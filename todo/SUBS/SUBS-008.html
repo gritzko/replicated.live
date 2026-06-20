@@ -13,22 +13,18 @@
 </a>
 <h1>SUBS-008: GET unmount of a removed sub orphans the sub's worktree files (LANDED)</h1>
 <p>
-*<strong>LOW — LANDED <code>50722656</code> (2026-06-06).</strong>*  <code>BEGetSubUnmount</code> (<code>beagle/SUBS.c</code>) only unlinked <code>&lt;wt&gt;/&lt;subpath&gt;/.be</code> (the logical unmount), leaving the sub's checked-out files (<code>core.c</code>, <code>helper.c</code>, <code>..be.idx</code>) orphaned under the parent wt.  Fix: after unlinking the anchor, best-effort <code>FILErmrf</code> the whole mount dir — the sub's objects live in the parent's store shard, so the on-disk checkout is pure clutter once the gitlink is gone (git <code>submodule deinit</code> + tree-switch parity).  This is the shared GET/PATCH unmount path, so both verbs get the cleanup.  Added <code>be-get-sub-unmount-clean</code> repro.
+<strong>LOW — LANDED <code>50722656</code> (2026-06-06).</strong>  <code>BEGetSubUnmount</code> (<code>beagle/SUBS.c</code>) only unlinked <code>&lt;wt&gt;/&lt;subpath&gt;/.be</code> (the logical unmount), leaving the sub's checked-out files (<code>core.c</code>, <code>helper.c</code>, <code>..be.idx</code>) orphaned under the parent wt.  Fix: after unlinking the anchor, best-effort <code>FILErmrf</code> the whole mount dir — the sub's objects live in the parent's store shard, so the on-disk checkout is pure clutter once the gitlink is gone (git <code>submodule deinit</code> + tree-switch parity).  This is the shared GET/PATCH unmount path, so both verbs get the cleanup.  Added <code>be-get-sub-unmount-clean</code> repro.
 </p>
 <p>
-*<strong>LOW.</strong>*  When <code>be get ?&lt;branch&gt;</code> switches to a target tree where a gitlink has been removed (the sub and its <code>.gitmodules</code> entry are gone), GET correctly unmounts the sub — removes <code>vendor/sub/.be</code> and prunes — but leaves the sub's worktree files (<code>core.c</code>, <code>helper.c</code>) and internal metadata (<code>..be.idx</code>) orphaned on disk.
+<strong>LOW.</strong>  When <code>be get ?&lt;branch&gt;</code> switches to a target tree where a gitlink has been removed (the sub and its <code>.gitmodules</code> entry are gone), GET correctly unmounts the sub — removes <code>vendor/sub/.be</code> and prunes — but leaves the sub's worktree files (<code>core.c</code>, <code>helper.c</code>) and internal metadata (<code>..be.idx</code>) orphaned on disk.
 </p>
 <h2>Repro</h2>
 <ol>
 <li><code>be get &lt;parent&gt;?master</code> (mounts <code>vendor/sub</code>).</li>
-<li>Switch to a branch <code>norm</code> whose tree drops the <code>vendor/sub</code> gitlink and the</li>
-</ol>
-<div>
-<p>
+<li>Switch to a branch <code>norm</code> whose tree drops the <code>vendor/sub</code> gitlink and the<p>
 <code>.gitmodules</code> entry: <code>be get ?norm</code>.
 </p>
-</div>
-<ol>
+</li>
 <li>stderr: <code>be: get vendor/sub: unmounted</code> + <code>sniff: pruned 1 file(s)</code>, exit 0.</li>
 <li>But <code>vendor/sub/</code> still lists <code>core.c</code>, <code>helper.c</code>, <code>..be.idx</code>.</li>
 </ol>

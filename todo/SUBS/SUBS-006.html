@@ -13,23 +13,21 @@
 </a>
 <h1>SUBS-006: POST git-remote push aborts NOBRANCH on a clean nested sub (LANDED)</h1>
 <p>
-*<strong>MEDIUM — LANDED <code>414d9f96</code> (2026-06-06).</strong>*  A clean detached nested sub forwarded <code>be post -q ?/&lt;sub&gt;/.&lt;parent&gt;/&lt;branch&gt;</code> with no msg/patch rows, hitting <code>POSTPromote</code>'s missing-target arm which unconditionally returned <code>NOBRANCH</code>, aborting the whole git-peer push (157).  A <strong>dirty</strong> detached sub instead routes through <code>POSTCommit</code> (which auto-creates the synthetic branch at the pin), so anything reaching the missing-branch arm from a detached wt is by definition a clean sub with nothing to promote.  Fix <code>sniff/POST.c</code>: detached wt → <code>POSTNONE</code> (no-op, <code>-q</code>-swallowed); an attached wt still refuses <code>NOBRANCH</code> (DIS-020 preserved).  Added <code>test/post/29</code> repro.
+<strong>MEDIUM — LANDED <code>414d9f96</code> (2026-06-06).</strong>  A clean detached nested sub forwarded <code>be post -q ?/&lt;sub&gt;/.&lt;parent&gt;/&lt;branch&gt;</code> with no msg/patch rows, hitting <code>POSTPromote</code>'s missing-target arm which unconditionally returned <code>NOBRANCH</code>, aborting the whole git-peer push (157).  A <strong>dirty</strong> detached sub instead routes through <code>POSTCommit</code> (which auto-creates the synthetic branch at the pin), so anything reaching the missing-branch arm from a detached wt is by definition a clean sub with nothing to promote.  Fix <code>sniff/POST.c</code>: detached wt → <code>POSTNONE</code> (no-op, <code>-q</code>-swallowed); an attached wt still refuses <code>NOBRANCH</code> (DIS-020 preserved).  Added <code>test/post/29</code> repro.
 </p>
 <p>
-*<strong>MEDIUM.</strong>*  A <code>be post ssh://&lt;host&gt;/&lt;parent&gt;.git?master</code> (git-peer remote) recurses the local-commit step into mounted subs, but when it reaches a *<strong>clean, detached</strong>* nested sub whose synthetic branch (<code>?/&lt;sub&gt;/.&lt;parent&gt;/&lt;branch&gt;</code>) does not yet exist, sniff fails <code>?/&lt;sub&gt;/.&lt;parent&gt;/&lt;branch&gt; does not exist — be put ?&lt;branch&gt; first</code> (<code>NOBRANCH</code>), which propagates as <code>be post: aborting parent commit — sub recursion failed</code> (exit 157).  A clean nested sub should be a *<strong>no-op</strong>*, not abort the whole push.
+<strong>MEDIUM.</strong>  A <code>be post ssh://&lt;host&gt;/&lt;parent&gt;.git?master</code> (git-peer remote) recurses the local-commit step into mounted subs, but when it reaches a <strong>clean, detached</strong> nested sub whose synthetic branch (<code>?/&lt;sub&gt;/.&lt;parent&gt;/&lt;branch&gt;</code>) does not yet exist, sniff fails <code>?/&lt;sub&gt;/.&lt;parent&gt;/&lt;branch&gt; does not exist — be put ?&lt;branch&gt; first</code> (<code>NOBRANCH</code>), which propagates as <code>be post: aborting parent commit — sub recursion failed</code> (exit 157).  A clean nested sub should be a <strong>no-op</strong>, not abort the whole push.
 </p>
 <h2>Repro</h2>
 <ol>
 <li>Depth-3 forest (parent → vendor/sub → vendor/sub/.../leaf), leaf clean.</li>
 <li>Make a local parent commit.</li>
 <li><code>be post ssh://localhost/&lt;rel&gt;/parent.git?master</code>.</li>
-<li>Recursion descends to the clean leaf, forwards</li>
-</ol>
-<div>
-<p>
+<li>Recursion descends to the clean leaf, forwards<p>
 <code>post ?/leaf/.sub/.parent/master</code>; the branch is absent → NOBRANCH → 157.
 </p>
-</div>
+</li>
+</ol>
 <h2>Expected</h2>
 <p>
 Per spec: &quot;<code>be post</code> on a detached sub auto-creates that branch at the pin&quot; and a clean sub with nothing to commit should no-op.  The remote-push recursion must not refuse on a clean sub merely because the synthetic branch has not been materialised yet.

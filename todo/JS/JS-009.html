@@ -18,34 +18,24 @@
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>mmap leak: the <code>mmap_free</code>/<code>FILEUnMap</code> deallocator is only wired into the typed</li>
-</ul>
-<div>
-<p>
+<li>mmap leak: the <code>mmap_free</code>/<code>FILEUnMap</code> deallocator is only wired into the typed<p>
 array that FAILED to construct → on failure the mapping is never unmapped.
 </p>
-</div>
-<ul>
+</li>
 <li><code>args[0]</code> is read before any <code>argc</code> check → OOB when called with no args.</li>
-<li>A path longer than <code>PAGESIZE</code> is silently truncated (the return size is ignored)</li>
-</ul>
-<div>
-<p>
+<li>A path longer than <code>PAGESIZE</code> is silently truncated (the return size is ignored)<p>
 and left non-NUL-terminated.
 </p>
-</div>
-<ul>
+</li>
 <li><code>WITH_JS</code>-gated WIP.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>No leaked mapping on the TA-fail path; no OOB on a no-arg call; an over-long path</li>
-</ul>
-<div>
-<p>
+<li>No leaked mapping on the TA-fail path; no OOB on a no-arg call; an over-long path<p>
 errors instead of truncating.
 </p>
-</div>
+</li>
+</ul>
 <h3>Constraints</h3>
 <ul>
 <li><code>FILEUnMap(buf)</code> on the TA-fail path; guard <code>argc</code>; error on path overflow.</li>
@@ -53,24 +43,18 @@ errors instead of truncating.
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open) Unmap explicitly when <code>JSObjectMakeTypedArrayWithBytesNoCopy</code> returns</li>
-</ul>
-<div>
-<p>
+<li>(open) Unmap explicitly when <code>JSObjectMakeTypedArrayWithBytesNoCopy</code> returns<p>
 NULL; check <code>argc</code> before <code>args[0]</code>; reject a path that overflows the page.
 </p>
-</div>
-<h3>TODOs</h3>
-<ul>
-<li>] Repro-first: <code>io.mmap()</code> (no args) does not OOB; force a TA-construct failure</li>
+</li>
 </ul>
-<div>
-<p>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: <code>io.mmap()</code> (no args) does not OOB; force a TA-construct failure<p>
   and assert (LSAN) no mapping leaks; a <code>&gt;PAGESIZE</code> path errors.
 </p>
-</div>
-<ul>
-<li>] Apply the three fixes.</li>
+</li>
+<li class="open"><input type="checkbox" disabled> Apply the three fixes.</li>
 </ul>
 <h3>Blockers</h3>
 <ul>
@@ -78,12 +62,10 @@ NULL; check <code>argc</code> before <code>args[0]</code>; reject a path that ov
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>*<strong>LANDED <code>621f4633</code></strong>* (2026-06-16): <code>JABCioFileMap</code> now guards <code>argc&lt;1</code></li>
-</ul>
-<div>
-<p>
+<li><strong>LANDED <code>621f4633</code></strong> (2026-06-16): <code>JABCioFileMap</code> now guards <code>argc&lt;1</code><p>
 before reading <code>args[0]</code>, rejects an over-long (<code>len&gt;=PAGESIZE</code>) path, and <code>FILEUnMap</code>s the mapping on the typed-array-construct-fail path. C++ repro <code>run_mmap_argc_repro</code> (argc==0 → ASAN SEGV on <code>args[0]</code> RED, clean GREEN; plus <code>&gt;PAGESIZE</code> path must throw); ctest JABC green, ASAN/LSan clean.
 </p>
-</div>
+</li>
+</ul>
 </body>
 </html>

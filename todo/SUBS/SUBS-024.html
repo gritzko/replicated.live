@@ -21,74 +21,54 @@
 Three source cases (user's framing; identical to <a href="SUBS-020.html">SUBS-020</a>):
 </p>
 <ul>
-<li>*<strong>beagle remote</strong>* → expect the sub in the SAME repo/peer.</li>
-<li>*<strong>git repo, <code>.git</code> URI</strong>* → no same-repo expectation; the sub's official URL.</li>
-<li>*<strong>git repo, fs URI</strong>* → expect the sub repo in the fs at the parent-relative</li>
-</ul>
-<div>
-<p>
+<li><strong>beagle remote</strong> → expect the sub in the SAME repo/peer.</li>
+<li><strong>git repo, <code>.git</code> URI</strong> → no same-repo expectation; the sub's official URL.</li>
+<li><strong>git repo, fs URI</strong> → expect the sub repo in the fs at the parent-relative<p>
 path. In the beagle and fs cases, if the assumption fails, FALL BACK to the official <code>.gitmodules</code> URL.
 </p>
-</div>
+</li>
+</ul>
 <h3>Context — live repro</h3>
 <p>
 <code>be post ssh://localhost/src/dogs</code> (beagle parent → git fs-path destination):
 </p>
 <ul>
-<li>`keeper: post: branch ?.dogs/ is a be-only synthetic coordinate; pushing to git</li>
-</ul>
-<div>
-<p>
+<li>`keeper: post: branch ?.dogs/ is a be-only synthetic coordinate; pushing to git<p>
 remote https://github.com/gritzko/libabc.git default branch<code> — the </code>abc<code> sub went to its OFFICIAL github url (case 2), NOT parent-relative </code>ssh://localhost/src/dogs/abc` (case 3).
 </p>
-</div>
-<ul>
-<li>github unreachable → WIREUNRCH aborted the whole post; <code>--nosub</code> was the only</li>
-</ul>
-<div>
-<p>
+</li>
+<li>github unreachable → WIREUNRCH aborted the whole post; <code>--nosub</code> was the only<p>
 way through. GET resolves this correctly; POST does not.
 </p>
-</div>
+</li>
+</ul>
 <h3>Goals</h3>
 <p>
 POST routes each sub-push destination by the parent/destination kind, with fallback.
 </p>
 <ul>
-<li>Git fs-path (non-<code>.git</code>) destination → push the sub parent-relative</li>
-</ul>
-<div>
-<p>
+<li>Git fs-path (non-<code>.git</code>) destination → push the sub parent-relative<p>
 (<code>&lt;dest&gt;/&lt;subpath&gt;</code>); fall back to the official URL only if absent.
 </p>
-</div>
-<ul>
+</li>
 <li>Beagle destination → same peer + <code>?/&lt;project&gt;</code>; fall back to official.</li>
 <li>Git <code>.git</code> destination → official URL (unchanged).</li>
-<li>Repro test: a beagle-parent post to a git fs-path dest asserts the sub lands</li>
-</ul>
-<div>
-<p>
+<li>Repro test: a beagle-parent post to a git fs-path dest asserts the sub lands<p>
 parent-relative, not official.
 </p>
-</div>
+</li>
+</ul>
 <h3>Constraints</h3>
 <ul>
-<li>Reuse the GET resolver exports (<code>SNIFFSubSrcEndsGit</code>, <code>SNIFFSubCandidateGitRel</code>)</li>
-</ul>
-<div>
-<p>
+<li>Reuse the GET resolver exports (<code>SNIFFSubSrcEndsGit</code>, <code>SNIFFSubCandidateGitRel</code>)<p>
 and the <code>bepushgit_recurse_cb</code> arm <a href="SUBS-020.html">SUBS-020</a> added — find WHY it doesn't fire here (ssh fs-path dest / beagle-parent → git-dest path); do not re-roll.
 </p>
-</div>
-<ul>
-<li>Trace the actual push routing first (recursion-debug practice); the</li>
-</ul>
-<div>
-<p>
+</li>
+<li>Trace the actual push routing first (recursion-debug practice); the<p>
 <code>?/&lt;sub&gt;/.&lt;parent&gt;</code> synthetic-coordinate → git-default-branch mapping is involved.
 </p>
-</div>
+</li>
+</ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <p>
@@ -97,92 +77,58 @@ Root cause (traced, repro'd): case 3 fed the <code>.gitmodules</code> url to <co
 <ul>
 <li>beagle peer → same peer, sub shard <code>?/&lt;subproj&gt;</code> (unchanged).</li>
 <li>git <code>.git</code> → declared official url as-is (unchanged).</li>
-<li>git fs-path + RELATIVE url (<code>../sub</code>) → resolve url vs remote URI</li>
-</ul>
-<div>
-<p>
+<li>git fs-path + RELATIVE url (<code>../sub</code>) → resolve url vs remote URI<p>
 (sibling); ref = url. Unchanged (post/44, get/50-3a).
 </p>
-</div>
-<ul>
-<li>git fs-path + ABSOLUTE url → <code>&lt;remote&gt;/&lt;subpath&gt;</code>; ref = subpath.</li>
-</ul>
-<div>
-<p>
+</li>
+<li>git fs-path + ABSOLUTE url → <code>&lt;remote&gt;/&lt;subpath&gt;</code>; ref = subpath.<p>
 NEW — bypasses the unreachable declared upstream (e.g. github).
 </p>
-</div>
-<ul>
+</li>
 <li>Fallback to the official url only when no candidate computes.</li>
-<li>Both GET (sniff/SUBS.c case-3 list) and POST (BE.cli.c</li>
-</ul>
-<div>
-<p>
+<li>Both GET (sniff/SUBS.c case-3 list) and POST (BE.cli.c<p>
 bepushgit_recurse_cb) get case 4, for push/fetch symmetry.
 </p>
-</div>
-<h3>TODOs</h3>
-<ul>
-<li>] Trace <code>be post ssh://&lt;fs-path&gt;</code> — absolute <code>.gitmodules</code> url →</li>
+</li>
 </ul>
-<div>
-<p>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Trace <code>be post ssh://&lt;fs-path&gt;</code> — absolute <code>.gitmodules</code> url →<p>
   SNIFFSubCandidateGitRel NONE → official url wins (repro'd $HOME/tmp).
 </p>
-</div>
-<ul>
-<li>] POST case 4: url absolute → dest = SNIFFSubCandidateGitRel(src,</li>
-</ul>
-<div>
-<p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> POST case 4: url absolute → dest = SNIFFSubCandidateGitRel(src,<p>
   subpath); keep relative-url arm + official fallback.
 </p>
-</div>
-<ul>
-<li>] GET case 4: add <code>&lt;src&gt;/&lt;subpath&gt;</code> candidate before official (SUBS.c).</li>
-<li>] Tests: post/45 + get/53 — absolute-url sub lands <code>&lt;remote&gt;/&lt;sub&gt;</code>,</li>
-</ul>
-<div>
-<p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> GET case 4: add <code>&lt;src&gt;/&lt;subpath&gt;</code> candidate before official (SUBS.c).</li>
+<li class="done"><input type="checkbox" checked disabled> Tests: post/45 + get/53 — absolute-url sub lands <code>&lt;remote&gt;/&lt;sub&gt;</code>,<p>
   NOT official; ctest 394/394 WITH_SSH.
 </p>
-</div>
+</li>
+</ul>
 <h3>Blockers and bummers</h3>
 <p>
 (none yet)
 </p>
 <h2>Outcome</h2>
 <ul>
-<li><code>b09b09bf</code> — case 4 in POST (BE.cli.c <code>bepushgit_recurse_cb</code>) and GET</li>
-</ul>
-<div>
-<p>
+<li><code>b09b09bf</code> — case 4 in POST (BE.cli.c <code>bepushgit_recurse_cb</code>) and GET<p>
 (sniff/SUBS.c <code>SNIFFSubMount</code>); reuses <code>SNIFFSubCandidateGitRel</code>, no new symbols. <code>post/45</code>+<code>get/53</code> added; full ctest 394/394 WITH_SSH.
 </p>
-</div>
-<ul>
-<li>GET gate widened: case 3/4 keyed on the URI FORM, dropping the</li>
-</ul>
-<div>
-<p>
+</li>
+<li>GET gate widened: case 3/4 keyed on the URI FORM, dropping the<p>
 <code>git_parent</code> gate that never fired over ssh (see follow-up below).
 </p>
-</div>
-<ul>
-<li>Bundled fix: emptied <code>test/put/01-states/05.put.err.txt</code> to match the</li>
-</ul>
-<div>
-<p>
+</li>
+<li>Bundled fix: emptied <code>test/put/01-states/05.put.err.txt</code> to match the<p>
 committed <code>be put</code> stderr-spam removal (<code>3582cbe1</code>) — straggler fixture.
 </p>
-</div>
-<ul>
-<li>Follow-up (own ticket TBD): <code>subs_recover_locator</code> flags ssh git</li>
-</ul>
-<div>
-<p>
+</li>
+<li>Follow-up (own ticket TBD): <code>subs_recover_locator</code> flags ssh git<p>
 remotes as <code>src_beagle</code>, which is why GET case 3 never fired over ssh.
 </p>
-</div>
+</li>
+</ul>
 </body>
 </html>

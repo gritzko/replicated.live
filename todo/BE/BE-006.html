@@ -21,84 +21,58 @@ One unreachable-remote push prints FIVE lines for ONE failure: a raw <code>ssh:<
 <code>be post ssh://localhost/src/dogs</code> to an unreachable git remote, verbatim:
 </p>
 <ul>
-<li><code>ssh: connect to host github.com port 22: Connection refused</code> — the ssh</li>
-</ul>
-<div>
-<p>
+<li><code>ssh: connect to host github.com port 22: Connection refused</code> — the ssh<p>
 subprocess's OWN stderr, inherited through the transport.
 </p>
-</div>
-<ul>
-<li><code>be: remote &lt;url&gt; is unreachable (transport refused or timed out).</code> —</li>
-</ul>
-<div>
-<p>
+</li>
+<li><code>be: remote &lt;url&gt; is unreachable (transport refused or timed out).</code> —<p>
 <code>keeper/WIRECLI.c:86</code>; the same failure, restated.
 </p>
-</div>
-<ul>
-<li><code>Error: WIREUNRCH</code> then <code>Error: BEDOGEXIT</code> ×2 — <code>abc/PRO.h:384</code>'s <code>MAIN</code></li>
-</ul>
-<div>
-<p>
+</li>
+<li><code>Error: WIREUNRCH</code> then <code>Error: BEDOGEXIT</code> ×2 — <code>abc/PRO.h:384</code>'s <code>MAIN</code><p>
 error printer fires once PER spawned <code>be</code> process (sub-recursion), so the code re-announces at every level as the exit propagates up.
 </p>
-</div>
+</li>
+</ul>
 <h3>Goals</h3>
 <p>
 A failed push (or any error exit) reports ONCE, uniformly.
 </p>
 <ul>
-<li>One <code>name + verb + URI + code</code> line per failure (<a href="BE-003.html">BE-003</a>); no `Error:</li>
-</ul>
-<div>
-<p>
+<li>One <code>name + verb + URI + code</code> line per failure (<a href="BE-003.html">BE-003</a>); no `Error:<p>
 &lt;code&gt;<code> stack from nested </code>be` processes.
 </p>
-</div>
-<ul>
-<li>The real cause (<code>WIREUNRCH</code>) wins; the generic <code>BEDOGEXIT</code> re-throws from</li>
-</ul>
-<div>
-<p>
+</li>
+<li>The real cause (<code>WIREUNRCH</code>) wins; the generic <code>BEDOGEXIT</code> re-throws from<p>
 parent frames are suppressed or collapsed.
 </p>
-</div>
-<ul>
-<li>Raw transport (<code>ssh:</code>) stderr is captured/labelled, not leaked alongside the</li>
-</ul>
-<div>
-<p>
+</li>
+<li>Raw transport (<code>ssh:</code>) stderr is captured/labelled, not leaked alongside the<p>
 be-level <code>unreachable</code> line (one transport message, not two).
 </p>
-</div>
+</li>
+</ul>
 <h3>Constraints</h3>
 <ul>
-<li>General form of <a href="BE-003.html">BE-003</a>; the <code>PRO.h</code> <code>MAIN</code> printer is process-global, so the</li>
-</ul>
-<div>
-<p>
+<li>General form of <a href="BE-003.html">BE-003</a>; the <code>PRO.h</code> <code>MAIN</code> printer is process-global, so the<p>
 fix must gate per-process re-printing or thread the code up without re-announcing.
 </p>
-</div>
-<ul>
-<li>A child <code>be</code>'s exit code must still propagate (BEDOGEXIT carries the failure),</li>
-</ul>
-<div>
-<p>
+</li>
+<li>A child <code>be</code>'s exit code must still propagate (BEDOGEXIT carries the failure),<p>
 only its user-facing line is suppressed at non-root levels.
 </p>
-</div>
+</li>
+</ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <p>
 (pending — needs a ruling on where the single error line is sourced: root <code>be</code> process only, vs. each dog, vs. the spawning frame.)
 </p>
 <h3>TODOs</h3>
-<ul>
-<li>] Repro: <code>be post</code> to an unreachable remote; assert exactly one error line.</li>
-<li>] Suppress nested-process <code>Error:</code> re-prints (PRO.h <code>MAIN</code> / the sub-spawn path).</li>
-<li>] Capture/label raw <code>ssh:</code> transport stderr instead of leaking it.</li>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: <code>be post</code> to an unreachable remote; assert exactly one error line.</li>
+<li class="open"><input type="checkbox" disabled> Suppress nested-process <code>Error:</code> re-prints (PRO.h <code>MAIN</code> / the sub-spawn path).</li>
+<li class="open"><input type="checkbox" disabled> Capture/label raw <code>ssh:</code> transport stderr instead of leaking it.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <p>

@@ -15,7 +15,7 @@
 <h2>Input</h2>
 <h3>Context</h3>
 <p>
-Child of <a href="">[GIT-001</a>]; depends on <a href="">[GIT-002</a>]/<a href="">[GIT-004</a>]. <code>js/pack.hpp</code> is a third copy of pack-log logic: <code>JABCPackFeedOfs</code> (<code>:23</code>) is a hand-rolled replica of keeper's <code>pack_feed_ofs</code>, <code>JABCpackFeed</code> (<code>:58</code>) re-implements the raw-vs-OFS_DELTA decision (inflate base, <code>DELTEncode</code>, size compare, emit header+ofs varint+deflate), and <code>JABCpackNext</code> (<code>:120</code>) re-inflates to learn a record's compressed length. Once <a href="">[GIT-002</a>] lands the writer and <a href="">[GIT-004</a>] the resolver in dog/git, the binding must hold NO pack-log logic — it only marshals JS typed arrays into <code>u8s</code> and calls the dog/git functions. See <a href="../../wiki/PackLog.html">PackLog</a>, <a href="../../../beagle/js/INDEX.md">INDEX</a>, <a href="../../../beagle/CLAUDE.md">CLAUDE</a>.
+Child of <a href="GIT-001.html">GIT-001</a>; depends on <a href="GIT-002.html">GIT-002</a>/<a href="GIT-004.html">GIT-004</a>. <code>js/pack.hpp</code> is a third copy of pack-log logic: <code>JABCPackFeedOfs</code> (<code>:23</code>) is a hand-rolled replica of keeper's <code>pack_feed_ofs</code>, <code>JABCpackFeed</code> (<code>:58</code>) re-implements the raw-vs-OFS_DELTA decision (inflate base, <code>DELTEncode</code>, size compare, emit header+ofs varint+deflate), and <code>JABCpackNext</code> (<code>:120</code>) re-inflates to learn a record's compressed length. Once <a href="GIT-002.html">GIT-002</a> lands the writer and <a href="GIT-004.html">GIT-004</a> the resolver in dog/git, the binding must hold NO pack-log logic — it only marshals JS typed arrays into <code>u8s</code> and calls the dog/git functions. See <a href="../../wiki/PackLog.html">PackLog</a>, <a href="../../../beagle/js/INDEX.md">INDEX</a>, <a href="../../../beagle/CLAUDE.md">CLAUDE</a>.
 </p>
 <ul>
 <li>Triple duplication: the OFS varint encoder, the feed delta-decision, and the record-end scan exist once in keeper, once in dog/git (post GIT-002/004), and once in the binding — a format tweak must be written three times and they can drift. <code>JABCpackFeed</code>'s delta-or-raw block is a line-for-line copy of <code>KEEPPackFeed</code>'s inner emit (<code>keeper/KEEP.c:1709-1766</code>); the landed <code>PACKu8sFeedOfs</code> dedup was necessary but insufficient — the surrounding inflate-base / <code>DELTEncode</code> / size-compare / emit-hdr+deflate sequence is still duplicated.</li>
@@ -26,7 +26,7 @@ Child of <a href="">[GIT-001</a>]; depends on <a href="">[GIT-002</a>]/<a href="
 <h3>Goals</h3>
 <ul>
 <li>Reduce <code>js/pack.hpp</code> to pure marshalling over the dog/git pack-log core, holding zero delta/encode/inflate decisions.</li>
-<li>Delete the duplicated pack-log logic (<code>JABCPackFeedOfs</code>, the inline feed delta-decision, the re-inflate record-end scan) once <a href="">[GIT-002</a>]/<a href="">[GIT-004</a>] land.</li>
+<li>Delete the duplicated pack-log logic (<code>JABCPackFeedOfs</code>, the inline feed delta-decision, the re-inflate record-end scan) once <a href="GIT-002.html">GIT-002</a>/<a href="GIT-004.html">GIT-004</a> land.</li>
 <li>Clear the local defects in the rewrite: the <code>binto</code>/<code>basec</code> base-range dup and the latent double-header corruption from the ignored OFS-arm return.</li>
 </ul>
 <h3>Constraints</h3>
@@ -42,24 +42,22 @@ Child of <a href="">[GIT-001</a>]; depends on <a href="">[GIT-002</a>]/<a href="
  —
 </p>
 <h3>TODOs</h3>
-<ul>
-<li>] Re-point <code>_pack_feed</code> at the dog/git writer (GIT-002): pass type, content, resolved base bytes + base offset; the dog/git function decides raw|OFS_DELTA and emits, checking every header/varint/deflate return (closing the ignored-return gap). Delete the inline inflate/<code>DELTEncode</code>/compare block and the <code>binto</code>/<code>basec</code> dup.</li>
-<li>] Re-point object reads at the dog/git resolver (GIT-004) and a dog/git record-extent helper; delete <code>JABCpackNext</code>'s re-inflate-to-measure and the JS-composed seek+<code>delt.apply</code> chain.</li>
-<li>] Delete <code>JABCPackFeedOfs</code>; keep the thin drains (<code>_pack_count</code>/<code>_type</code>/<code>_size</code>/<code>_baseoff</code>/<code>_ref</code>/<code>_inflate</code>) as marshalling over <code>PACKDrain*</code>.</li>
-<li>] Repro-first (<a href="../../../beagle/CLAUDE.md">CLAUDE</a> §17): keep <code>js/test/pack.js</code> green; add a cross-impl vector — a log written by keeper round-trips byte-identically when read back through the JABC binding (and vice versa), proving keeper + binding share one format.</li>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Re-point <code>_pack_feed</code> at the dog/git writer (GIT-002): pass type, content, resolved base bytes + base offset; the dog/git function decides raw|OFS_DELTA and emits, checking every header/varint/deflate return (closing the ignored-return gap). Delete the inline inflate/<code>DELTEncode</code>/compare block and the <code>binto</code>/<code>basec</code> dup.</li>
+<li class="open"><input type="checkbox" disabled> Re-point object reads at the dog/git resolver (GIT-004) and a dog/git record-extent helper; delete <code>JABCpackNext</code>'s re-inflate-to-measure and the JS-composed seek+<code>delt.apply</code> chain.</li>
+<li class="open"><input type="checkbox" disabled> Delete <code>JABCPackFeedOfs</code>; keep the thin drains (<code>_pack_count</code>/<code>_type</code>/<code>_size</code>/<code>_baseoff</code>/<code>_ref</code>/<code>_inflate</code>) as marshalling over <code>PACKDrain*</code>.</li>
+<li class="open"><input type="checkbox" disabled> Repro-first (<a href="../../../beagle/CLAUDE.md">CLAUDE</a> §17): keep <code>js/test/pack.js</code> green; add a cross-impl vector — a log written by keeper round-trips byte-identically when read back through the JABC binding (and vice versa), proving keeper + binding share one format.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Lands after <a href="">[GIT-002</a>] (the writer + <code>PACKu8sFeedOfs</code>) and <a href="">[GIT-004</a>] (the resolver) exist in dog/git.</li>
+<li>Lands after <a href="GIT-002.html">GIT-002</a> (the writer + <code>PACKu8sFeedOfs</code>) and <a href="GIT-004.html">GIT-004</a> (the resolver) exist in dog/git.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>Landed <code>d8fec51a</code> on beagle.new: <code>js/pack.hpp</code> is pure marshalling — <code>_pack_feed</code>→</li>
-</ul>
-<div>
-<p>
+<li>Landed <code>d8fec51a</code> on beagle.new: <code>js/pack.hpp</code> is pure marshalling — <code>_pack_feed</code>→<p>
 <code>PACKu8sFeedObj</code>, <code>_pack_resolve</code>→<code>PACKResolveOfs</code>, <code>_pack_next</code>→new <code>PACKRecordEnd</code> (dog/git/PACK.c:184, decl PACK.h:136 — record-extent now owned in dog/git). Deleted <code>JABCPackFeedOfs</code>, the inline inflate/<code>DELTEncode</code>/compare emit block, the <code>binto</code>/<code>basec</code> dup, <code>JABCpackNext</code>'s re-inflate, and all <code>malloc</code>/<code>free</code> (scratch is JS-owned). Double-header corruption structurally gone (writer owns the emit + checks every return). Cross-impl vector (<code>JABCpack</code>): a chain written via the binding resolves byte-identically through the dog/git chase. 413/413, ASan/LSan clean.
 </p>
-</div>
+</li>
+</ul>
 </body>
 </html>

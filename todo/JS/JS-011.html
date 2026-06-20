@@ -18,82 +18,60 @@
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>JABCutf8Encode</code> typed-array length includes the trailing NUL (<code>test.js:66</code></li>
-</ul>
-<div>
-<p>
+<li><code>JABCutf8Encode</code> typed-array length includes the trailing NUL (<code>test.js:66</code><p>
 asserts <code>&quot;hello&quot;</code> → byteLength 6) → every encoded buffer carries a spurious +1 NUL, and U+0000 is indistinguishable from the terminator.
 </p>
-</div>
-<ul>
-<li><code>JABCutf8Decode</code> (<code>utf8.cpp:28-33</code>) is a no-op stub returning <code>undefined</code> → no</li>
-</ul>
-<div>
-<p>
+</li>
+<li><code>JABCutf8Decode</code> (<code>utf8.cpp:28-33</code>) is a no-op stub returning <code>undefined</code> → no<p>
 rejection of overlong forms, lone surrogates, truncated multibyte, or bad continuation bytes.
 </p>
-</div>
-<ul>
+</li>
 <li><code>WITH_JS</code>-gated WIP; <code>Encode</code> is exercised by <code>test.js</code>.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>Encode(&quot;hello&quot;)</code> byteLength is 5 (NUL trimmed); <code>Decode</code> validates and rejects</li>
-</ul>
-<div>
-<p>
+<li><code>Encode(&quot;hello&quot;)</code> byteLength is 5 (NUL trimmed); <code>Decode</code> validates and rejects<p>
 malformed UTF-8.
 </p>
-</div>
+</li>
+</ul>
 <h3>Constraints</h3>
 <ul>
-<li>Trim the NUL from <code>Encode</code>'s length; implement <code>Decode</code> with explicit malformed-</li>
-</ul>
-<div>
-<p>
+<li>Trim the NUL from <code>Encode</code>'s length; implement <code>Decode</code> with explicit malformed-<p>
 input rejection.
 </p>
-</div>
+</li>
+</ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open) Drop the terminator from <code>Encode</code>'s reported length; write a real</li>
-</ul>
-<div>
-<p>
+<li>(open) Drop the terminator from <code>Encode</code>'s reported length; write a real<p>
 validating <code>Decode</code>. Fix the <code>test.js:66</code> expectation to 5.
 </p>
-</div>
-<h3>TODOs</h3>
-<ul>
-<li>] Repro-first: <code>Encode(&quot;hello&quot;).byteLength === 5</code>; <code>Decode</code> rejects each bad</li>
+</li>
 </ul>
-<div>
-<p>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: <code>Encode(&quot;hello&quot;).byteLength === 5</code>; <code>Decode</code> rejects each bad<p>
   sequence below.
 </p>
-</div>
-<ul>
-<li>] Trim the NUL; implement validating <code>Decode</code>.</li>
-<li>] Fuzz seeds: <code>C0 80</code> (overlong NUL), <code>ED A0 80</code> (lone surrogate), <code>E2 82</code></li>
-</ul>
-<div>
-<p>
+</li>
+<li class="open"><input type="checkbox" disabled> Trim the NUL; implement validating <code>Decode</code>.</li>
+<li class="open"><input type="checkbox" disabled> Fuzz seeds: <code>C0 80</code> (overlong NUL), <code>ED A0 80</code> (lone surrogate), <code>E2 82</code><p>
   (truncated 3-byte), <code>F4 90 80 80</code> (&gt; U+10FFFF).
 </p>
-</div>
+</li>
+</ul>
 <h3>Blockers</h3>
 <ul>
 <li>None.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>*<strong>LANDED <code>041e4bd5</code></strong>* (2026-06-16): <code>JABCutf8Decode</code> now validates inbound</li>
-</ul>
-<div>
-<p>
+<li><strong>LANDED <code>041e4bd5</code></strong> (2026-06-16): <code>JABCutf8Decode</code> now validates inbound<p>
 UTF-8 via abc's <code>utf8sValid</code>/<code>utf8sDrain32</code> (rejects overlong forms, lone surrogates, truncated multibyte, bad continuation, &gt; U+10FFFF) and decodes valid bytes to a UTF-16 JS string; <code>JABCutf8Encode</code> trims the trailing NUL so the typed-array byteLength is the real UTF-8 byte count (<code>&quot;hello&quot;</code>→5). The Encode-NUL change was applied (NOT deferred): <code>test.js</code>:67 and the generated <code>test.js.c</code> blob were synced 6→5 in lockstep, and the C++ harness <code>ROWS</code> byteLengths dropped by one — <code>JABCtest</code> stays green. C++ repro rows added to <code>js/test/jabc_test.cpp</code> (<code>run_utf8_decode_repro</code>): red with the stub/incl-NUL code, green after. ASAN/LSan clean (only the suppressed JSC-internal singleton leak). All 3 JABC ctests pass.
 </p>
-</div>
+</li>
+</ul>
 </body>
 </html>

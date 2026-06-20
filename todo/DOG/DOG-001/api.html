@@ -19,7 +19,7 @@ Attached design note for <a href="README.html">DOG-001</a>. Volumous detail live
 </div>
 <h2>The model</h2>
 <p>
-A weave is one file's whole DAG history as *<strong>structure-of-arrays</strong>*, byte-compatible with HUNK's <code>text</code>+<code>toks</code>. The current interleaved-TLV form plus its 7-buffer runtime decode (<code>wdec</code>) collapse into a single canonical columnar form; <code>struct weave</code> is a zero-copy parsed view over a serialized blob, and the builders write a fresh blob into a caller-owned <code>u8s</code> (resource-at-top, CLAUDE §5).
+A weave is one file's whole DAG history as <strong>structure-of-arrays</strong>, byte-compatible with HUNK's <code>text</code>+<code>toks</code>. The current interleaved-TLV form plus its 7-buffer runtime decode (<code>wdec</code>) collapse into a single canonical columnar form; <code>struct weave</code> is a zero-copy parsed view over a serialized blob, and the builders write a fresh blob into a caller-owned <code>u8s</code> (resource-at-top, CLAUDE §5).
 </p>
 <pre><code>typedef struct {
     u8cs    text;     // every token's bytes, concatenated in weave order
@@ -89,36 +89,26 @@ ok64 WEAVEEmitMerged(weave const *w, weavescope const *groups, u32 ngroups,
 </code></pre>
 <h2>Producing any past rev</h2>
 <p>
-Content at rev R = walk <code>toks</code> in weave order and emit <code>text[tok]</code> for every token whose *<strong>inserter bit set in scope(R)</strong>* and *<strong>no remover bit set in scope(R)</strong>*, where <code>scope(R)</code> is the bitmap of R's ancestor closure over <code>commits[]</code> (built from R's active hashlets via <code>WEAVEScope</code>). This is exactly today's <code>weave_scope_alive</code> single-predicate classifier; &quot;produce a rev&quot; is the <code>to</code>-only degenerate of a diff. <code>WEAVEAlive</code> is the hot tip case (rm-bit-clear scan, no set lookups). The weave alone cannot compute <code>scope(R)</code> (no parent edges stored) — graf's DAG supplies the ancestor <code>u64</code> ids, mapped through <code>commits[]</code>, as today. Fast path: with <code>commits[]</code> in fold order, a linear rev's scope is a prefix test (<code>index ≤ k</code>); only a cross-branch rev after a merge needs the full ancestor set.
+Content at rev R = walk <code>toks</code> in weave order and emit <code>text[tok]</code> for every token whose <strong>inserter bit set in scope(R)</strong> and <strong>no remover bit set in scope(R)</strong>, where <code>scope(R)</code> is the bitmap of R's ancestor closure over <code>commits[]</code> (built from R's active hashlets via <code>WEAVEScope</code>). This is exactly today's <code>weave_scope_alive</code> single-predicate classifier; &quot;produce a rev&quot; is the <code>to</code>-only degenerate of a diff. <code>WEAVEAlive</code> is the hot tip case (rm-bit-clear scan, no set lookups). The weave alone cannot compute <code>scope(R)</code> (no parent edges stored) — graf's DAG supplies the ancestor <code>u64</code> ids, mapped through <code>commits[]</code>, as today. Fast path: with <code>commits[]</code> in fold order, a linear rev's scope is a prefix test (<code>index ≤ k</code>); only a cross-branch rev after a merge needs the full ancestor set.
 </p>
 <h2>WEAVENext / WEAVEMerge</h2>
 <ul>
-<li>*<strong>Next</strong>* diffs <code>WEAVEAlive(w)</code> against tokenized <code>new_blob</code> (RAPHash +</li>
-</ul>
-<div>
-<p>
+<li><strong>Next</strong> diffs <code>WEAVEAlive(w)</code> against tokenized <code>new_blob</code> (RAPHash +<p>
 relocated BRAM/NEIL): survivors keep identity, deleted survivors gain <code>commit</code> as a remover (<code>rm</code>, <code>custom</code> if multi), new tokens insert with inserter=<code>commit</code> anchored before the next survivor — today's <code>weave_diff_core</code>, emitting columns not TLV.
 </p>
-</div>
-<ul>
-<li>*<strong>Merge</strong>* walks A and B by <code>(commit-id, per-commit ordinal)</code>: a token in</li>
-</ul>
-<div>
-<p>
-both emits once with remover set = UNION (dead in either ⇒ dead); a side-only run splices in; colliding concurrent runs order by *<strong>commit-id</strong>* (total, deterministic — no timestamp tie-break). This is the shared-sequence merge <a href="../../DIS/DIS-003.html">DIS-003</a> prescribes; conflict markers stay render-time-only in <code>WEAVEEmitMerged</code>.
+</li>
+<li><strong>Merge</strong> walks A and B by <code>(commit-id, per-commit ordinal)</code>: a token in<p>
+both emits once with remover set = UNION (dead in either ⇒ dead); a side-only run splices in; colliding concurrent runs order by <strong>commit-id</strong> (total, deterministic — no timestamp tie-break). This is the shared-sequence merge <a href="../../DIS/DIS-003.html">DIS-003</a> prescribes; conflict markers stay render-time-only in <code>WEAVEEmitMerged</code>.
 </p>
-</div>
+</li>
+</ul>
 <h2>Old → new mapping</h2>
 <ul>
 <li><code>WEAVEFromBlob</code>/<code>…Rm</code>               → <code>WEAVENext</code> on an empty weave.</li>
-<li><code>WEAVEDiff</code>/<code>DiffCarry</code> + <code>weavedec</code>→ <code>WEAVENext</code> (columnar = the carried</li>
-</ul>
-<div>
-<p>
+<li><code>WEAVEDiff</code>/<code>DiffCarry</code> + <code>weavedec</code>→ <code>WEAVENext</code> (columnar = the carried<p>
 decode; <a href="../../GET/GET-001.html">GET-001</a> dissolves).
 </p>
-</div>
-<ul>
+</li>
 <li><code>WEAVEApply</code> + <code>WEAVEsetfn</code> closure → <code>WEAVEMerge</code> / scope bitset.</li>
 <li><code>WEAVE_DECODE</code>/<code>wdec</code> (7 BASS bufs) → <code>WEAVEParse</code> (zero-copy).</li>
 <li><code>WEAVEEmit*</code> <code>WEAVEsetfn</code> ctx       → <code>weavescope</code> bitmap over commits[].</li>

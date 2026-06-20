@@ -13,20 +13,18 @@
 </a>
 <h1>SUBS-004: bare <code>be put</code> with only the sub dirty exits 206/PUTNONE</h1>
 <p>
-*<strong>MEDIUM.</strong>*  When only a mounted submodule is dirty (parent clean), bare <code>be put</code> correctly recurses and stages the sub blob, but the aggregate command exits *<strong>206/PUTNONE</strong>* because the parent sniff's <code>PUTNONE</code> (&quot;no changes&quot;) propagates as the command exit.  The relay (<code>BEActSubsRelay</code>) runs AFTER the parent's put action in <code>BE_PLAN_PUT</code> and its <code>-q</code> only swallows the SUB's NONE, not the parent's.  DELETE has no such asymmetry — a parent-only bare delete is a lenient exit-0 no-op, so a sub-only delete returns 0 (see SUBS-005 contrast).
+<strong>MEDIUM.</strong>  When only a mounted submodule is dirty (parent clean), bare <code>be put</code> correctly recurses and stages the sub blob, but the aggregate command exits <strong>206/PUTNONE</strong> because the parent sniff's <code>PUTNONE</code> (&quot;no changes&quot;) propagates as the command exit.  The relay (<code>BEActSubsRelay</code>) runs AFTER the parent's put action in <code>BE_PLAN_PUT</code> and its <code>-q</code> only swallows the SUB's NONE, not the parent's.  DELETE has no such asymmetry — a parent-only bare delete is a lenient exit-0 no-op, so a sub-only delete returns 0 (see SUBS-005 contrast).
 </p>
 <h2>Repro</h2>
 <ol>
 <li><code>be get &lt;parent&gt;?master</code>.</li>
 <li>Edit only <code>vendor/sub/core.c</code> (leave parent files clean).</li>
 <li><code>be put</code>.</li>
-<li>stdout lists <code>put vendor/sub/core.c</code> and the sub's wtlog gains a real</li>
-</ol>
-<div>
-<p>
+<li>stdout lists <code>put vendor/sub/core.c</code> and the sub's wtlog gains a real<p>
 <code>put core.c</code> row (sub blob IS staged) — but exit is 206/PUTNONE.
 </p>
-</div>
+</li>
+</ol>
 <h2>Expected</h2>
 <p>
 Exit 0.  The sub blob was staged, so the bare put did real work; spec: &quot;A clean sub returns <code>*NONE</code>; recursion passes <code>-q</code> and treats it as a no-op, so it never fails a bare <code>be put</code>/<code>delete</code>.&quot;  Symmetrically, a <strong>dirty</strong> sub under a <strong>clean</strong> parent should make the aggregate succeed.

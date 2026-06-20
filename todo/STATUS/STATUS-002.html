@@ -18,141 +18,89 @@
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Repro (deterministic; same on PATH <code>be</code> and a fresh build — NOT skew): build</li>
-</ul>
-<div>
-<p>
+<li>Repro (deterministic; same on PATH <code>be</code> and a fresh build — NOT skew): build<p>
 the <code>abc</code> sub (makes <code>abc/build-debug/{CMakeCache.txt,*.o,…}</code>), then <code>be status:abc/</code> → ~15 <code>unk abc/build-debug/...</code> rows.
 </p>
-</div>
-<ul>
-<li><code>be status:&lt;sub&gt;/</code> relays into the sub's worktree; its <code>SNIFFOpen</code>/<code>IGNOLoad</code></li>
-</ul>
-<div>
-<p>
+</li>
+<li><code>be status:&lt;sub&gt;/</code> relays into the sub's worktree; its <code>SNIFFOpen</code>/<code>IGNOLoad</code><p>
 reads only the SUB's own <code>.gitignore</code> (absent for <code>abc</code>), so the repo-root <code>.gitignore</code> never governs the sub's paths.
 </p>
-</div>
-<ul>
+</li>
 <li>Bare <code>be</code> collapses the sub to one summary row → no flood (the &quot;intermittent&quot;).</li>
-<li>POST-020 (<code>8c7f5f3a</code>) REFUTED: <code>sniff/SNIFF.c</code>/<code>CLASS.c</code>/<code>dog/git/IGNO.c</code>/</li>
-</ul>
-<div>
-<p>
+<li>POST-020 (<code>8c7f5f3a</code>) REFUTED: <code>sniff/SNIFF.c</code>/<code>CLASS.c</code>/<code>dog/git/IGNO.c</code>/<p>
 <code>ULOG.c</code> are byte-identical to parent <code>d8fec51a</code>; the bug is pre-existing / structural (since submodule projector recursion), not a regression.
 </p>
-</div>
-<ul>
-<li>The repo-root <code>.gitignore</code> already lists every flooded pattern — it just</li>
-</ul>
-<div>
-<p>
+</li>
+<li>The repo-root <code>.gitignore</code> already lists every flooded pattern — it just<p>
 isn't consulted from inside the sub.
 </p>
-</div>
+</li>
+</ul>
 <h3>Goals</h3>
 <ul>
-<li>Hierarchical <code>.gitignore</code>: classifying a path loads every <code>.gitignore</code> from</li>
-</ul>
-<div>
-<p>
+<li>Hierarchical <code>.gitignore</code>: classifying a path loads every <code>.gitignore</code> from<p>
 its directory up to <code>$HOME</code> (or <code>/</code> if not under <code>$HOME</code>) and COMPOUNDS them (git precedence: nearer/deeper rules add or override; <code>!</code> negation honored).
 </p>
-</div>
-<ul>
-<li>The chain CROSSES submodule boundaries, so a parent repo's <code>.gitignore</code></li>
-</ul>
-<div>
-<p>
+</li>
+<li>The chain CROSSES submodule boundaries, so a parent repo's <code>.gitignore</code><p>
 governs nested sub paths — this is what fixes the <code>abc/build-debug</code> flood.
 </p>
-</div>
-<ul>
-<li>No hardcoded dir names; <code>build</code>/<code>Corpus</code>/etc. are excluded ONLY because the</li>
-</ul>
-<div>
-<p>
+</li>
+<li>No hardcoded dir names; <code>build</code>/<code>Corpus</code>/etc. are excluded ONLY because the<p>
 real <code>.gitignore</code>s in the chain list them.
 </p>
-</div>
+</li>
+</ul>
 <h3>Constraints</h3>
 <ul>
-<li>ROLL BACK the prior stop-gap (unconditional <code>build*/</code>/<code>Corpus/</code> ignore in</li>
-</ul>
-<div>
-<p>
+<li>ROLL BACK the prior stop-gap (unconditional <code>build*/</code>/<code>Corpus/</code> ignore in<p>
 <code>IGNOMatch</code>): <code>Corpus</code> is not special — restore pattern-only matching.
 </p>
-</div>
-<ul>
-<li>Honor git pattern semantics (anchoring, dir-only trailing <code>/</code>, <code>!</code> negation,</li>
-</ul>
-<div>
-<p>
+</li>
+<li>Honor git pattern semantics (anchoring, dir-only trailing <code>/</code>, <code>!</code> negation,<p>
 precedence) across the compounded chain.
 </p>
-</div>
-<ul>
-<li>Terminate the walk at <code>$HOME</code> (or <code>/</code>); cache the chain per directory so the</li>
-</ul>
-<div>
-<p>
+</li>
+<li>Terminate the walk at <code>$HOME</code> (or <code>/</code>); cache the chain per directory so the<p>
 status walk doesn't reload <code>.gitignore</code>s for every leaf.
 </p>
-</div>
+</li>
+</ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>REJECTED (the prior worker's landed-in-tree fix, to be rolled back):</li>
-</ul>
-<div>
-<p>
+<li>REJECTED (the prior worker's landed-in-tree fix, to be rolled back):<p>
 <code>igno_is_build</code>/<code>Corpus</code> special-case in <code>IGNOMatch</code> — a hardcoded dir blacklist, not ignore resolution.
 </p>
-</div>
-<ul>
-<li>CHOSEN: an <code>.gitignore</code> STACK loaded leaf-dir → <code>$HOME</code>/<code>/</code>; <code>IGNOMatch</code></li>
-</ul>
-<div>
-<p>
+</li>
+<li>CHOSEN: an <code>.gitignore</code> STACK loaded leaf-dir → <code>$HOME</code>/<code>/</code>; <code>IGNOMatch</code><p>
 consults it nearest-first with git precedence; built once per directory (cached), not per leaf.  Localize in <code>dog/git/IGNO</code> + the <code>sniff/SNIFF</code> open/scan that drives it (incl. the <code>be status:&lt;sub&gt;/</code> relay).
 </p>
-</div>
-<h3>TODOs</h3>
-<ul>
-<li>] Roll back the prior fix: drop <code>igno_is_build*</code>/<code>Corpus</code> from <code>dog/git/IGNO.c</code>,</li>
+</li>
 </ul>
-<div>
-<p>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Roll back the prior fix: drop <code>igno_is_build*</code>/<code>Corpus</code> from <code>dog/git/IGNO.c</code>,<p>
   revert the test that pinned it; <code>IGNOMatch</code> pattern-only again.
 </p>
-</div>
-<ul>
-<li>] Implement the chain: load+stack <code>.gitignore</code> from the path's dir up to</li>
-</ul>
-<div>
-<p>
+</li>
+<li class="open"><input type="checkbox" disabled> Implement the chain: load+stack <code>.gitignore</code> from the path's dir up to<p>
   <code>$HOME</code>/<code>/</code>; compound with git precedence; cache per directory.
 </p>
-</div>
-<ul>
-<li>] Wire into the status walk so sub subtrees inherit the parent chain.</li>
-<li>] Repro-first test (hermetic): a sub subtree with a PARENT-ONLY <code>.gitignore</code></li>
-</ul>
-<div>
-<p>
+</li>
+<li class="open"><input type="checkbox" disabled> Wire into the status walk so sub subtrees inherit the parent chain.</li>
+<li class="open"><input type="checkbox" disabled> Repro-first test (hermetic): a sub subtree with a PARENT-ONLY <code>.gitignore</code><p>
   → build artifacts ignored; plus a <code>!</code>-negation / precedence case. ctest green.
 </p>
-</div>
+</li>
+</ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Prior worker flagged the STATUS-002 worktree <code>/</code> at 100% disk (built via a</li>
-</ul>
-<div>
-<p>
+<li>Prior worker flagged the STATUS-002 worktree <code>/</code> at 100% disk (built via a<p>
 tmpfs symlink).  Watch disk on the rerun.
 </p>
-</div>
+</li>
+</ul>
 <h2>Outcome</h2>
 <ul>
 <li>(open; prior build/Corpus stop-gap rejected, to be rolled back.)</li>

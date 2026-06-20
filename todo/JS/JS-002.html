@@ -18,65 +18,47 @@
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>$u8alloc(into,max)</code> sets <code>into={base, base+max}</code> (<code>abc/Sx.h:491</code>: head=base),</li>
-</ul>
-<div>
-<p>
+<li><code>$u8alloc(into,max)</code> sets <code>into={base, base+max}</code> (<code>abc/Sx.h:491</code>: head=base),<p>
 then <code>JABCutf8CopyStringValue</code> does <code>into[0]+=fact</code> — advancing the HEAD past the copied bytes, leaving <code>into={base+fact, base+max}</code>.
 </p>
-</div>
-<ul>
-<li>Caller <code>JABCioFileWrite</code> (<code>io.cpp:111</code>) does <code>write(fd, ta[0], $len(ta))</code> → it</li>
-</ul>
-<div>
-<p>
+</li>
+<li>Caller <code>JABCioFileWrite</code> (<code>io.cpp:111</code>) does <code>write(fd, ta[0], $len(ta))</code> → it<p>
 writes from <code>base+fact</code> for <code>max-fact</code> bytes (the UNINITIALISED tail), not the string. Then <code>$u8free</code> (<code>io.cpp:124</code>) frees <code>base+fact</code> — a non-base pointer → heap corruption / invalid free.
 </p>
-</div>
-<ul>
+</li>
 <li><code>fact</code> includes the NUL terminator (off-by-one in the length too).</li>
-<li>Severity unchanged by the <code>WITH_JS</code> gate: <code>file.write</code>/<code>io.log</code> are the live,</li>
-</ul>
-<div>
-<p>
+<li>Severity unchanged by the <code>WITH_JS</code> gate: <code>file.write</code>/<code>io.log</code> are the live,<p>
 wired binding entry points, not the dead rdx path.
 </p>
-</div>
+</li>
+</ul>
 <h3>Goals</h3>
 <ul>
 <li><code>file.write(&quot;hello&quot;)</code> writes exactly <code>hello</code> (5 bytes) and frees the real base.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>The copy helper must leave <code>into</code> as a DATA slice (term=<code>base+fact-1</code>, head</li>
-</ul>
-<div>
-<p>
+<li>The copy helper must leave <code>into</code> as a DATA slice (term=<code>base+fact-1</code>, head<p>
 stays at <code>base</code>); the caller writes <code>[base, len)</code> and frees <code>base</code>. Use the idiomatic ABC slice term-set, not a head advance.
 </p>
-</div>
+</li>
+</ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open) Fix in <code>JABCutf8CopyStringValue</code>: set the slice TERM to the byte count</li>
-</ul>
-<div>
-<p>
+<li>(open) Fix in <code>JABCutf8CopyStringValue</code>: set the slice TERM to the byte count<p>
 (excluding NUL), keep HEAD at base. Audit every caller for the head==base assumption.
 </p>
-</div>
-<h3>TODOs</h3>
-<ul>
-<li>] Repro-first: <code>file.write(&quot;hello&quot;)</code> into a pipe; assert the fd receives exactly</li>
+</li>
 </ul>
-<div>
-<p>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: <code>file.write(&quot;hello&quot;)</code> into a pipe; assert the fd receives exactly<p>
   <code>hello</code> (5 bytes), no trailing garbage; run under ASAN to catch the bad free.
 </p>
-</div>
-<ul>
-<li>] Fix the copy helper to leave a base-anchored data slice; drop the NUL from len.</li>
-<li>] Re-check <code>JABCioFileWrite</code> / <code>JABCioLog</code> write + free pair.</li>
+</li>
+<li class="open"><input type="checkbox" disabled> Fix the copy helper to leave a base-anchored data slice; drop the NUL from len.</li>
+<li class="open"><input type="checkbox" disabled> Re-check <code>JABCioFileWrite</code> / <code>JABCioLog</code> write + free pair.</li>
 </ul>
 <h3>Blockers</h3>
 <ul>
@@ -84,12 +66,10 @@ stays at <code>base</code>); the caller writes <code>[base, len)</code> and free
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>*<strong>LANDED <code>5ee417eb</code></strong>* (2026-06-16): <code>JABCutf8CopyStringValue</code> now keeps the</li>
-</ul>
-<div>
-<p>
+<li><strong>LANDED <code>5ee417eb</code></strong> (2026-06-16): <code>JABCutf8CopyStringValue</code> now keeps the<p>
 slice HEAD at the malloc base and sets TERM to <code>base+fact-1</code> (drops the NUL, <code>fact==0</code>-guarded), so <code>file.write(string)</code> writes the real <code>[base,len)</code> and <code>$u8free</code>s the real base; C++ pipe repro in <code>jabc_test.cpp</code> (red→green, ASAN).
 </p>
-</div>
+</li>
+</ul>
 </body>
 </html>

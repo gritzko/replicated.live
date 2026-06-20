@@ -18,119 +18,79 @@ A hunk nav-URI like <code>diff:ast/BAST.c#L362</code> (the <code>U</code> link b
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>diff:</code> is URI-driven (<code>graf/DIFFREF.c</code>: &quot;file or whole tree, ref vs wt or</li>
-</ul>
-<div>
-<p>
+<li><code>diff:</code> is URI-driven (<code>graf/DIFFREF.c</code>: &quot;file or whole tree, ref vs wt or<p>
 ref vs ref&quot;).  A file path scopes to that file; today it emits only the file's changed hunks.
 </p>
-</div>
-<ul>
-<li>bro emits a <code>U</code> nav-URI per hunk carrying a <code>#L&lt;n&gt;</code> line anchor (<code>dog/HUNK.c</code></li>
-</ul>
-<div>
-<p>
+</li>
+<li>bro emits a <code>U</code> nav-URI per hunk carrying a <code>#L&lt;n&gt;</code> line anchor (<code>dog/HUNK.c</code><p>
 fragment grammar; built via <code>HUNKu8sMakeURI</code>, <code>graf/WEAVE.c</code>).  Clicking it re-dispatches <code>diff:&lt;path&gt;#L&lt;n&gt;</code> — the entry point for this view.
 </p>
-</div>
-<ul>
+</li>
 <li>Distinct from dir/tree <code>diff:</code> (changed-hunks-only), which must NOT change.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>be diff:&lt;file&gt;#L&lt;n&gt;</code> (file-scoped) renders the FULL file, every line, with</li>
-</ul>
-<div>
-<p>
+<li><code>be diff:&lt;file&gt;#L&lt;n&gt;</code> (file-scoped) renders the FULL file, every line, with<p>
 added/removed/changed lines highlighted in place and the <code>#L&lt;n&gt;</code> anchor honored for scroll/jump.
 </p>
-</div>
-<ul>
+</li>
 <li>Tree/dir-scoped <code>diff:</code> (no single-file path) stays changed-hunks-only.</li>
 <li>Works in Plain/Color/TLV; composes the same under sub recursion.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Producer/renderer split: graf decides the EMIT scope (full-file lines vs</li>
-</ul>
-<div>
-<p>
+<li>Producer/renderer split: graf decides the EMIT scope (full-file lines vs<p>
 changed-hunks-only) keyed off file-vs-tree URI scope; bro owns the change highlighting/presentation — producers must not decide presentation.
 </p>
-</div>
-<ul>
-<li>No new diff engine — reuse graf's existing file diff (<code>graf/DIFFREF.c</code>,</li>
-</ul>
-<div>
-<p>
+</li>
+<li>No new diff engine — reuse graf's existing file diff (<code>graf/DIFFREF.c</code>,<p>
 <code>graf/WEAVE.c</code>); emit unchanged context lines tagged so bro highlights.
 </p>
-</div>
-<ul>
+</li>
 <li><code>abc/</code> untouched; read-only <code>dog/HUNK</code> stream; all four URI slots compose.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions (open — confirm in a design pass before forking)</h3>
 <ul>
-<li>Where full-file scope is decided: a file-scoped <code>diff:</code> URI should make</li>
-</ul>
-<div>
-<p>
+<li>Where full-file scope is decided: a file-scoped <code>diff:</code> URI should make<p>
 DIFFREF emit all file lines (change-tagged), not just hunks — confirm the branch/flag, and whether the ref-vs-ref line cap must lift for one file.
 </p>
-</div>
-<ul>
-<li>Highlight encoding: which <code>dog/HUNK</code> tok tags bro already has for add/del/</li>
-</ul>
-<div>
-<p>
+</li>
+<li>Highlight encoding: which <code>dog/HUNK</code> tok tags bro already has for add/del/<p>
 change lines, and whether full-file context needs an &quot;unchanged&quot; tag.
 </p>
-</div>
-<h3>TODOs</h3>
-<ul>
-<li>] Design pass: confirm the DIFFREF file-scope branch + bro's tok tagging.</li>
-<li>] Implement full-file emit for a file-scoped <code>diff:</code>; keep tree/dir scope</li>
+</li>
 </ul>
-<div>
-<p>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Design pass: confirm the DIFFREF file-scope branch + bro's tok tagging.</li>
+<li class="open"><input type="checkbox" disabled> Implement full-file emit for a file-scoped <code>diff:</code>; keep tree/dir scope<p>
   changed-hunks-only.
 </p>
-</div>
-<ul>
-<li>] Honor the <code>#L&lt;n&gt;</code> anchor for jump/scroll in the full-file view.</li>
-<li>] Tests: file-scoped <code>diff:&lt;file&gt;#L&lt;n&gt;</code> output contains an UNCHANGED line</li>
-</ul>
-<div>
-<p>
+</li>
+<li class="open"><input type="checkbox" disabled> Honor the <code>#L&lt;n&gt;</code> anchor for jump/scroll in the full-file view.</li>
+<li class="open"><input type="checkbox" disabled> Tests: file-scoped <code>diff:&lt;file&gt;#L&lt;n&gt;</code> output contains an UNCHANGED line<p>
   far from any change AND the highlighted changed line, in Plain/Color/TLV;   tree-scope <code>diff:</code> still hunks-only (regression).
 </p>
-</div>
+</li>
+</ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Whole-file emit on a huge file ⇒ large output; the per-file line cap may</li>
-</ul>
-<div>
-<p>
+<li>Whole-file emit on a huge file ⇒ large output; the per-file line cap may<p>
 need a file-scope override (verify the BNOROOM-class limits).
 </p>
-</div>
+</li>
+</ul>
 <h2>Outcome</h2>
 <ul>
-<li>Landed <code>eaa75793</code>: file-scope <code>diff:</code> reuses the <code>cat:</code> emitter</li>
-</ul>
-<div>
-<p>
+<li>Landed <code>eaa75793</code>: file-scope <code>diff:</code> reuses the <code>cat:</code> emitter<p>
 <code>WEAVEEmitFull</code> (change-tagged, no windowing) via a <code>b8 full</code> flag threaded through <code>GRAFDiff2Layer</code>; tree-scope keeps windowed <code>WEAVEEmitDiff</code>.
 </p>
-</div>
-<ul>
-<li><code>WEAVEEmitFull</code> gained a <code>scheme</code> param so <code>dog/HUNK</code> routes the full-file</li>
-</ul>
-<div>
-<p>
+</li>
+<li><code>WEAVEEmitFull</code> gained a <code>scheme</code> param so <code>dog/HUNK</code> routes the full-file<p>
 hunk to the unified +/- formatter (<code>cat:</code> passes empty → byte-identical). Test <code>test/diff/11-file-scope-full</code>; 373/373 green.
 </p>
-</div>
+</li>
+</ul>
 </body>
 </html>

@@ -13,7 +13,7 @@
 </a>
 <h1>PTR-007: bro/+woof/ raw pool arena, manual fragment parse</h1>
 <p>
-The 2026-06-15 audit found woof/ backs its connection pool with a raw <code>u8 *</code> from mmap, forcing per-slot pointer arithmetic and four-cell buffer writes throughout CONN.c; bro/ hand-parses the prompt/URI path with <code>char[]</code>+<code>strlen</code>/<code>atoi</code>/<code>sscanf</code>. Behavior-preserving; *<strong>woof is a load-bearing spawn/serve path — gate the diff before landing.</strong>*
+The 2026-06-15 audit found woof/ backs its connection pool with a raw <code>u8 *</code> from mmap, forcing per-slot pointer arithmetic and four-cell buffer writes throughout CONN.c; bro/ hand-parses the prompt/URI path with <code>char[]</code>+<code>strlen</code>/<code>atoi</code>/<code>sscanf</code>. Behavior-preserving; <strong>woof is a load-bearing spawn/serve path — gate the diff before landing.</strong>
 </p>
 <h2>Input</h2>
 <h3>Context — woof/</h3>
@@ -46,13 +46,13 @@ The 2026-06-15 audit found woof/ backs its connection pool with a raw <code>u8 *
 <li>Convert <code>WOOF.pool</code> to an arena first — it is the root cause; most of CONN.c's pointer arithmetic disappears once slots are typed buffer views. <code>woof/ROUTE.c</code> is already clean (uses <code>u8slit</code>/<code>u8csEq</code>) — model after it.</li>
 </ul>
 <h3>TODOs</h3>
-<ul>
-<li>] Repro-first: lock woof serve + bro render outputs on existing tables.</li>
-<li>] <code>WOOF.pool</code> → <code>u8a</code>/<code>u8b</code> arena; slots via <code>u8bMap</code>/<code>u8bAcquire</code>.</li>
-<li>] woof: <code>LIT</code>→<code>u8slit</code>, cell-pokes→<code>u8bUsed</code>, Fork→<code>u8sFork</code>/<code>u8sJoin</code>, envelopes→<code>u8csc</code>.</li>
-<li>] bro: <code>BRODispatchFragment</code>/<code>BROReadURI</code> → slice + ragel URI lexer.</li>
-<li>] bro: <code>bro_lineinfo</code> typed buffer; completion <code>u8b</code>; <code>scr_emit_char</code>/<code>MAUS</code> → <code>u8csc</code>.</li>
-<li>] Build + ctest; gate woof diff; report done vs skipped.</li>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: lock woof serve + bro render outputs on existing tables.</li>
+<li class="open"><input type="checkbox" disabled> <code>WOOF.pool</code> → <code>u8a</code>/<code>u8b</code> arena; slots via <code>u8bMap</code>/<code>u8bAcquire</code>.</li>
+<li class="open"><input type="checkbox" disabled> woof: <code>LIT</code>→<code>u8slit</code>, cell-pokes→<code>u8bUsed</code>, Fork→<code>u8sFork</code>/<code>u8sJoin</code>, envelopes→<code>u8csc</code>.</li>
+<li class="open"><input type="checkbox" disabled> bro: <code>BRODispatchFragment</code>/<code>BROReadURI</code> → slice + ragel URI lexer.</li>
+<li class="open"><input type="checkbox" disabled> bro: <code>bro_lineinfo</code> typed buffer; completion <code>u8b</code>; <code>scr_emit_char</code>/<code>MAUS</code> → <code>u8csc</code>.</li>
+<li class="open"><input type="checkbox" disabled> Build + ctest; gate woof diff; report done vs skipped.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
