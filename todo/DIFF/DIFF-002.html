@@ -28,19 +28,14 @@ The recursed submodule diff bypasses the parent's pager and lands on the bare te
 </ul>
 <h2>WIP (2026-06-16 — part-b DOES share the channel bug; &quot;no results&quot; localized)</h2>
 <p>
-Reanimated: the <a href="DIFF-001.html">DIFF-001</a> part-b <code>diff:?&lt;sha&gt;</code> recursion shares this exact bug,
-surfaced by clicking a *<strong>submodule pin-only</strong>* commit in <code>be log:</code>.
+Reanimated: the <a href="DIFF-001.html">DIFF-001</a> part-b <code>diff:?&lt;sha&gt;</code> recursion shares this exact bug, surfaced by clicking a *<strong>submodule pin-only</strong>* commit in <code>be log:</code>.
 </p>
 <ul>
 <li>Repro: <code>be log:</code> → click <code>cb71e65b</code> (the ABC-003 abc pin bump; parent diff is</li>
 </ul>
 <div>
 <p>
-ONLY the <code>abc &lt;old&gt;..&lt;new&gt;</code> gitlink line, all content in the abc sub) → bro shows
-*<strong>&quot;be: no results&quot;</strong>*. The diff itself is correct: plain <code>be diff:?cb71e65b</code> = 74
-lines (gitlink line + the abc <code>UTF8.h</code>/<code>UTF8.c</code> content); <code>be --tlv diff:?cb71e65b</code>
-= 6006 bytes carrying that content. So the diff CHAIN (commit→.gitmodules→pin→sub
-diff) is deterministic and CORRECT — the break is downstream, at the pager.
+ONLY the <code>abc &lt;old&gt;..&lt;new&gt;</code> gitlink line, all content in the abc sub) → bro shows *<strong>&quot;be: no results&quot;</strong>*. The diff itself is correct: plain <code>be diff:?cb71e65b</code> = 74 lines (gitlink line + the abc <code>UTF8.h</code>/<code>UTF8.c</code> content); <code>be --tlv diff:?cb71e65b</code> = 6006 bytes carrying that content. So the diff CHAIN (commit→.gitmodules→pin→sub diff) is deterministic and CORRECT — the break is downstream, at the pager.
 </p>
 </div>
 <ul>
@@ -48,13 +43,7 @@ diff) is deterministic and CORRECT — the break is downstream, at the pager.
 </ul>
 <div>
 <p>
-nav URI, <code>BROForkBe</code> (<code>:2506</code>) runs <code>execlp(be,&quot;be&quot;,&quot;--tlv&quot;,uri)</code> (<code>:2538</code>), drains
-the child via <code>bro_drain_tlv</code> (<code>:2560</code>), then `new_nhunks = bro_nhunks - hunks_save;
-if (new_nhunks == 0) { bro_flash(st,&quot;be: no results&quot;); }<code>. So for a sub-pin </code>diff:?&lt;sha&gt;`
-the forked child's TLV deterministically yields *<strong>ZERO renderable hunks</strong>* in bro —
-the sub-recursion's content crosses the TLV/pager boundary in a framing bro drops
-(same root as the working-tree case: the sub diff is on a channel the parent pager
-doesn't fold into its hunk list).
+nav URI, <code>BROForkBe</code> (<code>:2506</code>) runs <code>execlp(be,&quot;be&quot;,&quot;--tlv&quot;,uri)</code> (<code>:2538</code>), drains the child via <code>bro_drain_tlv</code> (<code>:2560</code>), then <code>new_nhunks = bro_nhunks - hunks_save; if (new_nhunks == 0) { bro_flash(st,&quot;be: no results&quot;); }</code>. So for a sub-pin <code>diff:?&lt;sha&gt;</code> the forked child's TLV deterministically yields *<strong>ZERO renderable hunks</strong>* in bro — the sub-recursion's content crosses the TLV/pager boundary in a framing bro drops (same root as the working-tree case: the sub diff is on a channel the parent pager doesn't fold into its hunk list).
 </p>
 </div>
 <ul>
@@ -62,11 +51,7 @@ doesn't fold into its hunk list).
 </ul>
 <div>
 <p>
-<code>commit:?&lt;sha&gt;</code> instead of <code>diff:?&lt;sha&gt;</code> (<code>graf/LOG.c:214</code> → new <code>GRAFPackUriCommitSha</code>,
-<code>graf/GRAF.c</code>/<code>.h</code>). Commit-show always has a header hunk, so the CLICK no longer
-bottoms out to &quot;no results&quot;. This does NOT fix the underlying bug: directly invoking
-<code>be diff:?&lt;sub-pin-commit&gt;</code> (or working-tree <code>be diff</code> over a sub-dirty wt) still
-renders empty in the pager — that is THIS ticket.
+<code>commit:?&lt;sha&gt;</code> instead of <code>diff:?&lt;sha&gt;</code> (<code>graf/LOG.c:214</code> → new <code>GRAFPackUriCommitSha</code>, <code>graf/GRAF.c</code>/<code>.h</code>). Commit-show always has a header hunk, so the CLICK no longer bottoms out to &quot;no results&quot;. This does NOT fix the underlying bug: directly invoking <code>be diff:?&lt;sub-pin-commit&gt;</code> (or working-tree <code>be diff</code> over a sub-dirty wt) still renders empty in the pager — that is THIS ticket.
 </p>
 </div>
 <h2>Blockers</h2>
@@ -93,9 +78,7 @@ working-tree <code>be diff</code> AND <code>be diff:?&lt;sub-pin-commit&gt;</cod
 </ul>
 <div>
 <p>
-content reaches bro's hunk list (<code>new_nhunks &gt; 0</code> at <code>bro/BRO.c:2568</code>), not just the
-child's stdout bytes. Instrument <code>bro_drain_tlv</code> to see why the sub-relay TLV folds to
-zero hunks.
+content reaches bro's hunk list (<code>new_nhunks &gt; 0</code> at <code>bro/BRO.c:2568</code>), not just the child's stdout bytes. Instrument <code>bro_drain_tlv</code> to see why the sub-relay TLV folds to zero hunks.
 </p>
 </div>
 <h2>Outcome</h2>
@@ -104,15 +87,7 @@ zero hunks.
 </ul>
 <div>
 <p>
-NOT the sub-relay framing — it was *<strong><code>graf/DIFFREF.c:451</code> <code>diffref_emit_gitlink</code></strong>*,
-the one diff emitter that wrote the gitlink line <code>&lt;path&gt; &lt;old&gt;..&lt;new&gt;</code> via raw
-<code>fprintf(stdout,…)</code>, bypassing the canonical <code>GRAFHunkEmit → HUNKu8sFeedOut</code> channel.
-In <code>--tlv</code> that raw text LEADS the stream un-enveloped (before the <code>H</code> records);
-bro's <code>bro_drain_tlv</code> (<code>bro/BRO.c:2560</code> → <code>dog/HUNK.c:187 HUNKu8sDrain → TLVu8sDrain</code>)
-parses the leading <code>c</code> (0x63) as a short-form TLV, the <code>t==HUNK_TLV</code> gate fails, the
-loop breaks at offset 0 → <code>new_nhunks==0</code> (<code>bro/BRO.c:2568</code>) → &quot;be: no results&quot;.
-Manifestation #1 (working-tree sub-dirty) was already clean (prior <code>BERunPipeSubs</code>);
-only this gitlink-fprintf remained.
+NOT the sub-relay framing — it was *<strong><code>graf/DIFFREF.c:451</code> <code>diffref_emit_gitlink</code></strong>*, the one diff emitter that wrote the gitlink line <code>&lt;path&gt; &lt;old&gt;..&lt;new&gt;</code> via raw <code>fprintf(stdout,…)</code>, bypassing the canonical <code>GRAFHunkEmit → HUNKu8sFeedOut</code> channel. In <code>--tlv</code> that raw text LEADS the stream un-enveloped (before the <code>H</code> records); bro's <code>bro_drain_tlv</code> (<code>bro/BRO.c:2560</code> → <code>dog/HUNK.c:187 HUNKu8sDrain → TLVu8sDrain</code>) parses the leading <code>c</code> (0x63) as a short-form TLV, the <code>t==HUNK_TLV</code> gate fails, the loop breaks at offset 0 → <code>new_nhunks==0</code> (<code>bro/BRO.c:2568</code>) → &quot;be: no results&quot;. Manifestation #1 (working-tree sub-dirty) was already clean (prior <code>BERunPipeSubs</code>); only this gitlink-fprintf remained.
 </p>
 </div>
 <ul>
@@ -120,14 +95,7 @@ only this gitlink-fprintf remained.
 </ul>
 <div>
 <p>
-no ptr-arith; empty side → empty hex) and emits it as a text-only <code>hunk</code> via
-<code>GRAFHunkEmit</code> — all modes share the one channel (TLV wraps it in <code>H</code>; plain/color
-render identical text). <code>--nosub</code> still suppresses; empty-parent-but-sub-changed now
-renders the sub diff in the pager. RED repro in <code>test/diff/08-sub-pin-bump-gitlink</code>
-(pin-bump TLV → bro: 0 bytes pre-fix, 203 post-fix). Files: <code>graf/DIFFREF.c</code>,
-<code>test/diff/08…/run.sh</code>, <code>test/diff/INDEX.md</code>. Full <code>ctest</code> *<strong>302/302</strong><strong>. </strong>*LANDED
-<code>3dc19b0a</code>** (FF child of <code>f6bea1c5</code>; msg `DIFF-002: emit gitlink line as a hunk,
-not raw fprintf`).
+no ptr-arith; empty side → empty hex) and emits it as a text-only <code>hunk</code> via <code>GRAFHunkEmit</code> — all modes share the one channel (TLV wraps it in <code>H</code>; plain/color render identical text). <code>--nosub</code> still suppresses; empty-parent-but-sub-changed now renders the sub diff in the pager. RED repro in <code>test/diff/08-sub-pin-bump-gitlink</code> (pin-bump TLV → bro: 0 bytes pre-fix, 203 post-fix). Files: <code>graf/DIFFREF.c</code>, <code>test/diff/08…/run.sh</code>, <code>test/diff/INDEX.md</code>. Full <code>ctest</code> *<strong>302/302</strong><strong>. </strong><strong>LANDED <code>3dc19b0a</code></strong>* (FF child of <code>f6bea1c5</code>; msg <code>DIFF-002: emit gitlink line as a hunk, not raw fprintf</code>).
 </p>
 </div>
 </body>

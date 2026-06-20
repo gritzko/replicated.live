@@ -13,11 +13,7 @@
 </a>
 <h1>GET-025: <code>be get '?#&lt;sha&gt;'</code> (short sha) reconcile breaks the worktree baseline — every tracked file reads <code>new</code>, <code>be head</code> not advanced</h1>
 <p>
-A behind-by-N worktree reconciled with <code>be get '?#&lt;short-sha&gt;'</code> ends up with a
-cur-tip the baseline resolver reads as EMPTY: <code>be status</code> reports every tracked
-file as <code>new</code> (not <code>mod</code>/clean) and <code>be head</code> still shows the OLD tip, even
-though the checkout updated the changed files on disk. Surfaced during the
-DOC-001 commit reconcile; in the GET-024 <code>?#&lt;sha&gt;</code> trunk-state area. Method: <a href="../../rule/Issues.html">Issues</a>.
+A behind-by-N worktree reconciled with <code>be get '?#&lt;short-sha&gt;'</code> ends up with a cur-tip the baseline resolver reads as EMPTY: <code>be status</code> reports every tracked file as <code>new</code> (not <code>mod</code>/clean) and <code>be head</code> still shows the OLD tip, even though the checkout updated the changed files on disk. Surfaced during the DOC-001 commit reconcile; in the GET-024 <code>?#&lt;sha&gt;</code> trunk-state area. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -25,12 +21,12 @@ DOC-001 commit reconcile; in the GET-024 <code>?#&lt;sha&gt;</code> trunk-state 
 <li>Repro (from the DOC-001 committer, worktree <code>~/todo/DOC-001-abc2</code>, behind 1 =</li>
 </ul>
 <div>
-<p>
-missing GET-024 <code>134b9e30</code>, with 11 dirty <code>INDEX.md</code>):
 <pre><code>    $ be get '?#134b9e30'     # EXIT 0; updated sniff/GET.c + test/get/33; kept the 11 INDEX.md
     $ be status   →  ?  1217 new, 244 unk        (expected: behind 0, ~11 mod)
     $ be head     →  tip = ef8901fa (GET-021), NOT 134b9e30
 </code></pre>
+<p>
+missing GET-024 <code>134b9e30</code>, with 11 dirty <code>INDEX.md</code>):
 </p>
 </div>
 <ul>
@@ -38,9 +34,7 @@ missing GET-024 <code>134b9e30</code>, with 11 dirty <code>INDEX.md</code>):
 </ul>
 <div>
 <p>
-while row-1 anchors a full 40-char sha; the baseline tree then resolves EMPTY,
-so all 1217 tracked files read as <code>new</code>. The commit graph itself is intact
-(<code>be log:?#134b9e30</code> resolves: GET-024, parent ef8901fa). abc sub-mount fine.
+while row-1 anchors a full 40-char sha; the baseline tree then resolves EMPTY, so all 1217 tracked files read as <code>new</code>. The commit graph itself is intact (<code>be log:?#134b9e30</code> resolves: GET-024, parent ef8901fa). abc sub-mount fine.
 </p>
 </div>
 <ul>
@@ -48,11 +42,7 @@ so all 1217 tracked files read as <code>new</code>. The commit graph itself is i
 </ul>
 <div>
 <p>
-path (<code>be-put-06-triangle</code> uses <code>be get --force ?#&lt;sha&gt;</code>); the NON-force
-reconcile path with a SHORT <code>?#&lt;sha&gt;</code> records a cur-tip the baseline resolver
-can't expand → empty baseline. Either <code>be get</code> must resolve/expand a short
-<code>?#&lt;sha&gt;</code> to the full sha when recording the wtlog cur-tip, or reject a short
-sha; it must NOT silently leave an unresolvable baseline.
+path (<code>be-put-06-triangle</code> uses <code>be get --force ?#&lt;sha&gt;</code>); the NON-force reconcile path with a SHORT <code>?#&lt;sha&gt;</code> records a cur-tip the baseline resolver can't expand → empty baseline. Either <code>be get</code> must resolve/expand a short <code>?#&lt;sha&gt;</code> to the full sha when recording the wtlog cur-tip, or reject a short sha; it must NOT silently leave an unresolvable baseline.
 </p>
 </div>
 <h3>Goals</h3>
@@ -61,8 +51,7 @@ sha; it must NOT silently leave an unresolvable baseline.
 </ul>
 <div>
 <p>
-<code>be head</code> shows the new tip, <code>be status</code> shows only the genuinely-dirty files
-as <code>mod</code> (NOT the whole tree as <code>new</code>), baseline resolves normally.
+<code>be head</code> shows the new tip, <code>be status</code> shows only the genuinely-dirty files as <code>mod</code> (NOT the whole tree as <code>new</code>), baseline resolves normally.
 </p>
 </div>
 <h3>Constraints</h3>
@@ -71,11 +60,7 @@ as <code>mod</code> (NOT the whole tree as <code>new</code>), baseline resolves 
 </ul>
 <div>
 <p>
-<code>~/todo/DOC-001-abc2</code> — it holds the DOC-001 trim work uncommitted against this
-broken baseline; the 11 trimmed <code>INDEX.md</code> are also backed up at
-<code>~/todo/doc-trimmed/</code>). Then fix in <code>sniff/GET.c</code> (the GET-024 arm / wtlog
-cur-tip recording), VALIDATE with <code>-DWITH_SSH=ON</code> (<code>be-put-06-triangle</code> must
-stay green) AND a new non-force <code>?#&lt;sha&gt;</code> reconcile test.
+<code>~/todo/DOC-001-abc2</code> — it holds the DOC-001 trim work uncommitted against this broken baseline; the 11 trimmed <code>INDEX.md</code> are also backed up at <code>~/todo/doc-trimmed/</code>). Then fix in <code>sniff/GET.c</code> (the GET-024 arm / wtlog cur-tip recording), VALIDATE with <code>-DWITH_SSH=ON</code> (<code>be-put-06-triangle</code> must stay green) AND a new non-force <code>?#&lt;sha&gt;</code> reconcile test.
 </p>
 </div>
 <h2>WIP</h2>
@@ -85,8 +70,7 @@ stay green) AND a new non-force <code>?#&lt;sha&gt;</code> reconcile test.
 </ul>
 <div>
 <p>
-<code>?#&lt;sha&gt;</code> at record time), or the baseline resolver must accept a short-sha
-cur-tip. Confirm which by tracing the empty-baseline resolution.
+<code>?#&lt;sha&gt;</code> at record time), or the baseline resolver must accept a short-sha cur-tip. Confirm which by tracing the empty-baseline resolution.
 </p>
 </div>
 <h3>TODOs</h3>
@@ -109,8 +93,7 @@ cur-tip. Confirm which by tracing the empty-baseline resolution.
 </ul>
 <div>
 <p>
-rather than committing against the empty baseline). Adjacent to <a href="">[GET-024</a>]
-<code>134b9e30</code> (which I landed) — treat as a candidate regression of that change.
+rather than committing against the empty baseline). Adjacent to <a href="">[GET-024</a>] <code>134b9e30</code> (which I landed) — treat as a candidate regression of that change.
 </p>
 </div>
 <h2>Outcome</h2>

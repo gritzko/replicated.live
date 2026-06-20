@@ -14,8 +14,6 @@
 <h1>SUBS-025: submodule GET recursion leaks raw fetch progress instead of hunks</h1>
 <h2>Input</h2>
 <h3>Context</h3>
-<p>
-<code>be get</code> recursing into a submodule prints the sub's fetch progress as RAW terminal text, interleaved with the parent's real progress hunks (<code> 14:17  get abc?00e5d050</code>). Observed cloning <code>beagle.new</code> (sub <code>abc</code>):
 <pre><code> 14:17  new woof/test/STATIC.c          &lt;- parent hunk (beagle format)
 Enumerating objects: 2745, done.        &lt;- git side-band band-2, RAW to stderr
 Counting objects: 100% (2745/2745), done.
@@ -24,6 +22,8 @@ Total 2745 (delta 2096), reused 2415 (delta 1834), pack-reused 0 (from 0)
 keeper: fetched 1 ref(s)                 &lt;- keeper's own RAW stderr
  14:17  get abc?00e5d050                 &lt;- back to parent hunk
 </code></pre>
+<p>
+<code>be get</code> recursing into a submodule prints the sub's fetch progress as RAW terminal text, interleaved with the parent's real progress hunks (<code> 14:17  get abc?00e5d050</code>). Observed cloning <code>beagle.new</code> (sub <code>abc</code>):
 </p>
 <ul>
 <li>Two raw-stderr sources bypass the hunk channel: git side-band *<strong>band-2</strong>* is piped &quot;to stderr live&quot; by the ingest demux (<code>keeper/KEEP.c:2381</code>), and keeper prints <code>fprintf(stderr, &quot;keeper: fetched %u ref(s)\n&quot;, recorded)</code> (<code>keeper/WIRECLI.c:939</code>).</li>

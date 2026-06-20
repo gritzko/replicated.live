@@ -13,9 +13,7 @@
 </a>
 <h1>JS-010 <a href="">MED</a>: boundary cleanup — <code>JSStringRef</code> leaks + callback re-entrancy / exception safety</h1>
 <p>
-<code>JSValueToStringCopy</code> refs are never released, and the poll callbacks re-enter JS
-that can mutate <code>JS_FILES</code>/<code>JABC_TIMER</code> mid-loop while a C++ <code>throw</code> unwinding
-through a C-ABI callback is UB. Method: <a href="../../rule/Issues.html">Issues</a>.
+<code>JSValueToStringCopy</code> refs are never released, and the poll callbacks re-enter JS that can mutate <code>JS_FILES</code>/<code>JABC_TIMER</code> mid-loop while a C++ <code>throw</code> unwinding through a C-ABI callback is UB. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -32,9 +30,7 @@ through a C-ABI callback is UB. Method: <a href="../../rule/Issues.html">Issues<
 </ul>
 <div>
 <p>
-<code>io.cpp:281-336</code>) re-enter JS that can mutate <code>JS_FILES</code> / <code>JABC_TIMER</code>
-mid-loop with no guard; a C++ <code>throw</code> unwinding through these C-ABI callbacks
-is UB.
+<code>io.cpp:281-336</code>) re-enter JS that can mutate <code>JS_FILES</code> / <code>JABC_TIMER</code> mid-loop with no guard; a C++ <code>throw</code> unwinding through these C-ABI callbacks is UB.
 </p>
 </div>
 <ul>
@@ -55,8 +51,7 @@ mutation; no C++ exception escapes a C-ABI callback.
 </ul>
 <div>
 <p>
-<code>try{}catch(...){}</code> (effectively <code>noexcept</code>); document the single-thread contract
-and add a re-entrancy assert.
+<code>try{}catch(...){}</code> (effectively <code>noexcept</code>); document the single-thread contract and add a re-entrancy assert.
 </p>
 </div>
 <h2>WIP</h2>
@@ -91,11 +86,7 @@ re-entrancy-aware.
 </ul>
 <div>
 <p>
-live <code>JSStringRef</code> leaks (all paired w/ release; the cited utf8:18 was JS-003,
-convert.cpp is dead); wrapped both poll callbacks (<code>timeout_cb</code>,
-<code>JABCioNetOnEvent</code>) in <code>try{}catch(...){}</code> + a single-thread re-entrancy guard
-(<code>JABCioReentry</code>). C++-throw containment verified RED (abort) → GREEN via a new
-<code>jabc_test</code> row.
+live <code>JSStringRef</code> leaks (all paired w/ release; the cited utf8:18 was JS-003, convert.cpp is dead); wrapped both poll callbacks (<code>timeout_cb</code>, <code>JABCioNetOnEvent</code>) in <code>try{}catch(...){}</code> + a single-thread re-entrancy guard (<code>JABCioReentry</code>). C++-throw containment verified RED (abort) → GREEN via a new <code>jabc_test</code> row.
 </p>
 </div>
 </body>

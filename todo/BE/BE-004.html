@@ -13,11 +13,7 @@
 </a>
 <h1>BE-004: unify <code>home</code> into a process singleton (stop threading <code>home *</code>)</h1>
 <p>
-<code>home</code> is per-invocation ambient state derived purely from *<strong>cwd</strong>* (store /
-worktree discovery) — a process property, like <code>&amp;KEEP</code> and <code>&amp;GRAF</code> already are.
-Yet the codebase threads <code>home *</code> through every API and embeds a borrowed
-<code>home *h</code> in every dog's state struct, and reopens a fresh local <code>home</code> at
-~16 sites. Make <code>home</code> a singleton <code>&amp;HOME</code>; drop the pointer-passing.
+<code>home</code> is per-invocation ambient state derived purely from *<strong>cwd</strong>* (store / worktree discovery) — a process property, like <code>&amp;KEEP</code> and <code>&amp;GRAF</code> already are. Yet the codebase threads <code>home *</code> through every API and embeds a borrowed <code>home *h</code> in every dog's state struct, and reopens a fresh local <code>home</code> at ~16 sites. Make <code>home</code> a singleton <code>&amp;HOME</code>; drop the pointer-passing.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -26,8 +22,7 @@ Yet the codebase threads <code>home *</code> through every API and embeds a borr
 </ul>
 <div>
 <p>
-<code>home *base</code> in its state struct and propagates it through DOGOpen. All
-HOME functions take <code>home *</code> as their first argument.&quot;
+<code>home *base</code> in its state struct and propagates it through DOGOpen. All HOME functions take <code>home *</code> as their first argument.&quot;
 </p>
 </div>
 <ul>
@@ -51,8 +46,7 @@ HOME functions take <code>home *</code> as their first argument.&quot;
 </ul>
 <div>
 <p>
-<code>&amp;GRAF</code>, with <code>KEEPOPEN</code>/<code>GRAFOPEN</code> &quot;already open, use the global, do not
-close&quot; statuses). <code>home</code> is the odd one still passed by pointer.
+<code>&amp;GRAF</code>, with <code>KEEPOPEN</code>/<code>GRAFOPEN</code> &quot;already open, use the global, do not close&quot; statuses). <code>home</code> is the odd one still passed by pointer.
 </p>
 </div>
 <ul>
@@ -97,8 +91,7 @@ and the <code>home *</code> first argument from the HOME/KEEP/GRAF/SNIFF APIs.
 </ul>
 <div>
 <p>
-(writable cur + one ro aux); the singleton must keep supporting
-project/branch swap for cross-branch and sibling-shard reads.
+(writable cur + one ro aux); the singleton must keep supporting project/branch swap for cross-branch and sibling-shard reads.
 </p>
 </div>
 <ul>
@@ -119,15 +112,7 @@ refcount/status, callers never own it.
 </ul>
 <div>
 <p>
-<code>sniff/SUBS.c:617 subs_sibling_shard_has_pin(home *parent_home,…)</code> probes a
-sibling sub-shard by swapping <code>parent_home-&gt;project</code> + <code>KEEPOpenBranch</code>,
-then restores it (GET-011). Against <code>&amp;HOME</code> it swaps <code>&amp;HOME-&gt;project</code> and
-restores exactly as it does today — the singleton already owns a mutable
-<code>project</code> field, and the parent home is <strong>already</strong> a shared handle here, so
-nothing changes. (It does contradict &quot;subs always fork&quot;: this one pin
-probe reads in-process rather than forking — a behaviour note, not a
-migration obstacle.) No genuine <strong>dual-home</strong> (two live <code>home</code> structs in
-one process) exists anywhere, so the singleton thesis holds.
+<code>sniff/SUBS.c:617 subs_sibling_shard_has_pin(home *parent_home,…)</code> probes a sibling sub-shard by swapping <code>parent_home-&gt;project</code> + <code>KEEPOpenBranch</code>, then restores it (GET-011). Against <code>&amp;HOME</code> it swaps <code>&amp;HOME-&gt;project</code> and restores exactly as it does today — the singleton already owns a mutable <code>project</code> field, and the parent home is <strong>already</strong> a shared handle here, so nothing changes. (It does contradict &quot;subs always fork&quot;: this one pin probe reads in-process rather than forking — a behaviour note, not a migration obstacle.) No genuine <strong>dual-home</strong> (two live <code>home</code> structs in one process) exists anywhere, so the singleton thesis holds.
 </p>
 </div>
 <h3>TODOs</h3>
@@ -144,8 +129,7 @@ one process) exists anywhere, so the singleton thesis holds.
 </ul>
 <div>
 <p>
-  across HOME/KEEP/GRAF/SNIFF/SPOT/WOOF/BRO/REFSResolveURI/KEEPResolveURI;
-  <code>k-&gt;h-&gt;</code> → <code>HOME.</code>.
+  across HOME/KEEP/GRAF/SNIFF/SPOT/WOOF/BRO/REFSResolveURI/KEEPResolveURI;   <code>k-&gt;h-&gt;</code> → <code>HOME.</code>.
 </p>
 </div>
 <ul>
@@ -167,9 +151,7 @@ re-run FF'd/wove clean.)
 </ul>
 <div>
 <p>
-params and the borrowed <code>home *h</code> struct fields are gone across all dogs +
-dispatcher; ~70 source + ~22 test files; 291/291 green. Preserved the
-BRO-001 banner, BLAME-004 try-wraps, DIS-041 fix in the overlapping files.
+params and the borrowed <code>home *h</code> struct fields are gone across all dogs + dispatcher; ~70 source + ~22 test files; 291/291 green. Preserved the BRO-001 banner, BLAME-004 try-wraps, DIS-041 fix in the overlapping files.
 </p>
 </div>
 </body>

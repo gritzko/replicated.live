@@ -13,9 +13,7 @@
 </a>
 <h1>JS-005 <a href="">HIGH</a>: <code>JS_FILES</code> fd-table custody — GC-root leak, double-unprotect, std-stream close, table leak</h1>
 <p>
-The <code>JS_FILES</code> fd→object table mishandles JSC protect/unprotect and <code>close()</code>,
-leaking GC roots, double-unprotecting stdio, and closing the process std streams.
-Flagged by the lifecycle + custody lenses (high confidence). Method: <a href="../../rule/Issues.html">Issues</a>.
+The <code>JS_FILES</code> fd→object table mishandles JSC protect/unprotect and <code>close()</code>, leaking GC roots, double-unprotecting stdio, and closing the process std streams. Flagged by the lifecycle + custody lenses (high confidence). Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -24,8 +22,7 @@ Flagged by the lifecycle + custody lenses (high confidence). Method: <a href="..
 </ul>
 <div>
 <p>
-JSValueProtect` unconditionally — on fd reuse the prior protected object is
-overwritten with no <code>Unprotect</code> → permanent GC-root leak + stale object/fd.
+JSValueProtect<code> unconditionally — on fd reuse the prior protected object is overwritten with no </code>Unprotect` → permanent GC-root leak + stale object/fd.
 </p>
 </div>
 <ul>
@@ -33,8 +30,7 @@ overwritten with no <code>Unprotect</code> → permanent GC-root leak + stale ob
 </ul>
 <div>
 <p>
-<code>JS_FILES</code> loop unprotects the same stdio objects again (double-unprotect) AND
-<code>JABCioCloseFile</code> <code>close()</code>s fds 0/1/2 — closing the process std streams.
+<code>JS_FILES</code> loop unprotects the same stdio objects again (double-unprotect) AND <code>JABCioCloseFile</code> <code>close()</code>s fds 0/1/2 — closing the process std streams.
 </p>
 </div>
 <ul>
@@ -91,11 +87,7 @@ stdio unprotect between <code>JABCio_STD</code> and the table loop, free the tab
 </ul>
 <div>
 <p>
-<code>JABCioMakeFileObject</code>, skip <code>close()</code> for fds 0/1/2 in <code>JABCioCloseFile</code>,
-dedup the stdio unprotect (null <code>JS_FILES[0..2]</code> before the close-loop), and
-<code>free(JS_FILES)</code> on uninstall; C++ harness now drives io install/uninstall
-and asserts std fds survive + table freed (red-before/green-after, ASAN/LSan
-clean). (a) fd-reuse GC-root balance is logic-verified; (b)+(c) test-verified.
+<code>JABCioMakeFileObject</code>, skip <code>close()</code> for fds 0/1/2 in <code>JABCioCloseFile</code>, dedup the stdio unprotect (null <code>JS_FILES[0..2]</code> before the close-loop), and <code>free(JS_FILES)</code> on uninstall; C++ harness now drives io install/uninstall and asserts std fds survive + table freed (red-before/green-after, ASAN/LSan clean). (a) fd-reuse GC-root balance is logic-verified; (b)+(c) test-verified.
 </p>
 </div>
 </body>

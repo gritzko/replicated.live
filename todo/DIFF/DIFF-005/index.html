@@ -13,12 +13,7 @@
 </a>
 <h1>DIFF-005: <code>be diff:&lt;file&gt;</code> emits enormous (whole-file) context</h1>
 <p>
-<code>be diff:dog/INDEX.md</code> returns 110 lines for a 2-line edit — a single hunk
-<code>@@ -1,106 +1,106 @@</code> spanning the ENTIRE file (2 added, 2 removed, **105
-context**). For a tiny change in a large doc this is &quot;enormous context for no
-obvious reason.&quot; Likely DIFF-003's landed file-scoped full-file diff showing for
-a single-file <code>diff:</code>; research whether that is intended/acceptable or should be
-bounded. Evidence: <a href="diff-evidence.txt">evidence</a>. Method: <a href="../../rule/Issues.html">Issues</a>.
+<code>be diff:dog/INDEX.md</code> returns 110 lines for a 2-line edit — a single hunk <code>@@ -1,106 +1,106 @@</code> spanning the ENTIRE file (2 added, 2 removed, *<strong>105 context</strong>*). For a tiny change in a large doc this is &quot;enormous context for no obvious reason.&quot; Likely DIFF-003's landed file-scoped full-file diff showing for a single-file <code>diff:</code>; research whether that is intended/acceptable or should be bounded. Evidence: <a href="diff-evidence.txt">evidence</a>. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -27,8 +22,7 @@ bounded. Evidence: <a href="diff-evidence.txt">evidence</a>. Method: <a href="..
 </ul>
 <div>
 <p>
-hunk <code>@@ -1,106 +1,106 @@</code>, 2 <code>+</code> / 2 <code>-</code> / *<strong>105 context</strong>*. The whole file is
-emitted as context for a 2-line change. Full capture + repro: <a href="diff-evidence.txt">evidence</a>.
+hunk <code>@@ -1,106 +1,106 @@</code>, 2 <code>+</code> / 2 <code>-</code> / *<strong>105 context</strong>*. The whole file is emitted as context for a 2-line change. Full capture + repro: <a href="diff-evidence.txt">evidence</a>.
 </p>
 </div>
 <ul>
@@ -36,10 +30,7 @@ emitted as context for a 2-line change. Full capture + repro: <a href="diff-evid
 </ul>
 <div>
 <p>
-a single-file <code>diff:&lt;path&gt;</code> plausibly renders the WHOLE file BY DESIGN. But the
-maintainer didn't expect/recognize it (&quot;no idea why&quot;) — so either it's the
-intended file-scoped mode (and needs documenting / a bound for large files), or
-a context-sizing regression.
+a single-file <code>diff:&lt;path&gt;</code> plausibly renders the WHOLE file BY DESIGN. But the maintainer didn't expect/recognize it (&quot;no idea why&quot;) — so either it's the intended file-scoped mode (and needs documenting / a bound for large files), or a context-sizing regression.
 </p>
 </div>
 <h3>Goals</h3>
@@ -56,8 +47,7 @@ file-scoped) or a context-sizing bug? Cite the code path.
 </ul>
 <div>
 <p>
-git-style ~N-line-context mode, and DOCUMENT it so it stops surprising; if a
-bug, fix the context window.
+git-style ~N-line-context mode, and DOCUMENT it so it stops surprising; if a bug, fix the context window.
 </p>
 </div>
 <h3>Constraints</h3>
@@ -84,11 +74,7 @@ context size for a small-edit-in-large-file case.
 </ul>
 <div>
 <p>
-<code>be diff:</code> is ALREADY bounded — every hunk is 3-line context
-(<code>GRAFDiffWtTree</code>→<code>GRAFDiffWtFile(full=NO)</code>→<code>WEAVEEmitDiff</code>). The whole-file
-inflation is ONLY the single-file <code>diff:&lt;file&gt;</code> projector (<code>full=YES</code>). So this
-ticket stays a single-file-projector concern; do NOT add bare-diff handling, and
-drop the &quot;bare diff is whole-file&quot; framing.
+<code>be diff:</code> is ALREADY bounded — every hunk is 3-line context (<code>GRAFDiffWtTree</code>→<code>GRAFDiffWtFile(full=NO)</code>→<code>WEAVEEmitDiff</code>). The whole-file inflation is ONLY the single-file <code>diff:&lt;file&gt;</code> projector (<code>full=YES</code>). So this ticket stays a single-file-projector concern; do NOT add bare-diff handling, and drop the &quot;bare diff is whole-file&quot; framing.
 </p>
 </div>
 <ul>
@@ -96,12 +82,7 @@ drop the &quot;bare diff is whole-file&quot; framing.
 </ul>
 <div>
 <p>
-<a href="">[DIFF-006</a>] (cosmetic: per-hunk <code>--- a/</code>/<code>+++ b/</code> repeated, not coalesced per
-file — the &quot;62 headers vs 17 files&quot; artifact, <code>dog/HUNK.c:1242</code>) and <a href="">[DIFF-007</a>]
-(REAL bug: <code>diff:&lt;largefile&gt;</code> silently EMPTY — <code>WEAVEEmitFull</code>'s 65536-token
-<code>outtoks</code> carve overflows on big files, NOROOM swallowed; <code>WEAVE.c:1030/1099</code>).
-Note: option-a here (bound large files → <code>WEAVEEmitDiff</code>) would INCIDENTALLY mask
-DIFF-007, a strong extra argument for it.
+<a href="">[DIFF-006</a>] (cosmetic: per-hunk <code>--- a/</code>/<code>+++ b/</code> repeated, not coalesced per file — the &quot;62 headers vs 17 files&quot; artifact, <code>dog/HUNK.c:1242</code>) and <a href="">[DIFF-007</a>] (REAL bug: <code>diff:&lt;largefile&gt;</code> silently EMPTY — <code>WEAVEEmitFull</code>'s 65536-token <code>outtoks</code> carve overflows on big files, NOROOM swallowed; <code>WEAVE.c:1030/1099</code>). Note: option-a here (bound large files → <code>WEAVEEmitDiff</code>) would INCIDENTALLY mask DIFF-007, a strong extra argument for it.
 </p>
 </div>
 <ul>
@@ -109,10 +90,7 @@ DIFF-007, a strong extra argument for it.
 </ul>
 <div>
 <p>
-<code>full=YES</code> for single-file <code>diff:</code> shapes. Decision site <code>GRAFDiff2Layer</code>
-(<code>graf/DIFFREF.c:163</code>): <code>if (full) WEAVEEmitFull</code> (no windowing, <code>WEAVE.c:1015</code>)
-else <code>WEAVEEmitDiff</code> (3-line <code>WEAVE_CTX_LINES</code>, <code>WEAVE.c:802/850</code>). Intent
-documented verbatim at <code>DIFFREF.c:108-117</code> + <code>GRAF.h:315-317</code>. No context knob.
+<code>full=YES</code> for single-file <code>diff:</code> shapes. Decision site <code>GRAFDiff2Layer</code> (<code>graf/DIFFREF.c:163</code>): <code>if (full) WEAVEEmitFull</code> (no windowing, <code>WEAVE.c:1015</code>) else <code>WEAVEEmitDiff</code> (3-line <code>WEAVE_CTX_LINES</code>, <code>WEAVE.c:802/850</code>). Intent documented verbatim at <code>DIFFREF.c:108-117</code> + <code>GRAF.h:315-317</code>. No context knob.
 </p>
 </div>
 <ul>
@@ -120,9 +98,7 @@ documented verbatim at <code>DIFFREF.c:108-117</code> + <code>GRAF.h:315-317</co
 </ul>
 <div>
 <p>
-wt-vs-base, <code>:502</code> ref, <code>:438</code> range). Tree-scope (<code>DIFFREF.c:377</code>) and the
-<code>weave</code> verb (<code>GRAF.exe.c:567</code>) ALREADY use the bounded 3-line path — so the
-machinery for git-style context exists.
+wt-vs-base, <code>:502</code> ref, <code>:438</code> range). Tree-scope (<code>DIFFREF.c:377</code>) and the <code>weave</code> verb (<code>GRAF.exe.c:567</code>) ALREADY use the bounded 3-line path — so the machinery for git-style context exists.
 </p>
 </div>
 <ul>
@@ -130,10 +106,7 @@ machinery for git-style context exists.
 </ul>
 <div>
 <p>
-<code>DIFFREF.c:163</code>, when <code>full &amp;&amp; line_count &gt; N</code> (~200) demote to <code>WEAVEEmitDiff</code>;
-small files keep the full read (one-site, no API churn — worker's preferred).
-(b) SPLIT pager-vs-text — tty/<code>HUNKMode</code> → full, non-tty → 3-line (touches the 3
-dispatch sites). (c) KEEP + DOCUMENT only (it self-documents already).
+<code>DIFFREF.c:163</code>, when <code>full &amp;&amp; line_count &gt; N</code> (~200) demote to <code>WEAVEEmitDiff</code>; small files keep the full read (one-site, no API churn — worker's preferred). (b) SPLIT pager-vs-text — tty/<code>HUNKMode</code> → full, non-tty → 3-line (touches the 3 dispatch sites). (c) KEEP + DOCUMENT only (it self-documents already).
 </p>
 </div>
 <h3>TODOs</h3>
@@ -171,8 +144,7 @@ might be a bound + docs, not a behaviour reversal.
 </ul>
 <div>
 <p>
-<code>graf/DIFFREF.c:163</code>. Awaiting a maintainer UX ruling (bound-large-files /
-pager-vs-text / document-only), then a one-site implementation.
+<code>graf/DIFFREF.c:163</code>. Awaiting a maintainer UX ruling (bound-large-files / pager-vs-text / document-only), then a one-site implementation.
 </p>
 </div>
 </body>

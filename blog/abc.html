@@ -13,42 +13,13 @@
 </a>
 <h1>Three years with Abstractionless C</h1>
 <p>
-<img src="./img/c_vs_cpp.jpg#rightw40" alt="C versus C++">
-Recently, &quot;to C or not to C&quot; became a topic on HN, which is a nice
-excuse to spend couple hours on <a href="https://github.com/gritzko/libabc">ABC</a> retrospective. The decision
-to work in C was rather natural: the author is a C/Go, not C++/Rust
-kind of person, so once Go runtime became a problem, C was the
-most straightforward answer. The dirty secret of both C++ and C is
-that these two are like IKEA or LEGO languages. Languages to create
-other languages. For example, virtually any serious C++ user has
-some sort of alternative standard library (Abseil, QT, there are
-many). You don't use C or C++ as-is, normally. C standard library 
-is small by design, so that is inevitable for most use cases.
-C++/C standard libraries are sort of a very mixed bag, effectively
-a chronicle of CS ideas for the last 40-50 years. If C standard lib
-is kind of a manuscript chamber in a faraway monastery, C++ std lib
-is more like the Library of Congress. Nobody knows it all, and most
-of the ideas written are definitely not recommended today.
+<img src="./img/c_vs_cpp.jpg#rightw40" alt="C versus C++"> Recently, &quot;to C or not to C&quot; became a topic on HN, which is a nice excuse to spend couple hours on <a href="https://github.com/gritzko/libabc">ABC</a> retrospective. The decision to work in C was rather natural: the author is a C/Go, not C++/Rust kind of person, so once Go runtime became a problem, C was the most straightforward answer. The dirty secret of both C++ and C is that these two are like IKEA or LEGO languages. Languages to create other languages. For example, virtually any serious C++ user has some sort of alternative standard library (Abseil, QT, there are many). You don't use C or C++ as-is, normally. C standard library  is small by design, so that is inevitable for most use cases. C++/C standard libraries are sort of a very mixed bag, effectively a chronicle of CS ideas for the last 40-50 years. If C standard lib is kind of a manuscript chamber in a faraway monastery, C++ std lib is more like the Library of Congress. Nobody knows it all, and most of the ideas written are definitely not recommended today.
 </p>
 <p>
-Abstractionless C resulted from many frustrations with C++ and its
-endless quirks. I needed generics, STL-like containers, disk and
-network serialization, some standard algorithms, with no pointer 
-arithmetics and no malloc/free headaches. Coming from Go, I clearly 
-needed slices. That was the pragmatic problem statement. Things to
-improve productivity while doing systems-programming.
+Abstractionless C resulted from many frustrations with C++ and its endless quirks. I needed generics, STL-like containers, disk and network serialization, some standard algorithms, with no pointer  arithmetics and no malloc/free headaches. Coming from Go, I clearly  needed slices. That was the pragmatic problem statement. Things to improve productivity while doing systems-programming.
 </p>
 <p>
-<img src="./img/Jenga.gif#rightw40" alt="Playing Jenga">
-On the higher philosophical level, I wanted to avoid the cursed
-tower-of-abstractions trap that I felt quite sharply in C++. 
-There, same bytes packaged differently become entirely different
-incompatible entities (like <code>std::string</code> vs <code>std::vector&lt;char&gt;</code> vs
-<code>std::valarray&lt;&gt;</code> etc). I understand quite clearly what happens on
-the bit and byte level. Lawyering about pure abstractions always 
-felt counter-productive to me, and C++ always had <strong>lots</strong> of that.
-Many of those abstractions abstracted away things that do not exist
-anymore, like big-endian CPUs and HDDs. 
+<img src="./img/Jenga.gif#rightw40" alt="Playing Jenga"> On the higher philosophical level, I wanted to avoid the cursed tower-of-abstractions trap that I felt quite sharply in C++.  There, same bytes packaged differently become entirely different incompatible entities (like <code>std::string</code> vs <code>std::vector&lt;char&gt;</code> vs <code>std::valarray&lt;&gt;</code> etc). I understand quite clearly what happens on the bit and byte level. Lawyering about pure abstractions always  felt counter-productive to me, and C++ always had <strong>lots</strong> of that. Many of those abstractions abstracted away things that do not exist anymore, like big-endian CPUs and HDDs. 
 </p>
 <p>
 I did not want to play Jenga with imaginary bricks. 
@@ -93,8 +64,7 @@ for STL-level containers: <code>HEAPu64Pop()</code>, <code>HEAPu8csPop()</code>,
 </ol>
 <div>
 <p>
-Vectors, heaps, open addressed hash maps, <a href="https://github.com/gritzko/libabc/blob/main/HIT.md">LSM</a> sorted sets,
-these are fundamentally arrays.
+Vectors, heaps, open addressed hash maps, <a href="https://github.com/gritzko/libabc/blob/main/HIT.md">LSM</a> sorted sets, these are fundamentally arrays.
 </p>
 </div>
 <ol>
@@ -102,8 +72,7 @@ these are fundamentally arrays.
 </ol>
 <div>
 <p>
-<code>void SHA1Sum(sha1* hash, u8csc from)</code> declared in <code>SHA1.h</code>,
-implemented in <code>SHA1.c</code>, tested in <code>test/SHA1.c</code>, etc.
+<code>void SHA1Sum(sha1* hash, u8csc from)</code> declared in <code>SHA1.h</code>, implemented in <code>SHA1.c</code>, tested in <code>test/SHA1.c</code>, etc.
 </p>
 </div>
 <ol>
@@ -119,29 +88,14 @@ mmap for solid containers.
 </ol>
 <div>
 <p>
-<code>u8csb</code> is a buffer-of-const-byte-slices. <code>sha256bMap()</code> mmaps
-a buffer of hashes, which might be treated as a vector, a heap, 
-or a <a href="https://github.com/gritzko/libabc/blob/main/HASHx.h">hash set</a>, e.g. with <code>HASHsha256Put()</code>/<code>HASHsha256Get()</code>.
+<code>u8csb</code> is a buffer-of-const-byte-slices. <code>sha256bMap()</code> mmaps a buffer of hashes, which might be treated as a vector, a heap,  or a <a href="https://github.com/gritzko/libabc/blob/main/HASHx.h">hash set</a>, e.g. with <code>HASHsha256Put()</code>/<code>HASHsha256Get()</code>.
 </p>
 </div>
 <p>
-Slices and generics are a bit unexpected in C, the rest is just
-another C style with a funky notation, no biggie. The obvious issue
-here is that C does not support slices in any of its standard APIs.
-But, the C standard library is not that huge, and its usable part
-is even less, so unless a function is a syscall or somehow gets
-special treatment from the compiler, what is the value of it?
-Diminishingly zero. Especially in the LLM era. What has a lot of
-value is the toolchain that understands C and the OS kernel. Those
-are true megaprojects.
+Slices and generics are a bit unexpected in C, the rest is just another C style with a funky notation, no biggie. The obvious issue here is that C does not support slices in any of its standard APIs. But, the C standard library is not that huge, and its usable part is even less, so unless a function is a syscall or somehow gets special treatment from the compiler, what is the value of it? Diminishingly zero. Especially in the LLM era. What has a lot of value is the toolchain that understands C and the OS kernel. Those are true megaprojects.
 </p>
 <p>
-So, I sketched some skeleton of my (un)standard lib and started
-working with it. The &quot;meat&quot; slowly grew, the thing saw one or two
-refactors along the way, but it mainly remains a collection of
-small and focused modules with slice-based APIs and increasingly
-rare malloc use. The cases for malloc go down for the following
-reasons:
+So, I sketched some skeleton of my (un)standard lib and started working with it. The &quot;meat&quot; slowly grew, the thing saw one or two refactors along the way, but it mainly remains a collection of small and focused modules with slice-based APIs and increasingly rare malloc use. The cases for malloc go down for the following reasons:
 </p>
 <ol>
 <li>anything multiple-page sized can be mmapped directly,</li>
@@ -151,8 +105,7 @@ reasons:
 </ol>
 <div>
 <p>
-so you deal with <code>u8cs</code> (two-pointer slice) and the bytes
-live in the arena,
+so you deal with <code>u8cs</code> (two-pointer slice) and the bytes live in the arena,
 </p>
 </div>
 <ol>
@@ -167,15 +120,10 @@ matches on-disk layout, forget SPARCs and Alphas already),
 <li>the remaining cases are either <code>malloc</code> or something else.</li>
 </ol>
 <p>
-Out of remaining burning questions one may mention package and
-dependendency management. Obviously, for C that is RPM, APT, apk,
-Brew and so on. I am not going to bring along second copies of
-CURL, libsodium, and all the other usual suspects.
+Out of remaining burning questions one may mention package and dependendency management. Obviously, for C that is RPM, APT, apk, Brew and so on. I am not going to bring along second copies of CURL, libsodium, and all the other usual suspects.
 </p>
 <p>
-So for my purposes, it worked out fine in a 100KLoC project. 
-As L.Torvalds once said:  &quot;Standards are paper. Buy some and write
-your own.&quot; Or something like that.
+So for my purposes, it worked out fine in a 100KLoC project.  As L.Torvalds once said:  &quot;Standards are paper. Buy some and write your own.&quot; Or something like that.
 </p>
 </body>
 </html>

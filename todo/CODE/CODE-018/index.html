@@ -13,14 +13,7 @@
 </a>
 <h1>CODE-018: manual <code>ok64</code> propagation should use PRO.h <code>call()</code>/<code>try()</code></h1>
 <p>
-In <code>.c</code> files a recurring hand-rolled pattern <code>ok64 o = A; if (o != OK) return o;</code>
-forwards an <code>ok64</code> callee's error WITHOUT a PRO.h frame.  Per <a href="../../../CLAUDE.md">CLAUDE</a> §1/§16 +
-<a href="../../rule/ABC.html">ABC</a>, a function that calls a fallible <code>ok64</code> fn should itself <code>sane()</code>/<code>done</code>
-and propagate via <code>call(A)</code> (or <code>try(A)</code> + branch).  Header-defined fns are
-inlineables that should be can't-fail; if one does fallible work it belongs in a
-<code>.c</code> with a real frame.  Suspect list (116, regenerable) in <a href="suspects.txt">suspects</a>.  NOT a
-mechanical sweep — <code>call()</code> snapshots+rewinds <code>ABC_BASS</code>, which manual <code>return o</code>
-does NOT, so each conversion is a per-case correctness check.  Method: <a href="../../rule/Issues.html">Issues</a>.
+In <code>.c</code> files a recurring hand-rolled pattern <code>ok64 o = A; if (o != OK) return o;</code> forwards an <code>ok64</code> callee's error WITHOUT a PRO.h frame.  Per <a href="../../../CLAUDE.md">CLAUDE</a> §1/§16 + <a href="../../rule/ABC.html">ABC</a>, a function that calls a fallible <code>ok64</code> fn should itself <code>sane()</code>/<code>done</code> and propagate via <code>call(A)</code> (or <code>try(A)</code> + branch).  Header-defined fns are inlineables that should be can't-fail; if one does fallible work it belongs in a <code>.c</code> with a real frame.  Suspect list (116, regenerable) in <a href="suspects.txt">suspects</a>.  NOT a mechanical sweep — <code>call()</code> snapshots+rewinds <code>ABC_BASS</code>, which manual <code>return o</code> does NOT, so each conversion is a per-case correctness check.  Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -37,10 +30,7 @@ does NOT, so each conversion is a per-case correctness check.  Method: <a href="
 </ul>
 <div>
 <p>
-snapshots+rewinds BASS around <code>A</code> (frees the callee's per-call scratch).  Some
-manual sites may be INTENTIONAL — the callee returns a slice/buffer carved in
-BASS that the caller still uses, so a <code>call()</code> rewind would dangle it.  These
-must stay manual (or restructure) — converting them blindly is a bug.
+snapshots+rewinds BASS around <code>A</code> (frees the callee's per-call scratch).  Some manual sites may be INTENTIONAL — the callee returns a slice/buffer carved in BASS that the caller still uses, so a <code>call()</code> rewind would dangle it.  These must stay manual (or restructure) — converting them blindly is a bug.
 </p>
 </div>
 <ul>
@@ -65,8 +55,7 @@ surface uncertainty, don't churn.
 </ul>
 <div>
 <p>
-call, replace <code>ok64 o=A; if(o!=OK) return o;</code> with <code>call(A)</code> (the fn already /
-now has <code>sane(...)</code>/<code>done</code>).  <code>try(A)</code>+<code>then</code>/<code>nedo</code> where a branch follows.
+call, replace <code>ok64 o=A; if(o!=OK) return o;</code> with <code>call(A)</code> (the fn already / now has <code>sane(...)</code>/<code>done</code>).  <code>try(A)</code>+<code>then</code>/<code>nedo</code> where a branch follows.
 </p>
 </div>
 <ul>
@@ -74,8 +63,7 @@ now has <code>sane(...)</code>/<code>done</code>).  <code>try(A)</code>+<code>th
 </ul>
 <div>
 <p>
-(PRO.h is <code>.c</code>-only); a genuinely-fallible one with cleanup needs → move to a
-<code>.c</code>.  Decide each, don't blanket-convert.
+(PRO.h is <code>.c</code>-only); a genuinely-fallible one with cleanup needs → move to a <code>.c</code>.  Decide each, don't blanket-convert.
 </p>
 </div>
 <ul>
@@ -92,8 +80,7 @@ rewording to dodge the search.
 </ul>
 <div>
 <p>
-callee leaves nothing live in BASS that the caller reads after <code>A</code>.  If unsure,
-SKIP and list it.
+callee leaves nothing live in BASS that the caller reads after <code>A</code>.  If unsure, SKIP and list it.
 </p>
 </div>
 <ul>
@@ -109,8 +96,7 @@ diffs for maintainer review, never autoland (<a href="../../../CLAUDE.md">CLAUDE
 </ul>
 <div>
 <p>
-(macro/template headers); <code>*/test/*</code> + <code>abc/fuzz/*</code> (TEST/FUZZ frames, low
-priority).  All flagged in <a href="suspects.txt">suspects</a>.
+(macro/template headers); <code>*/test/*</code> + <code>abc/fuzz/*</code> (TEST/FUZZ frames, low priority).  All flagged in <a href="suspects.txt">suspects</a>.
 </p>
 </div>
 <ul>
@@ -123,9 +109,7 @@ priority).  All flagged in <a href="suspects.txt">suspects</a>.
 </ul>
 <div>
 <p>
-<code>.h</code>-triage separately.  Repro-first (<a href="../../../CLAUDE.md">CLAUDE</a> §17): the existing suite is the
-behaviour anchor — full <code>ctest</code> green after each batch; add a case only where
-a conversion could shift behaviour.
+<code>.h</code>-triage separately.  Repro-first (<a href="../../../CLAUDE.md">CLAUDE</a> §17): the existing suite is the behaviour anchor — full <code>ctest</code> green after each batch; add a case only where a conversion could shift behaviour.
 </p>
 </div>
 <h3>TODOs</h3>
@@ -134,8 +118,7 @@ a conversion could shift behaviour.
 </ul>
 <div>
 <p>
-  (callee output is mmap/scalar/caller-carved, never live BASS scratch). Suspect
-  count 116→65; finder re-run confirms the drop is real <code>call()</code>/<code>try()</code>.
+  (callee output is mmap/scalar/caller-carved, never live BASS scratch). Suspect   count 116→65; finder re-run confirms the drop is real <code>call()</code>/<code>try()</code>.
 </p>
 </div>
 <ul>
@@ -157,9 +140,7 @@ a conversion could shift behaviour.
 </ul>
 <div>
 <p>
-+ <code>SNIFFMergeWalk</code> cb-dispatch (cb may carve cross-call BASS in ctx — MEM-018);
-<code>diffref_remember_submodule</code> (cross-step <code>u8bAcquire</code>); <code>BRAM.c</code>/<code>CAPOEmit</code> are
-<code>try</code>/<code>on</code>-idioms not forwards; tok BRCT/MDT/MKDT (no frame, ptr-arith legacy).
++ <code>SNIFFMergeWalk</code> cb-dispatch (cb may carve cross-call BASS in ctx — MEM-018); <code>diffref_remember_submodule</code> (cross-step <code>u8bAcquire</code>); <code>BRAM.c</code>/<code>CAPOEmit</code> are <code>try</code>/<code>on</code>-idioms not forwards; tok BRCT/MDT/MKDT (no frame, ptr-arith legacy).
 </p>
 </div>
 <ul>
@@ -167,8 +148,7 @@ a conversion could shift behaviour.
 </ul>
 <div>
 <p>
-<code>abc/ROCK.c#ROCKGet</code>** holds a <code>rocksdb_get</code> <code>val</code> needing free — a <code>call()</code>
-early-return leaks it; keep manual / restructure. abc <code>.h</code> all <code>fun</code> inlineables.
+<code>abc/ROCK.c#ROCKGet</code>** holds a <code>rocksdb_get</code> <code>val</code> needing free — a <code>call()</code> early-return leaks it; keep manual / restructure. abc <code>.h</code> all <code>fun</code> inlineables.
 </p>
 </div>
 <h2>Outcome</h2>
@@ -177,8 +157,7 @@ early-return leaks it; keep manual / restructure. abc <code>.h</code> all <code>
 </ul>
 <div>
 <p>
-18 non-abc files, 298/298; <code>POSTCFLCT</code> was the documented false positive
-(<code>// ====</code> comment banners, no real markers) — forced with <code>be post!</code> as gated.
+18 non-abc files, 298/298; <code>POSTCFLCT</code> was the documented false positive (<code>// ====</code> comment banners, no real markers) — forced with <code>be post!</code> as gated.
 </p>
 </div>
 <ul>
@@ -186,10 +165,7 @@ early-return leaks it; keep manual / restructure. abc <code>.h</code> all <code>
 </ul>
 <div>
 <p>
-review-only, marginal ABC-consistency value; clean candidates were
-<code>PATH.c</code>/<code>URI.c</code>/<code>JSON.c</code>/<code>FILE.c</code> forwards, but <code>abc/ROCK.c#ROCKGet</code> is a
-free-leak HAZARD (keep manual) and the abc <code>.h</code> are <code>fun</code> inlineables (keep
-manual).  14 non-abc sites correctly skipped as BASS findings.  Ticket done.
+review-only, marginal ABC-consistency value; clean candidates were <code>PATH.c</code>/<code>URI.c</code>/<code>JSON.c</code>/<code>FILE.c</code> forwards, but <code>abc/ROCK.c#ROCKGet</code> is a free-leak HAZARD (keep manual) and the abc <code>.h</code> are <code>fun</code> inlineables (keep manual).  14 non-abc sites correctly skipped as BASS findings.  Ticket done.
 </p>
 </div>
 </body>

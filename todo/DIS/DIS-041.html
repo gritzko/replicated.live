@@ -13,16 +13,7 @@
 </a>
 <h1>DIS-041: <code>be get</code>/<code>patch</code> FF-weave bails with <code>graf err</code> and leaves the file UNMERGED when the commits aren't indexed — the correct fallback is to INDEX the commits and RETRY</h1>
 <p>
-When a store-backed worktree that is BEHIND trunk is fast-forwarded
-(<code>be get '?'</code>), files that diverged on both sides need a 3-way weave. If the
-relevant commit DAG is not indexed, the weave drops to
-<code>build_tip_weave_tunable</code>'s *<strong>no-history fallback</strong>* (<code>graf/GET.c:537-548</code>),
-which stamps each side's blob with its own tip hashlet so the two sides share
-NO baseline birth-ids → <code>WEAVEApply</code> matches nothing → <code>GRAFFAIL</code>
-(<code>sniff/GET.c:748</code>), and sniff prints `merge failed … (graf err) — leaving wt
-content untouched`, i.e. the file is left UNMERGED. The only correct fallback
-is to *<strong>index the commits and RETRY</strong>* the weave — never bail, never silently
-return <code>ours</code>. See <a href="../../wiki/PATCH.html">PATCH</a>, <a href="../../wiki/POST.html">POST</a>, <a href="../../wiki/Graf.html">Graf</a>.
+When a store-backed worktree that is BEHIND trunk is fast-forwarded (<code>be get '?'</code>), files that diverged on both sides need a 3-way weave. If the relevant commit DAG is not indexed, the weave drops to <code>build_tip_weave_tunable</code>'s *<strong>no-history fallback</strong>* (<code>graf/GET.c:537-548</code>), which stamps each side's blob with its own tip hashlet so the two sides share NO baseline birth-ids → <code>WEAVEApply</code> matches nothing → <code>GRAFFAIL</code> (<code>sniff/GET.c:748</code>), and sniff prints <code>merge failed … (graf err) — leaving wt content untouched</code>, i.e. the file is left UNMERGED. The only correct fallback is to *<strong>index the commits and RETRY</strong>* the weave — never bail, never silently return <code>ours</code>. See <a href="../../wiki/PATCH.html">PATCH</a>, <a href="../../wiki/POST.html">POST</a>, <a href="../../wiki/Graf.html">Graf</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -31,11 +22,7 @@ return <code>ours</code>. See <a href="../../wiki/PATCH.html">PATCH</a>, <a href
 </ul>
 <div>
 <p>
-&quot;is no longer on disk / cannot be driven through <code>be</code>&quot;): FF the BE-004
-store-backed worktree <code>~/todo/BE-004-new</code> (cloned behind trunk) onto
-current trunk → <code>be get '?'</code> → <code>merge failed for bro/BRO.c (graf err)</code> and
-<code>graf/BLAME.c (graf err) — leaving wt content untouched</code>. Reproducible on
-demand from any behind-worktree FF where both sides touched a file.
+&quot;is no longer on disk / cannot be driven through <code>be</code>&quot;): FF the BE-004 store-backed worktree <code>~/todo/BE-004-new</code> (cloned behind trunk) onto current trunk → <code>be get '?'</code> → <code>merge failed for bro/BRO.c (graf err)</code> and <code>graf/BLAME.c (graf err) — leaving wt content untouched</code>. Reproducible on demand from any behind-worktree FF where both sides touched a file.
 </p>
 </div>
 <ul>
@@ -43,8 +30,7 @@ demand from any behind-worktree FF where both sides touched a file.
 </ul>
 <div>
 <p>
-comment: &quot;Without this the merge silently returns ours's bytes&quot;) is the
-smoking gun — the index step exists but its failure is swallowed.
+comment: &quot;Without this the merge silently returns ours's bytes&quot;) is the smoking gun — the index step exists but its failure is swallowed.
 </p>
 </div>
 <h3>Goals</h3>
@@ -88,8 +74,7 @@ DISPROVEN (below). The fix is in the verb/index layer.
 </ul>
 <div>
 <p>
-verb-layer base/target SELECTION failure&quot; is withdrawn — it was asserted
-without a live repro. Diagnose from the repro now available, not theory.
+verb-layer base/target SELECTION failure&quot; is withdrawn — it was asserted without a live repro. Diagnose from the repro now available, not theory.
 </p>
 </div>
 <ul>
@@ -97,10 +82,7 @@ without a live repro. Diagnose from the repro now available, not theory.
 </ul>
 <div>
 <p>
-byte-identical to <code>git merge-file</code> (the frozen SUBS-019 trio, 135584 B,
-clean via <code>GRAFMerge3Bytes</code>/<code>GRAFMergeWtFile</code>/<code>GRAFMergeWtFileTunable</code>). So
-the engine is correct; the bug is the verb dropping to the un-indexed
-fallback instead of indexing + retrying.
+byte-identical to <code>git merge-file</code> (the frozen SUBS-019 trio, 135584 B, clean via <code>GRAFMerge3Bytes</code>/<code>GRAFMergeWtFile</code>/<code>GRAFMergeWtFileTunable</code>). So the engine is correct; the bug is the verb dropping to the un-indexed fallback instead of indexing + retrying.
 </p>
 </div>
 <h3>TODOs</h3>
@@ -117,8 +99,7 @@ fallback instead of indexing + retrying.
 </ul>
 <div>
 <p>
-  (<code>build_tip_weave_tunable</code> / <code>GRAFIndexFromTips</code>); propagate index
-  failure (drop the <code>(void)</code>), never leave-untouched / return-ours.
+  (<code>build_tip_weave_tunable</code> / <code>GRAFIndexFromTips</code>); propagate index   failure (drop the <code>(void)</code>), never leave-untouched / return-ours.
 </p>
 </div>
 <ul>

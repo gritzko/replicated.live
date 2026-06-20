@@ -13,14 +13,7 @@
 </a>
 <h1>DIFF-008: tree-diff silently truncates later files — per-file BASS scratch is never rewound in <code>graf_diff_tree_refs_inner</code></h1>
 <p>
-The per-file loops in <code>graf_diff_tree_refs_inner</code> call <code>GRAFDiff2Layer</code> with NO
-<code>call()</code>/<code>try()</code> frame: the <code>ok64</code> return is IGNORED, and <code>GRAFDiff2Layer</code>'s internal
-BASS scratch is not rewound between files. So scratch accumulates across the file
-list until <code>a_carve</code> returns NOROOM — and from then on every remaining file's diff
-SILENTLY FAILS and is dropped from the output. A big-blob file (or just enough
-files) thus truncates the tail of a <code>be diff:</code>/<code>commit:</code> tree diff with no error.
-Surfaced by <a href="">[BLAME-006b</a>] (a 9.5 MB binary starved the last file); its binary-skip
-MASKED the trigger but did not fix the root. Method: <a href="../../rule/Issues.html">Issues</a>.
+The per-file loops in <code>graf_diff_tree_refs_inner</code> call <code>GRAFDiff2Layer</code> with NO <code>call()</code>/<code>try()</code> frame: the <code>ok64</code> return is IGNORED, and <code>GRAFDiff2Layer</code>'s internal BASS scratch is not rewound between files. So scratch accumulates across the file list until <code>a_carve</code> returns NOROOM — and from then on every remaining file's diff SILENTLY FAILS and is dropped from the output. A big-blob file (or just enough files) thus truncates the tail of a <code>be diff:</code>/<code>commit:</code> tree diff with no error. Surfaced by <a href="">[BLAME-006b</a>] (a 9.5 MB binary starved the last file); its binary-skip MASKED the trigger but did not fix the root. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -29,9 +22,7 @@ MASKED the trigger but did not fix the root. Method: <a href="../../rule/Issues.
 </ul>
 <div>
 <p>
-(<code>:555-589</code>) and the deletion loop (<code>:592-612</code>) each end in a BARE
-<code>GRAFDiff2Layer(path, ext, old_data, new_data, NO, navver);</code> (<code>:588</code>, <code>:611</code>) —
-the return is discarded, so a per-file NOROOM/failure is swallowed, not propagated.
+(<code>:555-589</code>) and the deletion loop (<code>:592-612</code>) each end in a BARE <code>GRAFDiff2Layer(path, ext, old_data, new_data, NO, navver);</code> (<code>:588</code>, <code>:611</code>) — the return is discarded, so a per-file NOROOM/failure is swallowed, not propagated.
 </p>
 </div>
 <ul>
@@ -39,11 +30,7 @@ the return is discarded, so a per-file NOROOM/failure is swallowed, not propagat
 </ul>
 <div>
 <p>
-wrapper <code>a_carve(u8, base_buf, 16&lt;&lt;20)</code> <code>:217</code>; <code>WEAVEEmitFull</code> carves the 65536
-<code>outtoks</code> etc.). None of that is released between loop iterations — there is no
-per-file <code>try()</code> rewind or <code>Bu8mark</code>/rewind. The code comment at <code>:370-372</code>
-documents the failure mode: &quot;carves 16 MB per file — until <code>a_carve</code> returns NOROOM
-and the outer call frame unwinds.&quot;
+wrapper <code>a_carve(u8, base_buf, 16&lt;&lt;20)</code> <code>:217</code>; <code>WEAVEEmitFull</code> carves the 65536 <code>outtoks</code> etc.). None of that is released between loop iterations — there is no per-file <code>try()</code> rewind or <code>Bu8mark</code>/rewind. The code comment at <code>:370-372</code> documents the failure mode: &quot;carves 16 MB per file — until <code>a_carve</code> returns NOROOM and the outer call frame unwinds.&quot;
 </p>
 </div>
 <ul>
@@ -51,9 +38,7 @@ and the outer call frame unwinds.&quot;
 </ul>
 <div>
 <p>
-(<code>beagle/test/be-unknown-command.sh</code>) was silently truncated because the 9.5 MB
-<code>dog/dogs.png</code> weave had exhausted the BASS. BLAME-006b's binary-skip removed THAT
-trigger but a large-enough text set (or many files) still truncates the tail.
+(<code>beagle/test/be-unknown-command.sh</code>) was silently truncated because the 9.5 MB <code>dog/dogs.png</code> weave had exhausted the BASS. BLAME-006b's binary-skip removed THAT trigger but a large-enough text set (or many files) still truncates the tail.
 </p>
 </div>
 <h3>Goals</h3>
@@ -79,8 +64,7 @@ NEVER silently swallowed into a truncated-but-exit-0 diff.
 </ul>
 <div>
 <p>
-accumulation. graf change gates for review. Keep the <a href="">[BLAME-006b</a>] binary-skip +
-one-sided short-circuit intact.
+accumulation. graf change gates for review. Keep the <a href="">[BLAME-006b</a>] binary-skip + one-sided short-circuit intact.
 </p>
 </div>
 <h2>WIP</h2>
@@ -90,9 +74,7 @@ one-sided short-circuit intact.
 </ul>
 <div>
 <p>
-the pre-call mark after each file) — the canonical PRO.h pattern — or take an explicit
-<code>Bu8mark</code> before the call and rewind after. Stop ignoring the return: <code>call()</code>/<code>try()</code>
-it so NOROOM/failure propagates instead of truncating.
+the pre-call mark after each file) — the canonical PRO.h pattern — or take an explicit <code>Bu8mark</code> before the call and rewind after. Stop ignoring the return: <code>call()</code>/<code>try()</code> it so NOROOM/failure propagates instead of truncating.
 </p>
 </div>
 <h3>TODOs</h3>
@@ -101,8 +83,7 @@ it so NOROOM/failure propagates instead of truncating.
 </ul>
 <div>
 <p>
-  dropped on the current tree (the BLAME-006b <code>be-unknown-command.sh</code> truncation is the
-  witness shape); assert ALL files render after the fix, byte-identical for small sets.
+  dropped on the current tree (the BLAME-006b <code>be-unknown-command.sh</code> truncation is the   witness shape); assert ALL files render after the fix, byte-identical for small sets.
 </p>
 </div>
 <ul>
@@ -129,19 +110,7 @@ verify perf is unchanged (a per-file rewind is cheap; it only frees, doesn't re-
 </ul>
 <div>
 <p>
-<code>GRAFDiff2Layer</code> at <code>graf/DIFFREF.c:588/611</code> is now <code>call()</code>-wrapped (rewinds
-ABC_BASS per file + propagates a per-file NOROOM); <code>test/diff/17-tree-no-truncate</code>.
-(First cut used <code>try(…); nedo done;</code> — identical to <code>call()</code> per <code>abc/PRO.h:77/97</code>;
-tightened to plain <code>call()</code>.) Root cause confirmed —
-<code>GRAFDiff2Layer</code>'s weave carves a FIXED ~17 MB BASS block per file; with no
-surrounding frame, scratch accumulated until <code>a_carve</code> NOROOM at ~58 files, after
-which every remaining file's diff silently failed (return ignored) and was dropped
-(exit 0). Fix (<code>graf/DIFFREF.c:588</code> + <code>:611</code>): <code>try(GRAFDiff2Layer,…); nedo done;</code> —
-<code>try()</code> rewinds ABC_BASS per file (bounds scratch to one file), <code>nedo done</code>
-propagates a genuine NOROOM instead of truncating. RED→GREEN <code>test/diff/17-tree-no-truncate</code>
-(80 tiny files: unfixed truncates at <code>f056</code>/drops <code>f079</code>; fixed renders all 80).
-Small-set output byte-identical, perf unchanged, BLAME-006b/DIFF-001/002 intact.
-*<strong>306/306</strong>*. Awaiting gate. Msg: <code>DIFF-008: per-file try() frame in tree-diff; no truncation</code>.
+<code>GRAFDiff2Layer</code> at <code>graf/DIFFREF.c:588/611</code> is now <code>call()</code>-wrapped (rewinds ABC_BASS per file + propagates a per-file NOROOM); <code>test/diff/17-tree-no-truncate</code>. (First cut used <code>try(…); nedo done;</code> — identical to <code>call()</code> per <code>abc/PRO.h:77/97</code>; tightened to plain <code>call()</code>.) Root cause confirmed — <code>GRAFDiff2Layer</code>'s weave carves a FIXED ~17 MB BASS block per file; with no surrounding frame, scratch accumulated until <code>a_carve</code> NOROOM at ~58 files, after which every remaining file's diff silently failed (return ignored) and was dropped (exit 0). Fix (<code>graf/DIFFREF.c:588</code> + <code>:611</code>): <code>try(GRAFDiff2Layer,…); nedo done;</code> — <code>try()</code> rewinds ABC_BASS per file (bounds scratch to one file), <code>nedo done</code> propagates a genuine NOROOM instead of truncating. RED→GREEN <code>test/diff/17-tree-no-truncate</code> (80 tiny files: unfixed truncates at <code>f056</code>/drops <code>f079</code>; fixed renders all 80). Small-set output byte-identical, perf unchanged, BLAME-006b/DIFF-001/002 intact. *<strong>306/306</strong>*. Awaiting gate. Msg: <code>DIFF-008: per-file try() frame in tree-diff; no truncation</code>.
 </p>
 </div>
 </body>

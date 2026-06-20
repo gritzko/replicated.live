@@ -13,14 +13,7 @@
 </a>
 <h1>GET-028: <code>be</code> execs a stale <code>keeper</code> helper → opaque ZINFFAIL clone</h1>
 <p>
-<code>be get ssh://host/repo?/branch</code> aborts mid-ingest with `KEEPIngestStream
-failed: ZINFFAIL<code> / </code>WIRECLFL` even on a healthy remote (all 19250 objects
-transfer). The ingest CODE is fine — current source ingests the pack clean.
-Root cause is a build gap: <code>be</code> execs a SEPARATE <code>keeper</code> binary, but the
-<code>be-cli</code> CMake target declares no dependency on <code>keeper-cli</code> (nor <code>spot</code>/
-<code>graf</code>/<code>sniff</code>). <code>ninja be</code> recompiles the shared keeplib objects yet never
-relinks the <code>keeper</code> exe, so iterating on <code>be</code> runs a NEW <code>be</code> against an OLD
-<code>keeper</code> whose ingest predates a landed fix. Relates to <a href="GET-009.html">GET-009</a>.
+<code>be get ssh://host/repo?/branch</code> aborts mid-ingest with <code>KEEPIngestStream failed: ZINFFAIL</code> / <code>WIRECLFL</code> even on a healthy remote (all 19250 objects transfer). The ingest CODE is fine — current source ingests the pack clean. Root cause is a build gap: <code>be</code> execs a SEPARATE <code>keeper</code> binary, but the <code>be-cli</code> CMake target declares no dependency on <code>keeper-cli</code> (nor <code>spot</code>/ <code>graf</code>/<code>sniff</code>). <code>ninja be</code> recompiles the shared keeplib objects yet never relinks the <code>keeper</code> exe, so iterating on <code>be</code> runs a NEW <code>be</code> against an OLD <code>keeper</code> whose ingest predates a landed fix. Relates to <a href="GET-009.html">GET-009</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -87,11 +80,7 @@ clone uses ssh-localhost upload-pack.
 </ul>
 <div>
 <p>
-time; those spawn targets were unmodeled build deps. Add
-<code>add_dependencies(be-cli keeper-cli spot-cli graf-cli sniff-cli)</code> in
-<code>beagle/CMakeLists.txt</code> (all four exist when <code>beagle/</code> is configured — the
-top CMakeLists adds it after them). The dog clis already depend on their
-own libs, so co-building keeps them current.
+time; those spawn targets were unmodeled build deps. Add <code>add_dependencies(be-cli keeper-cli spot-cli graf-cli sniff-cli)</code> in <code>beagle/CMakeLists.txt</code> (all four exist when <code>beagle/</code> is configured — the top CMakeLists adds it after them). The dog clis already depend on their own libs, so co-building keeps them current.
 </p>
 </div>
 <h3>TODOs</h3>

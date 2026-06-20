@@ -13,12 +13,7 @@
 </a>
 <h1>SUBS-024: POST sub-push ignores parent-kind source resolution (live gap)</h1>
 <p>
-<a href="SUBS-020.html">SUBS-020</a> landed a POST mirror meant to route each recursed sub commit to the SAME
-place GET would fetch it from — same peer (beagle), parent-relative (git non-<code>.git</code>),
-or official (git <code>.git</code>) — but a live <code>be post</code> to a git fs-path destination pushed
-the sub to its OFFICIAL url instead of the parent-relative path, so an unrelated
-unreachable upstream aborted the whole post. POST must apply the three-case
-resolution + fallback for real, the way GET already does. See <a href="SUBS-020.html">SUBS-020</a>, <a href="../../wiki/Submodules.html">Submodules</a>.
+<a href="SUBS-020.html">SUBS-020</a> landed a POST mirror meant to route each recursed sub commit to the SAME place GET would fetch it from — same peer (beagle), parent-relative (git non-<code>.git</code>), or official (git <code>.git</code>) — but a live <code>be post</code> to a git fs-path destination pushed the sub to its OFFICIAL url instead of the parent-relative path, so an unrelated unreachable upstream aborted the whole post. POST must apply the three-case resolution + fallback for real, the way GET already does. See <a href="SUBS-020.html">SUBS-020</a>, <a href="../../wiki/Submodules.html">Submodules</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -32,8 +27,7 @@ Three source cases (user's framing; identical to <a href="SUBS-020.html">SUBS-02
 </ul>
 <div>
 <p>
-path. In the beagle and fs cases, if the assumption fails, FALL BACK to the
-official <code>.gitmodules</code> URL.
+path. In the beagle and fs cases, if the assumption fails, FALL BACK to the official <code>.gitmodules</code> URL.
 </p>
 </div>
 <h3>Context — live repro</h3>
@@ -45,9 +39,7 @@ official <code>.gitmodules</code> URL.
 </ul>
 <div>
 <p>
-remote https://github.com/gritzko/libabc.git default branch<code> — the </code>abc` sub
-went to its OFFICIAL github url (case 2), NOT parent-relative
-<code>ssh://localhost/src/dogs/abc</code> (case 3).
+remote https://github.com/gritzko/libabc.git default branch<code> — the </code>abc<code> sub went to its OFFICIAL github url (case 2), NOT parent-relative </code>ssh://localhost/src/dogs/abc` (case 3).
 </p>
 </div>
 <ul>
@@ -86,8 +78,7 @@ parent-relative, not official.
 </ul>
 <div>
 <p>
-and the <code>bepushgit_recurse_cb</code> arm <a href="SUBS-020.html">SUBS-020</a> added — find WHY it doesn't fire
-here (ssh fs-path dest / beagle-parent → git-dest path); do not re-roll.
+and the <code>bepushgit_recurse_cb</code> arm <a href="SUBS-020.html">SUBS-020</a> added — find WHY it doesn't fire here (ssh fs-path dest / beagle-parent → git-dest path); do not re-roll.
 </p>
 </div>
 <ul>
@@ -101,10 +92,7 @@ here (ssh fs-path dest / beagle-parent → git-dest path); do not re-roll.
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <p>
-Root cause (traced, repro'd): case 3 fed the <code>.gitmodules</code> url to
-<code>SNIFFSubCandidateGitRel</code>; an ABSOLUTE url resolves-to-self → NONE → the
-official url wins. Split case 3 by url FORM — four cases, keyed on the
-remote (dest for POST, src for GET), all reusing the SAME resolver:
+Root cause (traced, repro'd): case 3 fed the <code>.gitmodules</code> url to <code>SNIFFSubCandidateGitRel</code>; an ABSOLUTE url resolves-to-self → NONE → the official url wins. Split case 3 by url FORM — four cases, keyed on the remote (dest for POST, src for GET), all reusing the SAME resolver:
 </p>
 <ul>
 <li>beagle peer → same peer, sub shard <code>?/&lt;subproj&gt;</code> (unchanged).</li>
@@ -169,8 +157,7 @@ bepushgit_recurse_cb) get case 4, for push/fetch symmetry.
 </ul>
 <div>
 <p>
-(sniff/SUBS.c <code>SNIFFSubMount</code>); reuses <code>SNIFFSubCandidateGitRel</code>, no
-new symbols. <code>post/45</code>+<code>get/53</code> added; full ctest 394/394 WITH_SSH.
+(sniff/SUBS.c <code>SNIFFSubMount</code>); reuses <code>SNIFFSubCandidateGitRel</code>, no new symbols. <code>post/45</code>+<code>get/53</code> added; full ctest 394/394 WITH_SSH.
 </p>
 </div>
 <ul>

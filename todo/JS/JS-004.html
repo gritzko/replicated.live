@@ -13,9 +13,7 @@
 </a>
 <h1>JS-004 <a href="">HIGH</a>: <code>len-1</code> / <code>factlen-1</code> <code>size_t</code> underflow on empty / zero-length strings</h1>
 <p>
-<code>JSStringGetUTF8CString</code> returns 0 on an empty string or failure; the <code>-1</code> sites
-then underflow <code>size_t</code> to a huge value. Flagged by all 7 lenses (highest
-confidence). Method: <a href="../../rule/Issues.html">Issues</a>.
+<code>JSStringGetUTF8CString</code> returns 0 on an empty string or failure; the <code>-1</code> sites then underflow <code>size_t</code> to a huge value. Flagged by all 7 lenses (highest confidence). Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -24,9 +22,7 @@ confidence). Method: <a href="../../rule/Issues.html">Issues</a>.
 </ul>
 <div>
 <p>
-<code>convert.cpp:24-25</code> (<code>*idle += factlen-1</code>), <code>JABC.hpp:52</code> &amp; <code>:64</code>
-(<code>varn[1] += len-1</code>), <code>io.cpp:430</code> (<code>u8sFeedn(..., len-1)</code>), <code>main.cpp:139</code>
-(<code>page[len-1]='\n'</code> → OOB write when <code>len==0</code>).
+<code>convert.cpp:24-25</code> (<code>*idle += factlen-1</code>), <code>JABC.hpp:52</code> &amp; <code>:64</code> (<code>varn[1] += len-1</code>), <code>io.cpp:430</code> (<code>u8sFeedn(..., len-1)</code>), <code>main.cpp:139</code> (<code>page[len-1]='\n'</code> → OOB write when <code>len==0</code>).
 </p>
 </div>
 <ul>
@@ -85,14 +81,7 @@ or OOB access.
 </ul>
 <div>
 <p>
-two LIVE sites — <code>io.cpp</code> <code>JABCioFileMap</code> (extracted <code>JABCioMapBuildPath</code>, now
-returns SNOROOM on <code>len == 0</code> instead of feeding a SIZE_MAX-underflowed,
-silently-discarded <code>u8sFeedn</code>) and <code>main.cpp</code> <code>JABCReport</code> <code>page[len - 1]</code>
-(<code>if (len &lt; 1) len = 1;</code> removes the <code>page[-1]</code> OOB write). C++ harness row
-<code>run_mmap_underflow_repro</code> drives the path builder with <code>len==0/1/N+1</code>
-(RED before: <code>len==0</code> returned OK; GREEN after; ASAN/LSan clean). The
-<code>main.cpp</code> OOB is logic-verified (a 0-length JSC conversion is not
-deterministically forceable from a real JSString with a PAGESIZE buffer).
+two LIVE sites — <code>io.cpp</code> <code>JABCioFileMap</code> (extracted <code>JABCioMapBuildPath</code>, now returns SNOROOM on <code>len == 0</code> instead of feeding a SIZE_MAX-underflowed, silently-discarded <code>u8sFeedn</code>) and <code>main.cpp</code> <code>JABCReport</code> <code>page[len - 1]</code> (<code>if (len &lt; 1) len = 1;</code> removes the <code>page[-1]</code> OOB write). C++ harness row <code>run_mmap_underflow_repro</code> drives the path builder with <code>len==0/1/N+1</code> (RED before: <code>len==0</code> returned OK; GREEN after; ASAN/LSan clean). The <code>main.cpp</code> OOB is logic-verified (a 0-length JSC conversion is not deterministically forceable from a real JSString with a PAGESIZE buffer).
 </p>
 </div>
 <ul>

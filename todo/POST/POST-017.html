@@ -13,13 +13,7 @@
 </a>
 <h1>POST-017: a refused/failed <code>be post</code> is non-atomic — writes the reflog before the objects are safely stored</h1>
 <p>
-A <code>be post</code> that is REFUSED (or errors) after it has begun can still leave a
-<code>post</code> row in the store reflog (<code>&lt;store&gt;/&lt;shard&gt;/refs</code>) and a <code>put</code> staging row,
-even though NO commit object was created. The reflog/refs write must be the LAST
-step — <code>be post</code> may append the reflog row ONLY after the commit objects are safely
-in the store: written, <code>msync</code>'d (durably flushed), AND indexed. Any refusal/error
-before that point must leave the reflog (and staging) UNCHANGED — the post is
-all-or-nothing. Method: <a href="../../rule/Issues.html">Issues</a>.
+A <code>be post</code> that is REFUSED (or errors) after it has begun can still leave a <code>post</code> row in the store reflog (<code>&lt;store&gt;/&lt;shard&gt;/refs</code>) and a <code>put</code> staging row, even though NO commit object was created. The reflog/refs write must be the LAST step — <code>be post</code> may append the reflog row ONLY after the commit objects are safely in the store: written, <code>msync</code>'d (durably flushed), AND indexed. Any refusal/error before that point must leave the reflog (and staging) UNCHANGED — the post is all-or-nothing. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -28,12 +22,7 @@ all-or-nothing. Method: <a href="../../rule/Issues.html">Issues</a>.
 </ul>
 <div>
 <p>
-(the <a href="">[POST-006</a>] marker-string false positive on <code>graf/WEAVE.c</code>), yet it had
-ALREADY appended a stray row to the shared store reflog
-(<code>/home/gritzko/beagle/.be/dogs/refs</code>: <code>26616Cpe5S post ?#f6bea1c5…</code>, a duplicate
-of the parent row) and staged an <code>abc</code> gitlink — while creating NO commit. `be
-head` still resolved the true tip (refs are sha-lineage, not row-order), so it is
-harmless to resolution, but it is debris that accumulates and reads like a tip.
+(the <a href="">[POST-006</a>] marker-string false positive on <code>graf/WEAVE.c</code>), yet it had ALREADY appended a stray row to the shared store reflog (<code>/home/gritzko/beagle/.be/dogs/refs</code>: <code>26616Cpe5S post ?#f6bea1c5…</code>, a duplicate of the parent row) and staged an <code>abc</code> gitlink — while creating NO commit. <code>be head</code> still resolved the true tip (refs are sha-lineage, not row-order), so it is harmless to resolution, but it is debris that accumulates and reads like a tip.
 </p>
 </div>
 <ul>
@@ -41,8 +30,7 @@ harmless to resolution, but it is debris that accumulates and reads like a tip.
 </ul>
 <div>
 <p>
-so a late refusal (conflict scan) or any error after that write but before the
-commit leaves the partial row behind. A post is not all-or-nothing.
+so a late refusal (conflict scan) or any error after that write but before the commit leaves the partial row behind. A post is not all-or-nothing.
 </p>
 </div>
 <ul>
@@ -59,9 +47,7 @@ mid-op failure leaves nothing changed&quot; shape, on the POST side.
 </ul>
 <div>
 <p>
-commit object(s) are (1) written to the store, (2) <code>msync</code>'d to durable storage,
-and (3) indexed (<code>.refs.idx</code> / graf / spot). Before that point, a refusal/error
-(POSTCFLCT, validation, transport, crash) leaves the reflog and staging UNCHANGED.
+commit object(s) are (1) written to the store, (2) <code>msync</code>'d to durable storage, and (3) indexed (<code>.refs.idx</code> / graf / spot). Before that point, a refusal/error (POSTCFLCT, validation, transport, crash) leaves the reflog and staging UNCHANGED.
 </p>
 </div>
 <ul>
@@ -94,14 +80,7 @@ bypass; output and landed-commit shape unchanged on the happy path.
 </ul>
 <div>
 <p>
-<code>refs</code>/reflog text row (that REFS write at ~<code>sniff/POST.c:3080</code> runs AFTER the scan, so
-it was untouched), it is ORPHAN OBJECTS + a rewritten INDEX. The <code>POSTCFLCT</code> scan ran
-MID-pack-feed (<code>sniff/POST.c:3012-3022</code>), inside the blob-feed loop, AFTER <code>KEEPPackOpen</code>
-(~<code>POST.c:2745</code>) and after all trees were fed; on a hit it called <code>KEEPPackClose</code>, which
-PERSISTS the pack, publishes a fresh idx puppy (<code>keep_pup_create_next</code>) and runs
-<code>KEEPCompact</code> (<code>keeper/KEEP.c:1782-1851</code>), THEN returned POSTCFLCT — so a refusal left
-orphan tree+blob objects in <code>0000000001.keeper</code> and a rewritten <code>*.keeper.idx</code> durably.
-(The earlier observed stray <code>26616Cpe5S</code> refs row was a SEPARATE partial op, not this.)
+<code>refs</code>/reflog text row (that REFS write at ~<code>sniff/POST.c:3080</code> runs AFTER the scan, so it was untouched), it is ORPHAN OBJECTS + a rewritten INDEX. The <code>POSTCFLCT</code> scan ran MID-pack-feed (<code>sniff/POST.c:3012-3022</code>), inside the blob-feed loop, AFTER <code>KEEPPackOpen</code> (~<code>POST.c:2745</code>) and after all trees were fed; on a hit it called <code>KEEPPackClose</code>, which PERSISTS the pack, publishes a fresh idx puppy (<code>keep_pup_create_next</code>) and runs <code>KEEPCompact</code> (<code>keeper/KEEP.c:1782-1851</code>), THEN returned POSTCFLCT — so a refusal left orphan tree+blob objects in <code>0000000001.keeper</code> and a rewritten <code>*.keeper.idx</code> durably. (The earlier observed stray <code>26616Cpe5S</code> refs row was a SEPARATE partial op, not this.)
 </p>
 </div>
 <ul>
@@ -109,11 +88,7 @@ orphan tree+blob objects in <code>0000000001.keeper</code> and a rewritten <code
 </ul>
 <div>
 <p>
-after <code>post_scan_changeset</code> builds the decisions ULOG and BEFORE the unlink/<code>KEEPPackOpen</code>/
-any object/index/reflog write. New <code>post_cflct_scan_cb</code> (<code>POST.c:1240</code>) reads each <code>add</code>
-row's wt body (same mmap/readlink idiom as the feed loop) + <code>SNIFFHasConflictMarker</code>; a hit
-returns POSTCFLCT before any store mutation. Removed the redundant in-loop scan. <code>--force</code>
-skips the pre-flight exactly as before.
+after <code>post_scan_changeset</code> builds the decisions ULOG and BEFORE the unlink/<code>KEEPPackOpen</code>/ any object/index/reflog write. New <code>post_cflct_scan_cb</code> (<code>POST.c:1240</code>) reads each <code>add</code> row's wt body (same mmap/readlink idiom as the feed loop) + <code>SNIFFHasConflictMarker</code>; a hit returns POSTCFLCT before any store mutation. Removed the redundant in-loop scan. <code>--force</code> skips the pre-flight exactly as before.
 </p>
 </div>
 <h3>TODOs</h3>
@@ -122,9 +97,7 @@ skips the pre-flight exactly as before.
 </ul>
 <div>
 <p>
-  byte-identical (excl. volatile <code>.refs.idx</code>/<code>.wtlog.idx</code> read-caches a <code>be head</code> also
-  rewrites); RED on unfixed (mutated <code>0000000001.keeper</code> + <code>*.keeper.idx</code>), GREEN with fix;
-  also covers the <code>--force</code> bypass.
+  byte-identical (excl. volatile <code>.refs.idx</code>/<code>.wtlog.idx</code> read-caches a <code>be head</code> also   rewrites); RED on unfixed (mutated <code>0000000001.keeper</code> + <code>*.keeper.idx</code>), GREEN with fix;   also covers the <code>--force</code> bypass.
 </p>
 </div>
 <ul>
@@ -141,9 +114,7 @@ skips the pre-flight exactly as before.
 </ul>
 <div>
 <p>
-  recurses+commits SUBS (<code>DISPATCH.c:446</code>) BEFORE <code>BEActSniffPost</code> scans the parent
-  (<code>:447</code>); make the parent's conflict scan gate sub-recursion too. Larger orchestration
-  change — separate ticket if wanted.
+  recurses+commits SUBS (<code>DISPATCH.c:446</code>) BEFORE <code>BEActSniffPost</code> scans the parent   (<code>:447</code>); make the parent's conflict scan gate sub-recursion too. Larger orchestration   change — separate ticket if wanted.
 </p>
 </div>
 <h3>Blockers and bummers</h3>
@@ -161,15 +132,7 @@ atomicity). Cleaning the existing stray <code>26616Cpe5S</code> row is a separat
 </ul>
 <div>
 <p>
-write (atomic post)<code>): within-</code>POSTCommit` atomicity — conflict scan + validators hoisted
-to a pre-flight (<code>post_cflct_scan_cb</code>, step 5a) before any object/index/reflog write
-(<code>sniff/POST.c</code>), so a refused post leaves the store byte-identical. New
-<code>test/post/42-refuse-atomic-store</code> (RED→GREEN), happy path byte-identical, 303/304 (the
-1 red was a local stale-build of <code>be-diff-16</code>, NOT a regression — verified BRO-004 Part 3
-is correct on trunk). Correction: leak was orphan objects + index, not the refs row.
-NB the land itself hit <a href="">[POST-006</a>] (POSTCFLCT false-positive on <code>sniff/POST.c</code>'s own
-marker-literal comment) → documented <code>--force</code> conflict-scan bypass. The <code>be</code>-level
-scan-before-sub-recursion ordering remains a flagged follow-up.
+write (atomic post)<code>): within-</code>POSTCommit<code> atomicity — conflict scan + validators hoisted to a pre-flight (</code>post_cflct_scan_cb<code>, step 5a) before any object/index/reflog write (</code>sniff/POST.c<code>), so a refused post leaves the store byte-identical. New </code>test/post/42-refuse-atomic-store<code> (RED→GREEN), happy path byte-identical, 303/304 (the 1 red was a local stale-build of </code>be-diff-16<code>, NOT a regression — verified BRO-004 Part 3 is correct on trunk). Correction: leak was orphan objects + index, not the refs row. NB the land itself hit [[POST-006]] (POSTCFLCT false-positive on </code>sniff/POST.c<code>'s own marker-literal comment) → documented </code>--force<code> conflict-scan bypass. The </code>be`-level scan-before-sub-recursion ordering remains a flagged follow-up.
 </p>
 </div>
 </body>

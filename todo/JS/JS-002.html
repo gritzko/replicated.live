@@ -13,10 +13,7 @@
 </a>
 <h1>JS-002 <a href="">CRIT</a>: <code>file.write(string)</code> / <code>io.log(string)</code> heap corruption — invalid free + uninitialised write</h1>
 <p>
-<code>JABCutf8CopyStringValue</code> (<code>js/utf8.cpp:63-71</code>) advances the slice HEAD past the
-written bytes, so the caller writes the uninitialised tail and frees a
-non-allocation-base pointer. Flagged by 5 of 7 review lenses (very high
-confidence). Method: <a href="../../rule/Issues.html">Issues</a>.
+<code>JABCutf8CopyStringValue</code> (<code>js/utf8.cpp:63-71</code>) advances the slice HEAD past the written bytes, so the caller writes the uninitialised tail and frees a non-allocation-base pointer. Flagged by 5 of 7 review lenses (very high confidence). Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -25,8 +22,7 @@ confidence). Method: <a href="../../rule/Issues.html">Issues</a>.
 </ul>
 <div>
 <p>
-then <code>JABCutf8CopyStringValue</code> does <code>into[0]+=fact</code> — advancing the HEAD past
-the copied bytes, leaving <code>into={base+fact, base+max}</code>.
+then <code>JABCutf8CopyStringValue</code> does <code>into[0]+=fact</code> — advancing the HEAD past the copied bytes, leaving <code>into={base+fact, base+max}</code>.
 </p>
 </div>
 <ul>
@@ -34,9 +30,7 @@ the copied bytes, leaving <code>into={base+fact, base+max}</code>.
 </ul>
 <div>
 <p>
-writes from <code>base+fact</code> for <code>max-fact</code> bytes (the UNINITIALISED tail), not the
-string. Then <code>$u8free</code> (<code>io.cpp:124</code>) frees <code>base+fact</code> — a non-base pointer →
-heap corruption / invalid free.
+writes from <code>base+fact</code> for <code>max-fact</code> bytes (the UNINITIALISED tail), not the string. Then <code>$u8free</code> (<code>io.cpp:124</code>) frees <code>base+fact</code> — a non-base pointer → heap corruption / invalid free.
 </p>
 </div>
 <ul>
@@ -58,8 +52,7 @@ wired binding entry points, not the dead rdx path.
 </ul>
 <div>
 <p>
-stays at <code>base</code>); the caller writes <code>[base, len)</code> and frees <code>base</code>. Use the
-idiomatic ABC slice term-set, not a head advance.
+stays at <code>base</code>); the caller writes <code>[base, len)</code> and frees <code>base</code>. Use the idiomatic ABC slice term-set, not a head advance.
 </p>
 </div>
 <h2>WIP</h2>
@@ -69,8 +62,7 @@ idiomatic ABC slice term-set, not a head advance.
 </ul>
 <div>
 <p>
-(excluding NUL), keep HEAD at base. Audit every caller for the head==base
-assumption.
+(excluding NUL), keep HEAD at base. Audit every caller for the head==base assumption.
 </p>
 </div>
 <h3>TODOs</h3>
@@ -96,9 +88,7 @@ assumption.
 </ul>
 <div>
 <p>
-slice HEAD at the malloc base and sets TERM to <code>base+fact-1</code> (drops the NUL,
-<code>fact==0</code>-guarded), so <code>file.write(string)</code> writes the real <code>[base,len)</code> and
-<code>$u8free</code>s the real base; C++ pipe repro in <code>jabc_test.cpp</code> (red→green, ASAN).
+slice HEAD at the malloc base and sets TERM to <code>base+fact-1</code> (drops the NUL, <code>fact==0</code>-guarded), so <code>file.write(string)</code> writes the real <code>[base,len)</code> and <code>$u8free</code>s the real base; C++ pipe repro in <code>jabc_test.cpp</code> (red→green, ASAN).
 </p>
 </div>
 </body>
