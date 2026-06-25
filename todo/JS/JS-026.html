@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-026</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-026 <a href="">LOW</a>: richer extension exit codes (<code>jabc</code> has no <code>process.exit</code>)</h1>
+<p>
+Surfaced by <a href="JS-025.html">JS-025</a>. <code>be &lt;name&gt;</code> forks <code>jabc bin/&lt;name&gt;.js</code>; the script's exit becomes <code>be</code>'s exit. But <code>jabc</code> exposes no <code>process.exit(code)</code>, so a script can only signal 0 (clean return) or non-zero (an uncaught throw → exit 1). An extension that wants a specific exit code (e.g. <code>be status</code>-style &quot;1 = dirty&quot;) cannot set it. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><a href="JS-025.html">JS-025</a> dispatch makes the script's process exit <code>be</code>'s exit code, but<p>
+<code>jabc</code> (<code>js/main.cpp</code>) only maps clean-return→0 / uncaught-exception→1.
+</p>
+</li>
+<li>A <code>bin/status.js</code> reimplementation (the SDK-validation goal) wants the same<p>
+exit semantics as native <code>be status</code> (0 clean, non-zero dirty/ahead/behind).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Add <code>process.exit(code)</code> (and/or a <code>process.exitCode</code> settable global) to the<p>
+<code>jabc</code> runtime so a script can set its own process exit status.
+</p>
+</li>
+<li><code>be &lt;name&gt;</code> then propagates that exact code (already wired by <a href="JS-025.html">JS-025</a>).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Small <code>js/main.cpp</code> change; must still drain the event loop / run GC<p>
+deallocators before exit (the existing teardown order — context release before <code>FILECloseAll</code>). <code>process.exit</code> should flush + tear down cleanly, not <code>_exit</code>.
+</p>
+</li>
+<li>Keep JABC rule #4 (no held JS refs); a Node-ish <code>process.exitCode</code> honored at<p>
+natural drain is the cleaner fit than an abrupt <code>exit()</code>.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) <code>process.exitCode</code> (read at end of run, Node-style) vs <code>process.exit(n)</code><p>
+(immediate). Prefer <code>exitCode</code> to preserve the loop-drain + GC teardown.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: a script that sets a non-default exit code, asserted via <code>be &lt;name&gt;</code>.</li>
+<li class="open"><input type="checkbox" disabled> Implement in <code>js/main.cpp</code>; update <code>js/INDEX.md</code> + <code>js/API.md</code>.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

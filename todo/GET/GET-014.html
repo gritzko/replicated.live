@@ -45,5 +45,27 @@ Repro-first (<a href="../../../beagle/CLAUDE.md">CLAUDE</a> §17), then refuse t
 <li>Document <code>be put '?#&lt;sha&gt;'</code> as the branch-tip reset (<code>be get</code>/<code>be get --force</code> do <strong>not</strong> move a divergent branch ref, only the worktree) in <a href="../../wiki/GET.html">GET</a>/<a href="../../wiki/HEAD.html">HEAD</a>.</li>
 <li>Regression under <code>test/get</code> (or <code>test/head</code> for the dry-run-read-only case).</li>
 </ul>
+<h2>Reopened 2026-06-22 — <code>be get</code> back-regress arm (DIS-038 Layer-2 gap)</h2>
+<p>
+The Blockers finding &quot;<code>be get</code> is the clean model&quot; is FALSE for a 2nd arm: a <code>be get</code> from a far-behind worktree silently regressed the shared <code>beagle</code> trunk tip BACKWARD (linear, not divergent), orphaning 3 already-landed commits.
+</p>
+<ul>
+<li>Live repro: trunk advanced <code>9e80e5f0</code> → <code>c3fbdda5</code>(JS-035) → <code>742c06ff</code><p>
+(JS-036) → <code>d7eaf5c4</code>(SUBS-030, just posted+verified as tip). A <code>be get --nosub</code> in <code>~/todo/DIS-048</code> (pinned at June-21 commits) then resolved trunk back to <code>9e80e5f0</code> and rewrote <code>.be/beagle/refs</code> — dropping all 3. Recovered with <code>graf index</code>. Full timeline in <a href="">DIS-038</a> &quot;Evidence (live 2026-06-22…)&quot;.
+</p>
+</li>
+<li>Same regen root, NOT covered by the landed fix: the DIS-038 Layer-1 keeper<p>
+fallback (<code>graf/DAG.c</code>, on trunk since mid-June) handles head/patch, but the newer tip <code>d7eaf5c4</code> was in keeper yet NOT graf-indexed, so the <code>.refs.idx</code> regen picked the older INDEXED leaf <code>9e80e5f0</code> — a backward FF-able regress.
+</p>
+</li>
+<li>Fix: DIS-038 Layer-2 was done only for <code>be patch</code> (lazy <code>GRAFIndexFromTips</code>),<p>
+never <code>be get</code>. Make <code>be get</code>'s fetch ingest the fetched tip's closure into graf (<code>GRAFIndex</code> / <code>GRAFIndexFromTips</code> + <code>KEEPEachRemote</code>), OR make the refs-regen leaf-pick reachability-aware. Repro-first, hermetic. <a href="">DIS-038</a>.
+</p>
+</li>
+<li>LANDED <code>b89011fa</code>: chose the reachability-aware route (no indexing-on-get).<p>
+<code>sniff/GET.c</code> FF-gates the TRUNK re-sync via <code>KEEPIsAncestor</code> (keeper-body BFS, self-sufficient on unindexed tips) → refuses backward/divergent, allows forward FF; <code>keeper/REFS.c::REFSResolve</code> keeps the latest LOCAL move tip unless the peer tip descends it (a behind/divergent <code>get</code> row can't win). Repro <code>test/get/57</code>, adversarial <code>test/get/58</code>; head/patch clobber preserved.
+</p>
+</li>
+</ul>
 </body>
 </html>

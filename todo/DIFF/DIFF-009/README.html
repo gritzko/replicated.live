@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>README</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIFF-009: be-diff-17 drops 2 file headers on Ubuntu CI only</h1>
+<p>
+<code>be-diff-17-tree-no-truncate</code> fails on the Ubuntu runner (<code>78 / 80 file headers present</code>) yet passes 0/55 locally (25 plain + 30 under 8× CPU stress), same <code>Release</code> build. Two CI runs hours apart are byte-identical (<a href="/todo/DIFF/DIFF-009/ci-fail.log">ci-fail.log</a>) — DETERMINISTIC, not a flake. NOT the <a href="/todo/DIFF/DIFF-008.html">DIFF-008</a> tail truncation this test guards: the last file <code>f079</code> is present, <code>be</code> exits 0, empty stderr, no BASS NOROOM. Two MID-LIST files lose their <code>--- a/fNNN</code> header — likely <code>--- /dev/null</code> adds the <code>grep '^--- a/f'</code> misses. Method: <a href="/rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Test <code>test/diff/17-tree-no-truncate</code>: seeds 80 tiny files, posts <code>?v1</code> (ORIGINAL)<p>
+then <code>?v2</code> (MODIFIED), runs <code>be diff:?v1..v2</code>, asserts 80 <code>^--- a/f</code> headers.
+</p>
+</li>
+<li>CI (<code>ctest --parallel 4</code>, <code>BUILD_TYPE=Release</code>) fails twice, identical: 78/80,<p>
+<code>highest header: --- a/f079.txt</code>, last-12-lines show f078+f079 — evidence <a href="/todo/DIFF/DIFF-009/ci-fail.log">ci-fail.log</a>.
+</p>
+</li>
+<li>Local: 0/55 fails (25 plain + 30 under 8× <code>yes</code>), same Release build → CI-only.</li>
+<li>Path: <code>graf/DIFFREF.c::graf_diff_tree_refs_inner</code> (<code>:513</code>); per-to-entry loop (<code>:554-601</code>)<p>
+skips a file iff <code>f &amp;&amp; sha1Eq(&amp;f-&gt;sha, …)</code> (<code>:560</code>); <code>diffref_set_find</code> is a linear scan (<code>:92</code>).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Determine WHICH 2 files and WHY they lose the <code>--- a/f</code> header on the runner; make the<p>
+tree diff emit all N file headers deterministically across platforms/filesystems.
+</p>
+</li>
+<li>If they render as <code>--- /dev/null</code> adds → <code>from_set</code> missed them (collection/order bug);<p>
+if absent → skipped sha-equal at <code>:560</code> (v2 staged stale blobs). Pin which.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Reproduces only on the runner; needs the CI-kept scratch (<code>…/diff/17-tree-no-truncate</code>,<p>
+<code>tree.got.out</code>). graf change gates for review; keep small-set output byte-identical.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) Leading hypothesis: order-dependent collection — <code>KEEPLsFiles</code> returns entries in<p>
+filesystem readdir order, which differs CI-vs-local, exposing a set add/find miss for 2 paths. Alternatives: <code>be put</code> racy/stale staging of 2 files in v2; an uninitialized read (per-binary deterministic). The kept <code>tree.got.out</code> (adds vs absent) decides between them.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Pull the CI scratch: inspect <code>tree.got.out</code> — are the 2 files <code>--- /dev/null</code> adds, or absent?</li>
+<li class="open"><input type="checkbox" disabled> If adds: trace <code>diffref_set_push</code>/<code>_find</code> + <code>KEEPLsFiles</code> order; assert <code>from_set</code> holds all 80.</li>
+<li class="open"><input type="checkbox" disabled> If absent: <code>be ls</code>/<code>cat</code> the <code>?v2</code> tree — do the 2 files carry v1 blob shas (stale <code>be put</code>)?</li>
+<li class="open"><input type="checkbox" disabled> Reproduce under the runner's filesystem/glibc (container) or ASan/valgrind; add a deterministic guard.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Not reproducible locally (0/55, Release, incl. CPU stress); needs runner-side evidence to advance.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open) Filed from CI evidence; no fix yet.</li>
+</ul>
+</body>
+</html>

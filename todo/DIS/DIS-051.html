@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-051</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-051 <a href="">LOW</a>: no clock-override for deterministic commit identity</h1>
+<p>
+A commit's author/committer time derives from the <code>post</code> row's ron60 stamp via local-tz <code>mktime</code> (<code>sniff/POST.c</code> commit body + <code>sniff/AT.c:688</code>), and the stamp comes from the wall clock (<code>SNIFFAtNow</code>/<code>RONNow</code>). So two independent posts of the SAME tree produce DIFFERENT commit shas unless pinned to the same wall-clock second — there is no <code>SOURCE_DATE_EPOCH</code>-style override. Surfaced porting <a href="../JS/JS-051.html">JS-051</a>, whose sha-parity tests need a future-seed clamp hack to force both tools onto one second.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><a href="../JS/JS-051.html">JS-051</a> <code>be post</code> parity can only assert byte-identical commit shas by seeding<p>
+a near-future <code>post</code> row so native + JS both clamp to <code>tail+1</code> (same second); without it the author/committer epoch differs → different shas for one tree.
+</p>
+</li>
+<li>Root: <code>RONNow</code>/<code>SNIFFAtNow</code> read the wall clock with no test/CI override; the<p>
+commit ts is local-tz <code>mktime</code> of that ron60 (DST/tz also enter the epoch).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Add a deterministic clock source: a <code>SOURCE_DATE_EPOCH</code>-style env honored by<p>
+<code>RONNow</code>/<code>SNIFFAtNow</code> (or a test-only clock hook), so a given tree+message+parent yields a stable commit sha across machines/times.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Must not perturb normal interactive timestamps; opt-in via env. Keep ron60's<p>
+2000–2099 ms domain; document tz handling (commit epoch should be tz-stable).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending: env name + whether it stamps the ULOG row, the commit epoch, or both;<p>
+git uses <code>SOURCE_DATE_EPOCH</code> for the commit/author dates only.)
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Decide the override surface; wire <code>RONNow</code>/<code>SNIFFAtNow</code>; let <a href="../JS/JS-051.html">JS-051</a> drop the<p>
+  future-seed clamp and assert exact shas directly.
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Low priority — a test-ergonomics + reproducible-build nicety, not a correctness<p>
+bug. Tracks the <a href="../JS/JS-051.html">JS-051</a> residual.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

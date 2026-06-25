@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-027b</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-027b: submodule recursion semantics + record-writing + the deferred classifier axes (follow-on to SUBS-027)</h1>
+<p>
+SUBS-027's first slice landed the <code>SUBSDirty</code> classifier + <code>be status</code> Advanced-detection. This ticket is the deferred half: actually WRITE the R1/R2 records, compute the Edited and coord-mismatch axes, enforce the recursive get/post return-code semantics, surface the pin axis in <code>be head</code>, and fill the get/post test gaps. Serialized AFTER <a href="SUBS-026.html">SUBS-026</a> + <a href="../PATCH/PATCH-001.html">PATCH-001</a> (same gitlink-bump path). See <a href="../../wiki/Submodules.html">Submodules</a>, <a href="SUBS-027.html">SUBS-027</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The landed slice classifies + flags <code>be status</code>, but three pieces are placeholders and the verb semantics are unenforced:
+</p>
+<ul>
+<li><strong>R1/R2 are not written by any code.</strong> <code>SUBSDirty</code> reads R1 as the live tree gitlink and probes R2 (usually ABSENT — your beagle case). The parent-pin reflog mirror and the <code>?.&lt;parent&gt;</code> synth keep-alive must actually be emitted on post.</li>
+<li><strong>Edited (bit 0) is declared but a no-op</strong> — the recursive cross-store file-scan ≠ R4.base comparison is unwired, so today only <strong>Advanced</strong> drives status.</li>
+<li><strong>coord-mismatch unwired</strong> — the R2.&lt;parent/branch&gt; vs R3.branch check (record-health axis) is not computed.</li>
+<li><strong>Recursion semantics unenforced</strong> — the get reapply-onto-pin and the post OK/POSTNONE/error contract live only in the <a href="../../wiki/Submodules.html">Submodules</a> spec; <code>sniff/POST.c</code> + <code>beagle/SUBS.c</code> don't implement them. These files COLLIDE with in-flight <a href="SUBS-026.html">SUBS-026</a> and <a href="../PATCH/PATCH-001.html">PATCH-001</a>.</li>
+<li><strong><code>be head</code> can't see the pin axis</strong> — <code>graf/LOG.c</code> computes <code>changed</code> as committed-tree-vs-branch-tip; it structurally cannot see wt-vs-pin (the tree still pins the old sha). Needs a sniff→graf path.</li>
+<li><strong>Test gaps</strong> (audit of test/get,post,patch,status): Advanced/behind/diverged + all record-health are untested at GET/POST level (only patch/28,/35 cover advanced/behind); <code>post/26</code>+<code>post/27</code> are <code>WILL_FAIL</code> stubs already encoding the post return-code contract, gated on &quot;SUBS-001&quot;; <code>get/14</code> gates on an unimplemented <code>be get --dry-run</code>.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Write R1 (parent-pin reflog mirror) and R2 (synth dot-branch) on post; the classifier reads real records, the tree stays authoritative for R1.</li>
+<li>Compute the Edited (recursive) and coord-mismatch axes so all three SUBSDirty axes are real.</li>
+<li>Enforce the get (reapply onto pin) and post (OK→read tip + stage bump / POSTNONE→no bump / any sub error→HARD-ABORT the whole post; base≠pin-on-entry→error unless <code>--force</code>) recursion contract.</li>
+<li>Surface Advanced/stale per sub in <code>be head</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>SERIALIZE after <a href="SUBS-026.html">SUBS-026</a> + <a href="../PATCH/PATCH-001.html">PATCH-001</a> — they rewrite the same gitlink-bump path; concurrent land = non-FF race (work.mkd hazard).</li>
+<li>Reuse the landed <code>SUBSDirty</code> (one classifier, every verb); ABC style; ragel for any parsing; no per-verb tree re-parse where R1 suffices.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+ —
+</p>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> No-quiet-commit-loss (the safety core of the post contract): a sub PROVABLY BEHIND the pin (R4.base a real ancestor of R1) is NEVER auto-bumped — recording the older tip would move the gitlink BACKWARD and drop pinned commits.  Landed <code>719cb085</code>; forward-only via the SUBSDirty Advanced/stale gate in <code>sniff/PUT.c</code>; repro <code>test/post/51-sub-behind-no-backward-bump</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Classifier robustness: <code>SUBSDirty</code> now derives the sub shard from the path basename when the anchor is unbound (<code>be get ?&lt;sha&gt;</code>, the <a href="">SUBS-028</a> blank-want), so a behind sub walks real ancestry instead of the old &quot;assume Advanced&quot; guess (which drove the backward bump).  Truly-unresolvable shards keep the conservative-Advanced signal (never miss a real bump — verified vs post/23, post/45).</li>
+<li class="done"><input type="checkbox" checked disabled> Emit R2 (<code>?/&lt;sub&gt;/.&lt;parent&gt;</code> keep-alive) on post — landed <code>0c67bea8</code>.  The committed case already posts onto the synth branch; the gap was the advanced-CLEAN bump (sub made no commit → never anchored), which now anchors R2 at the new pin via <code>be put ?&lt;synth&gt;</code> in the sub mount, gated on <code>silent</code> (no-commit) so it never perturbs the committed/push recursion (a broader bolt-on regressed 16 push/post tests).  Repro <code>test/post/52-sub-advanced-anchors-r2</code>.  Closes the R2 arm of <a href="SUBS-026.html">SUBS-026</a>.</li>
+<li class="open"><input type="checkbox" disabled> Emit R1 (parent-pin <code>&lt;sub/path&gt;?&lt;parent/branch&gt;#&lt;hash&gt;</code> mirror in the parent refs) + point the classifier at the records.  Lower priority: a cache the classifier doesn't need yet (it reads the pin from the authoritative tree); do it together with a consumer (coord-mismatch).</li>
+<li class="open"><input type="checkbox" disabled> Compute Edited: recursive cross-store sub file-scan ≠ R4.base, folded up the mount tree (node dirty if it OR any descendant is).</li>
+<li class="open"><input type="checkbox" disabled> Wire coord-mismatch: R2.&lt;parent/branch&gt; vs R3.branch.</li>
+<li class="open"><input type="checkbox" disabled> Remaining post-contract pieces: a LOUD error+<code>--force</code> escape (today behind silently keeps the pin + warns when not <code>-q</code>) and refusing a real DIVERGED cousin (today bumped conservatively, since cousin vs undecidable needs object fetch); the get reapply-onto-pin path.</li>
+<li class="open"><input type="checkbox" disabled> <code>be head</code>: a sniff→graf path so an Advanced/stale sub shows per-sub, not just <code>be status</code>.</li>
+<li class="open"><input type="checkbox" disabled> Tests (repro-first, <a href="../../../beagle/CLAUDE.md">CLAUDE</a> §17): Advanced/behind/diverged + synth-missing/coord-mismatch/unbound at GET and POST; recursive depth combos; UN-GATE <code>post/26</code>+<code>post/27</code> (the post return-code contract) when it lands; <code>get/14</code> once <code>--dry-run</code> exists.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Dependency satisfied: <a href="SUBS-026.html">SUBS-026</a> gitlink-bump arm + <a href="../PATCH/PATCH-001.html">PATCH-001</a> both landed; this slice builds on the same <code>sniff/PUT.c</code> gate.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>No-backward-bump (no quiet commit loss) landed on beagle trunk <code>719cb085</code>: <code>sniff/PUT.c</code> forward-only gate + <code>sniff/SUBS.c</code> unbound-anchor basename fallback; repro <code>test/post/51-sub-behind-no-backward-bump</code>.</li>
+<li>R2 keep-alive emission landed <code>0c67bea8</code>: an advanced-clean bump now anchors <code>?/&lt;sub&gt;/.&lt;parent&gt;</code> at the new pin (no synth-missing GC-orphan); repro <code>test/post/52-sub-advanced-anchors-r2</code>; full suite 415/415 (only network CURLtest/POLtest skipped).</li>
+<li>STILL OPEN: R1 emission (parent-pin cache, defer with a consumer), Edited + coord-mismatch axes, the loud error+<code>--force</code> / diverged-refusal, get reapply-onto-pin, the <code>be head</code> pin axis, and the GET/POST axis test matrix.</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-046</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-046 <a href="">UMBRELLA</a>: be put/delete/post as pure-JS extensions</h1>
+<p>
+Reproduce the three reflog-WRITE verbs — <code>be put</code>, <code>be delete</code>, <code>be post</code> — as <code>bin/{put,delete,post}.js</code>, output-equivalent to native, the way <a href="JS-027.html">JS-027</a> did <code>status</code> and <a href="JS-038.html">JS-038</a> did <code>get</code>. PUT/DELETE append intent rows (the wt <code>.be</code> ULOG + the keeper <code>refs</code> ULOG); POST consumes them to build a tree+commit, write a keeper pack-log, and FF-advance the ref. libabc+libdog ONLY — keeper/graf/sniff stay unlinkable, reimplemented in JS. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>status/get were READ ports; these are the first WRITE verbs. PUT/DELETE are<p>
+POST's prerequisite (POST commits their staged set). Native: <code>sniff/PUT.c</code>, <code>sniff/DEL.c</code>, <code>sniff/POST.c</code>; store <code>keeper/REFS.c</code>, format <code>keeper/KEEP.h</code>.
+</p>
+</li>
+<li>Verb semantics: <a href="../../wiki/Verbs.html">Verbs</a>, <a href="../../wiki/PUT.html">PUT</a>, <a href="../../wiki/DELETE.html">DELETE</a>, <a href="../../wiki/POST.html">POST</a>. Put→post flow is<p>
+<code>be put ./f &amp;&amp; be post '#msg'</code>. Two prior write precedents exist in JS: <code>get.js::writeWtlog</code>/<code>appendWtlog</code> and <code>ingest.js::writeUlog</code>.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>bin/put.js</code>/<code>bin/delete.js</code>/<code>bin/post.js</code> byte-equivalent to native on the<p>
+LOCAL path (rows, file mtimes, REFS, banner); shared <code>bin/lib/*</code> writers.
+</p>
+</li>
+<li>Exactly ONE new native leaf: <code>io.setMtime</code> over a new <code>abc/FILE</code> utimensat<p>
+wrapper (<a href="JS-047.html">JS-047</a>). Everything else is pure JS over the bound abc/dog surface.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>libabc+libdog ONLY; NO keeper/graf/sniff binding (reimplement in JS).</li>
+<li>We do NOT touch PATCH. POST is FF-or-refuse: THROW where native would<p>
+rebase/merge (non-FF advance, absorbed-patch &quot;theirs&quot; trees, the cascade).
+</p>
+</li>
+<li>Wire push (<code>//remote</code>) deferred; the local path lands first.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Native leaves wrap abc/dog only; ref resolve/advance, pack-log+idx framing,<p>
+classification, the wire convo all reimplement in JS (the get/status pattern).
+</p>
+</li>
+<li>Non-FF POST → POSTNOFF (refuse); graf rebase is unreachable without a binding<p>
+(sole future escape: a pure-JS WEAVE rebase over the already-bound dog/WEAVE).
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> <a href="JS-047.html">JS-047</a> io.setMtime (abc/FILE utimensat leaf) — native blocker.</li>
+<li class="open"><input type="checkbox" disabled> <a href="JS-048.html">JS-048</a> bin/lib write-side: wtlog appender + refs writer.</li>
+<li class="open"><input type="checkbox" disabled> <a href="JS-049.html">JS-049</a> bin/put.js + bin/lib/stage.js.</li>
+<li class="open"><input type="checkbox" disabled> <a href="JS-050.html">JS-050</a> bin/delete.js (reuses stage.js).</li>
+<li class="open"><input type="checkbox" disabled> <a href="JS-051.html">JS-051</a> bin/post.js + decide/commit/conflict (FF-or-refuse).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="JS-049.html">JS-049</a>/<a href="JS-050.html">JS-050</a>/<a href="JS-051.html">JS-051</a> ← <a href="JS-047.html">JS-047</a>+<a href="JS-048.html">JS-048</a>. <a href="JS-050.html">JS-050</a> ← <a href="JS-049.html">JS-049</a> (stage.js).<p>
+<a href="JS-047.html">JS-047</a>+<a href="JS-048.html">JS-048</a> are file-disjoint → start concurrently.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

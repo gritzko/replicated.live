@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>URI-006</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>URI-006 <a href="">HIGH</a>: transport cleanup — hostless <code>be:</code> = local keeper; <code>file:</code> is worktree-only</h1>
+<p>
+Beagle conflates two roles in <code>file:</code>: a local worktree SOURCE and the host-less LOCAL keeper WIRE (clone/fetch/push). <code>be:</code> is the keeper protocol but is ssh-gated (needs a host), so <code>file://</code> is currently the ONLY local keeper edge — which blocked making <code>file:</code> worktree-only (<a href="URI-005.html">URI-005</a> v1/v2 forks). Decision (user 2026-06-22): split the roles. Hostless <code>be:</code> runs the keeper LOCALLY (same protocol, no ssh pipe — ssh is only the remote transport); <code>file:</code> becomes WORKTREE-ONLY (always a shared-store worktree, never an own-store clone), slash-agnostic. Net: <code>be:</code> = keeper transport (local hostless OR ssh remote); <code>file:</code> = local worktree attach. Umbrella/epic. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>file:</code> running keeper is the same protocol as <code>be:</code> minus the ssh pipe (user) —<p>
+so a host-less <code>be:</code> is the natural local keeper transport, and <code>file:</code> need not carry the wire role at all.
+</p>
+</li>
+<li>Today <code>file://&lt;dir&gt;</code> makes an own-store clone over the local keeper wire; ~20 tests<p>
+use it for clone-and-push-back: be-post-32/38, be-patch-33, be-get-30, head/19-25, post/35-48 (verified by the v2 worker). These migrate to hostless <code>be:</code>.
+</p>
+</li>
+<li>Keeper transport seam: <code>keeper/KEEP.exe.c:1298</code> treats <code>be</code>/<code>file</code> as the keeper<p>
+protocol; <code>keeper_remote_uri</code>, <code>keep_post_is_git_wire</code>, <code>keeper_post</code> special-case host-less <code>file://</code>. The GET-012 slash-count signal + <code>be-get-29</code> encode file:=clone.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Hostless <code>be:</code> (e.g. <code>be:/abs/.be?/proj</code>) runs keeper locally (no ssh): clone /<p>
+fetch / push exactly as <code>be://host</code> does over ssh.
+</p>
+</li>
+<li><code>file:</code> is worktree-only: <code>be get file:</code> always attaches/updates a shared-store<p>
+worktree (no own store), slash-agnostic; the <code>file:</code> clone/push path is removed.
+</p>
+</li>
+<li>Migrate the ~20 <code>file://</code> clone-and-push-back tests onto hostless <code>be:</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>NEVER hand-rolled parsing — ragel grammar + dog dispatch (<a href="../../beagle/CLAUDE.md">CLAUDE</a>, <a href="../../meta/abc.html">ABC</a>).</li>
+<li>Land <a href="URI-005.html">URI-005</a> (the trailing-slash bug) first — it is independent and narrow.</li>
+<li>Don't regress <code>be://host</code> (ssh remote) or <code>ssh://</code>. Core transport — adversarial<p>
+tests, repro-first per stage.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Stage split (each its own worktree/lander; landing order St.1 → St.3 → St.2):</li>
+<li>St.1 — hostless <code>be:</code> runs local keeper (clone/fetch/push, no ssh): the be:-local<p>
+transport that gives <code>file:</code> somewhere to hand its wire role.
+</p>
+</li>
+<li>St.2 — <code>file:</code> worktree-only + slash-agnostic; remove the <code>file:</code> clone path;<p>
+retire the GET-012 slash-count signal + rewrite <code>be-get-29</code>.
+</p>
+</li>
+<li>St.3 — migrate the ~20 <code>file://</code> clone/push tests to hostless <code>be:</code>.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> St.1: hostless <code>be:</code> local keeper (no ssh); repro + tests. LANDED <code>096b425e</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> St.3: migrate file:// clone/push tests to be:. LANDED <code>49943c98</code> (21 tests:<p>
+prior 20 + post/23). No file:// own-store-clone dep left in the migrate set.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> St.2: <code>file:</code> worktree-only, slash-agnostic; remove file: clone path. Must also<p>
+(a) rework get/35,36 setup (still <code>file://</code> own-store clone — they assert file: scheme recovery, kept by St.3); (b) drop get/57 (now dup of <a href="">URI-007</a> get/62). IMPLEMENTED + scoped-green, parked <code>~/todo/URI-006-St2</code>. True scope was ~30 tests (+2 C-tests), not 4: St.3 had not migrated them all. <a href="URI-008.html">URI-008</a> LANDED <code>fa31e6f6</code> cleared the GET arm → 19/20 migrations green; last red is post/43 (SUBS-020 official-url sub-push) pending a behavior ruling. Then renumber get/63→65, reconcile onto <code>fa31e6f6</code>, land.
+</p>
+</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None — epic complete. St.2 landed <code>6a0ce1b7</code> onto <a href="../SUBS/SUBS-031.html">SUBS-031</a> <code>60cf0b10</code>; full suite<p>
+green (be-post-relpath ssh aside). file: clone/push path gone.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>St.1 landed <code>096b425e</code> — hostless <code>be:</code> runs the keeper locally (no ssh):<p>
+BE.cli.c <code>be_be_local_route</code>; KEEP.exe.c <code>hostless_local</code>; WIRECLI.c <code>wcli_spawn</code> local-exec; repro <code>test/get/60</code>.
+</p>
+</li>
+<li><a href="">URI-007</a> landed <code>31050b3f</code> — be:-local parity (cross-name selector + FF guard),<p>
+one fix in keeper/REFS.c; the gap St.3's first run surfaced.
+</p>
+</li>
+<li>St.3 landed <code>49943c98</code> — 21 <code>file://</code> clone/push tests migrated to <code>be:</code>; full<p>
+suite green (pre-existing <code>be-post-relpath</code> aside). St.2 now unblocked.
+</p>
+</li>
+<li><a href="URI-008.html">URI-008</a> landed <code>fa31e6f6</code> — be:-local recursive clone fetches sub objects +<p>
+co-resident shard (sniff/SUBS.c symmetric probe + BE.cli.c authority hoist).
+</p>
+</li>
+<li><a href="../SUBS/SUBS-031.html">SUBS-031</a> landed <code>60cf0b10</code> — git-<code>.git</code>→official sub-push gated behind <code>--force</code><p>
+(default skip + notice); the St.2 transport change exposed it.
+</p>
+</li>
+<li>St.2 landed <code>6a0ce1b7</code> — <code>file:</code> worktree-only + slash-agnostic; file: clone/push<p>
+path removed (BE.cli.c, KEEP.exe.c, WIRECLI.c). ~30 tests migrated file:→be:; get/63/64 became triangle wt-identity tests; post/43→ssh; get/57 dropped, get/30 renamed be-local. EPIC COMPLETE.
+</p>
+</li>
+</ul>
+</body>
+</html>

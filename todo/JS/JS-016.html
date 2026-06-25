@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-016</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-016 <a href="">LOW</a>: directory enumeration — <code>io.readdir</code> (dir-marked + callback-directed + recursive)</h1>
+<p>
+<code>io</code> exposes <code>stat</code> (kind incl. <code>&quot;dir&quot;</code>) but no way to LIST a directory, so a JS utility cannot walk a tree, glob, or scan a worktree. The abc leaf already exists. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>js/io.cpp</code> has open/close/stat/read/write/mmap but no listing<p>
+(verified: grep <code>readdir</code>/<code>scandir</code> in <code>io.cpp</code> → none).
+</p>
+</li>
+<li><code>abc/FILE.h:242 FILEScanDir(path8bp, path8f, void0p)</code> already wraps the<p>
+syscall — a bindable leaf, no new abc work.
+</p>
+</li>
+<li>Surfaced by the <code>be status</code> review: the worktree scan, any <code>require</code>-<p>
+style resolver, and most CLI tools need a dir listing.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>io.readdir(path)</code> → <code>string[]</code>, one level, **dirs marked with a trailing<p>
+<code>/</code>**; hidden (dot) entries skipped by default.
+</p>
+</li>
+<li>2nd arg is POLYMORPHIC: a FUNCTION is the directed callback<p>
+(<code>&quot;more&quot;</code>/<code>&quot;enough&quot;</code>/<code>&quot;recur&quot;</code>); an OBJECT is options.
+</p>
+</li>
+<li>Options <code>{recursive, callback, hidden}</code>: <code>recursive:true</code> auto-descends<p>
+(flat array, or cb per entry); <code>callback:fn</code> = the directed cb; <code>hidden:true</code> includes dotfiles (default skip).
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Marshal over <code>FILEScanDir</code> / <code>FILEDeepScanDir</code> (`path8f = ok64(*)(void0p,<p>
+path8p)<code>); a C trampoline runs </code>cb<code> synchronously in-frame, never stashed (rule #4); a </code>cb` throw aborts + propagates.
+</p>
+</li>
+<li>2nd-arg dispatch: <code>typeof === &quot;function&quot;</code> → callback form; an object →<p>
+options (with optional <code>callback</code>). <code>recursive:true</code> uses <code>FILEDeepScanDir</code>; a per-entry <code>&quot;recur&quot;</code> (non-recursive) nests <code>FILEScanDir</code>.
+</p>
+</li>
+<li><code>hidden:false</code> (default) skips basenames starting <code>.</code> (<code>.</code>/<code>..</code> already<p>
+dropped by FILEScan). Dir-ness from the trailing <code>/</code> per entry. No ptr arith.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) STATUS: 2nd iterate on reviewer feedback — unify the 2nd arg<p>
+(nothing | callback fn | options object) before landing.
+</p>
+</li>
+<li>(open) <code>{recursive, callback, hidden}</code> is the superset; bare-fn is sugar for<p>
+<code>{callback:fn}</code>. Emitted paths stay root-relative (cb sees <code>sub/child</code>).
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Stay current on trunk (JS-015 + JS-017 already in).</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: fixture tree (files + a dotfile + subdir/child) — assert dir<p>
+  marking, <code>enough</code> early-stop, <code>recur</code>/recursive reach the child, and   <code>hidden</code> default-skips the dotfile (present when <code>hidden:true</code>). Red→green.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Implement the polymorphic 2nd arg + the three behaviors; update INDEX/API.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><strong>LANDED <code>60194418</code></strong> (2026-06-21): polymorphic <code>io.readdir(path, arg)</code> —<p>
+absent → 1-level <code>string[]</code> (dirs marked <code>/</code>, dotfiles skipped); a function → directed cb (<code>more</code>/<code>enough</code>/<code>recur</code>); an object <code>{recursive, callback, hidden}</code> → superset (<code>recursive</code>→<code>FILEDeepScanDir</code>; <code>hidden:false</code> prunes dotfiles + hidden dirs via <code>FILESKIP</code>; <code>recur</code> no-op under <code>recursive</code>). 19 rows red→green; <code>ctest -R JABC</code> 18/18, ASAN/LSan clean; <code>--force</code> past the benign INDEX.md marker.
+</p>
+</li>
+</ul>
+</body>
+</html>

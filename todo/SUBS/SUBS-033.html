@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-033</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-033: status lists a newly-added (staged-gitlink) sub's files as <code>unk</code>, not one mount row</h1>
+<p>
+A submodule that is declared, mounted, and gitlink-<strong>staged</strong> (<code>be put &lt;sub&gt;</code>) but not yet committed has all its internal files listed individually as <code>unk</code> by <code>be status</code>, instead of being filtered behind one staged-gitlink (<code>new &lt;sub&gt;</code>) row. Real case: the journal's <code>be</code> sub (<code>?/beagle-ext</code>) shows 29 <code>be/*</code> files as <code>unk</code>. <code>html</code>/<code>beagle</code> don't, because their gitlinks are already committed. Method: <a href="../../meta/work.html">Issues</a>. Relates to <a href="SUBS-013.html">SUBS-013</a> (the <code>be put</code> staging side).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>In <code>beagle-journal</code>: <code>be</code> is in <code>.gitmodules</code>, mounted (<code>be/.be</code> anchor),<p>
+gitlink staged via <code>be put be</code> (<code>put be#c828169707…</code> in <code>.be/wtlog</code>), NOT yet posted. <code>be status</code> → 29 <code>be/*</code> lines as <code>unk</code> + <code>?  …, 29 unk</code>; recursion <code>status:be</code> separately shows <code>? 29 ok</code>. So the files are double-counted.
+</p>
+</li>
+<li>Root cause: <code>sniff/CLASS.c</code> <code>class_merge_step</code> records a submodule prefix<p>
+(which drops the sub's internal wt rows via <code>class_under_submodule</code>) ONLY when a COMMITTED baseline gitlink row exists: <code>base != NULL &amp;&amp; ok64Lit(base-&gt;verb, 0) == RON_s</code> (CLASS.c:188). A staged-only gitlink put (<code>base == NULL</code>, a <code>put &lt;path&gt;#&lt;40hex&gt;</code> row) is not recognized → <code>be/*</code> surface as <code>CLASS_WT_ONLY</code>.
+</p>
+</li>
+<li><code>html</code>/<code>beagle</code> are filtered because their <code>160000</code> gitlinks are in the<p>
+committed baseline tree; <code>be</code>'s gitlink is only staged.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A mounted sub whose gitlink is staged (<code>put &lt;path&gt;#&lt;40hex&gt;</code>) but uncommitted is<p>
+treated as a submodule boundary: its internal files are filtered and it surfaces as one staged-gitlink row. Matches <code>git add &lt;submodule&gt;</code>.
+</p>
+</li>
+<li><code>be status</code> in <code>beagle-journal</code> shows <code>new be</code> and zero <code>be/*</code> unk.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Minimal fix in <code>sniff/CLASS.c</code>; reuse <code>class_remember_submodule</code>. Repro-first<p>
+(CLAUDE.md §17), as a case in a registered table/dir test under <code>beagle/test/</code>.
+</p>
+</li>
+<li>Don't regress committed-gitlink subs nor regular (fragment-less) staged file<p>
+puts. Don't touch <code>test/CMakeLists.txt</code> / <code>test/put/*</code> (live WIP there).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>At CLASS.c:188 also fire the gitlink branch when `put != NULL &amp;&amp;<p>
+u8csLen(put-&gt;uri.fragment) == 40` (a staged gitlink bump). Discriminator: a gitlink put row carries a 40-hex fragment; a regular file put has none.
+</p>
+</li>
+<li>The sub's own path sorts before its children (<code>be</code> &lt; <code>be/…</code>), so the prefix is<p>
+recorded before any descendant row arrives — ordering already holds.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Repro: parent + mounted sub, <code>be put &lt;sub&gt;</code>, assert <code>be status</code> lists no<p>
+ <code>&lt;sub&gt;/*</code> <code>unk</code> — <code>test/all/03-staged-sub-unk</code> (fails pre-fix, passes post).
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Fix CLASS.c gitlink detection to include the staged-put (40-hex) case.</li>
+<li class="done"><input type="checkbox" checked disabled> Repro green + full <code>ctest</code> green (398/399; lone fail <code>be-post-relpath</code> is a<p>
+ pre-existing ssh/PATH env issue, unrelated to <code>sniff/</code>).
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Concurrent journal post diverged the beagle lines at <code>ab4519af</code> (trunk vs the<p>
+<code>?/beagle/.beagle-journal</code> dot-branch the journal pins); reconciled by weave.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><code>707bbbbe</code> — SUBS-033 fix landed on beagle trunk <code>?</code> (CLASS.c staged-gitlink<p>
+detection + <code>test/all/03-staged-sub-unk</code>). Verified: journal <code>be/</code> unk → 0.
+</p>
+</li>
+<li><code>0b60bf6a</code> — weave-merge of <code>707bbbbe</code> into the journal's beagle line<p>
+(<code>?/beagle/.beagle-journal</code>, over <code>121a98ae</code>); clean, content-conflict=0.
+</p>
+</li>
+<li>Journal beagle gitlink bump to <code>0b60bf6a</code> STAGED (<code>put beagle#0b60bf6a</code>);<p>
+awaiting the human's journal post.
+</p>
+</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-024</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-024 <a href="">MED</a>: <code>git</code> JS package — migrate <code>PACK</code> / <code>delt</code> → <code>git.pack</code> / <code>git.delta</code></h1>
+<p>
+All git/pack-log JS bindings belong in a <code>git</code> package. MIGRATE (hard cutover, not alias) the existing <code>PACK</code> container and <code>delt.apply</code> — which already wrap <code>dog/git</code> — off <code>abc</code> into <code>git.*</code>. Sets up the home for the pack-log index (the follow-on). Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>The <code>PACK</code> container (<code>js/cont.cpp</code>, <code>abc.over(&quot;PACK&quot;)</code> / <code>abc.mmap(&quot;PACK&quot;)</code>)<p>
+already wraps <code>dog/git/PACK.c</code>'s pack core (per <code>js/INDEX.md</code>) — it is mis-shelved under <code>abc</code>. <code>delt.apply</code> is git delta reconstruction.
+</p>
+</li>
+<li>Session decision: a <code>git</code> JS package for everything git/packlog;<p>
+*<strong>migrate, not alias</strong>* (the user's call). <code>sha1</code>/<code>sha256</code> stay generic.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>git.pack(...)</code> — the PACK container constructor + cursor (header/feed/<p>
+inflate/resolve/seek/next/count/type/size/baseOffset/ref), moved verbatim from the <code>abc.over</code>/<code>abc.mmap</code>/<code>abc.book</code> <code>&quot;PACK&quot;</code> family.
+</p>
+</li>
+<li><code>git.delta.apply(base, delta, out)</code> — moved from <code>delt.apply</code>.</li>
+<li>HARD cutover: REMOVE the <code>abc</code> PACK + <code>delt</code> forms; update <code>js/test/pack.js</code><p>
++ INDEX.md / API.md to the <code>git.*</code> surface.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Pure JS re-home inside cont.cpp (or a new <code>git</code>-bundle): the native<p>
+<code>_pack_*</code> / <code>_delt_apply</code> leaves are UNCHANGED, just re-exposed under <code>git</code>. No C changes, no new leaves. JABC rule #4 unchanged.
+</p>
+</li>
+<li>The GIT-007 cross-impl vector in <code>js/test/pack.js</code> (a JABC-written log<p>
+resolves byte-identically through the dog/git OFS_DELTA chase) MUST stay green under the <code>git.pack</code> surface.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) <code>git</code> is its own <code>JABC_API_OBJECT</code> (or a sub-bundle in cont.cpp);<p>
+<code>git.pack</code> is the container builder, <code>git.delta</code> the delta op. Match the existing <code>isLog</code>/<code>build</code> plumbing — <code>PACK</code> is a u8-backed log family.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> <code>be get --nosub</code> onto current trunk (JS-022 landed); build.</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: port <code>js/test/pack.js</code> to <code>git.pack</code>; confirm it FAILS on the<p>
+  removed <code>abc.over(&quot;PACK&quot;)</code> and PASSES on <code>git.pack</code> (incl. the GIT-007   vector). Red before, green after.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Migrate the family; update INDEX.md / API.md.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None. The pack-log INDEX (index-on-append + a native reindex-scan) is a<p>
+SEPARATE effort: an addition to the pack-log API in <code>dog/git</code> (a GIT-topic C prereq), then a <code>git</code> index binding that fills an <a href="JS-022.html">JS-022</a> <code>abc.index</code>. Out of scope here — this ticket only stands up the <code>git</code> namespace.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><strong>LANDED <code>5b11dad9</code></strong> (2026-06-21): <code>git</code> JS package — <code>g.git = {pack, delta}</code><p>
+in cont.cpp. <code>git.pack.ram/over/mmap/book</code> (PACK container, prototype lifted verbatim) + <code>git.delta.apply</code>. HARD cutover: <code>PROTO[&quot;PACK&quot;]</code>, <code>g.delt</code>, <code>&quot;PACK&quot;</code> in <code>isLog</code>, and the PACK <code>_read=12</code> special-case removed — <code>abc.over(&quot;PACK&quot;)</code> now throws, <code>delt</code> undefined. Native <code>_pack_*</code>/<code>_delt_apply</code> leaves unchanged. Made <code>abc.close</code> lane-safe (booked-PACK fix). GIT-007 vector byte-identical under <code>git.pack</code>; <code>js/test/pack.js</code> ported + a cutover guard red→green; <code>ctest -R JABC</code> 20/20, ASAN/LSan clean.
+</p>
+</li>
+<li>Pack-log INDEX (index-on-append + reindex) left out: a separate <code>dog/git</code><p>
+C addition (GIT-topic), then a <code>git</code>-index binding filling an <a href="JS-022.html">JS-022</a> index.
+</p>
+</li>
+</ul>
+</body>
+</html>

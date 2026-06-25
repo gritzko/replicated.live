@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-020</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-020 <a href="">LOW</a>: process spawn + output-as-Buf — bind <code>FILESpawn</code>/<code>FILESpawnFds</code>/<code>FILEReap</code></h1>
+<p>
+A JABC script cannot run a child process: the C leaves exist but aren't bound. Bind them, plus an &quot;output as a <code>Buf</code>&quot; convenience via a file + <code>mmap</code> sink — the deadlock-free, zero-copy path. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>io.spawn</code>/<code>reap</code> are shown in <code>js/API.md</code> but NOT bound (grep <code>js/</code> for<p>
+<code>spawn</code>/<code>Spawn</code> → none). The leaves exist: <code>abc/FILE.h:537 FILESpawn</code> (pipes for stdin/stdout, *<strong>stderr inherited</strong>*), <code>:545 FILESpawnFds</code> (caller fds, <code>-1</code>=inherit), <code>:552 FILEReap</code> (<code>FILESIGNAL</code> on signal death).
+</p>
+</li>
+<li>Surfaced by the spawn/Buf design chat: scripts/extensions need to run a<p>
+child and read its output. Naive pipe-drain *<strong>deadlocks</strong>* at the 64 KB pipe buffer, and a fixed-cap <code>Buf</code> overflows — the binding must dodge both.
+</p>
+</li>
+<li>No anonymous-fd leaf today (<code>memfd</code>/<code>O_TMPFILE</code> absent from FILE.h); the<p>
+zero-copy sink uses a named temp file via <code>FILECreate</code> + <code>FILEMapRO</code>.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>io.spawn(path, argv) → {pid, stdin, stdout}</code> (fds); `io.spawnFds(path,<p>
+argv, inFd, outFd) → pid<code> (</code>-1<code> inherits); </code>io.reap(pid) → {code, signal}`.
+</p>
+</li>
+<li>&quot;Output as a <code>Buf</code>&quot;: spawn with a file sink, reap, <code>mmap</code> → the child's<p>
+stdout as a zero-copy <code>Buf</code> (no pipe, no deadlock, no drain loop).
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Pure marshalling over the three leaves (no new abc): argv = a JS string<p>
+array → <code>u8css</code>; fds + pid cross as numbers; no held JS refs (rule #4).
+</p>
+</li>
+<li>The Buf-sink convenience composes EXISTING leaves (<code>io.open</code>/<code>spawnFds</code>/<p>
+<code>reap</code>/<code>mmap</code>) — a JS-side helper, no C format logic.
+</p>
+</li>
+<li>Reap contract: clean exit → <code>{code}</code>; <code>FILESIGNAL</code> → <code>{signal}</code> (exactly<p>
+one set). Caller owns + closes every fd; the binding never reaps on GC.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) Landing scope = the 3 leaf bindings + a JS <code>io.exec</code>/<code>io.capture</code><p>
+(file-sink → <code>mmap</code>) returning <code>{out: Buf, code}</code>, optional <code>{stdin: Buf}</code>.
+</p>
+</li>
+<li>(open) Deferred refinements: <code>io.memfd()</code> anon sink (needs a new<p>
+<code>FILEMemFd</code> abc leaf); *<strong>stderr capture</strong>* (FILESpawn inherits it — needs a stderr-fd spawn variant or a self-made pipe); an async streaming <code>child</code> module over <code>pol</code> (mirror <code>net.cpp</code>): two-pipe poll-drain (no deadlock) + SIGCHLD/<code>waitpid</code> reaping + <code>.on('data'|'exit')</code>.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: <code>io.spawn(&quot;/bin/echo&quot;,[&quot;echo&quot;,&quot;hi&quot;])</code> → read stdout == <code>&quot;hi\n&quot;</code>,<p>
+  <code>io.reap</code> → <code>{code:0}</code>; a non-zero exit and a signal death both surface   correctly; the file-sink <code>io.exec</code> returns the output <code>Buf</code>.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Bind the 3 leaves; add the file-sink→<code>mmap</code> convenience.</li>
+<li class="open"><input type="checkbox" disabled> Document the surface + the deadlock/stderr caveats in <code>js/API.md</code>; update<p>
+  <code>js/INDEX.md</code> (io.cpp section).
+</p>
+</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None for the core. stderr capture + <code>memfd</code> are flagged follow-ups that may<p>
+need small new abc leaves; the async <code>child</code> module is a larger follow-up.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><strong>LANDED <code>0155ee76</code></strong> (2026-06-21): <code>io.spawn(path,argv) → {pid,stdin,stdout}</code>,<p>
+<code>io.spawnFds(path,argv,inFd,outFd) → pid</code> (<code>-1</code>=inherit), <code>io.reap(pid) → {code}|{signal}</code> — pure marshalling over <code>FILESpawn</code>/<code>FILESpawnFds</code>/ <code>FILEReap</code>; plus <code>io.unlink</code> (<code>FILEUnLink</code>). argv→<code>u8css</code> idiom from <code>WIRECLI.c</code>. Tests red→green (echo, stdin round-trip, exit-code, signal, spawnFds-inherit, argv-throws); <code>ctest -R JABC</code> 18/18, ASAN/LSan clean.
+</p>
+</li>
+<li><code>io.exec</code> (file-sink→<code>mmap</code>) was built then CUT on review: the name<p>
+mismatches POSIX/Node <code>exec</code> and it was sugar over <code>spawn</code>. Capture-stdout recipes (pipe-drain + zero-copy file+<code>mmap</code>) stay in <code>API.md</code> over the leaves.
+</p>
+</li>
+<li>Deferred: stderr capture, a <code>memfd</code> anon sink, an async <code>pol</code>-driven <code>child</code><p>
+module, <code>{stdin:Buf}</code> — and a <code>Buf.close()</code> doc/impl gap spotted in <code>API.md</code>.
+</p>
+</li>
+</ul>
+</body>
+</html>

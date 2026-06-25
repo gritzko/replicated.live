@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>URI-005</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>URI-005 <a href="">MED</a>: <code>be get file:/…/.be?/proj</code> fails — trailing-slash store-path detection</h1>
+<p>
+<code>be get file:/home/…/.be?/proj</code> errors <code>cannot restore … — no baseline in .be/wtlog</code> instead of attaching a worktree, while <code>file:///…</code> works. Root cause (pinned by the v1/v2 workers): store-path detection in <code>beagle/BE.cli.c:813</code> runs <code>PATHu8sBase(base, prim_s)</code> on a path ending in <code>/.be/</code> (trailing slash); <code>PATHu8sBase</code> (<code>abc/PATH.c:39-48</code>) stops AT the trailing slash and returns EMPTY, so <code>u8csEq(base, &quot;.be&quot;)</code> is false → <code>path_is_store</code> stays NO → <code>BEGetWorktree</code> no-ops → falls through to <code>BEActSingleFileGet</code> → sniff restore → &quot;no baseline&quot;. Narrow detection fix; the broader <code>file:</code>/<code>be:</code> transport redesign is <a href="URI-006.html">URI-006</a>. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Live: <code>be get file:/home/gritzko/beagle-journal/.be/?/beagle</code> → exit 157<p>
+<code>cannot restore /home/gritzko/beagle-journal/.be/ — no baseline</code>; the <code>file:///…</code> (authority-present) form routes to the worktree fine. Same code path, slash count only changes whether the trailing-slash basename bug is hit.
+</p>
+</li>
+<li>Round-trip trap: <code>be</code> writes the trailing-slash store form into <code>.be/wtlog</code><p>
+(<code>sniff/AT.c</code> repo anchor, path <code>…/.be/</code>); re-feeding that stored form hits the same empty-basename bug, so the form <code>be</code> emits cannot be re-consumed.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>be get file:/…/.be?/proj</code> (any slash count) attaches/updates the shared-store<p>
+worktree, identical to <code>file:///…/.be?/proj</code>; the wtlog-stored form round-trips.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fix the store-path basename test only: trim a trailing <code>/</code> before the <code>.be</code><p>
+compare (or a dir-aware basename) — no hand-rolled parsing beyond that (<a href="../../beagle/CLAUDE.md">CLAUDE</a>).
+</p>
+</li>
+<li>Scope: JUST this detection bug. The <code>be:</code>/<code>file:</code> role redesign is <a href="URI-006.html">URI-006</a>.</li>
+<li>Don't regress <code>file://…</code>, <code>be://…</code>, or bare local-path args. Repro-first.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Narrow: trim the trailing slash before the <code>.be</code> basename compare at the<p>
+<code>path_is_store</code> test (<code>BE.cli.c:813</code>), so a <code>…/.be/</code> store path is recognized.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro (hermetic, scratch HOME): <code>be get file:/…/.be?/proj</code> fails today →<p>
+  attaches the shared worktree after the fix (red→green); wtlog form round-trips.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Fix the trailing-slash store-path detection; re-run the get suite.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>LANDED <code>d09bd197</code>: <code>beagle/BE.cli.c</code> trims one trailing <code>/</code> from the store<p>
+path (<code>u8csHeadS</code>) before the <code>.be</code> basename test — fixes detection AND the <code>.be//</code> round-trip trap in one place. Repro <code>test/get/59</code>; get suite 72/72.
+</p>
+</li>
+</ul>
+</body>
+</html>

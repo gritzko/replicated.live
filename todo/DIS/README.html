@@ -13,14 +13,14 @@
 </a>
 <h1>DIS tickets: cross-cutting spec/impl discrepancies</h1>
 <p>
-DIS collects spec↔implementation discrepancies that cut across verbs; a gap found mid-fix gets its own DIS ticket, linked both ways. Each entry below is one open ticket with its live state; a landed one (verify with <code>be log | grep DIS-NNN</code>) drops off. The 21 below remain open. The fix-and-land method is <a href="../../skill/Issues.html">Issues</a>.
+DIS collects spec↔implementation discrepancies that cut across verbs; a gap found mid-fix gets its own DIS ticket, linked both ways. Each entry below is one open ticket with its live state; a landed one (verify with <code>be log | grep DIS-NNN</code>) drops off. The 24 below remain open. The fix-and-land method is <a href="../../skill/Issues.html">Issues</a>.
 </p>
 <h2>Active tickets</h2>
 <ul>
 <li><a href="DIS-001.html">DIS-001</a> — sha-bearing wtlog row-0 anchor; correctness landed, only the optional clone-path cleanup remains.</li>
 <li><a href="DIS-002.html">DIS-002</a> — <code>be patch</code> over a transport drops freshly-fetched commits; routing landed, still loses the added file.</li>
 <li><a href="DIS-003.html">DIS-003</a> — WEAVEMerge token identity is positional, not total; one sub-bug fixed, a clean diff-key fix stays constrained.</li>
-<li><a href="DIS-004.html">DIS-004</a> — delete's dirty gate is mtime-only, with no <code>--force</code> content double-check bypass.</li>
+<li><a href="DIS-004.html">DIS-004</a> — LANDED <code>9718a03a</code>: delete now does the content-hash double-check (mtime-drift-but-identical proceeds) + a real <code>--force</code> bypass on file/dir paths (<code>del_content_eq_baseline</code> via <code>CLASSWtEqBase</code>; <code>SNIFFdelforce</code> 6 cases). Residual get-path re-stamp → <a href="DIS-052.html">DIS-052</a>.</li>
 <li><a href="DIS-005.html">DIS-005</a> — sha1/projector single-scheme URI grammar: document the two-step <code>be head</code> then <code>be sha1://</code> remote read.</li>
 <li><a href="DIS-006.html">DIS-006</a> — <code>be get file:</code> from a legacy elided store: migrate-in-place vs materialize-on-clone undecided.</li>
 <li><a href="DIS-007.html">DIS-007</a> — magic refs <code>?null</code> / <code>?back</code> are unimplemented.</li>
@@ -39,7 +39,11 @@ DIS collects spec↔implementation discrepancies that cut across verbs; a gap fo
 <li><a href="DIS-040.html">DIS-040</a> — POSTCFLCT can't be de-falsed at the byte level; needs a provenance check, couples to POST-016.</li>
 <li><a href="DIS-042.html">DIS-042</a> — cur's divergent commit: <code>be patch &lt;peer&gt;</code> + <code>be post</code> replays onto peer, drops cur's bytes (Invariant 2).</li>
 <li><a href="DIS-044.html">DIS-044</a> — WEAVEMerge's RGA tie-break sorts concurrent siblings by raw commit-id DESC, not causally — real (non-monotonic) hashlets strand replace-edits / splice clean instead of conflicting (silent merge data-loss). Fixed: tie-break on the causal commit index + topo-deterministic commits[]; fuzzer off its monotonic-id oracle. Landed <code>5041ed18</code>.</li>
+<li><a href="DIS-048.html">DIS-048</a> — <code>be get</code> op-summary listed orphaned (non-DAG) post-rows (showed 2 where <code>be log</code> shows 1). Ruling: OMIT non-tip-reachable rows (the <code>miss</code> relabel was wrong: disapplied ≠ behind). Landed <code>6bc22109</code> — drop the disapplied (<code>base \ tgt</code>) loop in <code>get_emit_commit_list</code>; repro <code>test/get/56</code>. Sibling JS-027 <code>be get</code> batch: DIS-046 <code>6d7ee04f</code>, DIS-047 <code>5b062e24</code>, DIS-049 <code>9e80e5f0</code>.</li>
 <li><a href="DIS-045.html">DIS-045</a> — CLOSING: premise false. Engine already correct (<a href="DIS-043.html">DIS-043</a> idh JOIN + <a href="DIS-044.html">DIS-044</a> causal order removed both DIS-003 layers); no repro in 4.7M fuzz. Committed <code>711618fe</code> (pure teeth: WEAVE03 step-2 oracle + blank criss-cross cases + <code>W2_BLANK</code> fuzz; 322/322). <code>be-patch-15</code> 5/5 fail re-tasked to <a href="">DOG-005</a> — graf cut-over glue, not the engine.</li>
+<li><a href="DIS-050.html">DIS-050</a> — <code>be put ?&lt;40hex&gt;</code> set-cur dispatch inconsistent (writes the ref vs falls to PUTNONE when sha == cur tip); <a href="">JS-049</a> residual, no data loss.</li>
+<li><a href="DIS-051.html">DIS-051</a> — no <code>SOURCE_DATE_EPOCH</code>-style clock override → a tree's commit sha is non-reproducible (wall-clock + local-tz mktime); <a href="">JS-051</a> residual.</li>
+<li><a href="DIS-052.html">DIS-052</a> — verbs disagree on a content-clean file with a drifted mtime: status/diff clean, <code>be delete</code> DELDIRTY, <code>be put</code> PUTNONE, <code>be get &lt;path&gt;</code> no re-stamp — the &quot;revert before deleting&quot; advice is a dead end. Live repro 2026-06-23.</li>
 </ul>
 <p>
 DIS-043 (dog/WEAVE concurrent-insert order path-dependent — criss-cross duplication; fixed with an RGA stable-order key: a per-token <code>'A'</code> anchor column + identity merge-JOIN in commit-id RGA order) landed <code>8eece3f3</code>; <code>dog/test/WEAVE01</code> + the DWEAVE fuzz corpus.

@@ -36,7 +36,10 @@ Two independent layers, either fix alone removes the symptom; both are worth doi
 <ul>
 <li>Layer 1 (reachability robustness): <code>DAGAncestors</code>/<code>DAGAncestorsTunable</code>/<code>get_lca</code> have no keeper-body fallback on a DAG miss, unlike <code>graf log</code>.</li>
 <li>Layer 2 (index coverage): the <code>be head</code>/<code>be patch</code> fetch reindex (<code>GRAFIndexFromTips</code> via <code>graf get</code>) does not ingest the just-fetched remote-tracking peer tip — only a single resolved tip.</li>
-<li>Note DIS-037 (project addressed by store-DIR <code>dogs</code> not TITLE <code>beagle</code>): the <code>?/beagle</code> query does not name a real branch here, so the head/lca path leans entirely on the implicit/remote-tracking target — which makes Layer-2's missing remote-tip ingest bite harder. Independent root cause, but they compound.</li>
+<li>Note DIS-037 (project addressed by store-DIR not TITLE) LANDED <code>014146f6</code><p>
+(12 Jun): <code>?/beagle</code> now resolves by title, so the head/lca path no longer leans on the implicit target for that reason — that compounding factor is gone. Layer 2 (remote-tip ingest) still stands on its own.
+</p>
+</li>
 </ul>
 <h2>Planned</h2>
 <p>
@@ -56,6 +59,28 @@ Real DAG (commit objects in keeper, parent headers — NOT re-rooted): <code>54d
 <li><code>be head be://localhost?/beagle</code> (clone's own <code>./build/bin/be</code>) → <code>head: 1317 ahead, 1 behind, 19 changed</code>; the <code>+</code> rows list cur's WHOLE history down to <code>c7184818 initial</code>; the single <code>-</code> row IS <code>8d313c50</code> (target resolved right, ancestors missing).</li>
 <li><code>keeper get .#8d313c50</code> / <code>.#54d2eb5b</code> / <code>.#479fcc96</code> (in <code>.be/dogs</code>) show correct, shared <code>parent</code> chains; <code>graf log ?#8d313c50</code> walks the full true chain (its LOG.c fallback masks the bug).</li>
 <li><code>graf index</code> then <code>graf head --at … ?/beagle</code> → <code>1 ahead, 3 behind, 19 changed</code> (the TRUE divergence). Index files restored afterwards; the clone is left in its original buggy state.</li>
+</ul>
+<h2>Evidence (live 2026-06-22, shared journal store — a get clobbered the tip)</h2>
+<p>
+Second manifestation (GET-014 arm): a <code>be get --nosub</code> in a far-behind worktree regressed the SHARED <code>beagle</code> shard HEAD, orphaning 3 already-landed commits.
+</p>
+<ul>
+<li><code>/home/gritzko/todo/SUBS-030</code> posted <code>d7eaf5c4</code> (SUBS-030, clean FF over<p>
+<code>742c06ff</code>/<code>c3fbdda5</code>/<code>9e80e5f0</code>) at 08:14 and verified it as the tip.
+</p>
+</li>
+<li>Then <code>/home/gritzko/todo/DIS-048</code> (pinned at June-21 <code>0c67bea8</code>/<code>371ad14b</code>)<p>
+ran <code>be get --nosub</code>; <code>.be/beagle/refs</code> was rewritten at 08:19 and HEAD resolved back to <code>9e80e5f0</code> — the journal's gitlink pin — for ALL clones AND the <code>beagle/</code> submodule checkout (journal then shows <code>beagle</code> clean).
+</p>
+</li>
+<li>No data loss: <code>d7eaf5c4</code>/<code>742c06ff</code>/<code>c3fbdda5</code> still present in <code>beagle/refs</code>;<p>
+<code>be head</code> from a clone shows the classic bogus ahead-list (cur whole history).
+</p>
+</li>
+<li>Recovery is a linear FF of the <code>beagle</code> shard HEAD <code>9e80e5f0</code>→<code>d7eaf5c4</code><p>
+(advancing the journal gitlink pin past the regression is the durable fix).
+</p>
+</li>
 </ul>
 </body>
 </html>

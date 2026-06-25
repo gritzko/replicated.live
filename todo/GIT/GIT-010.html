@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIT-010</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GIT-010 <a href="">MED</a>: pack-log index-emit — feed/scan emit <code>(sha→offset)</code> into a provided buffer</h1>
+<p>
+The pack-log does NOT maintain an index. Its <code>feed</code> and a <code>scan</code> EMIT <code>(sha→offset)</code> entries into a caller-provided buffer (if given); sort / merge / persist / query is entirely the caller's. Native core in <code>dog/git</code> (shared by keeper + the <code>git.pack</code> JABC binding). Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>The dog/git pack core (<code>PACKu8sFeedObj</code> / <code>PACKResolveOfs</code> / <code>PACKRecordEnd</code>,<p>
+<a href="GIT-007.html">GIT-007</a>) is the shared format floor — no pack-log logic in consumers.
+</p>
+</li>
+<li><code>git.pack</code> (the JABC binding, JS-024) wraps that core but emits NO<p>
+<code>sha→offset</code> today (per <code>js/INDEX.md</code> the index &quot;stays in the caller&quot;).
+</p>
+</li>
+<li>Design (the user's framing): the pack-log is an ENTRY PRODUCER into a<p>
+caller buffer, not an index owner — exactly the <code>tok.parse(…, out?)</code> / <code>delt.apply(…, out)</code> shape. The caller pipes entries into a JS-022 <code>abc.index</code> (<code>wh128</code>); the rest is up to the caller.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A <code>dog/git</code> scan/index-emit: walk a pack, resolve each object, git-sha it,<p>
+emit <code>(sha-hashlet60|type, offset)</code> into a provided buffer (<code>Bwh128</code>).
+</p>
+</li>
+<li>Index-on-append: <code>feed</code> optionally emits the just-fed object's entry into<p>
+the same buffer — cheap (hash the content you already hold; no resolve).
+</p>
+</li>
+<li><code>git.pack</code> exposes both with an optional <code>out</code> buffer; a JS test pipes the<p>
+entries into an <code>abc.index</code> and looks up <code>sha → offset</code>.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Native core in <code>dog/git</code> (shared, per the topic architecture) — reuse<p>
+<code>PACKResolveOfs</code> (resolve) + <code>dog/git</code> <code>sha1</code> + <code>GITTypeName</code> (the <code>&lt;type&gt; &lt;len&gt;\0</code> git object framing). SINGLE-pack, NO keeper coupling, NO fork parallelism (the heavy multi-pack/ingest path stays in keeper/UNPK).
+</p>
+</li>
+<li>Buffer-feed shape mirrors <code>tok.parse</code>/<code>delt.apply</code>: emit into the caller's<p>
+region, hold nothing (JABC rule #4). Don't change the pack format.
+</p>
+</li>
+<li>Emit <code>wh128</code> <code>(key=hashlet60|type, val=offset)</code> to match the keeper puppy<p>
+registry + the <code>abc.index</code> <code>wh128</code> lane, so the caller can <code>merge</code> directly.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) The reindex resolves deltas; a JS-over-cursor loop would re-inflate<p>
+bases O(objects×depth) (the index design pass), so the SCAN is NATIVE (one pass, shared apply state) — <code>keeper/UNPK.c::UNPKIndex</code> is the algorithm REFERENCE (model the single-pack core on it, minus parallelism + keeper).
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: a <code>dog/git</code> test + a <code>git.pack</code> JS test — build a pack with<p>
+  raw + OFS_DELTA objects, scan → entries, assert each <code>(sha, offset)</code>   resolves byte-correct; pipe into an <code>abc.index</code> and assert <code>sha→offset</code>   lookups; assert index-on-append == a full reindex.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Implement the <code>dog/git</code> scan-emit (+ feed-emit); bind via <code>git.pack</code>;<p>
+  update <code>dog/INDEX.md</code> + <code>js/INDEX.md</code> / <code>js/API.md</code>.
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>If the native scan needs keeper/UNPK machinery or the C balloons beyond a<p>
+single-pack emitter, STOP and report — keep it a small <code>dog/git</code> core.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><strong>LANDED <code>090658bb</code></strong> (2026-06-21): <code>dog/git/PIDX.{h,c}</code> — `PIDXScan(pack, out,<p>
+…)<code> walks one OFS-only pack, resolves via </code>PACKResolveOfs<code>, git-shas, emits </code>wh128<code> </code>(hashlet60|type → offset)<code> per object into the caller's </code>Bwh128<code>; </code>PIDXFeedEmit<code> = cheap index-on-append. Modeled on </code>UNPKIndex<code>, stripped of keeper/parallel/REF/ingest (a stray REF → </code>PACKREF<code>). Hoisted the key packing into shared </code>dog/WHIFF.h::WHIFFKeyPack<code> (</code>keepKeyPack<code> now an alias). </code>git.pack<code>: </code>pack.scan(out)<code> + </code>pack.feed(…, out?)<code>. C </code>PIDXtest<code> + JS </code>JABCpackidx<code> (entries → </code>abc.index<code> → </code>sha→offset`; append == reindex) red→green; full ctest 345/345, ASAN/LSan clean. Caller pipes into <a href="">JS-022</a>.
+</p>
+</li>
+<li>Deferred: converge keeper <code>UNPKIndex</code> onto <code>PIDXScan</code> (its parallel / REF /<p>
+ingest paths exceed this single-pack core) — a follow-up ticket.
+</p>
+</li>
+</ul>
+</body>
+</html>

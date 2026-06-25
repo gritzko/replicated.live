@@ -96,5 +96,26 @@ A mounted sub sits detached at the gitlink pin; a parent <a href="POST.html">POS
 <li>Remote <code>be post //host?/proj/br</code> recurses the push, pushing each sub's <code>?/subproj/.proj/br</code>; the parent records the sha.</li>
 <li>A standalone <code>be post</code> in a detached sub (no parent driving it) still refuses — no coordinate to derive the branch from.</li>
 </ul>
+<h2>Submodule state: four records</h2>
+<p>
+A mounted sub's state is four cheap records — no tree re-parse — read by one classifier (<code>sniff/SUBS.h</code> <code>SUBSDirty</code>, ticket SUBS-027) so every verb judges it identically.
+</p>
+<ul>
+<li><strong>R1 parent pin</strong> — parent shard <code>refs</code> <code>&lt;sub/path&gt;?&lt;parent/branch&gt;#&lt;hash&gt;</code>: a denormalized mirror of the <code>160000</code> gitlink; the tree stays authoritative, R1 is a rebuildable cache.</li>
+<li><strong>R2 sub synth-branch</strong> — sub shard <code>refs</code> <code>?.&lt;parent&gt;/&lt;branch&gt;#&lt;hash&gt;</code>: the keep-alive dot-branch tip (the <a href="POST.html">POST</a> anchor above).</li>
+<li><strong>R3 parent wtlog</strong> — <code>.be/wtlog</code>: the parent wt's branch + base from its last get/post row.</li>
+<li><strong>R4 sub wtlog</strong> — the mount anchor <code>&lt;wt&gt;/&lt;path&gt;/.be</code>: the sub wt's branch + the actually-checked-out commit (R4.base).</li>
+<li>Coherent ⟺ <code>R1 == R2 == R4.base</code>, the sub file-scan matches R4.base, <code>R2.&lt;parent/branch&gt; == R3.branch</code>, and R4 is title-bound (not a bare <code>?#hash</code>).</li>
+</ul>
+<h2>Three orthogonal axes (only one is &quot;dirty&quot;)</h2>
+<p>
+<code>SUBSDirty</code> classifies a sub on three independent axes by REAL ancestry in the sub shard (commit-walk, never a string compare); only axis 1 is &quot;dirty&quot; and drives <code>be status</code> <code>mod</code>.
+</p>
+<ul>
+<li><strong>Axis 1, dirtiness</strong> — 2-bit, recursive (a node carries the bit if it OR any descendant does): <strong>Edited</strong> = file-scan ≠ R4.base; <strong>Advanced</strong> = R4.base DESCENDS R1 (forward bump pending). Scale 0/1/2/3; POST records exactly this.</li>
+<li><strong>Axis 2, stale</strong> — off-pin but not forward; GET/PATCH resolve it, POST never does: <strong>behind</strong> = R4.base is an ancestor of R1 (re-get); <strong>diverged</strong> = cousins (merge via patch). Stale is needs-get, NOT <code>mod</code>.</li>
+<li><strong>Axis 3, record-health</strong> — the pin/anchor plumbing is broken: <strong>synth-lag/missing</strong> = R2 ≠ R1 or absent (GC-orphan risk); <strong>coord-mismatch</strong> = R2 branch ≠ R3 branch; <strong>unbound</strong> = R4 a titleless <code>?#hash</code> want (blank pin in status).</li>
+<li>Direction: a healthy <a href="GET.html">GET</a> drives R1→R4 top-down (pre-order); a healthy <a href="POST.html">POST</a> drives R4→R2→R1 bottom-up (post-order).</li>
+</ul>
 </body>
 </html>

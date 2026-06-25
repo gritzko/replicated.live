@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-027</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-027: submodule state model — four records (parent pin, sub synth-branch, parent wtlog, sub wtlog) and one dirtiness classifier</h1>
+<p>
+Submodule consistency today is recomputed ad-hoc per verb by re-parsing the parent tree + <code>.gitmodules</code>; this ticket pins it to FOUR cheap reflog/wtlog records and one shared classifier, so <code>be status</code>/<code>head</code>/<code>get</code>/<code>post</code> all judge &quot;dirty&quot; the same way. The model also fixes <a href="SUBS-026.html">SUBS-026</a> (the ahead-of-pin case reads clean) by giving status a record to compare against. See <a href="../../wiki/Submodules.html">Submodules</a>, <a href="../../wiki/Store.html">Store</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Four records describe a mounted sub's state; each lives in a known file, no tree walk needed:
+</p>
+<ul>
+<li><strong>R1 parent pin</strong> — in the parent shard <code>refs</code> (<code>.be/&lt;parent&gt;/refs</code>): <code>&lt;sub/path&gt;?&lt;parent/branch&gt;#&lt;full_hash&gt;</code>. A denormalized mirror of <code>.gitmodules</code> path + the <code>160000</code> gitlink, so verbs avoid re-parsing the tree/.gitmodules.</li>
+<li><strong>R2 sub synth-branch</strong> — in the sub shard <code>refs</code> (<code>.be/&lt;sub&gt;/refs</code>): <code>?.&lt;parent&gt;/&lt;branch&gt;#&lt;full_hash&gt;</code>. The keep-alive dot-branch tip on the sub's side (the parent-driven <a href="">POST</a> anchor; <code>?/&lt;sub&gt;/.&lt;parent&gt;</code> seen from the parent).</li>
+<li><strong>R3 parent wtlog</strong> — <code>.be/wtlog</code>: the last get/post row, <code>?&lt;parent/branch&gt;#&lt;base&gt;</code> — the parent wt's branch + base hash.</li>
+<li><strong>R4 sub wtlog</strong> — the mount anchor <code>&lt;wt&gt;/&lt;path&gt;/.be</code>: the last get/post row, <code>?&lt;branch&gt;#&lt;base&gt;</code> — the sub wt's branch + the actually-checked-out sub commit.</li>
+<li>Live example (<code>beagle</code> in <code>beagle-journal</code>): R1=<code>5a95cd15</code>, R4.base=<code>3b41fa69</code> (advanced), R2 ABSENT (no <code>?.beagle-journal</code> dot-branch), R3.branch=<code>trunk</code>, and R4 was recorded as an unbound <code>?#hash</code> want — so status read clean (<a href="SUBS-026.html">SUBS-026</a>).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A wiki spec (<a href="../../wiki/Submodules.html">Submodules</a> new section) defining R1–R4, the clean invariant, and the dirtiness senses below — one canonical definition every verb cites.</li>
+<li>One classifier (<code>SUBSDirty</code>-style) returning the dirty set from the four records (+ the sub's file scan), reused by status/head/get/post instead of per-verb tree re-parsing.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The parent TREE gitlink stays authoritative (<a href="../../wiki/Submodules.html">Submodules</a>); R1 is a <strong>cache</strong> — on any R1-vs-tree divergence the tree wins and R1 is rebuilt, never the reverse.</li>
+<li>Read records from the existing reflog/wtlog; ABC style, sniff/keeper edits, no hand parsing, not <code>abc/</code>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Coherent ⟺ all agree: <code>R1.hash == R2.hash == R4.base</code>, the sub file-scan matches <code>R4.base</code>, <code>R2.&lt;parent/branch&gt; == R3.branch</code>, and R4 is title-bound (not a bare <code>?#hash</code>). THREE orthogonal axes; only the first is &quot;dirty&quot;:
+</p>
+<p>
+<strong>Dirtiness scale</strong> — un-recorded FORWARD state a POST must capture; a 2-bit mask, RECURSIVE (a node carries the bit if it OR any descendant does):
+</p>
+<ul>
+<li><strong>Edited</strong> (bit 0) — sub file-scan ≠ R4.base (uncommitted edits). Sub-local; visible without R1.</li>
+<li><strong>Advanced</strong> (bit 1) — R4.base DESCENDS R1.hash (checkout ahead of pin → a forward gitlink bump pending) (<a href="SUBS-026.html">SUBS-026</a>, <a href="../PATCH/PATCH-001.html">PATCH-001</a>).</li>
+<li>Scale: <strong>0</strong> clean, <strong>1</strong> Edited, <strong>2</strong> Advanced, <strong>3</strong> both. POST records exactly this — nothing else is &quot;dirty&quot;.</li>
+</ul>
+<p>
+<strong>Stale axis</strong> — checkout is OFF the pin but NOT forward; GET/PATCH resolve it, POST never does:
+</p>
+<ul>
+<li><strong>behind</strong> — R4.base is an ancestor of R1.hash → re-get to the pin.</li>
+<li><strong>diverged</strong> — R4.base and R1.hash are cousins → merge via patch, not a bump.</li>
+</ul>
+<p>
+<strong>Record-health</strong> — orthogonal to both; the pin/anchor plumbing itself is broken:
+</p>
+<ul>
+<li><strong>synth-lag / synth-missing</strong> — R2.hash ≠ R1.hash, or R2 absent → pinned commit unanchored in the sub shard (GC-orphan; your beagle case).</li>
+<li><strong>coord-mismatch</strong> — R2.&lt;parent/branch&gt; ≠ R3.branch → sub anchored under the wrong parent branch.</li>
+<li><strong>unbound</strong> — R4 is a <code>?#hash</code> want with no title → decoupled, status shows a blank pin (get-records-blank-want, <a href="">SUBS-028</a>).</li>
+</ul>
+<p>
+Recursive verb semantics — the recursion is RETURN-CODE driven; the parent inspects each sub and decides:
+</p>
+<ul>
+<li><code>be get</code> (pre-order, R1→R4): moves each sub to the pin of the parent commit being got, peels off local uncommitted edits and REAPPLIES them onto that pin (3-way; already implemented for subs), re-anchors R4=R1, attaches R2. <code>--nosub</code> opts out (separate story). The committed version is never &quot;lost&quot; — it stays a reachable commit; only the wt moves.</li>
+<li><code>be post</code> (post-order, R4→R2→R1) per sub: returns <strong>OK</strong> (a commit was made) → parent reads the sub's new tip from R4/anchor and stages the gitlink bump; <strong>POSTNONE</strong> (nothing to do) → parent stages no bump (ignore it); <strong>error</strong> → parent HARD-ABORTS the whole post before committing anything — no partial pin set (the no-silent-half-apply invariant).</li>
+<li>POST precondition: a sub whose base ≠ pin on ENTRY is the spooky out-of-band case → error unless <code>--force</code>, to avoid quiet commit loss. The post-commit new-tip ≠ old-pin is the EXPECTED bump, not the err condition — evaluate the check on entry state, the bump on exit state.</li>
+</ul>
+<p>
+So a healthy post drives R4→R2→R1 bottom-up; a healthy get drives R1→R4 top-down.
+</p>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Wrote the <a href="../../wiki/Submodules.html">Submodules</a> &quot;Submodule state: four records&quot; + &quot;Three orthogonal axes&quot; spec sections.</li>
+<li class="done"><input type="checkbox" checked disabled> <code>SUBSDirty(parent, subpath) -&gt; {dirty, stale, health}</code> reading R4/R2 + pin by REAL ancestry; dirty mask = Edited|Advanced, stale (behind/diverged) and health (synth/unbound) kept separate. (Edited compute + coord-mismatch are placeholders → <a href="SUBS-027b.html">SUBS-027b</a>.)</li>
+<li class="done"><input type="checkbox" checked disabled> Routed <code>be status</code> through the classifier (mod from the dirty mask alone). head/get/post routing → <a href="SUBS-027b.html">SUBS-027b</a>.</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>POST recursion contract → moved to <a href="SUBS-027b.html">SUBS-027b</a> (collides with SUBS-026/PATCH-001).</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>GET recursion (reapply onto pin) → moved to <a href="SUBS-027b.html">SUBS-027b</a>.</del></li>
+<li class="done"><input type="checkbox" checked disabled> Repro <code>test/status/02-sub-pin-classify</code> (Advanced→mod, clean→no-flag). behind/diverged/error + record-health repros → <a href="SUBS-027b.html">SUBS-027b</a>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<p>
+ —
+</p>
+<h2>Outcome</h2>
+<ul>
+<li>Classifier + <code>be status</code> Advanced-detection landed on the beagle trunk: <code>1585ac47</code> (repro <code>test/status/02-sub-pin-classify</code>) + <code>4ae70e29</code> (<code>SUBSDirty</code> 3-axis classifier in <code>sniff/SUBS.{c,h}</code> + <code>CLASS_BASE_ONLY</code> mod-flag routing in <code>sniff/SNIFF.exe.c</code>).</li>
+<li>Four-record / three-axis model documented in <a href="../../wiki/Submodules.html">Submodules</a> (&quot;Submodule state: four records&quot; + &quot;Three orthogonal axes&quot;).</li>
+<li>Deferred to <a href="SUBS-027b.html">SUBS-027b</a>: write R1/R2 records, the Edited + coord-mismatch axes, the get/post recursion contract, the <code>be head</code> pin axis, and the get/post test gaps.</li>
+</ul>
+</body>
+</html>

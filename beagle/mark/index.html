@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>README</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>mark: StrictMark to HTML, with enforced limits</h1>
+<p>
+mark renders StrictMark wiki pages to standalone HTML. The goal is a lightweight, greppable wiki whose structure and size limits are enforced at build time, with no host renderer in the loop. The method: drive MKDT for block structure and inline tokens, generate HTML via u8b feed helpers, sanitize literal text through a ragel escaper, decompose emphasis and links through a second ragel machine, and check each page against the WikiWeb budgets — warn by default, fail under <code>--strict</code>.
+</p>
+<h2>Pipeline</h2>
+<p>
+Each page is parsed by MKDT, not by mark: MKDT's line classifiers give block structure and MKDTInlineLexer gives inline tokens. mark turns that token stream into HTML and never reparses Markdown by hand.
+</p>
+<ul>
+<li>Block structure comes from MKDT helpers: heading level, fence open/close, indent depth, line marker.</li>
+<li>Inline tokens come from MKDTInlineLexer; emphasis and links arrive as whole <code>G</code> tokens.</li>
+<li>Generation is u8b feed only: <code>MARKu8bLit</code> for tags, <code>MARKu8bFeedEsc</code> for text.</li>
+</ul>
+<h2>Sanitizing</h2>
+<p>
+All text reaches HTML through ragel, never a hand-rolled byte scan. The MARKE machine maps the four HTML-special bytes to entities; inline spans are split by the StrictMark inline grammar (<code>dog/tok/MKDT</code>: the <code>mkdtg</code> machine / <code>MKDTDecomposeSpan</code>) into kind, text, and label.
+</p>
+<ul>
+<li>MARKE escapes <code>&amp;</code> <code>&lt;</code> <code>&gt;</code> <code>&quot;</code> to entities and copies every other run verbatim.</li>
+<li><code>MKDTDecomposeSpan</code> decomposes <code>*strong*</code>, <code>_emph_</code>, <code>~~del~~</code>, the two link cases <code>[text][l]</code> / <code>[page]</code>, and <code>![alt][l]</code>.</li>
+<li>A shortcut <code>[page]</code> keys on its bracket text; an explicit <code>[text][l]</code> uses a one-symbol label <code>l</code>.</li>
+</ul>
+<h2>Links</h2>
+<p>
+Inter-page links are rewritten so the rendered site is self-contained. A link target ending in <code>.mkd</code> is emitted as <code>.html</code>; everything else passes through escaped.
+</p>
+<ul>
+<li>A reference definition <code>[key]: url</code> is collected in a first pass and never rendered.</li>
+<li>A shortcut <code>[Page]</code> resolves against those definitions, then <code>.mkd</code> becomes <code>.html</code>.</li>
+<li>An abs path <code>[/wiki/Page]</code> (no refdef) is emitted root-absolute (the leading slash is kept), anchored at <code>--root</code> only to probe existence; the same href resolves on every page regardless of depth.</li>
+<li>Extension: explicit <code>.mkd</code>/<code>.md</code>, or an extensionless target whose source exists, gives <code>.html</code>; else verbatim.</li>
+</ul>
+<h2>Enforced limits</h2>
+<p>
+mark is also the wiki linter: it checks the WikiWeb page shape and the 64-char-line budgets, reporting any breach. <code>--strict</code> turns the first breach into a non-zero exit for CI.
+</p>
+<ul>
+<li>Budgets in characters: header 64, bullet 128, summary 256, opener summary 512.</li>
+<li>Structure: exactly one H1 opener per page, since each page covers one concept.</li>
+<li>Default warns to stderr and still renders; <code>--strict</code> fails with <code>MARKLIMIT</code>.</li>
+</ul>
+<h2>CLI use</h2>
+<p>
+mark takes files or a directory. A file renders to a sibling <code>.html</code>; a directory renders every <code>.mkd</code> in it, so a whole wiki builds in one call.
+</p>
+<pre><code>    mark page.mkd           # -&gt; page.html beside it
+    mark --strict wiki/     # build a dir, fail on any budget breach
+    mark a.mkd b.mkd        # several files at once
+    mark --root=. wiki/p.mkd  # `/...` links anchor here (default: cwd)
+</code></pre>
+<h2>Build and test</h2>
+<p>
+mark is a standard dog: a static library plus a CLI, with table-driven tests. Its one ragel unit (the escaper) is pre-generated and committed alongside its source; block and inline grammars live in <code>dog/tok</code> (MKDTB, MKDT).
+</p>
+<ul>
+<li>Sources: <code>MARK.c</code> driver, <code>MARKE.c.rl</code> escaper, <code>MARK.cli.c</code> entry.</li>
+<li>Regenerate ragel with <code>ragel -C MARKE.c.rl -o MARKE.rl.c -L</code>.</li>
+<li>Tests in <code>test/MARK.c</code> render snippets and assert HTML; repros for past lexer gaps live there.</li>
+</ul>
+</body>
+</html>

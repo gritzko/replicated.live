@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-032</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-032: nested <code>abc</code> submodule resolves to the WRONG source (head → ?/abc no-refs; patch → official github)</h1>
+<p>
+Recursing into the nested <code>abc</code> submodule of <code>beagle</code> derives the wrong remote on two verbs. <code>be head be://localhost/beagle-journal?/beagle</code> recurses to <code>be://localhost/ beagle-journal?/abc</code> — the journal ROOT coordinate, which advertises no refs (abc is nested UNDER beagle). <code>be patch</code> instead reaches for the OFFICIAL <code>https://github.com/gritzko/libabc.git</code> and hard-fails offline. Either way the local co-resident abc shard is never used. <a href="SUBS-017.html">SUBS-017</a>-class. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>be head be://localhost/beagle-journal?/beagle</code> → after the parent head, `be: head<p>
+abc<code> → </code>remote be://localhost/beagle-journal?/abc is not a beagle or git repository (reachable, but advertised no refs)<code>, </code>HOMENOPROJ<code> / </code>WIRENOTRP<code>. Wrong coordinate: </code>?/abc` is the journal root, not the abc nested under beagle.
+</p>
+</li>
+<li><code>be patch '?6a0ce1b7!'</code> applied cleanly (incl. <code>applied abc</code>) but THEN still did an<p>
+<code>ssh/https</code> fetch of <code>https://github.com/gritzko/libabc.git</code> → <code>WIREUNRCH</code> / <code>BEDOGEXIT</code>. It used the OFFICIAL url, not the local abc shard, on a local reconcile.
+</p>
+</li>
+<li>Both: the abc sub source resolver picks journal-root / official upstream over the<p>
+local nested/co-resident shard. Relates to <a href="SUBS-017.html">SUBS-017</a> (wrong remote target) and <a href="SUBS-020.html">SUBS-020</a>/<a href="SUBS-024.html">SUBS-024</a> (parent-kind source resolution).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Nested <code>abc</code> resolves to its local co-resident/nested shard for <code>be head</code> and<p>
+<code>be patch</code> when reachable; fall back to official only when genuinely needed.
+</p>
+</li>
+<li>A LOCAL patch reconcile that already <code>applied abc</code> does NOT trigger a network fetch.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Reuse the GET-side resolver (<a href="SUBS-020.html">SUBS-020</a> <code>SNIFFSub*</code>); don't re-roll. Repro-first.</li>
+<li>Don't regress beagle-peer / git-parent sub resolution.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending) Find where head/patch sub-recursion builds the abc coordinate; it must nest<p>
+under the parent (co-resident / <code>?/beagle/abc</code>), not the journal root <code>?/abc</code>.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro <code>be head</code> abc → <code>?/abc</code> no-refs; fix the nested coordinate.</li>
+<li class="open"><input type="checkbox" disabled> Repro <code>be patch</code> abc → official github fetch; prefer the local shard, no net on local.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Surfaced reconciling JS-053 against <a href="">URI-006</a> St.2 <code>6a0ce1b7</code>.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+</body>
+</html>

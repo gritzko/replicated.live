@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-031</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-031 <a href="">HIGH</a>: gate git-<code>.git</code> official-url sub-push behind <code>--force</code> (default skip + notice)</h1>
+<p>
+<a href="SUBS-020.html">SUBS-020</a>'s POST mirror case 2 makes <code>be post &lt;git-parent ending .git&gt;</code> AUTO-push each mounted submodule to its official <code>.gitmodules</code> URL (an independently-hosted remote). User ruling (2026-06-22): pushing a sub to its OFFICIAL url should be MANUAL. Default <code>be post</code> must SKIP the official-url sub-push and print a one-line notice; <code>be post --force</code> performs it. Cases 1 (beagle→same peer) and 3 (git non-<code>.git</code>→parent-relative) stay automatic — the sub is reachable there. Net: only the independent-official push is opt-in. This is the LAST blocker for <a href="../URI/URI-006.html">URI-006</a> St.2 (its lone red test <code>post/43</code>). Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><a href="SUBS-020.html">SUBS-020</a> POST landed <code>3eba8e76</code>: the git-<code>.git</code>→official arm is <code>bepushgit_recurse_cb</code><p>
+in <code>beagle/BE.cli.c</code> (the previously do-nothing git-peer arm of <code>BEActSubsPost</code>), plus <code>keeper/KEEP.exe.c</code> branch-strip for the synthetic <code>?/&lt;sub&gt;/.&lt;parent&gt;</code>→git-default map.
+</p>
+</li>
+<li><code>test/post/43-sub-push-git-official-url</code> asserts the AUTO official push (bare <code>sub.git</code><p>
+holds the sub tip after a <code>.git</code>-parent post). It must be rewritten to the new policy.
+</p>
+</li>
+<li>Surfaced via <a href="../URI/URI-006.html">URI-006</a> St.2 / <a href="../URI/URI-008.html">URI-008</a>: post/43 is St.2's last red after URI-008 made<p>
+its be:-local fixture clone work; St.2 must not depend on the removed <code>file:</code>-clone.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Default <code>be post &lt;.git parent&gt;</code>: post the parent gitlink but DO NOT push the sub to its<p>
+official <code>.gitmodules</code> URL; print one line, e.g. <code>sub &lt;name&gt; not pushed to official &lt;url&gt;; use --force</code>. The parent may reference a sub sha the official remote lacks (the accepted trade — the notice warns).
+</p>
+</li>
+<li><code>be post --force &lt;.git parent&gt;</code>: perform the official-url sub-push (today's behavior).</li>
+<li>Cases 1 (beagle peer) and 3 (git parent-relative) UNCHANGED — auto, no <code>--force</code> needed.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Reuse the existing <code>be post --force</code> flag (same one POSTCFLCT uses); add no new flag.</li>
+<li>Don't regress case 1 (<code>post/38</code>) or case 3 (<code>post/44</code>); don't touch the GET resolver.</li>
+<li>NEVER hand-rolled parsing — ragel + dog dispatch (<a href="../../beagle/CLAUDE.md">CLAUDE</a>, <a href="../../meta/abc.html">ABC</a>); repro-first.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Gate ONLY case 2 (git-<code>.git</code>→official) on <code>--force</code>; cases 1/3 send to a destination<p>
+that tracks the parent, so they stay automatic. The notice is one line per skipped sub.
+</p>
+</li>
+<li>Rewrite <code>post/43</code> to assert BOTH arms: default ⇒ official <code>sub.git</code> does NOT receive the<p>
+sub tip + the notice prints; <code>--force</code> ⇒ it does. Use be:-local fixture setup (no <code>file:</code>-clone) so St.2's file:-removal needs no further post/43 edit.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Gate the case-2 official push in <code>bepushgit_recurse_cb</code> behind <code>--force</code>; default skip<p>
+ + one-line notice. Cases 1/3 untouched. (BE.cli.c:3767 gate, :3930 flag wire)
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Rewrite <code>post/43</code> for both arms (default-skip+notice, <code>--force</code>-pushes), be:-local setup.</li>
+<li class="done"><input type="checkbox" checked disabled> Confirm <code>post/38</code> (case 1) and <code>post/44</code> (case 3) still green; full ctest green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None (LANDED). St.2 now reconciles onto <code>60cf0b10</code> (post/43 owned here, be:-local).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>LANDED <code>60cf0b10</code> — case-2 official sub-push gated on <code>--force</code> in <code>bepushgit_recurse_cb</code><p>
+(BE.cli.c): default skips + prints <code>sub &lt;name&gt; not pushed to official &lt;url&gt;; use --force</code>; <code>--force</code> performs it. Cases 1/3 unchanged. post/43 rewritten to both arms (be:-local fixture); post/38/44 green; ctest 483/484 (<code>be-post-relpath</code> ssh aside + 2 net tests).
+</p>
+</li>
+</ul>
+</body>
+</html>

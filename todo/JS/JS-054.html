@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-054</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-054 <a href="">MED</a>: jabc error-exit paths leak the whole JS context</h1>
+<p>
+<code>main()</code>'s script-file failure paths <code>return</code> directly, bypassing the <code>JABCPolUninstall</code>/<code>JSClose</code>/<code>JABCioUninstall</code>/<code>u8bUnMap</code> teardown the success path runs — so the entire JS context built by <code>JSInit</code>/<code>JABCInstallModules</code> leaks (LSan: 95 objects / 2358 B from JSC bmalloc). Sibling of <a href="JS-007.html">JS-007</a>, which fixed the read's <strong>correctness</strong> but not the <strong>leak</strong> on its failure paths. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>js/main.cpp:184-208</code>: <code>fopen</code>/<code>ftell</code>/<code>malloc</code> failures each <code>return 1</code><p>
+AFTER <code>JSInit</code>, skipping the bottom cleanup block (<code>:217-223</code>).
+</p>
+</li>
+<li>The blanket <code>js/lsan.supp</code> (<code>leak:libjavascriptcoregtk</code>) HIDES it under<p>
+ctest — the 2358 B are JSC's. Only an unsuppressed run shows it.
+</p>
+</li>
+<li>Repro: <code>jabc /no/such/file</code> → LSan fires; <code>jabc --eval 0</code> (success) is<p>
+leak-clean, proving the teardown is the only difference.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Error exits run the SAME teardown as the success path: a failed<p>
+script-file open frees the context (LSan-clean); exit code + stderr stay.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>js/main.cpp</code> only; output-equivalent. Verify under the existing ASAN<p>
+debug build. New repro is red-before/green-after WITHOUT the JSC suppression.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Extract the file read into a <code>JABCRunFile(path) → b8</code> worker (symmetric with<p>
+<code>JABCRun</code>); every failure returns <code>NO</code> → <code>main</code> sets <code>rc=1</code> and falls through to the shared teardown. Mirrors the abc wrapper/worker idiom (CLAUDE.md §5).
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Repro-first <code>run-054.sh</code> (ctest <code>JABCleakExit</code>, no JSC suppression,<p>
+  self-calibrated vs the clean <code>--eval</code> exit): missing-file run must not leak.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Extract <code>JABCRunFile</code>; the three <code>return 1</code> become <code>return NO</code>; <code>main</code><p>
+  funnels to cleanup. <code>js/INDEX.md</code> unchanged (main.cpp not documented there).
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None. File-disjoint from all open JS tickets.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><strong>LANDED to beagle</strong> (2026-06-23): error exits now run the shared teardown, so<p>
+the missing-file exit is LSan-clean; stderr + exit code unchanged. ctest <code>JABCleakExit</code> red-before/green-after; full JABC suite 28/28.
+</p>
+<ul>
+<li><code>ab4519af</code> — <code>main.cpp</code> <code>JABCRunFile</code> worker + <code>JABCleakExit</code> ctest reg.</li>
+<li><code>b10b311c</code> — <code>js/test/run-054.sh</code> repro script (staged first, harmless alone).</li>
+</ul>
+</li>
+<li>Journal ticket left UNPOSTED (lands with the session's other journal work).</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-048</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-048 <a href="">MED</a>: bin/lib write-side — wtlog appender + <code>refs</code> writer</h1>
+<p>
+The pure-JS WRITE substrate for the reflog verbs. wtlog and reflog are BOTH ULOGs, so the write side lives IN <code>ulog.js</code> (beside its <code>each</code>/<code>drain</code> readers) — no new file — and the ref-store semantics live in the store lib. Generalises the ULOG-write code inlined in <code>bin/get.js</code> (<code>writeWtlog</code>/<code>appendWtlog</code>) + <code>ingest.js::writeUlog</code>. Pure JS over the abc ULOG container + io. Blocks the write verbs. Part of <a href="JS-046.html">JS-046</a>. Method: <a href="../../rule/Issues.html">Issues</a>. (Review: no multiplying files — fold, don't add.)
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>wtlog.js</code>/<code>keeper.js</code> are READ-only today. Native wt row format is<p>
+<code>&lt;ron60-ms&gt;\t&lt;verb&gt;\t&lt;uri&gt;</code> (<code>sniff/AT.md</code>); <code>refs</code> rows are <code>set ?&lt;br&gt;#&lt;sha&gt;</code> with a bare-40hex val, verbs post/delete (<code>keeper/REFS.h</code>).
+</p>
+</li>
+<li><code>ulog._feed(buf,off,verb,uri,ts)</code> accepts an explicit ts → monotonic rows are<p>
+expressible; <code>get.js::writeWtlog</code> is the existing (non-crash-safe) precedent.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>bin/lib/ulog.js</code> gains the WRITE side beside its <code>each</code>/<code>drain</code> readers:<p>
+<code>append(bePath, rows)</code> (port <code>SNIFFAtNow</code> monotonic ts, CLOCKBAD guard, crash- safe temp+rename) + <code>write</code>/<code>_stage</code>/<code>nowAfter</code>. No separate wtwrite.js.
+</p>
+</li>
+<li><code>bin/lib/store.js</code> (renamed from keeper.js) gains the ref WRITES:<p>
+<code>set(shard,key,sha)</code>/<code>tombstone(shard,key)</code>/<code>createShard</code>, beside resolveRef.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>libabc+libdog ONLY (abc ULOG + io). Crash-safe: write a temp then io.rename<p>
+(NOT get.js's resize-in-place). No keeper binding — append the ULOG file in JS.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>No multiplying files (review): wtlog+reflog are both ULOGs → ONE writer in<p>
+ulog.js; the ref semantics fold into store.js (was keeper.js). Repoint get.js + all keeper.js consumers; no output change.
+</p>
+</li>
+<li>CAS stays the caller's job (POST does resolve-then-conditional-append);<p>
+PUT/DELETE append unconstrained — the reflog escape hatch (<code>PUT.h</code>).
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/*</code>: append rows → re-drain, assert order + ts strict-<p>
+  increase; set/tombstone a ref → keeper.resolveRef round-trips; a mid-write   crash (kill before rename) leaves the OLD file intact.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Implement wtwrite.js + refs.js; repoint get.js; re-run be-js-get (no change).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>File-disjoint from <a href="JS-047.html">JS-047</a> → parallel. Blocks <a href="JS-049.html">JS-049</a>/<a href="">JS-050</a>/<a href="">JS-051</a>.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

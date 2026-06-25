@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-021</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-021 <a href="">LOW</a>: ron time codec — <code>ron.now</code> / <code>ron.of</code> / <code>ron.date</code></h1>
+<p>
+JSC provides <code>Date</code> (wall-clock), but beagle's <code>ron60</code> time encoding (ULOG <code>ts</code> fields) and the <code>be log</code> relative-date format aren't reachable from JS. Bind the small leaves + JS sugar on the <code>ron</code> object. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>ron.encode</code>/<code>decode</code> (js/codec.cpp) already do <code>ron60</code>↔BigInt, but NOT the<p>
+time <strong>interpretation</strong> — you can't read a ULOG <code>ts</code> as a date.
+</p>
+</li>
+<li>Leaves exist: <code>RONNow()</code>, <code>RONOfTime(ron60*, tm, ms)</code>,<p>
+<code>RONToTime(ron60, tm, ms)</code> (<code>abc/RON.h:104/45/48</code>); <code>DOGutf8sFeedDate(into, ts, now)</code> (<code>dog/DOG.h:719</code>) — the <code>12:34</code>/<code>Tue</code>/<code>01Jan</code> relative formatter.
+</p>
+</li>
+<li>Lets a JS tool read/format <code>be log</code>/<code>be status</code> timestamps as the dogs do.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>ron.now()</code> → current <code>ron60</code> (BigInt).</li>
+<li><code>ron.of(x)</code> → <code>ron60</code> from a JS <code>Date</code> or a ms-epoch int.</li>
+<li><code>ron.date(ronval)</code> → relative-date string (<code>DOGutf8sFeedDate</code>).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>MAY implement in JS over thin native leaves (<code>ron._now</code>/<code>_ofMs</code>/<code>_date</code>);<p>
+extend the existing <code>ron</code> object in codec.cpp (a small <code>JABCExecute</code> bundle like uri.cpp's). <code>ron60</code> crosses as BigInt; no held refs (rule #4).
+</p>
+</li>
+<li><code>ron.of</code> coerces <code>Date</code>→<code>getTime()</code>; localtime alignment matches <code>RONNow</code>.</li>
+<li><code>ron._date</code> computes <code>now</code> via <code>time(NULL)</code> itself (RONToTime→mktime→secs →<p>
+<code>DOGutf8sFeedDate</code>). Needs <code>#include &quot;dog/DOG.h&quot;</code> in codec.cpp.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) 3 native leaves (<code>_now</code>, <code>_ofMs</code>, <code>_date</code>) + JS <code>now</code>/<code>of</code>/<code>date</code><p>
+sugar; <code>now</code> may bind directly. <code>of</code> is the only one needing JS (Date coerce).
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: <code>ron.now()</code> is a BigInt; <code>ron.of(new Date(t))</code> === <code>ron.of(t)</code><p>
+  (ms int); <code>ron.date(ron.now())</code> is a non-empty string; a known ULOG <code>ts</code>   formats like <code>be log</code>. Red before, green after.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Bind the leaves; extend <code>ron</code>; doc in INDEX.md / API.md.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><strong>LANDED <code>78edd840</code></strong> (2026-06-21): 3 native leaves in codec.cpp — <code>ron._now</code><p>
+(<code>RONNow</code>), <code>ron._ofMs</code> (<code>localtime_r</code>+<code>RONOfTime</code>), <code>ron._date</code> (<code>RONToTime</code>→<code>mktime</code>→<code>DOGutf8sFeedDate</code>) + a <code>JABC_RON_JS</code> sugar bundle → <code>ron.now()</code> / <code>ron.of(Date|ms)</code> / <code>ron.date(ron60)</code> (BigInt). <code>ron60</code> spans 2000–2099 (<code>RONOfTime</code> YY field) — <code>ron.of</code> THROWS outside it (documented, inherent to the encoding). Rows in jabc_test.cpp + new <code>js/test/codec.js</code> (<code>JABCcodec</code>) red→green; <code>ctest -R JABC</code> 18/18, ASAN/LSan clean.
+</p>
+</li>
+</ul>
+</body>
+</html>

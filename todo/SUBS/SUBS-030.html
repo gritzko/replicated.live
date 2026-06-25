@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-030</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-030 <a href="">MED</a>: <code>be status</code> renders an advanced-submodule <code>mod &lt;sub&gt;</code> row with no timestamp</h1>
+<p>
+A submodule whose tip advanced past the parent gitlink pin reads <code>mod &lt;sub&gt;</code> in <code>be status</code> (correct per SUBS-027), but the row is emitted WITHOUT a timestamp (blank ts column, unlike every file <code>mod</code> row) and as a bare <code>mod</code> that doesn't distinguish &quot;advanced — gitlink bump pending&quot; from a content change. Method: <a href="../../skill/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Live repro: in <code>~/beagle-journal</code> (the <code>beagle</code> submodule advanced 6 commits<p>
+<code>5b11dad9</code>→<code>9e80e5f0</code> past the journal's gitlink pin), <code>be status</code> shows:
+</p>
+<pre><code>     19:27  mod README.mkd
+            mod beagle          &lt;- NO timestamp
+</code></pre>
+<p>
+Every file <code>mod</code> row carries a ts; the gitlink-advance row is blank.
+</p>
+</li>
+<li>The classification is CORRECT (SUBS-027: R4 tip descends R1 pin → Advanced →<p>
+<code>mod</code>). The RENDER is the defect: (a) no timestamp, (b) bare <code>mod</code> conflates an advanced gitlink (needs <code>be put &lt;sub&gt; &amp;&amp; be post</code>) with a content modification.
+</p>
+</li>
+<li>Render site: <code>sniff/SNIFF.exe.c</code> ~232–248 — the <code>CLASS_BASE_ONLY</code> + <code>RON_s</code><p>
+gitlink arm runs <code>SUBSDirty</code> and emits the <code>mod</code> row without stamping a ts.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>The advanced-submodule row carries a sensible timestamp (e.g. the sub tip's<p>
+commit ts) consistent with file rows. Consider a distinct marker for &quot;advanced&quot; (gitlink bump pending) vs content <code>mod</code> — cf. the <a href="../DIS/DIS-048.html">DIS-048</a> disapplied-marker semantics discussion (a wrong verb is worse than none).
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fix in the status gitlink-row emit (<code>sniff/SNIFF.exe.c</code> RON_s arm). Do NOT<p>
+regress SUBS-027's advanced / stale / health classification. Repro-first.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>ts source for the gitlink row: the sub tip's commit ts (R4.base author<p>
+wall-clock) via new read-only <code>SNIFFSubTipTs</code> — LANDED <code>d7eaf5c4</code>.
+</p>
+</li>
+<li>marker (user 2026-06-22): an advanced-only sub (gitlink-bump pending)<p>
+renders <code>adv</code>; a content-edited sub keeps <code>mod</code>. <a href="">in progress</a>
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Repro-first ts test <code>test/status/03-sub-advanced-mod-ts</code> (red→green),<p>
+  fix the row emit, re-run status/sub suites. LANDED <code>d7eaf5c4</code>.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Add an <code>adv</code> status verb; render advanced-only subs <code>adv</code> vs content<p>
+  <code>mod</code> (distinct from the ts fix). LANDED <code>69f51bd3</code>. JS parity → JS-045.
+</p>
+</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>ts half LANDED <code>d7eaf5c4</code> (stamp advanced-sub <code>mod</code> row with sub-tip<p>
+commit ts); merged clean onto trunk past JS-035 / JS-036.
+</p>
+</li>
+<li>adv-marker half LANDED <code>69f51bd3</code>: new <code>adv</code> verb; advanced-only sub<p>
+(<code>SUBS_DIRTY_ADVANCED</code>, <code>EDITED</code> clear) → <code>adv</code>, content edit → <code>mod</code>.
+</p>
+</li>
+<li>JS-side parity follow-up filed: JS-045 (<code>bin/lib/subs.js</code> still maps<p>
+advanced→<code>mod</code>; latent until jabc present).
+</p>
+</li>
+</ul>
+</body>
+</html>

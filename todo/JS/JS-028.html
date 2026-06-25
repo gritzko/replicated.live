@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-028</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-028 <a href="">MED</a>: <code>git.tree</code> / <code>git.parseCommit</code> — libdog git object parsers</h1>
+<p>
+Expose <code>dog/git</code>'s tree + commit object parsers to JS as <code>git.*</code> leaves so <code>bin/lib/keeper.js</code> reads trees/commits without hand-rolling git framing. Part of <a href="JS-027.html">JS-027</a>. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><a href="JS-027.html">JS-027</a> <code>be status</code> must read tree (file list + gitlink modes) and commit<p>
+(tree, parents) objects; <code>dog/git/GIT.h</code> already parses both — <code>GITu8sDrainTree</code> (one entry/call: mode·name·sha), <code>GITu8sParseCommit</code> / <code>GITu8sCommitTree</code>. tok32/ragel is a token stream — wrong shape for records.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>git.tree(bytes)</code> → pull cursor: <code>.next()</code> advances one entry, exposes <code>mode</code><p>
+(incl. 160000 gitlink), <code>name</code> (zero-copy) / <code>str</code>, <code>sha</code> (40-hex). Optional <code>git.tree(bytes, cb)</code> in-frame callback (io.readdir-style).
+</p>
+</li>
+<li><code>git.parseCommit(bytes)</code> → eager <code>{tree, parents[], foster[], author, committer, body}</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Pure marshalling over <code>dog/git</code> (libdog), like <code>git.pack</code>/<code>git.delta</code> (JS-024).<p>
+No new C parsing; cursor state in JS (rule #4). NO dog linked.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>_tree_next(bytes, off) -&gt; {mode, nameStart, nameEnd, sha, nextOff}</code> leaf; cursor JS.</li>
+<li>Commit eager (small); a <code>git.commit(bytes)</code> header cursor only if a raw case needs it.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first ctest (<code>js/test/git.js</code>): parse a known tree (incl. a 160000 entry)<p>
+  + commit; assert entries/fields vs vectors; full-walk count; zero-copy <code>name</code>.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Implement leaves in the <code>git</code> package; update <code>js/INDEX.md</code> + <code>js/API.md</code>.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

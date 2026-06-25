@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-034</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-034 <a href="">LOW</a>: gap review — thin libdog/abc leaves only if needed</h1>
+<p>
+After the JS modules land, decide whether any hot path warrants a thin libdog/abc native leaf. Part of <a href="JS-027.html">JS-027</a>. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><a href="JS-027.html">JS-027</a> does <code>be status</code> in pure JS over existing bindings; some paths may be<p>
+too slow/awkward. Concrete gaps surfaced during JS-030..033 (all worked around in JS, parity still byte-identical — these are convenience/perf leaves, libdog/abc):
+</p>
+<ol>
+<li><code>io.stat</code> returns <code>{size,mode,kind}</code> only — NO <code>mtime</code>; classify spawned<p>
+<code>stat -c '%Y %n'</code> (chunked ≤200 paths — a 2955-path argv overflowed <code>spawnFds</code> scratch). A thin <code>mtime</code> field on the stat leaf removes the spawn.
+</p>
+</li>
+<li><code>io.stat</code> follows symlinks (FILEStat not FILELStat) + no <code>io.readlink</code> — a<p>
+dangling symlink throws; symlink content unconfirmable. Want lstat + readlink leaves.
+</p>
+</li>
+<li><code>pack.scan</code>/<code>pack.resolve</code> (PIDXScan/PACKResolveOfs) fail on REF_DELTA — fine<p>
+for keeper (OFS-only per PackLog invariant), but foreign imports need a sha-base resolver.
+</p>
+</li>
+<li><code>io.readdir</code> <code>hidden:false</code> drops dotfiles — needed <code>hidden:true</code> to scan a<p>
+tracked <code>.gitignore</code> (only <code>.git</code>/<code>.be</code> should be meta-filtered).
+</p>
+</li>
+<li>classify quirk: a stamped wt-only file reads <code>unk</code> where native shows <code>new</code><p>
+(<code>SNIFFAtKnown</code> <code>new</code> branch) — orthogonal; only bites be-redirect files inside a recursed sub.
+</p>
+</li>
+<li>Optional: ULOG <code>has(ts)</code>/<code>row(i)</code> index, <code>git/IGNO</code> matcher, <code>HUNKu8sFeedRow</code><p>
+(ULOG→HUNK serialize) — currently done in pure JS, would be tidier as libdog leaves.
+</p>
+</li>
+</ol>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Measure JS-029/031/033 hot paths; per candidate decide pure-JS vs a thin <code>dog/</code><p>
+or <code>abc/</code> leaf (never a dog). File a focused ticket per accepted leaf.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Any new C is a libdog/abc leaf only. Bias to pure JS unless a measured win.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) decide after parity lands; perf oracle = native <code>be status</code> timing.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Profile; list accepted leaves with rationale; file per-leaf tickets.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>← <a href="JS-031.html">JS-031</a> (parity first).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

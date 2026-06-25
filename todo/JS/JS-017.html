@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-017</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-017 <a href="">LOW</a>: no env / cwd — bind <code>FILEGetEnv</code> + <code>FILEGetCwd</code></h1>
+<p>
+A JABC script can't read an environment variable or its working directory; both abc leaves already exist and just need marshalling. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>No <code>getenv</code> / cwd reachable from JS (verified: grep <code>getenv</code>/<code>getcwd</code><p>
+in <code>js/</code> → none).
+</p>
+</li>
+<li><code>abc/FILE.h:518 FILEGetCwd(path8b)</code> and <code>:523 FILEGetEnv(name, u8cs)</code><p>
+exist — bindable leaves, no new abc work.
+</p>
+</li>
+<li>A utility can't find <code>$HOME</code> / config paths or report where it runs;<p>
+<code>require</code>'s <code>.</code>-relative resolve also wants a real cwd.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>io.getenv(name)</code> and <code>io.cwd()</code> return the value / working directory.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Marshal over <code>FILEGetEnv</code> / <code>FILEGetCwd</code>; JS strings, no held refs.</li>
+<li><code>chdir</code> has no abc wrapper today — out of scope (note as follow-up),<p>
+don't block on it.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) <code>io.getenv(name) -&gt; string|undefined</code>, <code>io.cwd() -&gt; string</code>.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: a set env var reads back; <code>io.cwd()</code> matches a fixture.</li>
+<li class="open"><input type="checkbox" disabled> Bind the two FILE leaves.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><strong>LANDED <code>8622368a</code></strong> (2026-06-21): <code>io.cwd()</code> over <code>FILEGetCwd</code>,<p>
+<code>io.getenv(name)</code> over <code>FILEGetEnv</code> (unset → <code>undefined</code>; an empty-valued var is indistinguishable, documented), both in <code>js/io.cpp</code> + a <code>JABCSliceStr</code> helper. <code>jabc_test.cpp</code> rows <code>getenv_set</code>/<code>getenv_unset</code>/ <code>cwd_matches</code> red→green; <code>ctest -R JABC</code> 18/18, ASAN/LSan clean. Reconciled onto JS-015 via a clean <code>be get --nosub</code> weave-merge of INDEX.md/API.md; posted past the benign POSTCFLCT (<code>--force</code>).
+</p>
+</li>
+<li>Follow-up: <code>io.chdir</code> needs a new <code>FILEChdir</code> abc leaf (none today).</li>
+</ul>
+</body>
+</html>

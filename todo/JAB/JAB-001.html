@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-001</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-001 <a href="">BIG</a>: divorce <code>be</code> from <code>jab</code> (rename <code>jabc</code>→<code>jab</code>); <code>be</code> runs no JS</h1>
+<p>
+<code>be</code> currently forks the JS runtime <code>jabc</code> as its LAST dispatch fallback — an unknown bareword <code>be &lt;name&gt;</code> runs <code>&lt;wt&gt;/bin/&lt;name&gt;.js</code> (<code>be_run_extension</code>, JS-025). This couples a native CLI to a JS loader and keeps a doomed script duplicate in <code>beagle/bin/</code>. Divorce them: rename the binary <code>jabc</code>→<code>jab</code>, make <code>jab</code> a standalone runner (<code>jab [path] args</code>) with its own upward <code>be/</code>-scan resolution, and strip ALL JS from <code>be</code>. Canonical scripts already live in the separate <code>be/</code> submodule (beagle-ext). Method: <a href="../../skill/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>beagle/beagle/BE.cli.c</code>: <code>be_run_extension</code> (~4552–4627) forks <code>jabc</code><p>
+(sibling-resolved) on <code>&lt;wt&gt;/bin/&lt;name&gt;.js</code>; <code>ext_name</code>/<code>ext_tail</code> capture (~4913–4945); call site in the no-verb branch (~5123–5152).
+</p>
+</li>
+<li><code>beagle/js/main.cpp</code>: entry runs the first positional via <code>JABCRunFile</code><p>
+(global eval). <code>beagle/js/require.cpp</code>: CommonJS <code>require</code> with node-style resolution (<code>.js</code>/<code>/index.js</code>), no <code>be/</code>-scan.
+</p>
+</li>
+<li>Scripts duplicated: <code>beagle/bin/*.js</code> (doomed, deleted LATER) vs the<p>
+journal-root <code>be/</code> submodule (beagle-ext, complete: 8 verbs + <code>lib/</code>).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Rename the runtime binary <code>jabc</code>→<code>jab</code>; <code>be</code> and <code>jab</code> fully divorced.</li>
+<li><code>jab [path] args</code>: an explicit path (<code>/abs</code>, <code>./rel</code>, <code>../up</code>) runs the file<p>
+directly; a bare name runs the require machine.
+</p>
+</li>
+<li>Require machine: scan UP for <code>./be ../be ../../be …</code>, in each try<p>
+<code>&lt;be&gt;/&lt;name&gt;</code> then <code>&lt;be&gt;/&lt;name&gt;.js</code>; ceiling <code>$HOME/be</code> (under <code>$HOME</code>) else <code>/be</code>.
+</p>
+</li>
+<li><code>be</code> runs no JS: remove <code>be_run_extension</code> + plumbing + the JS-025 call site.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Rename is the binary / user-facing name only — internal <code>JABC*</code> C++<p>
+symbols stay.
+</p>
+</li>
+<li><code>beagle/bin/</code> is NOT deleted here; tests repoint to the <code>be/</code> submodule.</li>
+<li>Preserve direct-path global eval (CMake <code>js/test/*.js</code> use abs paths).</li>
+<li>Repro-first (CLAUDE.md §17); full <code>JABC*</code> + <code>bejs</code> ctest suites green.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>main.cpp</code> branches on the path prefix; the bare case sets a global<p>
+<code>__mainSpec</code> and runs <code>__main(__mainSpec)</code>.
+</p>
+</li>
+<li><code>require.cpp</code> splits <code>resolve()</code> into explicit-path vs <code>resolveBe()</code><p>
+(upward <code>be/</code>-scan via <code>io.cwd</code>/<code>io.getenv</code>/<code>io.stat</code>); <code>__main</code> patches <code>process.argv[1]</code> to the resolved abspath so the <code>be/*.js</code> <code>here</code> idiom works.
+</p>
+</li>
+<li><code>BE.cli.c</code>: the no-verb branch drops the extension probe and falls through<p>
+to <code>be_diagnose_unknown</code> (typo diagnostic) then <code>bro</code>.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+-<a href="">v</a>New <code>JAB</code> topic board: <code>todo/JAB/README.mkd</code> + this ticket + <code>[JAB]</code> on
+</p>
+<div>
+<p>
+  <code>todo/README.mkd</code>.
+</p>
+</div>
+<p>
+-<a href="">v</a>Rename <code>jabc</code>→<code>jab</code>: <code>js/CMakeLists.txt</code> targets+<code>add_test</code>s, <code>main.cpp</code>
+</p>
+<div>
+<p>
+  version string + <code>process.argv[0]</code> head.
+</p>
+</div>
+<p>
+-<a href="">v</a><code>main.cpp</code> <code>[path]</code> direct-vs-bare entry. -<a href="">v</a><code>require.cpp</code> upward <code>be/</code>-scan + <code>__main</code>; extend <code>js/test/require.js</code>. -<a href="">v</a>Strip <code>be_run_extension</code> + <code>ext_*</code> capture + call site; <code>beagle/INDEX.md</code>. -<a href="">v</a>Tests: delete <code>test/all/02-extension-dispatch</code>; parity harnesses
+</p>
+<div>
+<p>
+  <code>jabc</code>→<code>jab</code> + <code>bin/</code>→<code>../be/</code>; new <code>run-055.sh</code> ctest <code>JABCrequireBe</code>.
+</p>
+</div>
+<p>
+-<a href="">v</a>Docs: <code>js/INDEX.md</code>, <code>js/README.md</code>, <code>js/API.md</code>.
+</p>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Parity harnesses live in the <code>beagle</code> submodule but <code>be/</code> scripts are a<p>
+SIBLING submodule (<code>$_ROOT/../be</code>) — cross-submodule path; guard if absent.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Landed <code>9c1528d5</code> (ff onto <code>707bbbbe</code>): <code>jabc</code>→<code>jab</code>, <code>jab [path]</code> entry +<p>
+upward <code>be/</code>-scan require, JS stripped from <code>be</code>, tests/docs repointed.
+</p>
+</li>
+<li>Also repointed the <code>be-bin-*</code> parity harnesses (not in the Tests TODO, red<p>
+otherwise); full suite green 399/399 (<code>JABC*</code> 29, <code>bejs</code> 29, <code>be-bin</code> 6).
+</p>
+</li>
+<li>POSTCFLCT false-fired on <code>test/js/post/conflict/run.sh</code> (marker fixtures,<p>
+not a real conflict) → <code>--force</code>d that one post.
+</p>
+</li>
+</ul>
+</body>
+</html>

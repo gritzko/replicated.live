@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-027</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-027 <a href="">umbrella</a>: reimplement <code>be status</code> as <code>bin/status.js</code> (SDK validation)</h1>
+<p>
+Reimplement bare <code>be</code> / <code>be status</code> as a repo-local extension <code>bin/status.js</code>, built ONLY on libdog (<code>dog/</code>) + <code>abc/</code> via JABC — never linking a dog (sniff/keeper/graf). Goal: validate the <a href="../../wiki/Extensions.html">Extensions</a> SDK end-to-end and surface each JABC gap as a thin libdog/abc leaf. Every on-disk format is already libdog/abc (keeper objects = <code>git.pack</code>, <code>.idx</code> = <code>abc.index</code> wh128, wtlog/refs = ULOG, sha = <code>codec.sha1</code>), so the store layer is reimplementable in JS, sharing zero code with sniff. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><a href="JS-025.html">JS-025</a> landed <code>be &lt;name&gt;</code>→<code>bin/&lt;name&gt;.js</code>; <code>be status</code> is the first real<p>
+extension and the SDK proof. C path (sniff): SNIFFClassify heap-merge → bucket rows → ahead/behind (graf) → summary; mirrored in JS over libdog/abc.
+</p>
+</li>
+<li>Research: the wt-side is already pure-JS-able (<code>io</code>/<code>abc.index</code>/<code>codec</code>); the<p>
+store/keeper/graf/subs side is reachable because the formats are libdog/abc.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>MEANINGFUL output parity vs native <code>be status</code> — incl. submodule recursion, pin<p>
+advances (sub advanced past pin), and file del/new. Oracle = native <code>be status</code>; new parity tests live in <code>test/bin/*</code>. Iterate till parity; commit nothing.
+</p>
+</li>
+<li>A reusable <code>bin/lib/</code> SDK (be/wtlog/keeper/classify/dag/subs) future<p>
+scripts (<code>log</code>, <code>diff</code>, <code>ls</code>) <code>require()</code>.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>libdog + <code>abc/</code> ONLY; any new C is a thin <code>dog/</code>+<code>abc/</code> leaf, never a dog.</li>
+<li>Cursor state lives in JS (JABC rule #4). Parity oracle = native <code>be status</code>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Store read = pure JS over <code>git.pack</code> + <code>abc.index</code> + ULOG. Git object parse via<p>
+new libdog <code>git.tree</code>/<code>git.parseCommit</code> leaves (over <code>dog/git</code> <code>GITu8sDrain*</code>), no manual framing in JS. <code>git.tree(bytes).next()</code> pull cursor; <code>git.parseCommit</code> eager struct.
+</p>
+</li>
+<li>Status OUTPUT is a ULOG of status records rendered via the existing JABC ULOG +<p>
+HUNK bindings (ULOG→HUNK serialize) — there is NO &quot;rows&quot; type (ROWS was rooted out, BE-007). One reusable module per concern under <code>bin/lib/</code>; <code>bin/status.js</code> builds + renders the ULOG and wires the libs.
+</p>
+</li>
+</ul>
+<h3>TODOs (tentative ticket ids, in dependency order)</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> <a href="">JS-028</a> <code>git.tree(bytes).next()</code> cursor (<code>mode</code>/<code>name</code>/<code>str</code>/<code>sha</code>, 160000<p>
+  gitlink visible) + <code>git.parseCommit(bytes)</code> → <code>{tree,parents[],foster[],…}</code> —   libdog leaves over <code>GITu8sDrainTree</code>/<code>GITu8sParseCommit</code>; ctest. (no deps)
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> <a href="">JS-029</a> <code>bin/lib/be.js</code> (<code>.be</code> discovery walk) + <code>wtlog.js</code> (ULOG reader:<p>
+  cur/baseline tip, pd/patch boundaries, ts stamp-set). Smoke <code>bin/refs.js</code>. (no deps)
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> <a href="">JS-030</a> <code>bin/lib/keeper.js</code> — <code>getObject(sha)</code> (git.pack+abc.index+delta),<p>
+  <code>resolveRef</code>, <code>eachTip</code>/<code>eachRemote</code>, <code>readTree</code>, <code>commitTree</code>/<code>commitParents</code>.   ← JS-028, JS-029
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> <a href="">JS-031</a> <code>bin/lib/classify.js</code> + <code>ignore.js</code> + <code>bin/status.js</code> —<p>
+  baseline⊕wt⊕put⊕del heap-merge, bucket routing, <code>.gitignore</code>, build the status   ULOG + render via HUNK + summary. File-row parity incl. del/new; <code>test/bin/*</code>. ← JS-030
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> <a href="">JS-032</a> <code>bin/lib/dag.js</code> — ahead/behind via <code>commitParents</code> BFS; wire the<p>
+  commit-diff block into status. ← JS-030
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> <a href="">JS-033</a> <code>bin/lib/subs.js</code> — gitlink(160000)+<code>.gitmodules</code>, mount detect,<p>
+  3-axis dirty (ancestry via <code>dag</code> on the sub shard); sub rows. Full parity. ← JS-032
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> <a href="">JS-034</a> gap review: file thin libdog/abc leaves ONLY if pure JS proves too<p>
+  slow/awkward (candidates: ULOG <code>Has(ts)</code> index, <code>git/IGNO</code> matcher). ← JS-031
+</p>
+</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None. <a href="JS-026.html">JS-026</a> (<code>process.exit</code>) would let status return a clean/dirty exit code.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><strong>LANDED <code>125d5c8f</code></strong> (2026-06-21): <code>bin/status.js</code> + <code>bin/lib/</code><p>
+{be,wtlog,keeper,classify,ignore,dag,subs}.js reproduce native <code>be status</code> BYTE-FOR-BYTE. Verified independently on the REAL beagle repo (<code>1291 ok</code> non-recursive; <code>status:abc</code> sub hunk recursive) and via <code>test/bin/*</code>: keeper-verify, status-parity (clean/mod/new/staged/del/mis/mov/ignored), dag-divergence (ahead/behind), sub-status-parity (advanced-pin / back-at-pin / recursion / clean-recursion), refs-parity. libdog+<code>abc</code> ONLY; <code>jabc</code> links <code>dog abc-core</code> unchanged. Landed as ONE commit <code>125d5c8f</code> (all 20 files); <code>js/cont.cpp</code>'s marker-doc comment was cleaned first to dodge <a href="">DIS-046</a>.
+</p>
+</li>
+<li>Order built: <a href="">JS-028</a> <code>git.tree</code>/<code>parseCommit</code> → <a href="">JS-029</a> be/wtlog → <a href="">JS-030</a><p>
+keeper (over <code>git.pack</code>+<code>abc.index</code>, sha-rehash verified) → <a href="">JS-031</a> classify/ ignore/status (file rows) → <a href="">JS-032</a> dag → <a href="">JS-033</a> subs + recursion.
+</p>
+</li>
+<li>Recursion is opt-in via <code>--sub</code> (native: <code>be status</code> doesn't recurse, bare <code>be</code><p>
+does — the extension mirrors that). Object index = <code>git.pack.scan</code> → <code>abc.index</code> wh128. Sub-shard ancestry via <code>keeper.open(parentStore, subTitle)</code>.
+</p>
+</li>
+<li>Gaps found (worked around in JS, NOT blocking — see <a href="">JS-034</a>): <code>io.stat</code> has no<p>
+<code>mtime</code>; no <code>io.readlink</code>/lstat; <code>pack.scan</code> REF_DELTA; inert sub Edited-axis (matches C until SUBS-027b). Caveat: dag ahead/behind is unit-verified (the live <code>be status</code> <code>(behind N)</code> cur≠ref state is transient + hard to stage).
+</p>
+</li>
+</ul>
+</body>
+</html>

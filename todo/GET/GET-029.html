@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-029</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-029 <a href="">MED</a>: <code>be get ?/proj</code> baseline breaks on a bare-<code>post</code> wtlog tail</h1>
+<p>
+Surfaced during <a href="../JS/JS-025.html">JS-025</a> worktree setup. <code>be get file:&lt;store&gt;/.be/?/beagle</code> (create a store-backed worktree) failed with &quot;no baseline in <code>.be/wtlog</code>&quot; because the store's wtlog HEAD was a <code>post</code> row carrying the sha in the FRAGMENT, while the baseline resolver reads only the QUERY slot. Worktree creation breaks whenever the last wtlog row is a bare <code>post</code>. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro: with a store whose latest wtlog row is <code>post ?&lt;branch&gt;#&lt;sha&gt;</code> (sha in<p>
+<code>#frag</code>, empty query), <code>be get file:&lt;store&gt;/.be/?/beagle</code> aborts &quot;no baseline in <code>.be/wtlog</code>&quot;. A sibling worktree's <code>.be</code> pointer (which had an explicit <code>?&lt;sha&gt;</code> query) worked, confirming the slot mismatch.
+</p>
+</li>
+<li><code>SNIFFAtCurTip</code> / <code>SNIFFAtQueryFirstSha</code> resolve the baseline from the QUERY<p>
+slot only; a <code>post</code> row puts the committed sha in the FRAGMENT.
+</p>
+</li>
+<li>Hit by the <a href="../JS/JS-025.html">JS-025</a> agent; worked around by copying a sibling <code>.be</code> pointer.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>be get</code> baseline resolution falls back to a <code>get</code>/<code>post</code>/<code>patch</code> row's<p>
+FRAGMENT sha when the query slot is empty, so fresh worktree creation works regardless of whether the wtlog tail is a <code>get</code> or a bare <code>post</code>.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fix in the sniff baseline resolver (<code>sniff/AT.c</code> — <code>SNIFFAtBaselineTreeSha</code><p>
+/ <code>SNIFFAtCurTip</code> / <code>SNIFFAtQueryFirstSha</code>); no manual parsing — use the URI lexer's fragment slot. Don't regress the query-slot path.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) Prefer query sha when present (the explicit cur intent), else fall to<p>
+the latest sha-bearing row's fragment. Mirror how <code>be log</code>/status read tips.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: a toy store whose wtlog tail is a bare <code>post</code>, assert<p>
+  <code>be get file:&lt;store&gt;/.be/?/proj</code> succeeds (currently aborts). Red→green.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Fix the resolver; re-run the get/post suites.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><strong>CLOSED — subsumed by <a href="">DIS-049</a> <code>9e80e5f0</code></strong> (2026-06-21): the &quot;no baseline&quot; on a<p>
+bare-<code>post</code>/secondary-wt source was fixed within DIS-049 (secondary-wt source recognition + baseline reading the post-row fragment sha). <code>test/get/55</code> covers exactly this shape. No separate fix needed.
+</p>
+</li>
+</ul>
+</body>
+</html>

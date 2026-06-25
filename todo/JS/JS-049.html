@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-049</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-049 <a href="">MED</a>: <code>bin/put.js</code> + <code>bin/lib/stage.js</code> — the staging engine</h1>
+<p>
+<code>be put</code> as JS: stage files for the next commit (write <code>put</code> rows + restamp) and the ref-write forms (<code>?br</code> create, <code>?br#sha</code> set). The shared staging engine <code>stage.js</code> (bare-walk / named-classify / dir-expand / move-pair) backs both put and <a href="JS-050.html">JS-050</a> delete. ← <a href="JS-047.html">JS-047</a>+<a href="JS-048.html">JS-048</a>. Part of <a href="JS-046.html">JS-046</a>. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Native <code>sniff/PUT.c</code>: bare put walks the baseline tree, stages every tracked<p>
+file whose mtime ∉ stamp-set AND on-disk sha ≠ baseline (<code>put_visit_tracked :69</code>); named put drives SNIFFClassify (<code>put_classify_step :189</code>); dir-form expands per-file; move-form <code>&lt;old&gt;#&lt;new&gt;</code> renames on disk, row frag = dst.
+</p>
+</li>
+<li>Ref forms (<code>SNIFF.exe.c:1021</code>): <code>?br</code>→create-at-cur (PUTDUP if exists),<p>
+<code>?br#sha</code>/<code>?#sha</code>/<code>?&lt;40hex&gt;</code>→set OUTRIGHT (non-FF, the reflog escape hatch).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>bin/lib/stage.js</code>: bare-walk, named-classify (reuse classify.js), dir-expand,<p>
+move auto-pair (<code>put_detect_moves</code>, PUTAMBIG on non-1:1) + explicit move.
+</p>
+</li>
+<li><code>bin/put.js</code>: slot dispatch; stage → <code>put</code> rows (<a href="JS-048.html">JS-048</a>) + io.setMtime<p>
+(<a href="JS-047.html">JS-047</a>); refs via <a href="JS-048.html">JS-048</a>; the <code>put:</code> banner (render.js). Skip meta paths.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>libabc+libdog ONLY. Byte-equivalent to native <code>be put</code>: wtlog rows + file<p>
+mtimes + REFS. No push (<code>//remote</code> deferred). No patch interaction.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Reuse classify.js's wtScan/wtEqBase/baseline-load; stage.js is the put/delete<p>
+shared core (<a href="JS-050.html">JS-050</a> delete adds unlink + the dirty-gate).
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first parity <code>test/js/put/*</code> (fixtures from <code>test/put/</code>): stage one<p>
+  file / dir / move / bare-all; ref create + set — JS put vs native <code>be put</code>:   same wtlog rows, same file mtimes, same REFS.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Implement stage.js + put.js.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul class="todo">
+<li class="blocked"><input type="checkbox" disabled> ← <a href="JS-047.html">JS-047</a> (setMtime) + <a href="JS-048.html">JS-048</a> (writers).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

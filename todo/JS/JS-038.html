@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-038</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-038 UMBRELLA: <code>bin/get.js</code> — <code>be get</code> as a pure-JS extension</h1>
+<p>
+Reproduce native <code>be get</code> as <code>bin/get.js</code> + <code>bin/lib/*</code>, pure JS over JABC (libdog+<code>abc</code> ONLY, no keeper/sniff/graf dog linked), output-equivalent to native across all remotes and change kinds. Validates the wire SDK and extends the <a href="JS-027.html">JS-027</a> read-only store reader to the FETCH + write + checkout path.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><a href="JS-027.html">JS-027</a> proved the read side (be/wtlog/keeper/classify/dag/subs/ignore libs).<p>
+<code>be get</code> adds the WIRE fetch, pack INGEST (keeper write side), and CHECKOUT (materialise the fetched tree → wt) + REFS/wtlog append.
+</p>
+</li>
+<li>The git-wire conversation lives in <code>keeper/</code> (unlinkable from JABC), so it is<p>
+reimplemented in JS exactly as <code>status.js</code> reimplemented sniff.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>be get &lt;remote&gt;</code> parity: same op-summary/banner AND same resulting wt state<p>
+as native, for <code>file://</code>, <code>ssh://</code>(//host), <code>be://</code> remotes.
+</p>
+</li>
+<li>Change-kind parity: new / del / mod, for both files AND dirs.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>libdog+<code>abc</code> ONLY; <code>jabc</code> link unchanged. Tests in <code>test/js/get/</code>, reusable<p>
+helpers in <code>test/js/lib/</code>; oracle = native <code>be get</code>. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Native-leaf prereqs: <a href="JS-035.html">JS-035</a> zip, <a href="JS-036.html">JS-036</a> delta.encode, <a href="JS-037.html">JS-037</a> pack ref.</li>
+<li>Children: <a href="JS-039.html">JS-039</a> wire+pkt+transport (fetch convo), <a href="JS-040.html">JS-040</a> ingest (keeper<p>
+write side), <a href="JS-041.html">JS-041</a> checkout + <code>bin/get.js</code> entry. Read libs reused as-is.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> <a href="JS-039.html">JS-039</a> wire fetch; <a href="JS-040.html">JS-040</a> ingest; <a href="JS-041.html">JS-041</a> checkout + get.js — DONE<p>
+  (main tree, uncommitted). Full-fetch (no haves) ships OFS-only verbatim,   so <a href="">JS-035..037</a> leaves are NOT on the get path (only push/thin need them).
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Parity matrix GREEN: <code>test/js/get/{file,be,git}</code> × {new,del,mod} ×<p>
+  {file,dir} — stdout (time-normalised) + wt content + <code>be status</code> all match   native. ctest <code>be-js-get-{file,be,git}</code> 3/3 (be/git gated WITH_SSH).
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Exec-bit / symlink leaves in checkout (no io.chmod/symlink — JS-034 gap).</li>
+<li class="open"><input type="checkbox" disabled> <code>..be.idx</code> wtlog sidecar not written (status works without it; excluded<p>
+  from the tree diff as store metadata).
+</p>
+</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None (the get path is green). <a href="">JS-035/036</a> (leaves) land separately.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><code>bin/get.js</code> + <code>bin/lib/{pkt,wire,ingest,checkout}.js</code> reproduce <code>be get</code><p>
+output-equivalently for file:/be:/ssh-git × new/del/mod files+dirs. Key find (JS-040): native keeper needs the prebuilt <code>&lt;ron64&gt;.keeper.idx</code> (a sorted wh128 run: PACK-summary entry + per-object <code>key=hashlet60|type</code>, <code>val=(off&lt;&lt;24)|(file_id&lt;&lt;4)|1</code>) — a bare <code>.keeper</code> reads <code>unk</code>. Built it byte-identical via <code>pack.scan</code> + <code>abc.book</code>/<code>merge</code>. Tests in <code>test/js/get</code>.
+</p>
+</li>
+<li>Uncommitted (human commit gate). ctest <code>be-js-get-*</code> 3/3.</li>
+</ul>
+</body>
+</html>

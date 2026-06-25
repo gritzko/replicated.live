@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-030</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-030 <a href="">MED</a>: <code>be get be://host</code> wire fails &quot;keeper: not found&quot; (remote non-interactive PATH)</h1>
+<p>
+The <code>be://</code>/<code>ssh:</code> wire spawns the remote <code>keeper</code> via a non-interactive non-login ssh whose PATH lacks the dog bin dir, so <code>be get be://host…</code> fails <code>sh: keeper: not found</code> out of the box. Found creating worktrees for the loop. Method: <a href="../../skill/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro: <code>be get be://localhost/beagle-journal?/beagle</code> (also <code>be://localhost?/beagle</code>)<p>
+→ <code>sh: keeper: not found</code> / <code>be: remote … is not a beagle or git repository (reachable, but advertised no refs)</code> / <code>WIRENOTRP</code> / <code>BEDOGEXIT</code>.
+</p>
+</li>
+<li>Root cause: the be+ssh wire runs the remote dog via <code>ssh host 'keeper …'</code> — a<p>
+NON-interactive NON-login shell whose PATH is the bare default (<code>/usr/local/sbin:…:/bin</code>); it does NOT source <code>~/.profile</code>/<code>/etc/profile</code> where the dog bin dir (e.g. <code>…/beagle/build/bin</code>) is added. Interactive <code>ssh host</code> (login) finds <code>keeper</code>; the wire's shell does not.
+</p>
+</li>
+<li>Knobs already in the code (<code>keeper/WIRECLI.c</code>): <code>DOG_REMOTE_PATH</code> (line ~334)<p>
+prepends to the remote PATH (<code>PATH='&lt;rpath&gt;':&quot;$PATH&quot; exec keeper …</code> via <code>sh -c</code>) and <code>KEEPER_BIN</code> (line ~151) sets the LOCAL keeper path — but <code>DOG_REMOTE_PATH</code> is test-harness-only and unset by default, so the user-facing <code>be get be://</code> breaks.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>be get be://host</code> resolves the remote <code>keeper</code> with NO manual env/PATH setup:<p>
+auto-carry the remote dog path, OR document <code>DOG_REMOTE_PATH</code> as the supported knob with a clear error that points to it when keeper isn't found.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fix in the <code>keeper/WIRECLI.c</code> wire spawn. Don't break the existing<p>
+<code>DOG_REMOTE_PATH</code> / <code>KEEPER_BIN</code> test paths.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) the client can't know the remote's layout, but it CAN pass its own<p>
+sibling dir as a hint, or <code>be</code> can require/auto-derive <code>DOG_REMOTE_PATH</code>.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: <code>be get be://localhost/&lt;repo&gt;?/&lt;proj&gt;</code> succeeds with the dog dir<p>
+  only in a login profile (not the default PATH). Red→green.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Fix / document the remote-keeper resolution; keep the test knobs working.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None. Part of the recurring <code>be get</code> worktree-setup friction (<a href="../DIS/DIS-049.html">DIS-049</a>, <a href="GET-029.html">GET-029</a>).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><strong>LANDED <code>bbb3692f</code></strong> (2026-06-21): <code>wcli_remote_path()</code> (<code>keeper/WIRECLI.c</code>)<p>
+auto-derives the remote keeper PATH — <code>DOG_REMOTE_PATH</code> → <code>dirname($KEEPER_BIN)</code> → <code>dirname(/proc/self/exe)</code> — so <code>be get be://host</code> resolves <code>keeper</code> with no manual setup; the <code>DOG_REMOTE_PATH</code> knob still wins. Repro <code>WIRECLIENTtest</code> (<code>_be_ssh_no_setup</code>). Validated end-to-end (<code>be://localhost</code> reaches the wire with no <code>build/bin</code> on PATH). Main tree FF'd + rebuilt.
+</p>
+</li>
+</ul>
+</body>
+</html>

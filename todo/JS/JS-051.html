@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-051</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-051 <a href="">HIGH</a>: <code>bin/post.js</code> + decide/commit/conflict — the commit-maker</h1>
+<p>
+<code>be post</code> as JS: classify the staged change-set into keep/unlink/add decisions, build the git tree + commit object, write a keeper pack-log (+ idx), FF-advance the ref, append the <code>post</code> row + restamp the files. FF-or-refuse — NO rebase/merge. ← <a href="JS-047.html">JS-047</a>+<a href="JS-048.html">JS-048</a>. Part of <a href="JS-046.html">JS-046</a>. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Native <code>sniff/POST.c</code>: 5-way merge → decisions (<code>post_classify_step :440</code>),<p>
+bottom-up tree build (<code>post_build_tree :789</code>), commit body (tree/parent/author, git-strict order), pack feed (<code>:2929</code>), REFS CAS (<code>REFSCompareAndAppend</code>), post row + file restamp (<code>:3228</code>). Conflict pre-scan before any write (POST-017).
+</p>
+</li>
+<li>Pack WRITE is dog/git: <code>git.pack.book</code>/feed/finish (bound); idx via<p>
+<code>ingest.js::buildIndex</code> (pure JS, transfers whole).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>bin/lib/decide.js</code>: keep/unlink/add per path (extend classify.js's merge);<p>
+<code>bin/lib/commit.js</code>: tree+commit framing + pack-write + idx; <code>conflict.js</code>: the WEAVE-marker scan. <code>bin/post.js</code>: orchestrate, FF-or-refuse, the <code>post:</code> banner.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>libabc+libdog ONLY; NO keeper/graf binding. We do NOT touch PATCH: THROW where<p>
+native rebases/merges — non-FF advance (POSTNOFF), absorbed-patch &quot;theirs&quot; trees, and the descendant cascade are out of scope (error, don't handle).
+</p>
+</li>
+<li>All refuse-capable checks (conflict, empty-commit, FF) BEFORE opening the pack<p>
+(POST-017) — no orphan packs / half-written idx.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Decisions reuse classify's wtScan/baseline-load; the &quot;theirs&quot; 5th input is<p>
+absent (no patch) → a present patch row throws (out of scope).
+</p>
+</li>
+<li>REFS advance = JS CAS (resolve expected-old, conditional append); non-FF→refuse.</li>
+<li>Commit header order is git-grammar-strict (parent before author; foster/picked<p>
+after committer) — byte-exact or <code>git fsck</code> rejects the object.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first parity <code>test/js/post/*</code>: <code>be put ./f &amp;&amp; be post '#msg'</code> → JS post<p>
+  vs native: identical commit sha, REFS row, wtlog row, banner; empty-commit   POSTNONE; non-FF POSTNOFF (throws, no store write).
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Implement decide.js + commit.js + conflict.js + post.js.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul class="todo">
+<li class="blocked"><input type="checkbox" disabled> ← <a href="JS-047.html">JS-047</a> (setMtime) + <a href="JS-048.html">JS-048</a> (writers). File-disjoint from <a href="">JS-049</a>/<a href="">050</a><p>
+  EXCEPT a possible classify.js refactor overlap — reconcile if both touch it.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

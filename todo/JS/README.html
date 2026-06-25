@@ -15,9 +15,205 @@
 <p>
 <code>js/</code> is JABC — a thin, anti-bloat JavaScriptCore binding (stock <code>libjavascriptcore</code>; bindings &quot;hold no memory&quot;; JS owns the buffers, no shared custody). Tickets here cover exposing ABC primitives/containers to JS and the binding surface. The fix-and-land method is <a href="../../rule/Issues.html">Issues</a>.
 </p>
+<h2>Landed — jab status object-read (2026-06-23)</h2>
+<p>
+The <code>jab status</code> &quot;hang&quot; on the journal store is fixed end-to-end: JS-056 stops the per-open O(all-objects) index rebuild (9352 ms → 9 ms / locate), JS-055 makes the one &gt;pack-sized resolve that broke the fast path succeed. Both via the <a href="../../rule/Issues.html">Issues</a> loop.
+</p>
+<ul>
+<li><a href="JS-055.html">JS-055</a> LANDED <code>1c70e9d8</code>: <code>git.pack</code> scratch now sizes off the record's<p>
+declared <code>pk.size</code> and grows on NOROOM (a <code>_grow</code> wrapper), so a &gt;pack-sized object (the 46 MB tree-sitter <code>parser.c</code>) resolves/scans; <code>js/pack.hpp</code> throws NOROOM vs REF_DELTA distinctly (no more &quot;ref-delta? out full?&quot; guess). Repro <code>pack.js</code>/<code>packidx.js</code>; JABC 29/29 green.
+</p>
+</li>
+<li><a href="JS-056.html">JS-056</a> LANDED <code>c4c912e9</code> (beagle <code>bin/lib</code>) + <code>3cad15fb</code> (*<strong>beagle-ext</strong>*<p>
+<code>be/lib</code>, the copy <code>jab</code> runs): <code>store.js</code> <code>locate()</code> mmaps the on-disk <code>keeper.idx</code> LSM runs (<code>abc.index({dir,ext})</code>, decode <code>offset=val&gt;&gt;24|file_id=(val&gt;&gt;4)&amp;0xfffff</code>) instead of rebuilding the in-RAM index by scanning every object — in-RAM build kept as the no-idx fallback. Real <code>jab status</code> 10.9 s → 1.5 s. NB the lib is mirrored in two shards; landing only beagle/bin does NOT change the running command (it runs ~/beagle-journal/be).
+</p>
+</li>
+</ul>
+<h2>Open — test re-sharding (<a href="JS-061.html">JS-061</a>, 2026-06-25)</h2>
+<ul>
+<li><a href="JS-061.html">JS-061</a> OPEN <a href="">UMBRELLA</a>: the test files were COPIED to both sides — every<p>
+test now exists in the binding tree AND the be/ script tree. Sort each by what it tests and <code>rm</code> the wrong-side copy: bindings keep their copy in <code>beagle/{js/test,test/js}</code>, be/ scripts keep theirs in <code>be/test</code> (beagle-ext submodule). Inventory gates every delete. In <code>src/journal</code>.
+</p>
+</li>
+</ul>
+<h2>Landed — POSIX bindings batch (2026-06-21)</h2>
+<p>
+Topic reopened 2026-06-21: the <code>be status</code> JABC-coverage review surfaced standard-API gaps for utility scripts; this batch was the POSIX-syscall ones, each thin marshalling over an EXISTING C leaf (no new abc work). All three landed via the <a href="../../rule/Issues.html">Issues</a> loop (store-backed worktrees, repro-first, human-gated).
+</p>
+<ul>
+<li><a href="JS-015.html">JS-015</a> <code>800c57a3</code> — script argv → <code>args</code> / <code>process.argv</code> (ctest <code>JABCargv</code>).</li>
+<li><a href="JS-016.html">JS-016</a> <code>60194418</code> — <code>io.readdir</code>: dir-marked <code>/</code>, polymorphic 2nd arg<p>
+(fn | <code>{recursive, callback, hidden}</code>), over <code>FILEScanDir</code>/<code>FILEDeepScanDir</code>.
+</p>
+</li>
+<li><a href="JS-017.html">JS-017</a> <code>8622368a</code> — <code>FILEGetEnv</code> / <code>FILEGetCwd</code> → <code>io.getenv</code> / <code>io.cwd</code>.</li>
+<li><a href="JS-020.html">JS-020</a> <code>0155ee76</code> — process leaves <code>io.spawn</code> / <code>spawnFds</code> / <code>reap</code> (over<p>
+<code>FILESpawn</code>/<code>FILESpawnFds</code>/<code>FILEReap</code>) + <code>io.unlink</code>. <code>io.exec</code> was cut on review (misnamed sugar); capture-stdout recipes (pipe-drain + file/<code>mmap</code>) live in <code>API.md</code>. stderr/memfd/async-<code>child</code> deferred.
+</p>
+</li>
+<li><a href="JS-021.html">JS-021</a> <code>78edd840</code> — <code>ron</code> time codec: <code>ron.now</code> / <code>ron.of(Date|ms)</code> /<p>
+<code>ron.date(ron60)</code> over <code>RONNow</code>/<code>RONOfTime</code>/<code>RONToTime</code> + <code>DOGutf8sFeedDate</code> (beagle-domain; <code>ron60</code> spans 2000–2099). ctest <code>JABCcodec</code>.
+</p>
+</li>
+<li><a href="JS-023.html">JS-023</a> <code>012d4b3d</code> — generic tokenizer <code>tok.parse(bytes, lang, out?)</code> →<p>
+<code>tok32</code> <code>Uint32Array</code> (optional <code>out</code> Buf, zero-copy) + a pure-JS <code>TokStream</code> cursor, over the standalone <code>HUNKu32bTokenize</code> core. ctest <code>JABCtok</code>.
+</p>
+</li>
+<li><a href="JS-022.html">JS-022</a> <code>5d162989</code> — generic mmap LSM index <code>abc.index</code> (u64/wh128):<p>
+point/range/prefix + <code>.seek</code> pull cursor, in-memory (<code>io.ram</code>) vs on-disk (<code>abc.book</code>), <code>HIT&lt;lane&gt;Compact</code>. + <code>io.rename</code>/<code>io.mkdir</code>. ctest <code>JABCindex</code>.
+</p>
+</li>
+<li><a href="JS-024.html">JS-024</a> <code>5b11dad9</code> — <code>git</code> JS package: <code>git.pack</code> (PACK container) +<p>
+<code>git.delta.apply</code>, migrated off <code>abc</code> (hard cutover; <code>abc.over(&quot;PACK&quot;)</code>/<code>delt</code> removed). GIT-007 vector byte-identical. ctest <code>JABCpack</code>.
+</p>
+</li>
+</ul>
+<h2>Next door — pack-log index (<a href="../GIT/GIT-010.html">GIT-010</a> landed)</h2>
+<ul>
+<li><a href="../GIT/GIT-010.html">GIT-010</a> LANDED <code>090658bb</code>: the pack-log feed/scan emit <code>(sha→offset)</code><p>
+<code>wh128</code> entries into a CALLER buffer (<code>dog/git/PIDX</code>), surfaced via <code>git.pack</code> <code>scan(out)</code> / <code>feed(…,out)</code>; the caller pipes entries into a <a href="JS-022.html">JS-022</a> <code>abc.index</code>. The pack-log → <code>abc.index</code> pipeline is now wired from JS end-to-end. Deferred: converge keeper <code>UNPKIndex</code> onto <code>PIDXScan</code>.
+</p>
+</li>
+</ul>
+<h2>Deferred — not POSIX</h2>
+<ul>
+<li><a href="JS-018.html">JS-018</a> — generic zlib: MOOT — <code>git.pack</code> (the PACK container) already<p>
+(de)compresses blobs, every <code>ZINF</code> caller is pack/wire-internal, and beagle has no loose objects. Only foreign-git-loose / generic-gz would want it.
+</p>
+</li>
+<li><a href="JS-019.html">JS-019</a> — verb/projector dispatch (<code>DOGIsProjector</code>/<code>DOGProjectorDog</code>):<p>
+beagle-domain logic, belongs with the keeper/graf/sniff/HOME SDK effort.
+</p>
+</li>
+</ul>
+<p>
+The deeper store-layer gaps (keeper/graf/sniff/HOME bindings — open a <code>.be</code>, read an object by sha, classify the worktree, ahead/behind) are a separate, larger SDK effort; <a href="JS-018.html">JS-018</a> / <a href="JS-019.html">JS-019</a> fold into it.
+</p>
+<h2>Open — extension scripts (<a href="JS-025.html">JS-025</a> landed)</h2>
+<ul>
+<li><a href="JS-025.html">JS-025</a> LANDED <code>371ad14b</code>: <code>be &lt;name&gt;</code> runs a repo-local <code>bin/&lt;name&gt;.js</code> via<p>
+the <code>jabc</code> runtime (forked through <code>BERun</code>, no JSC in <code>be</code>), tail forwarded as <code>args</code>; last dispatch fallback (never shadows a verb/projector/file). <code>WITH_JS</code> ON by default, <code>jabc</code> built beside <code>be</code>. Concept: <a href="../../wiki/Extensions.html">Extensions</a>. ctest <code>be-all-02-extension-dispatch</code>. Store/repo SDK stays deferred.
+</p>
+</li>
+<li><a href="JS-026.html">JS-026</a> OPEN: richer extension exit codes — <code>jabc</code> has no <code>process.exit(code)</code>,<p>
+so only 0-vs-nonzero (a thrown script → 1) propagates through <code>be &lt;name&gt;</code>.
+</p>
+</li>
+</ul>
+<h2><code>be get</code> wire client (<a href="JS-038.html">JS-038</a> umbrella) — get path GREEN</h2>
+<p>
+Reproduce <code>be get</code> as <code>bin/get.js</code>, output-equivalent to native across <code>file:</code> / <code>ssh:</code> / <code>be:</code> remotes and new/del/mod files+dirs. The git-wire conversation lives in <code>keeper/</code> (unlinkable), reimplemented in JS like status.js did sniff. Tests in <code>test/js/get/</code>, helpers in <code>test/js/lib/</code>. The pipeline full-fetches (no haves → OFS-only verbatim pack), so the thin-pack leaves are NOT on the get path.
+</p>
+<ul>
+<li><a href="JS-039.html">JS-039</a> DONE (uncommitted): <code>bin/lib/pkt.js</code> + <code>wire.js</code> — pkt-line + the<p>
+fetch convo (advert / want-have-done; NO side-band requested → raw pack after NAK) over <code>io.spawn</code>/<code>net</code>. transport: file→keeper, be→ssh keeper, ssh→git.
+</p>
+</li>
+<li><a href="JS-040.html">JS-040</a> DONE (uncommitted): <code>bin/lib/ingest.js</code> — write the pack (minus<p>
+20-byte trailer) as <code>NNNNN.keeper</code> + the byte-identical <code>&lt;ron64&gt;.keeper.idx</code> wh128 run + <code>refs</code>/<code>wtlog</code>. Native needs the prebuilt idx (else <code>unk</code>).
+</p>
+</li>
+<li><a href="JS-041.html">JS-041</a> DONE (uncommitted): <code>bin/lib/checkout.js</code> + <code>bin/get.js</code> — apply<p>
+tree (new/upd/del, files+dirs) + wtlog anchor + the <code>get ?&lt;br&gt;#&lt;hl&gt;</code> banner + <code>post</code> commit rows (update). ctest <code>be-js-get-{file,be,git}</code> 3/3.
+</p>
+</li>
+<li><a href="JS-038.html">JS-038</a> UMBRELLA: matrix GREEN. Residual: exec/symlink checkout, <code>..be.idx</code><p>
+sidecar, thin-pack/incremental fetch (would use the leaves below).
+</p>
+</li>
+</ul>
+<p>
+Native-leaf prereqs (for push / thin packs — NOT needed by the get path):
+</p>
+<ul>
+<li><a href="JS-035.html">JS-035</a> LANDED <code>c3fbdda5</code>: <code>zip.deflate</code>/<code>inflate</code> over <code>dog/git/ZINF</code><p>
+(<code>ctest JABCzip</code>). Caught the <code>ZINFInflate</code> NOROOM-wrap footgun → <a href="">GIT-011</a>.
+</p>
+</li>
+<li><a href="JS-036.html">JS-036</a> LANDED <code>742c06ff</code> (code + <code>delta.js</code>) but INCOMPLETE: the <code>be get</code><p>
+reconcile dropped <code>JABCdelta</code> registration + encode docs → <a href="">GET-031</a>; follow-up needed to wire the test + docs.
+</p>
+</li>
+<li><a href="JS-037.html">JS-037</a> OPEN: pack <code>feed</code> base by offset|hash (REF_DELTA emit) — ← JS-036.</li>
+</ul>
+<h2>Open — be put/delete/post write verbs (<a href="JS-046.html">JS-046</a> umbrella, 2026-06-22)</h2>
+<p>
+The reflog-WRITE verbs as <code>bin/{put,delete,post}.js</code>, output-equivalent to native (the <a href="JS-027.html">JS-027</a>/<a href="JS-038.html">JS-038</a> pattern). PUT/DELETE append intent rows; POST commits their staged set. libabc+libdog ONLY (keeper/graf/sniff reimplemented in JS); PATCH is out of scope — POST is FF-or-refuse, throwing where native rebases/merges. One new native leaf (<code>io.setMtime</code>); the rest is pure-JS lib work.
+</p>
+<ul>
+<li><a href="JS-047.html">JS-047</a> OPEN: <code>io.setMtime</code> over a new <code>abc/FILE</code> utimensat wrapper — the lone<p>
+native leaf (restamp written files). Blocks the verbs; file-disjoint, START NOW.
+</p>
+</li>
+<li><a href="JS-048.html">JS-048</a> OPEN: ULOG write side folded into <code>ulog.js</code> + ref writes into<p>
+<code>store.js</code> (was keeper.js) — crash-safe monotonic appender + set/tombstone.
+</p>
+</li>
+<li><a href="JS-049.html">JS-049</a> OPEN: <code>bin/put.js</code> + <code>bin/lib/stage.js</code> — staging engine. ← 047+048.</li>
+<li><a href="JS-050.html">JS-050</a> OPEN: <code>bin/delete.js</code> — staged removal + branch tombstone. ← 049.</li>
+<li><a href="JS-051.html">JS-051</a> OPEN: <code>bin/post.js</code> + decide/commit/conflict — commit-maker. ← 047+048.</li>
+</ul>
+<h2>Open — jabc runtime (<code>js/main.cpp</code>)</h2>
+<ul>
+<li><a href="JS-054.html">JS-054</a> OPEN: jabc's script-file error exits (<code>fopen</code>/<code>ftell</code>/<code>malloc</code> fail)<p>
+<code>return</code> past the <code>JSClose</code> teardown → the whole JS context leaks (LSan 2358 B, masked by the blanket JSC suppression). Fix: a <code>JABCRunFile</code> worker funnels every failure to the shared cleanup. Sibling of <a href="JS-007.html">JS-007</a>. File-disjoint, standalone.
+</p>
+</li>
+</ul>
+<h2>be patch as JS (<a href="JS-052.html">JS-052</a>) — LANDED <code>4c6fa1fa</code></h2>
+<p>
+<code>be patch</code> was the LAST verb not mirrored. <a href="JS-052.html">JS-052</a> is <code>bin/patch.js</code> over FULL-HISTORY weave reconstruction (mirrors <code>GRAFMergeWtFileTunable</code>): per file, DAG-fold each side's commit history with the already-bound <code>weave.fold</code>/<code>merge</code>/ <code>merged</code> leaves, then merge+fence — NO new binding (a first 3-blob <code>weave.merge3</code> cut was rejected as the <code>graf merge</code> debug tool, not patch's engine).
+</p>
+<ul>
+<li><a href="JS-052.html">JS-052</a> LANDED <code>4c6fa1fa</code>: <code>bin/lib/patchscope.js</code> + <code>bin/patch.js</code> on<p>
+full-history weave reconstruction (existing <code>weave.*</code> leaves, no new C) + 9 <code>test/js/patch/*</code> parity cases. Conflicts deterministic via <code>SOURCE_DATE_EPOCH</code>; <code>same-anchor</code> fence-order is the <a href="">DOG-005</a> graf→dog/WEAVE residual.
+</p>
+</li>
+</ul>
+<h2>bro as JS (<a href="JS-053.html">JS-053</a>) — viewer LANDED <code>1afd5f2d</code>, TUI open</h2>
+<p>
+Mirror <code>bro</code> (the dog TUI pager/renderer) as <code>bin/bro.js</code>. A SELF-CONTAINED viewer: URI args → <code>io.mmap</code>+<code>tok.parse</code> → hunks → paint — NO stdin TLV pipe and NO forking C producers; bro.js runs JS commands for its content in-process (the point). Native gap is tiny (a raw-mode + winsize <code>tty.*</code> leaf); the bulk is a pure-JS port of <code>bro/BRO.c</code> (renderer + colour-diff classifier + TUI).
+</p>
+<ul>
+<li><a href="JS-053.html">JS-053</a> LANDED <code>1afd5f2d</code>: tty leaf (<code>ANSIRaw/Cook/TtySize</code> + the <code>tty.*</code><p>
+leaf) + <code>bin/bro.js</code> plain viewer (matches <code>bro --plain</code>). The interactive raw-mode TUI (TODO#3) remains open. libabc+libdog ONLY; cook-on-exit mandatory.
+</p>
+</li>
+</ul>
+<h2>Open — bin/*.js review follow-ups (2026-06-22)</h2>
+<p>
+A read-only review of <code>bin/*.js</code> (clarity / reuse / missing JABC APIs) spawned three tickets. JS-042 (js/-only) and JS-043 (bin/-only) are FILE-DISJOINT → parallel; JS-044 wires them together and is blocked on both.
+</p>
+<ul>
+<li><a href="JS-042.html">JS-042</a> LANDED <code>ff7a378e</code>: JABC FILE bindings — <code>io.stat</code> carries mtime/atime<p>
++ new <code>io.lstat</code>/<code>readlink</code>/<code>symlink</code>/<code>chmod</code> over <code>abc/FILE.h</code> leaves (<code>JABCstat</code> test). Surfaced <a href="">GET-032</a>. Enables the <a href="JS-044.html">JS-044</a> consumer rewire.
+</p>
+</li>
+<li><a href="JS-043.html">JS-043</a> LANDED <code>cbad5786</code>: <code>bin/*.js</code> consolidation — 4 new libs<p>
+(<code>path/sha/ulog/render</code>), 12 callers repointed, <code>hexToBytes</code>→<code>hex.decode</code>, <code>dag.commitTs</code> reuse, dead-func removal; −177 lines, byte-identical output. NB: the keeper ref-delta fallback was GATED, not deleted (reachable on wire-cloned packs — review premise was wrong).
+</p>
+</li>
+<li><a href="JS-044.html">JS-044</a> LANDED <code>b87e6251</code>: rewired consumers — <code>classify.js</code> drops the<p>
+<code>/usr/bin/stat</code> subprocess (→ <code>io.lstat.mtime</code>) + real symlink classify; <code>checkout.js</code> materializes symlinks + exec-bit (the <a href="JS-038.html">JS-038</a> checkout residuals). New <code>be-bin-checkout-symlink</code> test.
+</p>
+</li>
+<li><a href="JS-045.html">JS-045</a> LANDED <code>7ef0bf70</code>: advanced sub → <code>adv</code> verb (<code>subs.js</code>/<code>status.js</code>),<p>
+byte-matching native SUBS-030; <code>sub-status-parity</code> oracle expects <code>adv</code>.
+</p>
+</li>
+</ul>
+<p>
+The bin/*.js review batch (JS-042/043/044/045) is fully landed; full <code>be-bin</code>/ <code>be-js-get</code> suite 7/7 green. Worktrees <code>~/todo/JS-04{2,3,4,5}</code> are spent (removable).
+</p>
+<ul>
+<li><a href="JS-027.html">JS-027</a> UMBRELLA — LANDED <code>125d5c8f</code> (was <code>~/todo/JS-025</code>): <code>bin/status.js</code><p>
++ <code>bin/lib/*</code> reproduce native <code>be status</code> BYTE-FOR-BYTE (real repo <code>1291 ok</code> + recursive <code>status:abc</code>; <code>test/bin/*</code> all pass). libdog+<code>abc</code> ONLY, <code>jabc</code> link unchanged, nothing committed. Validates the extension SDK end-to-end. Children (done): JS-028 <code>git.tree</code>/<code>parseCommit</code> leaves, JS-029 <code>be</code>/<code>wtlog</code> lib, JS-030 <code>keeper</code> lib, JS-031 classify+ignore+<code>status.js</code>, JS-032 <code>dag</code> (ahead/behind), JS-033 <code>subs</code> (submodule rows + recursion), JS-034 gap review. Oracle: native <code>be status</code>; parity tests in <code>test/bin/*</code> (del/new, pin advances, sub recursion).
+</p>
+</li>
+</ul>
 <h2>Closed — all JS tickets landed</h2>
 <p>
-The <code>js/</code> 7-lens code review (2026-06-16) produced JS-002..JS-014; ALL were fixed on branch <code>?/dogs/js</code> (worktree <code>~/todo/dogs-js</code>), each repro-tested red→green and verified green under <code>WITH_JS</code>+ASAN (<code>ctest -R JABC</code> 3/3, LSan clean), and MERGED to trunk. The build was first restored (<code>c4f03a7c</code>: dropped dead <code>convert.cpp</code>/<code>rdx</code> — no <code>rdx/</code> dir — and mapped <code>ABC_BASS</code>). Tests are C++ (<code>js/test/jabc_test.cpp</code> + <code>run-007.sh</code>) since <code>test.js</code> can't be regenerated (no node). JS-001 (the ABC-container binding proposal) is also closed. Topic closed. Per-ticket Outcome + hash in each <code>.mkd</code>.
+The <code>js/</code> 7-lens code review (2026-06-16) produced JS-002..JS-014; ALL were fixed on branch <code>?/dogs/js</code> (worktree <code>~/todo/dogs-js</code>), each repro-tested red→green and verified green under <code>WITH_JS</code>+ASAN (<code>ctest -R JABC</code> 3/3, LSan clean), and MERGED to trunk. The build was first restored (<code>c4f03a7c</code>: dropped dead <code>convert.cpp</code>/<code>rdx</code> — no <code>rdx/</code> dir — and mapped <code>ABC_BASS</code>). Tests are C++ (<code>js/test/jabc_test.cpp</code> + <code>run-007.sh</code>) since <code>test.js</code> can't be regenerated (no node). JS-001 (the ABC-container binding proposal) is also closed. That batch closed; the reopened POSIX batch JS-015/016/017 landed (see above); JS-018/019 deferred. Per-ticket Outcome + hash in each <code>.mkd</code>.
 </p>
 <ul>
 <li>JS-002 <code>5ee417eb</code> — file.write/io.log heap corruption (CRIT).</li>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-023</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-023 <a href="">LOW</a>: generic tokenizer — <code>tok.parse(bytes, lang)</code> → tok32 + cursor</h1>
+<p>
+Drive the ragel dog tokenizers from JS: <code>(bytes, lang)</code> → a <code>tok32</code> <code>Uint32Array</code> (zero-copy), with a pure-JS cursor to read tag + spans. One thin native leaf over the already-standalone dogenize core. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>js/uri.cpp</code> binds <code>URILexer</code>; <code>HUNK.dogenize</code> exists. The dogenize CORE<p>
+<code>HUNKu32bTokenize</code> (<code>dog/HUNK.c:1342</code>) is ALREADY standalone — it writes a bare <code>tok32</code> buffer and dispatches ~80 langs by extension via <code>TOKLexer</code>.
+</p>
+</li>
+<li><code>tok32</code> = one <code>u32</code>: tag 31..27, custom 26, side 25..24, cumulative END<p>
+offset 23..0; decoders <code>tok32Tag</code>/<code>Offset</code>/<code>Side</code> (<code>dog/tok/TOK.h</code>). Token <code>i</code>'s start = token <code>i-1</code>'s end.
+</p>
+</li>
+<li><code>Uint32Array</code>-over-a-buf is the <code>cont.cpp</code> idiom (zero-copy when 4-aligned).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>tok.parse(bytes, lang, out?)</code> → the <code>tok32</code> stream as a <code>Uint32Array</code>.<p>
+Optional <code>out</code> buffer RECEIVES the results (reuse it across calls to avoid per-call allocation, the <code>delt.apply(…,out)</code> convention); <code>tok.parse</code> makes its own when <code>out</code> is omitted. <code>lang</code> = an extension (reuse the dispatch).
+</p>
+</li>
+<li>A pure-JS <code>TokStream</code> cursor: <code>.tag</code> / <code>.start</code> / <code>.end</code> / <code>.side</code> /<p>
+<code>.custom</code> / <code>.text(src)</code> (zero-copy subarray) / <code>.str()</code> / <code>.next</code> / <code>.seek</code>.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Native leaf(s) over the shared core <code>HUNKu32bTokenize</code> (no parse-logic dup;<p>
+<code>HUNK.dogenize</code> fast path untouched). The <code>out</code> path writes packed <code>tok32</code> into a caller region (a <code>Buf</code>'s IDLE, advance via <code>fed(n*4)</code>), mirroring <code>delt.apply</code>/<code>pack.inflate</code>; the no-<code>out</code> path allocates a fresh aligned array. Keep the returned <code>Uint32Array</code> zero-copy — mind 4-byte alignment of the <code>out</code> write position (a fresh/reset Buf is aligned); if a reused-<code>out</code> alignment case forces a copy-vs-require decision, STOP and ask.
+</p>
+</li>
+<li>Reject source &gt; 16 MiB (24-bit offset cap → <code>HUNKTOKOOB</code>); the cursor PINS<p>
+<code>srcBytes</code> (offsets snapshot positions, not bytes); empty input → empty array. Decode is pure-JS bit math over the <code>Uint32Array</code>.
+</p>
+</li>
+<li>Do NOT fold <code>uri</code>/<code>WIRE</code>/<code>DPATH</code> in — they don't emit <code>tok32</code>. <code>tok.parse</code><p>
+is the JS face of <code>dog/tok</code>'s <code>TOKLexer</code> ONLY (bespoke parsers stay bespoke).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) <code>tok.parse</code> + <code>TokStream</code> in an embedded <code>R&quot;JS(...)&quot;</code> bundle (like<p>
+<code>uri.cpp</code>); <code>_tok_parse</code> in <code>js/tok.hpp</code>, installed after <code>JABCContInstall</code>.
+</p>
+</li>
+<li>(open) Optional thin selectors <code>tok.knownLang</code>/<code>langs</code>/<code>sameLang</code> over<p>
+<code>TOKKnownExt</code>/<code>TOKExtAt</code>/<code>TOKSameLexer</code> — phase 2.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> First <code>be get --nosub</code> onto current trunk (JS-021 landed); build.</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: <code>js/test/tok.js</code> (model on <code>hunk.js</code>) — tokenize a <code>&quot;js&quot;</code><p>
+  snippet, assert <code>tag</code>/<code>start</code>/<code>end</code>/<code>text</code> for known tokens; a &gt;16 MiB   source throws; empty → empty. Red before, green after.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Add <code>_tok_parse</code> + the <code>TokStream</code> cursor; doc INDEX.md / API.md.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><strong>LANDED <code>012d4b3d</code></strong> (2026-06-21): <code>tok.parse(bytes, lang, out?)</code> → <code>tok32</code><p>
+<code>Uint32Array</code> over the shared <code>HUNKu32bTokenize</code> core (no parse-logic dup; <code>HUNK.dogenize</code> fast path untouched). With <code>out</code> (a Buf): lex into IDLE via <code>_tok_parse_into</code> → <code>fed(n*4)</code> → zero-copy view (require 4-aligned <code>out</code>, else throw); without <code>out</code>: fresh trimmed array. Pure-JS <code>TokStream</code> cursor (<code>tag</code>/<code>start</code>/<code>end</code>/<code>side</code>/<code>custom</code>/<code>text</code>/<code>str</code>/<code>next</code>/<code>seek</code>). Guards: &gt;16 MiB throw, empty→empty, unknown lang→plain-text. <code>js/test/tok.js</code> (<code>JABCtok</code>) red→green; <code>ctest -R JABC</code> 19/19, ASAN/LSan clean.
+</p>
+</li>
+</ul>
+</body>
+</html>

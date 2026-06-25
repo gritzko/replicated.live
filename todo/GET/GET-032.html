@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-032</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-032: <code>be get</code> of an offline submodule mount reports <code>ok</code> but writes no files</h1>
+<p>
+When <code>be get</code> mounts a submodule whose official remote is UNREACHABLE but whose pinned objects are ALREADY in the local/shared store, it records the manifest/ref and reports <code>&lt;n&gt; ok</code>, yet materializes ZERO files (empty mount dir). A failed fetch with locally-resolvable objects must still run the checkout — <code>237 ok</code> and an empty worktree must never coexist. Hit twice this session (JS-042/JS-043 worktree setup). Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>abc</code>'s <code>.gitmodules</code> URL is <code>https://github.com/gritzko/libabc.git</code>; with the<p>
+network down, <code>be get</code> of the parent mounts <code>abc</code>, the <code>abc</code> fetch fails (ssh/https refused), but the pinned commit (<code>6e3b93f8</code>) objects ARE in the local store.
+</p>
+</li>
+<li>Symptom: <code>be status</code> in the mount shows <code>?6e3b93f86ca5…  237 ok</code> (objects<p>
+present) while the <code>abc/</code> dir is EMPTY (no files on disk). Workaround used by both workers: copy <code>abc/</code> from a sibling worktree.
+</p>
+</li>
+<li>Independent of (and a sibling to) the already-filed <code>be get</code> path-form <code>file:</code><p>
+URL misparse; both surfaced in the same worktree-setup step.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>On a submodule fetch failure where the pinned objects resolve locally, <code>be get</code><p>
+materializes the files from the local store (or refuses with a clear error) — never a silent empty mount that still reports <code>ok</code>.
+</p>
+</li>
+<li>The <code>ok</code> count and a populated worktree stay consistent.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>sniff GET submodule-mount path; offline-tolerant — don't require the remote<p>
+when objects are local. Likely the fetch-fail short-circuits the checkout step.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending) — separate the submodule FETCH from the CHECKOUT: a failed fetch with<p>
+locally-resolvable objects should still run the materialize pass.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: unreachable submodule remote + pinned objects present locally → `be<p>
+  get<code> parent → assert the mount has FILES, not just an </code>ok` count.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Fix the submodule get to materialize from the local store on<p>
+  fetch-fail-but-objects-present; keep <code>ok</code> consistent with on-disk files.
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None. Surfaced by the <a href="../JS/JS-042.html">JS-042</a>/<a href="../JS/JS-043.html">JS-043</a> worktree setup (offline <code>abc</code>).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

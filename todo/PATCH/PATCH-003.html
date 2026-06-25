@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PATCH-003</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PATCH-003: <code>be patch '&lt;x&gt;!'</code> patch-from broken — false-noop+mutation (local) and dead source (remote)</h1>
+<p>
+The <code>!</code> patch-from operator misbehaves two ways, both seen reconciling the <code>~/todo/JS-053</code> worktree against landed <code>?6a0ce1b7</code> (<a href="../URI/URI-006.html">URI-006</a> St.2): a LOCAL <code>?!</code> reports &quot;nothing absorbed&quot; yet mutates the worktree, and a REMOTE <code>&lt;uri&gt;!</code> absorbs nothing at all while a pinned <code>?&lt;sha&gt;!</code> absorbs 41. Net: <code>be patch '!'</code> cannot be trusted to reconcile, and when it claims a noop it may still have written. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>be patch '?!'</code> → <code>noop=11 … (nothing absorbed — no patch row staged)</code> BUT then<p>
+<code>get abc?40cf6df6</code> + <code>mod abc/FILE.c</code> + <code>mod abc/FILE.h</code> — fetched abc and edited two files while reporting it did nothing.
+</p>
+</li>
+<li><code>be patch 'be://localhost/beagle-journal?/beagle!'</code> → same `noop=11 … nothing<p>
+absorbed<code>, though </code>be head be://…?/beagle<code> then reports </code>1 ahead, 1 behind, 100 changed`. The remote patch-source resolved to nothing.
+</p>
+</li>
+<li>Contrast (works): <code>be patch '?6a0ce1b7!'</code> → `noop=163 take-theirs=41 merged=1<p>
+added=2 deleted=2`, applied St.2's files cleanly. Only the pinned-sha form worked.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>be patch '?!'</code> and <code>be patch '&lt;remote-uri&gt;!'</code> resolve the SAME patch source a pinned<p>
+<code>?&lt;sha&gt;!</code> does, and absorb the real divergence (or report honestly why not).
+</p>
+</li>
+<li>A <code>noop</code>/&quot;nothing absorbed&quot; result means ZERO worktree mutation — never a silent<p>
+<code>get</code>/<code>mod</code> of files after the noop banner.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Don't regress the working <code>?&lt;sha&gt;!</code> form. Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17).</li>
+<li>Route via the URI resolver, never hand-rolled handling (<a href="../../meta/abc.html">ABC</a>).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending) The two symptoms may share a root in <code>!</code> source resolution; split if not.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro the local <code>?!</code> false-noop+mutation; make a noop mean no writes.</li>
+<li class="open"><input type="checkbox" disabled> Repro the remote <code>&lt;uri&gt;!</code> empty absorb; resolve its source like <code>?&lt;sha&gt;!</code>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Surfaced reconciling JS-053 against <a href="../URI/URI-006.html">URI-006</a> St.2 <code>6a0ce1b7</code>.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-036</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-036 <a href="">MED</a>: <code>git.delta.encode</code> — git delta producer over <code>dog/git/DELT</code></h1>
+<p>
+Expose <code>DELTEncode</code> as <code>git.delta.encode(base, target, out)</code>, the twin of the existing <code>git.delta.apply</code>. The missing primitive for delta-compressing objects in a pure-JS git-wire client (thin packs, push deltas). Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>git.delta.apply</code> (JS-024) reconstructs a target from base+delta, but JS<p>
+cannot PRODUCE a delta — <code>dog/git/DELT.h::DELTEncode</code> (libdog, already included by <code>js/pack.hpp</code>) does, and is unbound.
+</p>
+</li>
+<li>Prereq for <a href="JS-037.html">JS-037</a> (REF_DELTA bodies) and the future wire push/thin builder.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>git.delta.encode(base, target, out) -&gt; n</code> — append the delta instruction<p>
+stream to <code>out</code> (Buf IDLE), advance <code>fed</code>, return n.
+</p>
+</li>
+<li>DELTFAIL (delta not smaller than target) → return -1 so JS falls back to raw,<p>
+never throws on the expected &quot;store raw instead&quot; path.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Pure marshalling over <code>DELTEncode</code> (libdog). No new abc, NO dog. Caller owns<p>
+<code>out</code>; the leaf sizes nothing (rule #4).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Native leaf <code>_delt_encode(base,target,out,outOff) -&gt; n | -1</code> in <code>js/pack.hpp</code><p>
+(beside <code>_delt_apply</code>); installed via <code>JABCPackInstall</code>.
+</p>
+</li>
+<li>JS surface <code>git.delta.encode</code> in <code>cont.cpp</code> beside <code>git.delta.apply</code>; -1<p>
+surfaces verbatim (caller's raw fallback), DELT I/O errors throw.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first ctest <code>test/js/get/delta.js</code> (registered <code>JABCdelta</code>, helpers<p>
+  from <code>test/js/lib/</code>): encode(base,target) → apply(base,delta) == target for   shared-prefix / insert-only / copy-heavy pairs; incompressible → -1.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Implement <code>_delt_encode</code> + <code>git.delta.encode</code>; update <code>js/INDEX.md</code>/<code>API.md</code>.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None (shares <code>js/pack.hpp</code>/<code>js/cont.cpp</code> with <a href="JS-037.html">JS-037</a> — land FIRST).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Landed <code>742c06ff</code> (manual reconcile onto JS-035): <code>js/cont.cpp</code><p>
+<code>git.delta.encode</code> + <code>js/pack.hpp</code> <code>_delt_encode</code> leaf + <code>test/js/get/delta.js</code>.
+</p>
+</li>
+<li>INCOMPLETE — the <code>be get</code> reconcile silently dropped JS-036's edits to the<p>
+JS-035-overlapping files (<a href="../GET/GET-031/README.html">GET-031</a>): <code>js/CMakeLists.txt</code> (<code>JABCdelta</code> registration) + <code>js/API.md</code>/<code>js/INDEX.md</code> encode docs are MISSING; <code>delta.js</code> is unwired from <code>ctest</code>. Follow-up edits captured in <a href="../GET/GET-031/README.html">GET-031</a>'s <code>lost-content.diff</code> (and <code>/tmp/js036-backup</code>).
+</p>
+</li>
+</ul>
+</body>
+</html>

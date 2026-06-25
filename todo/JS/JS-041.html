@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-041</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-041 <a href="">MED</a>: <code>bin/lib/checkout.js</code> + <code>bin/get.js</code> — apply tree + entry</h1>
+<p>
+Materialise a fetched baseline tree into the worktree (new/del/mod, files+dirs), append the wtlog/REFS rows, print the <code>be get</code> op-summary, and wire the <code>bin/get.js</code> entry + transport dispatch. The orchestration tying <a href="JS-039.html">JS-039</a> fetch + <a href="JS-040.html">JS-040</a> ingest into output-equivalent <code>be get</code>. Part of <a href="JS-038.html">JS-038</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>After ingest the tip object is local; <code>be get</code> checks out its tree into the<p>
+wt — create dirs, write new/changed files (right mode), delete removed ones — then records the get in <code>.be/wtlog</code> + <code>refs</code>, and prints what moved.
+</p>
+</li>
+<li><code>keeper.readTreeRecursive</code> (leaf set) + <code>classify.js</code> (current wt state) +<p>
+<code>wtlog.js</code> already exist (read side); this adds the WRITE/apply side.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>checkout(repo, keeper, tipSha)</code>: diff baseline-tree vs wt, apply new/del/mod<p>
+for files and dirs (mkdir -p, io.write, io.unlink, mode bits), atomic-ish.
+</p>
+</li>
+<li><code>bin/get.js</code>: parse args/URI, dispatch transport (<a href="JS-039.html">JS-039</a>), ingest<p>
+(<a href="JS-040.html">JS-040</a>), checkout, append wtlog+REFS, emit the summary native emits.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>libdog+<code>abc</code> ONLY. Summary + wt state byte-equivalent to native <code>be get</code><p>
+(the <a href="JS-038.html">JS-038</a> parity matrix). No keeper/sniff dog.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Reuse <code>classify.js</code> to compute the apply set (baseline⊕wt) so del/mod/dir<p>
+handling matches status semantics; honour <code>.gitignore</code> via <code>ignore.js</code>.
+</p>
+</li>
+<li>wtlog/REFS append: a small write helper (the read libs are append-only-aware).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first parity <code>test/js/get/*</code> (helpers <code>test/js/lib/</code>, borrow fixtures<p>
+  from <code>test/get/</code>): {file,ssh,be} × {new,del,mod} × {file,dir} — JS get vs   native <code>be get</code>: same stdout summary AND same resulting wt tree.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Implement <code>bin/lib/checkout.js</code> + write helpers + <code>bin/get.js</code>.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>← <a href="JS-040.html">JS-040</a> (ingest), <a href="JS-039.html">JS-039</a> (fetch). Closes <a href="JS-038.html">JS-038</a> when the matrix greens.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

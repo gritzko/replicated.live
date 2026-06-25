@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-026</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-026: a sub advanced past the parent pin isn't surfaced by status/head, and a bare post records no gitlink bump</h1>
+<p>
+A submodule whose mounted worktree HEAD has advanced past the parent tree's <code>160000</code> gitlink pin — e.g. via a standalone <code>be get</code> inside the mount — is reported by <code>be status</code>/<code>be head</code> as clean (<code>0 ahead, 0 behind, 0 changed</code>, blank pin), and a bare <code>be post</code> records nothing; the bump lands only after a manual <code>be put &lt;sub&gt;</code>. Same invariant as <a href="../PATCH/PATCH-001.html">PATCH-001</a>, which covers the <code>be patch</code> arm — this is the get / manual-mount arm. See <a href="../../wiki/Submodules.html">Submodules</a>, <a href="../PATCH/PATCH-001.html">PATCH-001</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Advancing the <code>beagle</code> sub of <code>beagle-journal</code> with <code>be get ssh://localhost/src/dogs?/main</code> (inside <code>beagle/</code>) moved its wt <code>5a95cd15</code> → <code>3b41fa69</code>, but the parent never saw it:
+</p>
+<pre><code>status:beagle/abc   ?6e3b93f8…  237 ok    &lt;- pinned, sha shown
+status:beagle       ?           1272 ok    &lt;- advanced, BLANK pin, no ahead/behind
+be head beagle:  ?trunk: 0 ahead, 0 behind, 0 changed
+</code></pre>
+<ul>
+<li>The parent tree still pins <code>beagle</code> at <code>5a95cd15</code> while its wt sits at <code>3b41fa69</code>; <code>be status</code>/<code>be head</code> report neither an ahead count nor a &quot;changed&quot; gitlink, so the inconsistency is invisible.</li>
+<li>No keep-alive <code>?/beagle/.beagle-journal</code> dot-branch exists in the <code>beagle</code> shard refs — the advanced commit is unanchored in the parent's store.</li>
+<li>A bare <code>be post</code> records no bump; the new pin lands only after a manual <code>be put beagle</code> + <code>be post</code> (same manual escape <a href="../PATCH/PATCH-001.html">PATCH-001</a> hit on the patch arm).</li>
+<li>Independent of how the wt got ahead (a standalone get, a manual checkout): this ticket is purely the status/head/post side — surface the gitlink delta and record it.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>be status</code>/<code>be head</code> report a mounted sub whose wt HEAD differs from the parent gitlink pin as ahead / <code>changed</code>, never clean.</li>
+<li>A bare <code>be post</code> auto-stages the parent gitlink put-row for an ahead sub (NO manual <code>be put &lt;sub&gt;</code>) and auto-creates <code>?/&lt;sub&gt;/.&lt;parent&gt;</code> at the new pin (<a href="../../wiki/Submodules.html">Submodules</a> detached-sub topology).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Reuse <a href="../PATCH/PATCH-001.html">PATCH-001</a>'s pin classifier: compare the sub's wt tip against the parent <code>160000</code> pin independently of the surrounding tree; a forward pin is take-theirs and stages a put-row.</li>
+<li>Read the sub tip via the existing <code>SNIFFSubReadTip</code> / <code>.be</code> anchor, not a new parser; ABC style, sniff/keeper edits, not <code>abc/</code>.</li>
+<li>Keep the sub-checkout and the parent-gitlink-row consistent: both advance or neither (<a href="../PATCH/PATCH-001.html">PATCH-001</a> invariant).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+ —
+</p>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> status: ahead sub reads <code>mod</code> — landed earlier via <a href="">SUBS-027</a>'s <code>SUBSDirty</code> Advanced axis + <code>test/status/02-sub-pin-classify</code>. (<code>be head</code> per-sub pin axis still → <a href="">SUBS-027b</a>.)</li>
+<li class="done"><input type="checkbox" checked disabled> post (gitlink arm): a plain <code>be post</code> auto-stages the bump for an ahead sub with NO manual <code>be put</code> — confirmed working on trunk and locked with guard <code>test/post/49-sub-advanced-autobump</code>. The shared tip-vs-pin gate (<a href="">SUBS-029</a>, <code>sniff/PUT.c</code>) keeps it correct (stages iff tip ≠ pin).</li>
+<li class="done"><input type="checkbox" checked disabled> post (anchor arm): auto-create <code>?/&lt;sub&gt;/.&lt;parent&gt;</code> (R2 keep-alive) at the new pin — landed via <a href="">SUBS-027b</a> <code>0c67bea8</code> (anchors R2 on an advanced-clean bump).</li>
+<li class="done"><input type="checkbox" checked disabled> Repro-first (<a href="../../../beagle/CLAUDE.md">CLAUDE</a> §17): <code>test/post/49-sub-advanced-autobump</code> advances a sub past the pin, then asserts a plain post lands the new pin (no manual put).</li>
+<li class="done"><input type="checkbox" checked disabled> Cross-check <a href="../PATCH/PATCH-001.html">PATCH-001</a>: both arms converge on one &quot;tip ≠ pin → stage&quot; primitive (the <code>sniff/PUT.c</code> sub-mount short-circuit); patch/35 + post/49 both green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<p>
+ —
+</p>
+<h2>Outcome</h2>
+<ul>
+<li>Gitlink-bump arm verified + guarded on beagle trunk <code>3fd64016</code> (the <a href="">SUBS-029</a> commit): the tip-vs-pin gate makes a plain post land an advanced sub with no manual <code>be put</code>. Status side already landed by <a href="">SUBS-027</a> (<code>status/02</code>).</li>
+<li>R2 dot-branch creation on bare post landed via <a href="">SUBS-027b</a> <code>0c67bea8</code> (advanced-clean bump anchors <code>?/&lt;sub&gt;/.&lt;parent&gt;</code>).  SUBS-026's status + post arms are complete; the only residual is the <code>be head</code> per-sub pin axis, tracked solely by <a href="">SUBS-027b</a> — close this ticket once that lands.</li>
+</ul>
+</body>
+</html>

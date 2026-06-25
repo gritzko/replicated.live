@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-052</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-052: verbs disagree on a clean file with a drifted mtime; no path re-stamps it</h1>
+<p>
+A tracked file whose bytes EQUAL the baseline but whose mtime was changed out-of-band (an external <code>cp</code>, an editor no-op save, a <code>touch</code>) lands in a state where the verbs flatly disagree, and NO documented operation re-stamps it. <code>be status</code>/<code>be diff</code> content-compare → clean (<code>ok</code>, empty diff); <code>be delete</code> mtime-checks → DELDIRTY &quot;unstamped changes&quot; (<a href="DIS-004.html">DIS-004</a>); <code>be put</code> → PUTNONE &quot;no eligible paths&quot; (content == baseline); <code>be get &lt;path&gt;</code> → &quot;overwritten from ? (no staging)&quot; rewrites with a NEW mtime, still unstamped. So the DELDIRTY message's &quot;stage with <code>be put</code> or revert&quot; advice is unachievable. Hit live 2026-06-23 after an out-of-band <code>cp</code> onto <code>bin/lib/store.js</code>. Related <a href="DIS-023.html">DIS-023</a> (status non-idempotent). Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Issues</h2>
+<p>
+The <code>..be.idx</code> worktree stamp set is keyed per-file by exact mtime, but only some write paths record it; the read verbs use different dirtiness tests, so they diverge on a drifted-but-identical file.
+</p>
+<ul>
+<li><code>be get &lt;path&gt;</code> is a no-staging overwrite that does NOT record the stamp → the<p>
+file stays unstamped, so the suggested &quot;revert before deleting&quot; never clears it.
+</p>
+</li>
+<li><code>be put &lt;path&gt;</code> returns PUTNONE on a content-clean file (won't re-stamp it), so<p>
+the &quot;stage with <code>be put</code>&quot; advice fails too — both escape hatches are dead ends.
+</p>
+</li>
+<li>Full <code>be get</code> only clears it when it records the file's CURRENT mtime, and a get<p>
+that REWRITES the file (e.g. restoring a missing one) leaves it unstamped again.
+</p>
+</li>
+<li><code>be delete &lt;dir&gt;</code> needs the dir present to enumerate; once files are rm'd,<p>
+<code>be delete &lt;dir&gt;</code> stages 0 / skips, only bare <code>be delete</code> sweeps the missing set.
+</p>
+</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None; needs the stamp-set write threaded through the scoped <code>be get &lt;path&gt;</code> (and/or an idempotent re-stamp), plus the <a href="DIS-004.html">DIS-004</a> content double-check to align delete with status.
+</p>
+<h2>Planned</h2>
+<p>
+Make a content-clean file re-stampable and make the verbs agree.
+</p>
+<ul>
+<li><code>be get &lt;path&gt;</code> records the overwritten file's mtime into <code>..be.idx</code> so the<p>
+documented &quot;revert&quot; actually clears DELDIRTY (or add an explicit re-stamp verb).
+</p>
+</li>
+<li>Land <a href="DIS-004.html">DIS-004</a>'s content double-check so delete agrees with status/diff (bytes ==<p>
+baseline blob → proceed), removing the false DELDIRTY at the root.
+</p>
+</li>
+<li>Repro test: out-of-band identical-bytes <code>cp</code> → status <code>ok</code> + delete proceeds +<p>
+<code>be get &lt;path&gt;</code> leaves it stamped (no second DELDIRTY).
+</p>
+</li>
+</ul>
+<h2>Landed</h2>
+<p>
+Nothing yet.
+</p>
+</body>
+</html>

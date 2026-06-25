@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JaB - JavaScript bindings for Beagle</h1>
+<p>
+JaB is a WebKit JSC based runtime with a set of js bindings for libabc and libdog. It is a way to extend Beagle with arbitrary scripts to automate routines and workflows. The runtime binary is <code>jab</code> (formerly <code>jabc</code>), divorced from <code>be</code>: <code>be</code> links no JSC and runs no JS, while <code>jab</code> resolves and runs scripts kept in the <code>be/</code> submodule (see <a href="Extensions.html">Extensions</a>, <a href="Verbs.html">Verbs</a>).
+</p>
+<ul>
+<li>very basic runtime, still able to do low-level stuff</li>
+<li>revision control specific bindings</li>
+<li>no use of NPM infrastructure because of security issues</li>
+<li>git is the only code distribution channel</li>
+<li>no async() APIs, no node APIs: minimalistic, lightweight</li>
+</ul>
+<h2>Invocation — <code>jab [path] args</code></h2>
+<p>
+The <code>jab</code> binary is a standalone runner; the first argument picks one of two modes, and everything after it reaches the script as <code>args</code> (and Node-ish <code>process.argv</code>).
+</p>
+<ul>
+<li>Explicit path (<code>/abs</code>, <code>./rel</code>, <code>../up</code>) runs that file directly by global eval — no <code>be/</code> scan; the CMake <code>js/test/*.js</code> cases use this absolute-path form.</li>
+<li>A bare name (no leading slash or dot) runs the require machinery below to find a script under a <code>be/</code> dir, then evals it.</li>
+<li><code>jab</code> links no <code>be</code> logic and <code>be</code> links no JSC — fully divorced; a script reaches the repo by spawning <code>be</code>/dogs via <code>io.spawn</code>.</li>
+<li><code>process.argv[1]</code> is patched to the resolved abspath, so a script locates its siblings and <code>lib/</code> through the <code>here</code> idiom.</li>
+</ul>
+<h2>require() machinery</h2>
+<p>
+A bare name — a CLI argument or a <code>require(&quot;name&quot;)</code> — resolves by scanning UP for a <code>be/</code> dir; an explicit path resolves node-style, so a script set versions independently of where it runs.
+</p>
+<ul>
+<li>Bare name: from cwd walk up <code>./be ../be ../../be …</code>; in each try <code>&lt;be&gt;/&lt;name&gt;</code> then <code>&lt;be&gt;/&lt;name&gt;.js</code>.</li>
+<li>The scan ceiling is <code>$HOME/be</code> for paths under <code>$HOME</code>, else <code>/be</code>; absent <code>be/</code> dirs are skipped.</li>
+<li>Explicit path (<code>./rel</code>, <code>../up</code>, <code>/abs</code>) resolves relative to the requiring module's own dir, node-style (<code>.js</code> / <code>/index.js</code>).</li>
+<li><code>require()</code> is synchronous CommonJS (mmap → eval → cache), cycle-safe; canonical scripts live in the <code>be/</code> submodule (beagle-ext): the verb scripts plus <code>lib/</code>.</li>
+</ul>
+<h2>Bindings</h2>
+<p>
+JaB exposes libabc and libdog as a flat set of global modules — thin syscall/format leaves holding no memory across the boundary (only JS-owned buffers and fds cross). Install order is fixed in <code>main.cpp</code>.
+</p>
+<ul>
+<li><code>io</code> — fds, read/write, <code>mmap</code>, <code>readdir</code>, <code>spawn</code>/<code>reap</code>, <code>cwd</code>/<code>getenv</code>/<code>stat</code>/<code>mkdir</code>/<code>rename</code>: the syscall leaves.</li>
+<li><code>Buf</code> — a <code>Uint8Array</code> plus PAST|DATA|IDLE boundaries; the one cursor abstraction over heap, mmap, or file backings.</li>
+<li><code>abc</code> — containers over abc logs (<code>ram</code>/<code>mmap</code>/<code>over</code>/<code>book</code>), <code>abc.index</code> (the mmap LSM), <code>merge</code>/<code>intersect</code>.</li>
+<li><code>git</code> — <code>git.pack</code> (offset-pure PACK), <code>git.delta.apply</code>, <code>git.tree</code>, <code>git.parseCommit</code>.</li>
+<li><code>tok</code> — generic source tokenizer (<code>tok.parse</code>, <code>TokStream</code>) sharing dog/tok's lexer core.</li>
+<li><code>codec</code> — <code>hex</code>, <code>sha1</code>/<code>sha256</code>, and <code>ron</code> (the ron60 time codec, 2000–2099).</li>
+<li><code>zip</code> — raw zlib <code>deflate</code>/<code>inflate</code>, the git-wire primitive.</li>
+<li><code>uri</code> — abc/URI <code>parse</code>/<code>make</code>/<code>escape</code> and the <code>URI</code> class.</li>
+<li><code>pol</code> — the <code>poll(2)</code> event loop (<code>watch</code>/<code>every</code>/<code>after</code>/<code>run</code>).</li>
+<li><code>net</code> — Node-style TCP/UDP plus <code>setTimeout</code>/<code>setInterval</code> over <code>pol</code>.</li>
+<li><code>ansi</code> / <code>tty</code> — SGR colour wrappers and terminal raw-mode/winsize for the bro pager.</li>
+<li><code>utf8</code>, <code>process</code>, <code>require</code> — UTF-8 ↔ string, Node-ish <code>process.argv</code> / global <code>args</code>, and CommonJS <code>require</code>.</li>
+</ul>
+</body>
+</html>

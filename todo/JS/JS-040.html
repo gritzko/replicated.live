@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-040</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-040 <a href="">MED</a>: <code>bin/lib/ingest.js</code> — pack ingest (keeper write side)</h1>
+<p>
+Land a received packfile into the shard: resolve every object (incl. REF_DELTA against the existing store / in-pack bases), re-encode OFS-only into a fresh <code>NNNNN.keeper</code> pack-log, and index it into the shard's wh128 LSM. Mirrors <code>keeper/UNPK.c</code> + <code>KEEPIngestFile</code> (unlinkable). Part of <a href="JS-038.html">JS-038</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>The keeper store is OFS-only pack-logs + an <code>abc.index</code> wh128 lane.<p>
+<code>keeper.js</code> READS them but <code>indexPackByWalk</code> SKIPS REF_DELTA (&quot;unresolvable in pure JS&quot;) — false: <code>_pack_inflate</code> the delta + <code>getObject(baseSha)</code> + <code>git.delta.apply</code> resolves it. Received git packs ARE thin (REF_DELTA).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>ingest(repo, packBytes)</code>: walk records (<code>_pack_next</code>/<code>_pack_type</code>), resolve<p>
+raw/OFS via <code>_pack_resolve</code>, REF via inflate+apply against in-pack map or <code>keeper.getObject</code>; re-feed full bytes through <code>pack.feed</code> (OFS-only log).
+</p>
+</li>
+<li>Index the new log into the shard (<code>pack.scan</code> → <code>abc.index.put</code>/flush), so a<p>
+follow-up <code>keeper.getObject</code> of any landed sha succeeds.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>libdog+<code>abc</code> ONLY. Write a new <code>NNNNN.keeper</code> beside existing shard packs;<p>
+never mutate a landed pack. Re-encode deflates via <code>pack.feed</code> (or <a href="JS-035.html">JS-035</a>).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Two-pass: pass 1 builds the received pack's sha→offset map (raw+OFS first),<p>
+pass 2 resolves REF bases (map ∪ store) — the UNPK dep-order, in JS.
+</p>
+</li>
+<li>Un-stub <code>keeper.js</code> REF_DELTA on the read path too (shared resolver helper).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/get/ingest.js</code> (helpers <code>test/js/lib/</code>): ingest a real<p>
+  thin pack (fixture from <code>test/get/</code>), then <code>keeper.getObject</code> each tip   object re-hashes to its sha; OFS-only log re-<code>scan</code>s clean (no REF left).
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Implement <code>bin/lib/ingest.js</code> + REF resolver; reindex the shard.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>← <a href="JS-035.html">JS-035</a> (deflate, re-encode robustness), <a href="JS-039.html">JS-039</a> (supplies real packs).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

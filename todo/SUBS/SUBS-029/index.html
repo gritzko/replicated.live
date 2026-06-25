@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>README</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-029: recursive post stages a phantom no-op gitlink put in a sub shard and leaves it uncommitted</h1>
+<p>
+A recursive <code>be post</code> at the parent stages a <code>160000</code> gitlink bump INSIDE a sub's shard for a grand-sub that never changed, then leaves it uncommitted — the sub shard is left dirty with an orphaned no-op put. Live capture (<a href="glitch.txt">glitch</a>): posting <code>beagle-journal</code> left <code>beagle</code> reading <code>1 put</code> (<code>put abc</code>) while <code>abc</code> stayed clean at the SAME pin <code>6e3b93f8</code>, no commit. This is the inverse of <a href="../SUBS-026.html">SUBS-026</a> (a real bump DROPPED) and violates <a href="../SUBS-027.html">SUBS-027</a>'s POSTNONE→no-bump contract. See <a href="../../wiki/Submodules.html">Submodules</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Two-level mount <code>beagle-journal</code> → <code>beagle</code> → <code>abc</code>; <code>abc</code> clean and pinned at <code>6e3b93f8</code> throughout. Full transcript in <a href="glitch.txt">glitch</a>.
+</p>
+<ul>
+<li>Before post: <code>status:beagle/abc ?6e3b93f8…  237 ok</code> — clean, pinned, nothing staged.</li>
+<li><code>be post 'JS-015..JS-024…'</code> recursed post-order: printed <code>post beagle/abc</code> then <code>put beagle#5b11dad9</code> (the legit parent gitlink bump), committed parent <code>?7a97cec1</code>.</li>
+<li>After post: <code>status:beagle</code> shows <code>17:16 put beagle/abc</code> / <code>1280 ok, 1 put</code>; <code>cd beagle</code> confirms <code>17:16 put abc</code>; <code>cd abc</code> shows <code>?6e3b93f8…  237 ok</code> — same sha, NO commit.</li>
+<li>So the recursion stamped a gitlink put-row for <code>abc</code> in <code>beagle</code>'s shard though <code>abc</code> is unchanged (no Advanced bit) AND <code>beagle</code> made no commit (POSTNONE) — the row is a phantom, left dangling.</li>
+<li>Manual <code>be put beagle/</code> (no recursion) earlier did NOT do this; only the recursive post did.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A recursive <code>be post</code> stages a sub gitlink bump ONLY when the sub's pinned tip differs from the parent gitlink (Advanced); an unchanged pin yields PUTNONE, never a put-row.</li>
+<li>A sub that makes no commit (POSTNONE) leaves NO staged gitlink put in its shard — no orphaned half-apply after the parent post returns.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Reuse <a href="../SUBS-027.html">SUBS-027</a>'s <code>SUBSDirty</code> Advanced axis (R4.base DESCENDS R1) to gate the bump; do not re-parse the tree per verb.</li>
+<li>ABC style; sniff/keeper edits, no hand parsing, not <code>abc/</code>.</li>
+<li>SERIALIZE with <a href="../SUBS-026.html">SUBS-026</a> / <a href="../SUBS-027b.html">SUBS-027b</a> / <a href="../../PATCH/PATCH-001.html">PATCH-001</a> — same gitlink-bump path (work.mkd non-FF hazard).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+ —
+</p>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Repro-first (<a href="../../../beagle/CLAUDE.md">CLAUDE</a> §17): <code>test/post/50-sub-unchanged-no-orphan</code> — clean tree + clean pinned sub, plain <code>be post</code>; asserts no orphaned <code>put vendor/sub</code> / <code>N put</code> after. Depth-1 clean post models the depth-2 intermediate (a level that makes no commit). Reproduced the <code>1 put</code> orphan, then went green.</li>
+<li class="done"><input type="checkbox" checked disabled> Root cause: NOT <code>sniff/POST.c</code> — the <code>be put &lt;sub&gt;</code> sub-mount short-circuit (<code>sniff/PUT.c</code>) staged the gitlink row UNCONDITIONALLY; the <code>-q</code> on recursive children masks the child POSTNONE so <code>bepost_bump_sub</code> runs for every sub. Fix: gate the row on tip ≠ baseline pin (<code>KEEPTreeDescend</code>), so an unchanged sub returns PUTNONE.</li>
+<li class="done"><input type="checkbox" checked disabled> <code>bepost_bump_sub</code> (<code>beagle/BE.cli.c</code>) now swallows the child <code>be put</code> PUTNONE low-byte as a no-op (was BEDOGEXIT) — a POSTNONE sub leaves no staged child gitlink put.</li>
+<li class="done"><input type="checkbox" checked disabled> One &quot;tip vs pin&quot; primitive serves both directions: same gate lands an advanced sub (<a href="../SUBS-026.html">SUBS-026</a>) and skips an unchanged one — guard <code>test/post/49-sub-advanced-autobump</code>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Was serialized after <a href="../SUBS-026.html">SUBS-026</a>/<a href="../../PATCH/PATCH-001.html">PATCH-001</a>; landed together onto trunk tip (no race).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Fixed on beagle trunk <code>3fd64016</code> (&quot;stage sub gitlink put only when tip!=pin&quot;): the <code>sniff/PUT.c</code> tip-vs-pin gate + <code>beagle/BE.cli.c</code> PUTNONE tolerance.</li>
+<li>Repro <code>test/post/50-sub-unchanged-no-orphan</code> (was the <code>1 put</code> orphan, now green); test-guard hardened in <code>c2e1b0d9</code> (asserts the post doesn't hard-error on the now-PUTNONE sub — verified it fails if the BE.cli.c arm is reverted). Full suite 413/413 (only the 2 network tests CURLtest/POLtest skipped — no outbound net in the sandbox).</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Extensions</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>Extensions: scripts outside the verb basis</h1>
+<p>
+The <a href="Verbs.html">Verbs</a> basis is fixed and orthogonal by design, so new behaviour can't be bolted onto it — extensions are the escape hatch. An extension is a JS file run by <a href="JAB.html">JAB</a>: <code>jab &lt;name&gt; [args]</code> scans up for a <code>be/</code> dir, evals the script, and passes the tail as <code>args</code>. <code>be</code> itself runs no JS and forks no runtime, so a script can't shadow a verb, projector, or file — extensions grow the command space beside the basis, never inside it. Scripts share the <code>be/</code> submodule (beagle-ext) and <code>require()</code> each other, so a set versions on its own. A script gets whatever <a href="JAB.html">JAB</a> installs; a beagle repo/store SDK is the open frontier.
+</p>
+<h2><code>be</code> and <code>jab</code> are divorced — scripts run on <code>jab</code></h2>
+<p>
+<code>be</code> is a pure native dispatcher with no JSC linked; the <code>jab</code> runner owns all script resolution and execution.
+</p>
+<ul>
+<li><code>be &lt;name&gt;</code> matching no verb/file runs no script: the no-verb branch falls through to a typo diagnostic, then bro.</li>
+<li><code>jab &lt;name&gt; [args]</code> scans up <code>./be ../be …</code> (ceiling <code>$HOME/be</code> or <code>/be</code>), trying <code>&lt;be&gt;/&lt;name&gt;</code> then <code>&lt;be&gt;/&lt;name&gt;.js</code>.</li>
+<li><code>jab /abs</code> or <code>jab ./rel</code> runs that file directly by global eval — the explicit-path mode, no scan.</li>
+<li>The script's exit code becomes <code>jab</code>'s exit code; the tail reaches it as <code>args</code> + Node-ish <code>process.argv</code>.</li>
+</ul>
+<h2>Layout and require — one be/, scripts compose</h2>
+<p>
+Extensions live in the <code>be/</code> submodule; CommonJS <code>require()</code> resolves siblings and <code>lib/</code> with no new machinery.
+</p>
+<ul>
+<li><code>be/&lt;name&gt;.js</code> is the entry per command; helpers are modules under <code>be/lib/</code> <code>require()</code>d by relative path.</li>
+<li>A bare <code>require(&quot;name&quot;)</code> re-runs the <code>be/</code>-scan; an explicit <code>require(&quot;./x&quot;)</code> resolves node-style from the module's dir.</li>
+<li><code>require()</code> is synchronous (mmap → eval → cache), cycle-safe — the loader ships with <a href="JAB.html">JAB</a>.</li>
+<li>The <code>be/</code> submodule (beagle-ext) versions independently, so a script set ships and updates on its own.</li>
+</ul>
+<h2>SDK surface — bindings now, store later</h2>
+<p>
+A script gets the whole <a href="JAB.html">JAB</a> global API; the gap is beagle-domain repo access, deliberately deferred.
+</p>
+<ul>
+<li>Available now: <code>io</code>, <code>Buf</code>, <code>abc</code>/<code>abc.index</code>, <code>git.pack</code>/<code>delta</code>, <code>tok</code>, <code>codec</code>, <code>zip</code>, <code>uri</code>, <code>pol</code>, <code>net</code> — the <a href="JAB.html">JAB</a> bindings list.</li>
+<li>Deferred: open a <code>.be</code>, resolve refs/HEAD, read an object by sha, walk the log, classify the worktree (keeper/graf/sniff/HOME).</li>
+<li>Until the store SDK lands, an extension reaches the repo by spawning <code>be</code>/dogs through <code>io.spawn</code> and reading their output.</li>
+<li>The store SDK is a larger effort tracked in <a href="../todo/JS/README.html">/todo/JS</a>; the extension model itself ships independent of it.</li>
+</ul>
+</body>
+</html>

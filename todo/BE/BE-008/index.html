@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>README</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-008: <code>be put</code>/<code>be post</code> leak a sub's empty-put PUTNONE cascade</h1>
+<p>
+A <code>be put</code>/<code>be post</code> whose parent SUCCEEDS still leaks a spurious error cascade from its recursion into an UNCHANGED submodule: the sub's internal put step fails with <code>sniff: put: no changes</code> (or <code>no eligible paths</code>), an empty <code>put put:</code> banner, then <code>Error: PUTNONE</code> and <code>Error: NONE</code> — all printed even though the command succeeded and exits 0. An unchanged submodule must be a silent no-op on recursion, not an error spray. Evidence: <a href="garbage.txt">garbage.txt</a> (landing JS-036 <code>742c06ff</code> in a store-backed worktree with <code>abc</code> unchanged). Method: <a href="../../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>be put</code> (bare) staged <code>js/cont.cpp</code>/<code>js/pack.hpp</code> in the parent, then<p>
+recursed <code>put put:abc</code> → <code>sniff: put: no changes</code> + <code>Error: PUTNONE</code> + <code>Error: NONE</code>, all on a successful put. See <a href="garbage.txt">garbage.txt</a>.
+</p>
+</li>
+<li><code>be post 'JS-036…'</code> recursed <code>post abc</code> → <code>sniff: put: no eligible paths</code> +<p>
+empty <code>put put:</code> + <code>Error: PUTNONE</code> + <code>Error: NONE</code>, THEN the real <code>post ?742c06ff</code>. The garbage interleaves before the success row.
+</p>
+</li>
+<li>Kin: <a href="../../POST/POST-019.html">POST-019</a> (sub ADVANCED → put banner leaks), <a href="../BE-006.html">BE-006</a>/<a href="../BE-003.html">BE-003</a> (stacked<p>
+<code>Error:</code> lines → one uniform line), <a href="../../POST/POST-022.html">POST-022</a>/<a href="../BE-007.html">BE-007</a> (sub-push wrecked output, landed). This is the unchanged-sub no-op case, none of the above.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>An unchanged submodule on <code>put</code>/<code>post</code> recursion emits NOTHING — no<p>
+<code>PUTNONE</code>/<code>NONE</code>, no empty <code>put put:</code> banner; the parent output stays clean.
+</p>
+</li>
+<li>A genuine top-level <code>be put</code> with nothing to stage still reports <code>PUTNONE</code><p>
+(user asked to put nothing) — only the internal sub-recursion path is silenced.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>BE/sniff dispatch + the submodule-recursion put/post path; exit code is<p>
+already success (0) — this is output hygiene, do not change the status.
+</p>
+</li>
+<li>Aligns with <a href="../BE-003.html">BE-003</a>'s single error surface, but here the fix is to NOT treat<p>
+an empty sub as an error at all.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>The internal per-submodule put step treats &quot;no eligible paths&quot;/<code>PUTNONE</code> as a<p>
+benign skip (silent no-op), not a propagated error — mirrors <a href="../../POST/POST-019.html">POST-019</a>'s &quot;suppress the standalone put banner for the internal path&quot;.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first (<code>test/post/</code> or <code>test/put/</code>): parent + unchanged submodule,<p>
+  <code>be put</code>/<code>be post</code> → assert output has no <code>PUTNONE</code>/<code>NONE</code>/empty <code>put put:</code>.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Locate the sub-recursion put step; skip an empty sub silently; keep the<p>
+  top-level user <code>PUTNONE</code> path intact.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Confirm <code>ctest</code> verb-output tests stay green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

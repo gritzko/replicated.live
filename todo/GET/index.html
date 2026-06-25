@@ -17,6 +17,9 @@
 </p>
 <h2>Active tickets</h2>
 <ul>
+<li><a href="">GET-014</a> LANDED <code>b89011fa</code> (reopened back-regress arm) — <code>be get</code> trunk re-sync is now FF-gated via <code>KEEPIsAncestor</code> (self-sufficient on unindexed tips) and <code>keeper/REFS.c</code> resolution is reachability-aware (a behind/divergent peer <code>get</code> row can't out-vote the local move). Repro <code>test/get/57</code>, adversarial <code>test/get/58</code>; head/patch clobber stays fixed. The durable fix for the session's tip-regression class.</li>
+</ul>
+<ul>
 <li><a href="GET-009.html">GET-009</a> — efficient beagle↔beagle (<code>be://</code>) sync umbrella: replace <code>WIRE.c</code>'s byte-offset watermark with object-level reachability serving (<code>closure(wants) − closure(haves)</code>), cross-<code>file_id</code> serving, and a redundant-pack GC/compaction for already-bloated shards. St.1 (<a href="">GET-007</a> latest-copy) landed; St.2-4 open.</li>
 </ul>
 <ul>
@@ -34,6 +37,15 @@ GET-021 (a worktree silently diffs/statuses against an advanced cur — phantom 
 <ul>
 <li><a href="GET-022.html">GET-022</a> — no per-file checkout-from-rev: <code>be get &lt;path&gt;?&lt;rev&gt;</code> DROPS the path and resolves <code>?&lt;rev&gt;</code> as a branch → <code>KEEPNONE</code>/no-op (<code>sniff/GET.c:1711</code>). No git <code>checkout &lt;rev&gt; -- &lt;path&gt;</code> parity; <code>blob:</code>/<code>cat:</code> resolve it for reading but no verb writes it back. Needed by <a href="GET-021.html">GET-021</a> to restore one stale file without a whole-tree <code>be get</code> clobbering other WIP.</li>
 </ul>
+<ul>
+<li><a href="GET-031/README.html">GET-031</a> <a href="">HIGH</a> — <code>be get &lt;target&gt;</code> silently OVERWRITES <code>be put</code>/<code>be patch</code>-staged content for a path the target also changed (data loss, no refusal/merge, exit 0): <code>get_overlap_step</code> (<code>sniff/GET.c:440-529</code>) protects only UNATTRIBUTED-mtime files, and staged content is stamped. Deterministic two-arm repro + real-session evidence in the ticket dir; surfaced landing <a href="">JS-036</a> (<code>742c06ff</code> shipped without <code>JABCdelta</code>/docs).</li>
+</ul>
+<ul>
+<li><a href="GET-032.html">GET-032</a> — <code>be get</code> of an offline submodule mount reports <code>&lt;n&gt; ok</code> but materializes ZERO files (empty dir) when the remote is unreachable yet the pinned objects are local; a fetch-fail with locally-resolvable objects must still run the checkout. Surfaced by the JS-042/JS-043 worktree setup (offline <code>abc</code>).</li>
+</ul>
+<p>
+GET-030 (<code>be get be://host</code> wire <code>keeper: not found</code> — <code>wcli_remote_path()</code> auto-carries the remote dog PATH) landed <code>bbb3692f</code>. GET-029 (bare-<code>post</code> wtlog tail &quot;no baseline&quot;) CLOSED — subsumed by <a href="../DIS/DIS-049.html">DIS-049</a> <code>9e80e5f0</code> (single-project clone; <code>test/get/55</code> covers it).
+</p>
 <p>
 GET-020 (<code>be get file:&lt;wt&gt;</code> left a HALF-POPULATED tree + <code>SNIFFFAIL</code> under concurrent worktree creation) landed <code>49039f36</code>. GET-026 (bare <code>be get</code> = default GET + resulting-state banner via the shared ROWS path; orphaned overview moved to <a href="../STATUS/STATUS-001.html">STATUS-001</a>) landed <code>1b5d3def</code> + sub-test fix <code>cb94e64e</code>. GET-027 (<code>be get be://</code> clone read a degenerate zero-length pack bookmark → WIRECRPT; the &quot;off-by-one hashlet&quot; theory was wrong, two independent bugs fixed) landed <code>a8fa2e87</code>. GET-023 (<code>be get '?#&lt;sha&gt;'</code> silently dropped the <code>#fragment</code> → landed on the tip; classify-or-reject arm + composer-built source URI) landed <code>d6f35358</code>; its regression GET-024 (<code>?#&lt;sha&gt;</code> recorded a DETACHED cur-tip → POSTDET, broke the SSH-gated <code>be-put-06-triangle</code>) landed <code>134b9e30</code> — fixed in the same arm (record trunk-state) + a non-SSH-gated guard in <code>test/get/33-detached-refuse-commit</code>. GET-025 (a SHORT <code>?#&lt;short&gt;</code> recorded the wtlog cur-tip + keeper REFS tip verbatim → the 40-char-only baseline resolver read EMPTY: whole tree <code>new</code>, <code>be head</code> stuck) landed <code>4737404d</code> — record the RESOLVED full sha (<code>a_sha1hex(tgt_commit_sha)</code>) in the row + <code>REFSAppendVerb</code>; step 6 in <code>get/33</code> + <code>fragref</code> case 2. Also repaired the live <code>dogs/refs</code> (2 short rows the bug had written last night, blocking all posts).
 </p>

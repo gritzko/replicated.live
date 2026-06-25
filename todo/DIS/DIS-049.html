@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-049</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-049 <a href="">MED</a>: <code>be get file:&lt;repo&gt;?/&lt;project&gt;</code> clones the whole repo, not just the project</h1>
+<p>
+The <code>?/&lt;project&gt;</code> selector should clone ONLY that project shard, but <code>be get</code> clones the ENTIRE multi-project repo (all top-level files + every submodule), and the named project arrives at the parent's stale gitlink pin instead of its own tip. Found creating worktrees for the DIS fix-and-land loop. Method: <a href="../../skill/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro: <code>be get file:/home/gritzko/beagle-journal?/beagle</code> into an empty dir<p>
+produced the WHOLE journal — <code>CNAME wiki/ html/ blog/ todo/ meta/ assets/</code> + <code>beagle/</code> (the codebase as a SUBMODULE) + <code>beagle/abc</code> — not just the <code>beagle</code> project. (<code>new wiki/Worktree.mkd</code>, <code>get html?0f72708f</code>, <code>get beagle?5b11dad9</code>, <code>get beagle/abc?…</code>.)
+</p>
+</li>
+<li>Worse, the <code>beagle</code> subtree came in at the journal's GITLINK PIN <code>5b11dad9</code><p>
+(an old JS-024 commit), NOT the beagle project's own trunk tip <code>125d5c8f</code> — so you get stale code wrapped in the whole journal, no single-project worktree.
+</p>
+</li>
+<li>Intended: <code>?/&lt;project&gt;</code> selects ONE shard; the clone is that project at its<p>
+own tip, rooted at the worktree (no journal wrapper, no submodule indirection).
+</p>
+</li>
+<li>ALSO broken — cloning straight from the codebase worktree path:<p>
+<code>be get file:/home/gritzko/beagle-journal/beagle</code> → <code>sniff: get: cannot restore /home/gritzko/beagle-journal/beagle — no baseline in '.be/wtlog'</code> / <code>SNIFFFAIL</code> / <code>BEDOGEXIT</code>. This MUST work (clone the beagle project to a worktree at its tip). Same no-baseline family as <a href="../GET/GET-029.html">GET-029</a> (the source wtlog tail is a bare <code>post</code>); fixing baseline resolution likely fixes both.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>be get file:&lt;repo&gt;?/&lt;project&gt;</code> (and the <code>be://</code>/<code>ssh:</code> forms) clones ONLY the<p>
+named project shard, at that project's own tip, as the worktree root.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fix the <code>?/&lt;project&gt;</code> project-selector resolution in the get/clone path<p>
+(keeper/sniff <code>be get</code>, the URI <code>?/proj</code> handling). Don't regress the no-selector whole-repo clone or submodule recursion when actually wanted.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) selector semantics: <code>?/proj</code> = pick that shard as the clone root +<p>
+resolve to the project's tip, vs the current &quot;clone the repo + recurse subs&quot;.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: <code>be get file:&lt;multiproj-repo&gt;?/&lt;proj&gt;</code> yields ONLY <code>&lt;proj&gt;</code> at<p>
+  its own tip (no journal files, no submodule wrapper). Red→green.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Fix the selector; re-run the get/clone + submodule suites.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None. Blocks clean single-project worktree creation for the <a href="../../skill/Issues.html">Issues</a> loop<p>
+(the recurring <code>be get</code> worktree-setup friction, with <a href="../GET/GET-029.html">GET-029</a>).
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><strong>LANDED <code>9e80e5f0</code></strong> (2026-06-21): <code>BEGetWorktree</code> (<code>beagle/BE.cli.c</code>) now honors<p>
+the <code>?/&lt;project&gt;</code> selector (<code>sel_proj</code>, prefer it for the title; cross-project selector resolves the SELECTED shard's own tip) and recognizes a secondary-wt (<code>.be</code>-FILE) source (anchor at the shared store from row-0); <code>sniff/AT.c</code> <code>SNIFFAtTailOf</code> reads the project from the row-0 query. <code>be get file:&lt;repo&gt;?/&lt;proj&gt;</code> now clones ONLY that project at its tip. Repro <code>test/get/54</code>+<code>55</code>. Validated end-to-end (clean single-project clone at <code>9e80e5f0</code>). *<strong>Subsumes <a href="../GET/GET-029.html">GET-029</a>.</strong>*
+</p>
+</li>
+</ul>
+</body>
+</html>
