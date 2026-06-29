@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-097</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-097 <a href="">MED</a>: <code>jab get</code> ABORTS the whole checkout on a committed <code>.be</code>/<code>.git</code> tree entry (should skip it silently, like native POST-015)</h1>
+<p>
+A <code>jab get</code> (any transport) of a source tree that carries a committed <code>.be</code> entry dies with <code>JS exception: checkout: unsafe path .be</code> and checks out NOTHING — not even the sibling real files. <code>.be</code>/<code>.git</code>/<code>..be.idx</code> are the store-anchor names; native's keeper walk SKIPS them silently (POST-015, fixed the SPAM half in beagle/test/get/48), but the JS leaf raises a hard, uncaught exception that aborts the entire reconcile. Strictly worse than the native bug it mirrors. Found splitting <a href="./JS-096.html">JS-096</a> (the 48 port is xfail). Method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro (live 2026-06-28, prebuilt <code>jab</code>): a <code>git init</code> repo with a committed<p>
+<code>.be</code> (<code>git add -f real.txt .be</code>), cloned via <code>jab get ssh://localhost/&lt;rel&gt;?/g</code> → stdout empty, stderr <code>JS exception: checkout: unsafe path .be</code>, exit 1, <code>real.txt</code> NOT materialised. A clean sibling tree (no <code>.be</code>) clones fine.
+</p>
+</li>
+<li>Site: <code>shared/checkout.js::materialise</code> (line 96) throws<p>
+<code>&quot;checkout: unsafe path &quot; + rel</code> via <code>safeRel</code> (<code>shared/util/path.js:45-53</code>, which rejects <code>.git</code>/<code>.be</code>/<code>..be.idx</code> segments — the JS-065 traversal guard). The get fan-out leaf (<code>verbs/get/get.js::leaf</code>, ~line 644) calls <code>materialise</code> with no try/catch, so the exception propagates out of the whole <code>jab get</code>.
+</p>
+</li>
+<li><code>shared/store.js::readTreeRecursive</code> (line 509) has the SAME hazard — it<p>
+throws <code>store: unsafe tree path</code> on a <code>.be</code> leaf — but the get path hits the <code>materialise</code> guard first.
+</p>
+</li>
+<li>The JS-065 guard correctly rejects a path-traversal ESCAPE (<code>../evil</code> — see<p>
+test/get/traversal). A literal <code>.be</code>/<code>.git</code> entry is NOT an escape; it is a store-meta name to skip, like <code>scanWt</code> already skips (<code>checkout.js:37-38</code>).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>jab get</code> of a tree carrying <code>.be</code>/<code>.git</code>/<code>..be.idx</code> entries SKIPS those<p>
+entries SILENTLY and checks out every other path; the get exits 0.
+</p>
+</li>
+<li>The path-traversal guard (<code>../</code>, absolute, NUL) STILL refuses (loudly) —<p>
+distinguish &quot;store-meta name to skip&quot; from &quot;escape to reject&quot;.
+</p>
+</li>
+<li>Un-xfail <code>be-js-get-walk-dot-be-quiet</code> (the <a href="./JS-096.html">JS-096</a> port asserting real.txt<p>
+lands and the get exits 0); keep test/get/traversal green.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>No hand-rolled URI/path parsing beyond the existing <code>safeRel</code> segment check.</li>
+<li>Fix at the reconcile/leaf level (skip the <code>.be</code>/<code>.git</code>/<code>..be.idx</code> ENTRY)<p>
+rather than relaxing <code>safeRel</code> (which guards the traversal case too).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) Likely: split the guard — a new <code>safeRel</code>-style predicate that<p>
+classifies a leaf as SKIP (store-meta <code>.be</code>/<code>.git</code>/<code>..be.idx</code>) vs REJECT (escape) vs OK; the reconcile/leaf drops SKIP entries before <code>materialise</code>, keeps the loud throw for REJECT. The dir-reconcile (<code>reconcileDir</code>) and the recursive tree readers (<code>readTreeRecursive</code>) must drop the entry symmetrically so no del-leaf is emitted for a skipped name either.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: a port-arm <code>jab get</code> of a <code>.be</code>-bearing tree FAILS today<p>
+ (<code>be-js-get-walk-dot-be-quiet</code>, currently <code>_BE_WILL_FAIL</code>).
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Skip <code>.be</code>/<code>.git</code>/<code>..be.idx</code> entries in the get reconcile/leaf; keep the<p>
+ escape (<code>../</code>, absolute, NUL) refusal loud.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Un-xfail the case; confirm test/get/traversal still green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>A real-world clone of any tree that ever committed a <code>.be</code>/<code>.git</code> (common<p>
+for store-in-store fixtures) is unusable via <code>jab get</code>.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open) Split off <a href="./JS-096.html">JS-096</a> (the 48 port), filed 2026-06-28.</li>
+</ul>
+</body>
+</html>

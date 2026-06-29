@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-009</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-009 jab diff/commit colour: render the tok32 diff side as bg wash</h1>
+<p>
+<code>jab diff:</code>/<code>commit: --color</code> showed no change highlighting — only flat <code>+</code>/<code>-</code> fg lines, with word-merged text garbled — while <code>be</code> shows a word-level background wash. The 2-bit diff side in each <code>tok32</code> (eq/in/rm) was ignored by the renderer jab used. Fix: port bro's two-pass side→bg renderer into <a href="">view/bro.js</a> (the ONE JS impl) and route both jab colour edges through it; retire the duplicate C <code>HUNKu8sFeedColor</code> diff branch and the <code>hd.color()</code> use.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro: <code>jab commit:?&lt;sha&gt; --color</code> vs <code>be commit:?&lt;sha&gt; --color</code> — jab fg<p>
+<code>+</code>/<code>-</code> with merged-text garble; be a red/green word-level bg wash.
+</p>
+</li>
+<li>Records are identical (same text, same tok32 incl. side bits); only the<p>
+COLOUR render diverged. <code>--plain</code> was already byte-identical (LineBased).
+</p>
+</li>
+<li>Four render impls existed: C <code>bro/BRO.c</code> bro_cell_ansi (be, correct), C<p>
+<code>HUNKu8sFeedColor</code> diff branch (fg, used by jab via <code>hd.color</code>), JS <code>view/bro.js</code> cellSGR (pager, diff side EQ-only), JS <code>hd.color</code> (dump).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>jab <code>diff:</code>/<code>commit: --color</code> byte-matches <code>be --color</code> (bro) for the<p>
+<code>diff:</code> view (single-file + hermetic whole-tree).
+</p>
+</li>
+<li>ONE C diff-colour impl (<code>bro/BRO.c</code>), ONE JS impl (<code>view/bro.js</code>).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>view/bro.js is pure JS over the JABC bindings; no new binding.</li>
+<li>Byte-exact SGR: port abc/ANSI.c ANSIu8sFeedDelta (minimal deltas) + the<p>
+dog/THEME.h THEME16TBL values (NOT the JS THEME16 approximation table).
+</p>
+</li>
+<li>Text bytes emitted RAW (a latin1-string + utf8.Encode double-encodes<p>
+multibyte — the em-dash mojibake bug).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Port bro_cell_ansi (side+pass→bg I/O/J/K), bro_classify_lines, bro_classify,<p>
+bro_walk_hunk two-pass (rm rows then in rows), bro_row_end_pass (hide the other side's bytes) into view/bro.js as colorDiffHunk / paintDiffRowStr.
+</p>
+</li>
+<li>Route: renderHunkLog (dump) + pager indexRows/paintRow detect a diff hunk<p>
+(hasDiffSides) and render via the JS two-pass; plain/tlv + non-diff colour stay single-sourced through the C binding.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="">v</a> view/bro.js: ansi64 model + deltaSGR/resetSGR + two-pass + cellAnsi.</li>
+<li><a href="">v</a> renderHunkLog routes diff hunks to colorDiffHunk (retire JS-2 <code>hd.color</code>).</li>
+<li><a href="">v</a> pager indexRows/paintRow pass-aware (interactive tty path).</li>
+<li><a href="">v</a> test/diff/lib/diffcase.sh <code>--color</code> oracle flipped graf → be (bro).</li>
+<li><a href="">v</a> test/diff/13-color-word-wash regression (inline/split/add/del/multibyte).</li>
+<li><a href="">v</a> C-2 → C-1 in libdog: moved bro_cell_ansi + classify/walk/row_end two-pass<p>
+(+ BRO_PASS_*/bro_lineinfo/bro_emit_fn) into dog/HUNK.c+HUNK.h; HUNKu8sFeedColor now drives it (graf <code>--color</code> body byte-matches <code>be</code>); bro/BRO.c calls the libdog copies (no dup). Built jab/be/graf/bro; 472/472 C tests, 20/20 JS.
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Whole-tree <code>diff:?&lt;range&gt;</code> over the journal store still diverges (jab emits<p>
+the <code>test</code> submodule recursion in a different order) — PRE-EXISTING diff.js issue, reproduces in <code>--plain</code> too; out of scope here. Own ticket TBD.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>ONE diff-colour renderer: JS in <a href="">view/bro.js</a> (jab), C in dog/HUNK.c (graf +<p>
+bro + any direct-colour tool). C-2 (the fg <code>+</code>/<code>-</code> branch) and JS-2 (<code>hd.color</code> for diff hunks) retired. Pending land (beagle core, <a href="">GET-033</a>).
+</p>
+</li>
+</ul>
+</body>
+</html>

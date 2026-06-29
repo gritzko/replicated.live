@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-009</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-009 <a href="">HIGH</a>: <code>be</code> submodule absent from <code>be status</code> (no gitlink row, no recursion)</h1>
+<p>
+<code>be</code> is registered in <code>journal/.gitmodules</code> (<code>path = be</code>, the beagle-ext JS impl), yet bare <code>be</code> / <code>be status</code> from the journal root shows NEITHER a <code>put be</code> gitlink row NOR a <code>status:be</code> recursion block — while its NESTED sub <code>be/test</code> IS listed (<code>status:be/test … 101 ok</code>).  So the whole <code>be/</code> subtree's own changes are invisible to status and unreachable by <code>be post</code>.  Compounded by <a href="../STATUS/STATUS-003.html">STATUS-003</a>: <code>cd be &amp;&amp; be status</code> → <code>SNOROOM</code>/<code>BEDOGEXIT</code>, so be/ can't be statused standalone either. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>journal/.gitmodules</code>: <code>[submodule &quot;be&quot;] path = be url = …/beagle-ext.git</code><p>
+(alongside <code>html</code> and <code>beagle</code>, which DO appear).
+</p>
+</li>
+<li>Bare <code>be</code> (journal root) recursion lists: <code>status:html</code>, <code>status:be/test</code>,<p>
+<code>status:beagle</code>, <code>status:beagle/abc</code> — and a parent <code>23:08 put beagle</code> gitlink row — but NO <code>status:be</code> and NO <code>put be</code> row.  <code>be/test</code> (a deeper mount, <code>?/beagle-ext-tests/.beagle-ext/.journal</code>) is reached; its parent <code>be/</code> is not.
+</p>
+</li>
+<li><code>be/.be</code> is a 34 KB <code>.be</code>-FILE mount (store-backed worktree); <code>be/test/.be</code> a<p>
+2.8 KB file.  The discovery enumerates the nested mount but skips the be/ mount.
+</p>
+</li>
+<li><code>cd be &amp;&amp; /…/be status</code> → <code>Error: SNOROOM</code> / <code>Error: BEDOGEXIT</code> (no <code>ok</code> count)<p>
+— be/'s own status overflows the <a href="../STATUS/STATUS-003.html">STATUS-003</a> aggregate buffer, so even if it were discovered the recursion would abort.
+</p>
+</li>
+<li>IMPACT: the be/ code-review fixes (JS-065..091, all under <code>be/shared</code>,<p>
+<code>be/views</code>, <code>be/core</code>, <code>be/verbs</code>) are NOT shown by <code>be status</code> and cannot be committed via <code>be post</code> from the journal root.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Bare <code>be</code> / <code>be status</code> discovers the <code>be</code> submodule: a <code>put be</code> gitlink row<p>
+when its tip moved, and a <code>status:be</code> recursion block (like beagle/html).
+</p>
+</li>
+<li>Determine whether be/ is skipped by a discovery bug (nested-mount shadows its<p>
+parent) OR purely because its status SNOROOMs (<a href="../STATUS/STATUS-003.html">STATUS-003</a>) and is dropped.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Native BE/sniff submodule discovery + the <code>.be</code>-file mount walk; do not regress<p>
+html/beagle discovery or the be/test nested-mount handling.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>First fix <a href="../STATUS/STATUS-003.html">STATUS-003</a> (the SNOROOM), then re-check: if <code>status:be</code> then appears,<p>
+BE-009 was a swallowed-SNOROOM drop; if still absent, it is a real discovery gap (a sub whose own nested mount is enumerated but the parent mount is not).
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: a fixture parent + a <code>.be</code>-file submodule that itself contains a<p>
+ nested mount; assert bare <code>be</code> emits a <code>status:&lt;sub&gt;</code> block + gitlink row for  the OUTER sub, not only the nested one.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Trace the submodule-discovery walk (<code>.gitmodules</code> + <code>.be</code>-file mounts); fix the<p>
+ skip; verify be/ appears after <a href="../STATUS/STATUS-003.html">STATUS-003</a>.
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul class="todo">
+<li class="blocked"><input type="checkbox" disabled> ← <a href="../STATUS/STATUS-003.html">STATUS-003</a>: be/ status SNOROOMs, so BE-009 can't be fully verified until<p>
+ the buffer overflow is fixed (the two are entangled).
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FIXED-BY-DEPENDENCY (no native change): with <a href="../STATUS/STATUS-003.html">STATUS-003</a> landed, bare <code>be</code><p>
+over the journal tree now emits <code>status:be</code> (verified, between html and be/test). Discovery was never broken — the be/ mount IS enumerated; the <code>status:be</code> block was produced then dropped when the relay child SNOROOMed. Residual (out of scope, separate SUBS work): a FLAT <code>be status</code> row for a clean-gitlink sub with UNCOMMITTED edits needs SUBS_DIRTY_EDITED (a sub-wt content scan) — would change the test-#201 flat-vs-recursing contract.
+</p>
+</li>
+</ul>
+</body>
+</html>

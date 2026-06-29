@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-088</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-088 <a href="">MED</a>: hand-rolled require-path resolution (<code>libDir</code>/<code>_here</code>) duplicated across 5 modules</h1>
+<p>
+The be-relative require workaround (resolve a module's own dir so it can require siblings by absolute path under the resident loop, where argv<a href="">1</a> is loop.js not the module) is reinvented in five modules with subtly different fallbacks — <code>&quot;.&quot;</code> vs argv<a href="">1</a> vs <code>__dirname</code>.  Several sites do the require LAZILY in a function body, defeating the registry warm-cache and hiding the dependency graph.  Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>subs.js:44-46 <code>libDir(){ return __dirname || &quot;.&quot; }</code> then<p>
+subs.js:53 lazy <code>require(libDir()+&quot;/../core/discover.js&quot;)</code> in classifyMount's body — a per-call require, not a top import.
+</p>
+</li>
+<li>classify.js:416-417 the SAME <code>libDir(){ __dirname || &quot;.&quot; }</code>.</li>
+<li>fold-decide.js:214-215 the SAME <code>libDir(){ __dirname || &quot;.&quot; }</code>.</li>
+<li>loop.js:14-15 a DIFFERENT idiom: `_here = argv<a href="">1</a>.slice(0,<p>
+lastIndexOf(&quot;/&quot;))` — argv<a href="">1</a>-based, not __dirname.
+</p>
+</li>
+<li>refs.js:11 a THIRD idiom: <code>require(__dirname+&quot;/../../core/…&quot;)</code><p>
+inline, no helper.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>One <code>shared/util/here.js</code> exporting a base-dir + a sibling<p>
+require helper; the 5 sites consume it (one resolution rule).
+</p>
+</li>
+<li>Hoist the lazy in-body requires (subs.js:53) to module top so<p>
+the dependency graph is static + the warm-cache applies.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Must work under the resident loop (argv<a href="">1</a>==loop.js) AND a<p>
+one-shot entry; rely on <code>__dirname</code> (require.cpp injects it), drop the <code>&quot;.&quot;</code>/argv<a href="">1</a> fallbacks once verified present.
+</p>
+</li>
+<li>No behavioural change to module resolution — same files loaded.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Standardise on <code>__dirname</code>-relative (the require.cpp contract);<p>
+the <code>&quot;.&quot;</code> fallback is dead under the real loader — assert + drop.
+</p>
+</li>
+<li>here.js stays dependency-free (no core/, no view/) so every<p>
+layer may import it without a cycle.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: a test loading subs/classify/fold-decide/refs<p>
+ under the resident loop (argv<a href="">1</a>!=module) asserting siblings resolve.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Add shared/util/here.js; repoint the 5 sites; hoist subs.js:53.</li>
+<li class="open"><input type="checkbox" disabled> Remove the duplicated libDir() defs.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul class="todo">
+<li class="blocked"><input type="checkbox" disabled> none known — pure refactor behind the require contract.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

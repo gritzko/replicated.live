@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-036</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-036: the be/-extension self-locator is mis-created — <code>be get</code> leaves an empty <code>be/</code> dir, and every <code>be</code>/<code>jab</code> run recreates a <code>&lt;wt-basename&gt; -&gt; &lt;abs-wt&gt;</code> self-symlink instead of <code>be -&gt; .</code></h1>
+<p>
+beagle-ext is located by a self-symlink named <code>be</code> at the project root, so <code>jab</code> resolves the extension via its upward <code>be</code>-scan (<code>beagle/js/require.cpp</code>). That locator is mis-created two ways, and is correct ONLY when the worktree directory is itself literally named <code>be</code> (the canonical main tree, where the basename rule coincidentally yields the right name). (1) <code>be get</code> of beagle-ext materialises <code>be</code> as an EMPTY DIRECTORY, not the symlink — repro: <code>be get file:/home/gritzko/.be/?/beagle-ext</code> into a dir NOT named <code>be</code> (e.g. <code>/tmp/x/ZZZ</code>) leaves an empty <code>ZZZ/be/</code>, no self-symlink. (2) Every subsequent <code>be</code>/<code>jab</code> run in the worktree (re)creates a symlink named after the WORKTREE BASENAME with an ABSOLUTE self-target — verified: in <code>~/todo/DIS-057</code>, removing <code>DIS-057 -&gt; /home/gritzko/todo/DIS-057</code> by hand and running <code>be status</code> recreates it. The fallout: in any worktree NOT named <code>be</code>, the <code>be</code> locator is broken, so <code>jab</code> falls back to the stale global <code>/tmp/be -&gt; ~/journal/be</code> and runs the WRONG (main-tree) be/ scripts — which masked DIS-057's status changes during review (the bro-pager colour thread). Scope: beagle C core (<code>be</code>/<code>jab</code> runtime + <code>be get</code> checkout). See <a href="../../beagle/CLAUDE.md">CLAUDE</a>; method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Intended state: <code>&lt;wt&gt;/be</code> is a self-symlink (name <code>be</code>, relative target so <code>&lt;wt&gt;/be/...</code> == <code>&lt;wt&gt;/...</code>) so the project is locatable as the <code>be</code> shard. The main tree has <code>be -&gt; be</code> (works only because that dir is named <code>be</code>).</li>
+<li>Bug A (get-time): <code>be get …?/beagle-ext</code> writes <code>be</code> as an EMPTY DIR. Repro into a non-<code>be</code>-named dir → empty <code>be/</code>, no symlink. Likely <code>sniff/GET.c</code> checkout mis-handling the <code>be</code> tree leaf (a tracked symlink blob, or an empty-tree placeholder the runtime should fill).</li>
+<li>Bug B (run-time): every <code>be</code>/<code>jab</code> invocation recreates <code>&lt;basename&gt; -&gt; &lt;abs-wt&gt;</code> (e.g. <code>DIS-057 -&gt; /home/gritzko/todo/DIS-057</code>). Repro: rm the link, run <code>be status</code>, it reappears. The locator name is taken from the worktree dir basename + an absolute target, not the fixed <code>be</code> + relative <code>.</code>.</li>
+<li>Fallout: <code>jab</code>'s upward <code>be</code>-scan can't find a usable <code>&lt;wt&gt;/be</code>, so it resolves to the stale global <code>/tmp/be -&gt; ~/journal/be</code> and runs main-tree be/ code — interactive <code>jab status</code> in a worktree silently runs the WRONG scripts (root of the DIS-057 &quot;no colours&quot; confusion; see <a href="../BRO/BRO-010.html">BRO-010</a>).</li>
+<li>Open: is <code>be</code> a TRACKED symlink blob (→ Bug A is a checkout defect) or a runtime-created locator (→ one naming bug with two faces)? Resolve by reading the beagle-ext tree's <code>be</code> entry mode + the runtime self-link creation site.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>In ANY worktree (regardless of its directory name), the locator is a single self-symlink named <code>be</code> pointing at the project root (relative), created/maintained correctly by <code>be get</code> and not clobbered into a basename-named absolute link on later runs.</li>
+<li>No stray <code>&lt;basename&gt; -&gt; &lt;abs-wt&gt;</code> symlink is ever created; no empty <code>be/</code> dir is left by <code>be get</code>.</li>
+<li><code>jab</code>'s <code>be</code>-scan resolves the LOCAL worktree's scripts, never the stale global <code>/tmp/be</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>beagle C core, ABC style (<a href="../../beagle/CLAUDE.md">CLAUDE</a>); repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17) in SCRATCH dirs only (running <code>be</code>/<code>jab</code> in a real worktree recreates the bad link — do not repro in a live ticket worktree).</li>
+<li>Do not regress the main <code>be/</code> tree (named <code>be</code>), where the locator currently works.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Name the locator from the FIXED string <code>be</code> (the shard/locator name), never the worktree dir basename; target relative (<code>.</code> or <code>be</code>) so it is path-independent.</li>
+<li>Decide get-time ownership: either <code>be get</code> checks out the tracked <code>be</code> symlink verbatim, OR a single runtime step ensures <code>be -&gt; .</code> idempotently — not both, and never a <code>&lt;basename&gt;</code> link.</li>
+<li>Pin the two sites: the checkout leaf handler (Bug A, <code>sniff/GET.c</code>) and the runtime self-link creator (Bug B — the dispatcher / shard-mount that runs on <code>be status</code>).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro A in a scratch dir: <code>be get …?/beagle-ext</code> into <code>…/ZZZ</code> → assert <code>ZZZ/be</code> is the self-symlink, NOT an empty dir.</li>
+<li class="open"><input type="checkbox" disabled> Repro B in a scratch worktree: rm the basename link, run <code>be status</code>, assert no <code>&lt;basename&gt; -&gt; &lt;abs&gt;</code> link reappears and <code>be -&gt; .</code> is intact.</li>
+<li class="open"><input type="checkbox" disabled> Pin + fix both sites; the locator is always named <code>be</code>, relative target.</li>
+<li class="open"><input type="checkbox" disabled> Confirm <code>jab status</code> in a non-<code>be</code>-named worktree now loads the LOCAL scripts (not <code>/tmp/be</code>).</li>
+<li class="open"><input type="checkbox" disabled> Green: beagle ctest; no regression to the main <code>be/</code> tree.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The stale global <code>/tmp/be -&gt; ~/journal/be</code> is a separate dev convenience that this bug makes load-bearing; once the local locator works, <code>jab</code> should prefer it. Note any <code>/tmp/be</code> interaction.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-06-29 from the DIS-057 colour-review thread (jab was running stale main-tree scripts because the worktree <code>be</code> locator was broken). Two faces (get-time empty dir + run-time basename link); same fix family (fixed <code>be</code> name, relative target).</li>
+</ul>
+</body>
+</html>

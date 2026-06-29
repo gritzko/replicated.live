@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-057</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-057: be/ JS — unify status+post on ONE ULOG-merge dirtiness classifier (base ⊕ put ⊕ wt ⊕ theirs ulogs → a classification ulog), per Dirty.mkd</h1>
+<p>
+Today <code>status</code> and <code>post</code> classify dirtiness through TWO separate ladders over shared primitives: <code>status</code>/<code>ls:</code>/<code>spot</code> use <code>shared/classify.js</code> (<code>classify</code>/<code>classifyDir</code>, the JS twin of <code>sniff/SNIFF.exe.c::status_step</code>), while <code>post</code> uses <code>verbs/post/fold-decide.js</code> (<code>decide</code>, the JS twin of <code>sniff/POST.c::post_classify_step</code>). Both re-run their own <code>base ⊕ wt ⊕ put ⊕ del</code> merge and emit different vocabularies (display buckets vs <code>keep</code>/<code>unlink</code>/<code>add</code>), so they can drift — and <code>fold-decide</code> THROWS on an in-scope <code>patch</code> row (POST-005 / <a href="../JS/JS-051.html">JS-051</a> &quot;theirs&quot; 5th input), so the <code>pat</code>/<code>mrg</code>/<code>cnf</code> states <a href="../../wiki/Dirty.html">Dirty</a> requires aren't even commit-able. The rework: ONE classifier built as an N-way merge of four ulogs — the *<strong>base tree</strong><strong>, the </strong><strong>put list</strong>* (wtlog), the *<strong>work-tree</strong>* scan, and any *<strong>patched-in (theirs) trees</strong>* — whose OUTPUT is itself a ulog (per-path bucket + resolved sha/mode). <code>status</code> renders that output ulog; <code>post</code> consumes it (bucket → <code>keep</code>/<code>unlink</code>/<code>add</code>). Folds in the <a href="../../wiki/Dirty.html">Dirty</a> deltas: the <code>rmv</code>/<code>mov</code> move pair, <code>pat</code>/<code>mrg</code>/<code>cnf</code> (theirs ulogs + a patch-written stamp offset), and <code>conf</code>→<code>cnf</code>. ULOG is already the substrate (<a href="../JS/JS-031.html">JS-031</a> classify; <code>shared/ulog.js</code> each/drain/write). Scope <code>be/</code> only. See <a href="../../wiki/Dirty.html">Dirty</a>, <a href="../STATUS/STATUS-002.html">STATUS-002</a>, <a href="../POST/POST-005.html">POST-005</a>; method <a href="../../skill/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Two ladders today: <code>status</code>/<code>ls:</code>/<code>spot</code> → <code>shared/classify.js</code>; <code>post</code> → <code>verbs/post/fold-decide.js</code>. They share only <code>classify.wtScan</code>/<code>wtEqBase</code> and both independently read the base tree + the wtlog (<code>eachPutDelete</code>, <code>boundaries</code>) — same inputs, two routings → drift risk.</li>
+<li><code>fold-decide.js</code> explicitly does NOT handle the patch &quot;theirs&quot; input: an in-scope <code>patch</code> row THROWS (POST-005, <a href="../JS/JS-051.html">JS-051</a> &quot;out of scope&quot;). So a patched tree cannot be committed and <code>pat</code>/<code>mrg</code>/<code>cnf</code> have no commit path.</li>
+<li>ULOG is the natural common form: <code>shared/ulog.js</code> (<code>each</code>/<code>drain</code>/<code>write</code>/<code>append</code>) over the abc ULOG family; <code>wtlog.js</code> is a ULOG reader. A git tree, the wt scan, the put/delete list, and a patch's theirs tree are ALL path-keyed ulogs — the classifier is their merge.</li>
+<li><a href="../../wiki/Dirty.html">Dirty</a> deltas the merge must produce (from the prior audit): the <code>rmv</code>(source)+<code>mov</code>(dest) move PAIR; <code>pat</code>/<code>mrg</code>/<code>cnf</code> for patch-derived files; the conflict code spelled <code>cnf</code> (code currently <code>conf</code>, <code>get.js:634</code>, <code>patch.js:292</code>).</li>
+<li>Already correct, must not regress: content-confirmed clean (<a href="DIS-023.html">DIS-023</a> <code>wtEqBase</code>, re-hash not mtime), <code>ok</code> count-only + the <code>eq</code> listing row, <code>.gitignore</code>/meta/nested-repo + submodule-prefix pruning, and <code>post</code>'s byte-identical commits for non-patch cases.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>ONE classifier = an N-way merge of four INPUT ulogs → one OUTPUT (classification) ulog:<p>
+1. base tree ulog — the baseline commit snapshot, path → {sha, mode}; 2. put list ulog — the wtlog put/delete/move staged intents (already a ulog); 3. work-tree ulog — the wt scan, path → {mtime, kind}; 4. patched-in tree ulog(s) — each in-scope patch's theirs tree, path → {sha, mode}, if any.
+</p>
+</li>
+<li>OUTPUT ulog row = {path, bucket, sha?, mode?, ts}: <code>bucket</code> is the <a href="../../wiki/Dirty.html">Dirty</a> status (rendered by <code>status</code>), <code>sha</code>/<code>mode</code> is the resolved content (consumed by <code>post</code>). Single source of truth.</li>
+<li><code>status</code> becomes a RENDERER over the output ulog (bucket→row/colour, <code>ok</code> count-only, <code>eq</code> for <code>ls:</code>); <code>post</code> becomes a CONSUMER (bucket→<code>keep</code>/<code>unlink</code>/<code>add</code>). No second merge; the POST-005 patch-row throw is subsumed.</li>
+<li><a href="../../wiki/Dirty.html">Dirty</a> parity: the <code>rmv</code>/<code>mov</code> pair, <code>pat</code>/<code>mrg</code>/<code>cnf</code>, and the <code>conf</code>→<code>cnf</code> rename.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> (JS ext / JABC) ONLY — do not touch <code>beagle/</code>. Pure JS over the abc ULOG (<code>shared/ulog.js</code>) + libabc/libdog.</li>
+<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17 / <a href="../../skill/Issues.html">Issues</a>): RED tests first, esp. one proving <code>status</code> and <code>post</code> agree on the SAME tree.</li>
+<li>Keep status byte-parity (<code>test/parity/status</code>) and byte-identical <code>post</code> commits for every non-patch case; land behind the existing post corpora.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Tree↔ulog isomorphism: adapt the base tree and each theirs tree into a ulog (path→{sha,mode}); adapt the wt scan into a ulog (path→{mtime,kind}); the put list IS the wtlog ulog. Merge all by path (lex), N-way — the generalization of today's <code>base ⊕ wt ⊕ put ⊕ del (⊕ theirs)</code>.</li>
+<li>Output IS a ulog so it is one persistable/streamable artifact both consumers read; <code>status</code> and <code>post</code> never re-derive — they only map <code>bucket</code> (+ <code>sha</code>/<code>mode</code>) to their own surface.</li>
+<li>Move pair in the one merge: a put-with-dst row yields <code>rmv</code> on the source (base-present, wt-absent) and <code>mov</code> on the destination (base-absent, wt-present). BOTH <code>status</code> and <code>ls:</code>/<code>lsr:</code> render the pair (untied from native — RULING 2026-06-29).</li>
+<li>RULING 2026-06-29: the patched-in (theirs) tree is a SEPARATE input ulog, NEVER the baseline — <code>base</code> stays the ours (pre-patch get/post) tree. So <code>pat</code> = wt == theirs ≠ ours (clean take-theirs), distinct from <code>ok</code> (wt == ours); <code>mrg</code>/<code>cnf</code> = merged bytes ≠ theirs. (The first impl wrongly folded theirs into the baseline via <code>baselineTip</code>, collapsing <code>pat</code>→<code>ok</code>.)</li>
+<li><code>pat</code>/<code>mrg</code>/<code>cnf</code> via stamp + theirs ulog: the patch verb (which knows the outcome for free) stamps each patched file's mtime band = pat/mrg/cnf; the merge classifies a wt-vs-ours-modified, patch-stamped file by comparing against the theirs ulog (== theirs → pat; merged → mrg; conflict → cnf). Coarse &quot;patch-derived vs hand-edit&quot; is the load-bearing bit; the stamp carries the refinement with no merge recompute at read time.</li>
+<li><code>cnf</code>: rename <code>conf</code>→<code>cnf</code> across <code>be/</code> (<code>get.js</code>, <code>patch.js</code>, <code>status.js</code> orders, <code>theme.js</code>, tests) in one sweep.</li>
+<li>DEFERRED (own ticket): submodules are a FIFTH ulog source (the sub shard's records → <code>adv</code>/stale/health); blocked until <a href="../../wiki/Dirty.html">Dirty</a>/<a href="../../wiki/Submodules.html">Submodules</a> resolve the sub axes. Cross-link <a href="../SUBS/SUBS-027b.html">SUBS-027b</a>.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Define the output (classification) ulog row shape {path, bucket, sha?, mode?, ts}.</li>
+<li class="open"><input type="checkbox" disabled> Adapters: base tree→ulog, theirs tree→ulog, wt scan→ulog; reuse the wtlog put list as-is.</li>
+<li class="open"><input type="checkbox" disabled> Implement the N-way ULOG merge core → output ulog (buckets + resolved sha/mode), incl. the <code>rmv</code>/<code>mov</code> pair and <code>pat</code>/<code>mrg</code>/<code>cnf</code> via stamp.</li>
+<li class="open"><input type="checkbox" disabled> Reimplement <code>status</code> (<code>classify</code>/<code>classifyDir</code>) as a renderer over the output ulog (keep <code>ok</code> count-only + <code>eq</code> listing).</li>
+<li class="open"><input type="checkbox" disabled> Reimplement <code>post</code> (<code>fold-decide</code>) as a consumer of the output ulog (bucket→<code>keep</code>/<code>unlink</code>/<code>add</code>); REMOVE the POST-005 patch-row throw.</li>
+<li class="open"><input type="checkbox" disabled> <code>patch</code> verb: stamp patched files <code>ts</code>/<code>ts+1</code>/<code>ts+2</code> = pat/mrg/cnf.</li>
+<li class="open"><input type="checkbox" disabled> Rename <code>conf</code>→<code>cnf</code> across <code>be/</code>.</li>
+<li class="open"><input type="checkbox" disabled> Repros: a rename shows <code>rmv</code>+<code>mov</code> AND commits consistently; a patched file shows <code>pat</code>/<code>mrg</code>/<code>cnf</code> AND commits; <code>status</code> and <code>post</code> agree on one tree.</li>
+<li class="open"><input type="checkbox" disabled> Green: <code>test/parity/status</code> + status/listing/post/delete-dirty corpora intact; <code>be ctest</code> green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Unification rewires <code>post</code>'s commit path — preserve byte-identical commits for non-patch cases (parity risk); gate on the post corpora before landing.</li>
+<li>Submodule (5th ulog) blocked on <a href="../../wiki/Dirty.html">Dirty</a>'s missing <code>adv</code>/stale/health axes; track in <a href="../SUBS/SUBS-027b.html">SUBS-027b</a> / <a href="../../wiki/Submodules.html">Submodules</a>.</li>
+<li>The <code>ts+1</code>/<code>ts+2</code> stamp offset rides the mtime stamp-set — confirm it does not perturb the put/post fast-path stamp matching.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — reworked 2026-06-28. Plan: ONE ULOG-merge classifier (base ⊕ put ⊕ wt ⊕ theirs ulogs → a classification ulog) shared by <code>status</code> (renderer) and <code>post</code> (consumer), folding in the <a href="../../wiki/Dirty.html">Dirty</a> <code>rmv</code>/<code>mov</code> pair, <code>pat</code>/<code>mrg</code>/<code>cnf</code>, and <code>conf</code>→<code>cnf</code>. Subsumes the POST-005 patch-row throw. Submodule axes deferred.</li>
+</ul>
+</body>
+</html>

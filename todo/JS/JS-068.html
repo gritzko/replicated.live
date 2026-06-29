@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-068</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-068 <a href="">MED</a>: predictable <code>/tmp</code> post-barrier scratch path (symlink/TOCTOU + collision)</h1>
+<p>
+<code>verbs/post/post.js</code>'s <code>barrierPath()</code> builds the commit-JOIN scratch ULOG. For a secondary <code>.be</code>-FILE repo (no <code>.be/</code> dir) it falls back to a PREDICTABLE <code>/tmp/.bepost.barrier.&lt;USER&gt;.&lt;bePath-with-_&gt;</code>, later opened <code>O_CREAT|O_RDWR|O_TRUNC</code> with NO <code>O_NOFOLLOW</code>/<code>O_EXCL</code> — another user can pre-plant a symlink there and the open follows+truncates the target (CWE-59). The name is not PID-keyed, so same-user concurrent posts collide on it too. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>verbs/post/post.js:267</code> <code>barrierPath(info)</code> — the JOIN scratch path.</li>
+<li><code>:269</code> primary <code>.be/</code>: <code>&lt;dir&gt;/post.barrier</code> (fine, in-repo).</li>
+<li><code>:271</code> secondary <code>.be</code>-FILE fallback:<p>
+<code>&quot;/tmp/.bepost.barrier.&quot; + (io.getenv(&quot;USER&quot;)||&quot;x&quot;) + &quot;.&quot; + key</code> where <code>:270</code> <code>key = bePath.split(&quot;/&quot;).join(&quot;_&quot;)</code> — fully attacker-predictable.
+</p>
+</li>
+<li>Predictability: any user knowing the victim's <code>bePath</code> (and <code>$USER</code>) knows<p>
+the exact <code>/tmp</code> name; world-writable <code>/tmp</code> lets them pre-create it.
+</p>
+</li>
+<li>No PID/nonce in the name → two concurrent <code>be post</code> runs on the same repo<p>
+share one barrier file and corrupt each other's fold (cited <a href="../../wiki/POST.html">POST</a>).
+</p>
+</li>
+<li>The open is <code>O_CREAT|O_RDWR|O_TRUNC</code> (no <code>O_NOFOLLOW</code>/<code>O_EXCL</code>), so a planted<p>
+symlink is followed and its target truncated.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>The secondary-repo barrier is created in a path an attacker cannot pre-plant,<p>
+and never follows a symlink / truncates a pre-existing file.
+</p>
+</li>
+<li>Same-user concurrent posts on one repo no longer collide on the scratch name.</li>
+<li>A repro test: a pre-existing symlink at the computed path must NOT be<p>
+followed (open fails / picks a fresh name), not silently truncate its target.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Mirror the native barrier semantics (the JOIN fold + <code>cleanupBarrier</code><p>
+<code>:281</code> unlink-after-fold); keep the primary <code>.be/</code> <code>:269</code> path untouched.
+</p>
+</li>
+<li>Pure JS over <code>io.*</code>; reuse <code>ulog.*</code>. Scope: <code>barrierPath()</code> + the open site.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Create the scratch under a per-user <code>0700</code> dir (e.g. <code>$TMPDIR</code>/<code>$XDG_RUNTIME_DIR</code><p>
+ fallback <code>/tmp/.be-&lt;uid&gt;</code> made <code>0700</code>) with <code>O_EXCL|O_NOFOLLOW</code>, or via an  <code>mkstemp</code>-style random suffix; refuse a pre-existing path.
+</p>
+</li>
+<li>Add a random nonce (and/or PID) to the name so concurrent same-user posts<p>
+get distinct barriers.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/post/*</code>: pre-plant a symlink at the predicted<p>
+ <code>/tmp/.bepost.barrier.&lt;USER&gt;.&lt;key&gt;</code> and assert the post does NOT  follow/truncate it (open refused or fresh name chosen).
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Rewrite <code>barrierPath()</code> + open to the per-user-dir + <code>O_EXCL|O_NOFOLLOW</code><p>
+ + nonce scheme; keep <code>cleanupBarrier</code> unlinking the right path.
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Confirm <code>io.spawn</code>/<code>io</code> exposes the <code>O_NOFOLLOW</code>/<code>O_EXCL</code> open flags (or<p>
+ an <code>mkstemp</code>); if not, that primitive is a prerequisite.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

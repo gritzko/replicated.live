@@ -46,22 +46,53 @@ None; needs the stamp-set write threaded through the scoped <code>be get &lt;pat
 Make a content-clean file re-stampable and make the verbs agree.
 </p>
 <ul>
-<li><code>be get &lt;path&gt;</code> records the overwritten file's mtime into <code>..be.idx</code> so the<p>
-documented &quot;revert&quot; actually clears DELDIRTY (or add an explicit re-stamp verb).
+<li><a href="">v</a> <code>be get &lt;path&gt;</code> records the overwritten file's mtime into the stamp-set so<p>
+the documented &quot;revert&quot; actually clears DELDIRTY. Done via SNIFFAtStampPath.
 </p>
 </li>
-<li>Land <a href="DIS-004.html">DIS-004</a>'s content double-check so delete agrees with status/diff (bytes ==<p>
-baseline blob → proceed), removing the false DELDIRTY at the root.
+<li><a href="">v</a> <a href="DIS-004.html">DIS-004</a>'s content double-check already landed (<code>9718a03a</code>) — delete now<p>
+agrees with status/diff. This ticket is the residual scoped-get re-stamp.
 </p>
 </li>
-<li>Repro test: out-of-band identical-bytes <code>cp</code> → status <code>ok</code> + delete proceeds +<p>
-<code>be get &lt;path&gt;</code> leaves it stamped (no second DELDIRTY).
+<li><a href="">v</a> Repro test <code>sniff/test/restamp.sh</code> (SNIFFrestamp): edit/out-of-band <code>cp</code> →<p>
+<code>get &lt;path&gt;</code> re-stamps (mtime == baseline ts) + delete proceeds, no 2nd DELDIRTY.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Mirror PUT.c's content-equal re-stamp: a no-staging <code>be get &lt;path&gt;</code> overwrite stamps the written file to <code>SNIFFAtBaseline</code>'s ts (the latest get/post row, already in the wtlog index) — no new row, just <code>mtime ∈ stamp-set</code> so <code>SNIFFAtKnown</code> fast-paths it.
+</p>
+<h3>TODOs</h3>
+<ul>
+<li><a href="">x</a> explicit re-stamp verb — not needed; the get path re-stamp suffices.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<p>
+The verbs already AGREED at the surface (status/delete content-rehash since DIS-023/004) so the bug was invisible to verb-level asserts; the repro instead checks the file's mtime equals the baseline stamp ts (a sibling untouched file's mtime).
+</p>
+<h2>Outcome</h2>
+<p>
+PENDING-COMMIT (agent stopped at the commit boundary; human gates the commit).
+</p>
+<ul>
+<li>Root cause: <code>sniff_get_blob_to_wt</code> (sniff/GET.c:1813) wrote the blob but never<p>
+called SNIFFAtStampPath, so the restored file kept a fresh <code>now</code> mtime ∉ stamp-set.
+</p>
+</li>
+<li>Fix: sniff/GET.c:1863 — after the write, re-stamp <code>fp</code> to <code>SNIFFAtBaseline</code>'s ts<p>
+(mirrors PUT.c:131 content-equal re-stamp). 4 added lines + 4-line comment.
+</p>
+</li>
+<li>Test: sniff/test/restamp.sh (SNIFFrestamp), registered in sniff/test/CMakeLists.txt.<p>
+Failed pre-fix (mtime stayed at edit time), passes post-fix. ctest 375/375 green.
 </p>
 </li>
 </ul>
 <h2>Landed</h2>
 <p>
-Nothing yet.
+Nothing yet (pending-commit; see Outcome).
 </p>
 </body>
 </html>

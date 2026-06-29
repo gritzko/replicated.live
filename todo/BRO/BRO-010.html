@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-010</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-010: the jab bro-pager omits status verb-token colour (mod/unk/… render uncoloured on a TTY, unlike <code>be</code> and the piped path)</h1>
+<p>
+<code>jab status</code> colours the status verb token (<code>mod</code> yellow, <code>unk</code> grey, <code>adv</code> blue, …) on the DIRECT path but NOT through the interactive pager, so on a real terminal the tokens come out uncoloured — diverging from native <code>be status</code> and from <code>jab status --color | cat</code>. Routing: <code>jab status</code> piped/<code>--color</code> → <code>view/bro.js renderHunkLog</code>→<code>tableHunk</code>, which paints via the C THEME <code>.color()</code> sink (<code>view/bro.js:565,571</code>) — verified byte-identical to <code>be</code> (<code>\e[33mmod\e[39m</code>, <code>\e[34madv\e[39m</code>). But on a TTY, JAB-030 (<code>core/loop.js:24-25</code>) routes the hunk stream through the bro PAGER (<code>views/bro/pager.js</code>), a separate JS renderer (<code>cellSGR</code> over <code>view/theme.js</code>) that colours the date band but does not paint the per-row verb token. Net: the interactive pager is the one path that drops the verb colour. Surfaced during DIS-057's status-colour review (the new colours were invisible interactively) but pre-existing and independent of DIS-057 — the DIS-057 colour mapping itself is correct on the direct path. Scope: <code>be/</code> JS pager. See <a href="../../wiki/Bro.html">Bro</a>; method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Direct/piped path colours tokens correctly: <code>jab status --color | cat -v</code> → <code>\e[33mmod\e[39m</code>/<code>\e[34madv\e[39m</code>, matching <code>be status --color</code> (the C THEME <code>.color()</code> sink in <code>view/bro.js tableHunk</code>).</li>
+<li>TTY path drops the verb colour: JAB-030 (<code>core/loop.js:24-25</code>) opens the bro pager (<code>views/bro/pager.js</code>, <code>hunksFromLog</code>) on a tty instead of <code>renderHunkLog</code>; the pager paints the date band (cyan) but renders the verb token plain.</li>
+<li>The colour GATE is fine: <code>core/loop.js:259</code> sets mode=color on a tty (or <code>--color</code>); the loss is purely in the pager's per-cell rendering, not the gate.</li>
+<li>The status row carries its verb (<code>&lt;date&gt; &lt;verb3&gt; &lt;path&gt;</code>, <code>views/status/status.js</code>) and the THEME has every slot (<code>view/theme.js VERB_SLOT</code>); the pager just doesn't apply <code>verbSlot</code> to the verb cell.</li>
+<li><code>be</code> (C) colours the token in BOTH its piped and pager paths — the reference.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>The bro pager paints the status verb token with its <code>VERB_SLOT</code>/<code>cellSGR</code> colour, matching <code>renderHunkLog</code> and native <code>be status</code> (mod yellow, unk grey, adv blue, pat bold, rmv brown, cnf red, …).</li>
+<li>No regression to the piped/<code>--color</code> path (already correct) or to diff/log/grep hunk rendering in the pager.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> JS only (<code>views/bro/pager.js</code>, <code>view/bro.js</code>/<code>view/theme.js</code>); ABC/JS house style.</li>
+<li>Repro-first: a TTY is awkward to script — assert by comparing the pager renderer's bytes against <code>renderHunkLog</code>'s for the same status hunk (the verb cell must carry the same SGR), rather than relying on an interactive tty.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Apply <code>verbSlot</code>-driven SGR to the verb cell inside the pager's row renderer (<code>views/bro/pager.js cellSGR</code> path), reusing the same THEME slot table <code>renderHunkLog</code>/<code>tableHunk</code> use — single source, no second colour map.</li>
+<li>Prefer routing the pager's status rows through the same C THEME <code>.color()</code> cell painter the direct path uses, if feasible, so the two paths can't drift again.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: assert the pager's rendered bytes for a <code>mod</code>/<code>unk</code> status row carry the verb-token SGR (compare to <code>renderHunkLog</code> output / <code>be</code>).</li>
+<li class="open"><input type="checkbox" disabled> Fix <code>views/bro/pager.js</code> to paint the verb cell via <code>verbSlot</code>/the shared THEME.</li>
+<li class="open"><input type="checkbox" disabled> Green: be ctest (status/ls/diff/log pager + parity corpora) intact; verb colour present in the pager path.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Interactive verification needs a tty; rely on the renderer-bytes comparison above for the automated repro.</li>
+<li>GET-036 (broken <code>be</code> self-locator) can make <code>jab</code> load stale main-tree scripts in a non-<code>be</code>-named worktree — when testing this fix, ensure <code>jab</code> resolves the LOCAL worktree (e.g. <code>be -&gt; .</code>), else you may be exercising old code.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-06-29 from the DIS-057 colour-review thread. The DIS-057 colour mapping is correct on the direct path; this ticket fixes the interactive pager that drops it.</li>
+</ul>
+</body>
+</html>

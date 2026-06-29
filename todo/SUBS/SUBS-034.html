@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-034</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-034: bare-name argv<a href="">0</a> not realpath'd before sibling-helper lookup</h1>
+<p>
+<code>be</code> launched as a BARE name (<code>argv0=&quot;be&quot;</code>, no <code>/</code>) resolves via PATH in <code>dog/HOME.c</code> (the bare branch of <code>HOMEResolveSibling</code>, ~l.1054-1084) but looks for the sibling helper (<code>sniff</code>) beside the PATH <strong>entry</strong> (<code>entry_c</code>), never realpath-ing the found executable. When that <code>be</code> is a symlink into the real bin dir, <code>sniff</code> isn't beside the symlink → <code>home_try_sibling</code> fails → the fallback feeds bare <code>sniff</code> → <code>FILESpawn</code>/execvp fails ENOENT (<code>BEDOGEXIT</code>). The rel/abs branch already realpaths argv0 first (<a href="SUBS-022.html">SUBS-022</a> <code>453c55c2</code>); the bare branch is the residual. Method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Reproduce: `ctest --test-dir beagle/build -R '^be-post-relpath$'<p>
+--output-on-failure<code> (test </code>be-post-relpath.sh`, the SUBS-022 repro).
+</p>
+</li>
+<li>The test posts via sub-recursion three ways — argv0 as REL path, ABS path,<p>
+and BARE name. REL+ABS pass; the <code>[bare]</code> arm fails: <code>FILESpawn: exec 'sniff' failed: errno=2</code> → <code>Error: BEDOGEXIT</code>.
+</p>
+</li>
+<li>Root cause: <code>dog/HOME.c:1080</code> calls <code>home_try_sibling(out, entry_c, name)</code><p>
+on the raw PATH directory entry; the matching exe (<code>be</code>) is not realpath'd, so a symlinked/relinked <code>be</code> loses the real bin dir that holds <code>sniff</code>.
+</p>
+</li>
+<li>Pre-flagged in <a href="SUBS-033.html">SUBS-033</a> l.50-51 as a &quot;pre-existing ssh/PATH env issue,<p>
+unrelated to sniff/&quot; — this ticket is that residual.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>The <code>[bare]</code> arm of <code>be-post-relpath</code> passes; the sibling helper is found<p>
+beside the REAL binary, not the PATH symlink.
+</p>
+</li>
+<li>Bare-name self-discovery matches the rel/abs realpath behaviour.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Minimal <code>dog/HOME.c</code> fix mirroring the rel/abs realpath path; ABC path<p>
+discipline — <code>PATHu8bReal</code> + <code>PATHu8sDir</code>, path8b, NO pointer arithmetic (CLAUDE.md §1/§10).
+</p>
+</li>
+<li>Repro-first (CLAUDE.md §17): the <code>[bare]</code> arm is already a failing repro;<p>
+keep rel/abs + full <code>ctest</code> green after the fix.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>In the bare branch, after <code>home_is_exe($path(exe))</code> (HOME.c:1079) realpath<p>
+<code>exe</code> (<code>PATHu8bReal</code>) → dirname (<code>PATHu8sDir</code>) → <code>home_try_sibling</code> on the REAL dir; fall back to <code>entry_c</code> if realpath fails. Mirror l.1043-1045.
+</p>
+</li>
+<li>Don't <code>break</code> (l.1081) before the realpath'd dir is tried — let the real<p>
+dir get its <code>home_try_sibling</code> chance, then break.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Confirm <code>[bare]</code> arm fails today (done — exec 'sniff' ENOENT).</li>
+<li class="open"><input type="checkbox" disabled> Realpath the PATH-resolved exe in the bare branch (HOME.c ~l.1074-1081).</li>
+<li class="open"><input type="checkbox" disabled> <code>ctest -R '^be-post-relpath$'</code> green incl. <code>[bare]</code>; full suite no regress.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none known — file-disjoint from the JS path tickets)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><code>6df16caa</code> (dog/HOME.c: realpath the PATH-resolved exe in the bare-name branch<p>
+before the sibling lookup) + <code>5efa0966</code> (the deterministic <code>be-sniff-bare-name</code> repro + registration) — landed. <code>be-post-relpath</code> + the new test green; ctest no new regressions.
+</p>
+</li>
+</ul>
+</body>
+</html>

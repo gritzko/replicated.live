@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-077</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-077 <a href="">MED</a>: orphan keeper pack on a lost ref CAS (permanent disk leak)</h1>
+<p>
+<a href="">POST</a> writes the keeper pack-log + idx as the FIRST store mutation (<code>post.js:242-243</code>), THEN advances the ref with an expected-old CAS (<code>post.js:246</code> → <code>advanceRef</code>, <code>post.js:112-118</code>).  When the CAS loses — a concurrent advance, exactly the race the CAS defends — <code>advanceRef</code> throws POSTNOFF (<code>post.js:114-116</code>) AFTER the pack is on disk.  There is no rollback and no GC path anywhere, so each lost-CAS post leaves the just-written pack-log + idx orphaned: a permanent per-incident disk leak. Content is content-addressed, so it is a leak, not corruption.  Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>post.js:242-243</code>: <code>commitM.writePack(reader.shard, info.wt, …)</code> —<p>
+&quot;the FIRST store mutation&quot; (the comment :240 says so).
+</p>
+</li>
+<li><code>post.js:246</code>: `advanceRef(reader, reader.shard, branchKey,<p>
+expectedOld, commit.sha)` runs AFTER the pack write.
+</p>
+</li>
+<li><code>post.js:112-118</code> <code>advanceRef</code>: `if ((cur||&quot;&quot;) !== (expectedOld||&quot;&quot;))<p>
+throw &quot;POSTNOFF: REFS … advanced concurrently — retry&quot;` — the lost CAS.
+</p>
+</li>
+<li>No catch around :246 and no later GC of unreferenced pack-logs/idx —<p>
+the <code>NNNNNNNNNN.keeper</code>(+<code>.idx</code>) just written stays on disk forever.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A lost-CAS post leaves NO orphan pack-log/idx on disk (either the pack<p>
+is written only after the ref slot is reserved, or it is unlinked on the POSTNOFF path).
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Preserve the CAS semantics (POSTNOFF on a concurrent advance) and the<p>
+POST-017 all-or-nothing intent.
+</p>
+</li>
+<li>libabc+libdog ONLY; keep <code>writePack</code> byte-output unchanged.</li>
+<li>Scope to post.js's write/advance ordering; do not weaken the CAS.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Option A: do the CAS/reserve BEFORE <code>writePack</code> (re-check expected-old,<p>
+then write, then commit the ref).
+</p>
+</li>
+<li>Option B: wrap <code>advanceRef</code> in a catch that unlinks the freshly written<p>
+pack-log + idx before re-throwing POSTNOFF (record their paths from <code>writePack</code>).
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/post/*</code>: force a lost CAS (mutate the ref between<p>
+ pre-flight and <code>advanceRef</code>) and assert NO orphan pack-log/idx remains.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Implement the chosen ordering/rollback; keep POSTNOFF behavior.</li>
+<li class="open"><input type="checkbox" disabled> Re-run the post parity suite (clean-FF posts byte-equal, unaffected).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><code>writePack</code> must surface the exact file names it created so a catch can<p>
+unlink precisely (avoid clobbering a concurrent winner's pack).
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

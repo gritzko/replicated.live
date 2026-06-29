@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-038</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-038: a sub re-get whose <code>.gitmodules</code> url BASENAME changed since the first mount fetches the wrong shard → object-not-found</h1>
+<p>
+When a submodule's declared <code>.gitmodules</code> url BASENAME differs between the original mount and a later re-get (GET or whole-tree PATCH), the re-get fetches into a shard named by the NEW url basename while the existing mount + checkout live under the OLD basename.  <code>subs_pin_present</code> / <code>KEEPHas</code> then reports the pin present in the wrong shard, SubMount short-circuits, and the spawned <code>sniff get &lt;pin&gt;</code> opens the mount's shard and fails <code>object not found</code> / <code>SNIFFFAIL</code> / <code>BEDOGEXIT</code>.  Found while building the <a href="../PATCH/PATCH-005.html">PATCH-005</a> hermetic fixture; not the real dogs/journal flow (url basenames are stable there), so low priority — but a real latent gap.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro: clone a beagle parent whose sub <code>ch</code> is declared with url<p>
+basename <code>ch</code>; later rewrite the committed <code>.gitmodules</code> url to a different basename (<code>dead-libch</code>) and <code>be get</code> / <code>be patch</code> an advanced pin.  The fetch targets the <code>dead-libch</code> shard but the mount is <code>ch</code> → the child checkout reads <code>ch</code>, misses the pin.
+</p>
+</li>
+<li>Sibling-shard swap (<code>subs_sibling_shard_has_pin</code>, sniff/SUBS.c) keys<p>
+on the PATH basename, but the SHARD dir + anchor are named by the URL basename — they diverge when the url basename changes.
+</p>
+</li>
+<li>Workaround in tests: keep the dead url basename STABLE from the first<p>
+clone (so the shard name never changes).  <a href="../PATCH/PATCH-005.html">PATCH-005</a>/008 guard tests (test/patch/38, 41) do this.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A sub re-get keys the shard/anchor consistently across mounts — prefer<p>
+the PATH basename (stable) over the URL basename, or detect+migrate an existing OLD-basename mount when the url basename changes.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-06-27 (<a href="../PATCH/PATCH-005.html">PATCH-005</a> fixture session).  Latent edge<p>
+case (url-basename change mid-stream); not blocking the PATCH chain.
+</p>
+</li>
+</ul>
+</body>
+</html>

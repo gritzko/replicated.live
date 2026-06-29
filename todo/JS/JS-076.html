@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-076</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-076 <a href="">MED</a>: <code>wire.fetch</code> leaks the child stdin fd (wfd) on every error path</h1>
+<p>
+<code>wire.fetch</code> spawns <code>upload-pack</code>, holding <code>wfd=child.stdin</code> / <code>rfd=child.stdout</code> / <code>pid</code> (<code>wire.js:136-137</code>).  <code>wfd</code> is closed only at <code>wire.js:170</code>, INSIDE the <code>try</code> after the request is written; the <code>finally</code> (<code>wire.js:188-191</code>) closes <code>rfd</code> and reaps <code>pid</code> but NEVER <code>wfd</code>.  Any throw before :170 — peer advertised no usable ref (:160), a pkt parse error draining the advert, a mid-loop <code>io.writeAll</code> failure — leaks <code>wfd</code>, and reaping with the child's stdin still open can block the peer.  WIRECLI.c closes both fds before reaping.  Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>wire.js:137</code>: `const wfd = child.stdin, rfd = child.stdout, pid =<p>
+child.pid;<code> — </code>wfd` owned for the whole fetch.
+</p>
+</li>
+<li><code>wire.js:160</code>: <code>if (!want) throw &quot;… no usable ref&quot;</code> — throws with <code>wfd</code><p>
+still open (before the :170 close).
+</p>
+</li>
+<li><code>wire.js:169-170</code>: `for (const r of reqs) io.writeAll(wfd, r);<p>
+io.close(wfd);<code> — a write failure here also leaks </code>wfd`.
+</p>
+</li>
+<li><code>wire.js:188-191</code> <code>finally</code>: <code>io.close(rfd)</code> + <code>io.reap(pid)</code> ONLY —<p>
+<code>wfd</code> is absent; the reap can block on a peer still reading stdin.
+</p>
+</li>
+<li>Native <code>WIRECLI.c:1035-1039</code>: `if (wfd&gt;=0) close(wfd); if (rfd&gt;=0)<p>
+close(rfd);<code> THEN </code>FILEReap(pid,…)` — both fds closed before the reap.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>wfd</code> is closed on EVERY exit path (success + each throw), before the<p>
+reap, so a failed fetch never leaks an fd or blocks the peer.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Keep the happy-path :170 close harmless under a <code>finally</code> re-close —<p>
+guard with <code>try{ io.close(wfd) }catch{}</code> (double-close is a no-op).
+</p>
+</li>
+<li>Close <code>wfd</code> (and <code>rfd</code>) BEFORE <code>io.reap(pid)</code>, matching WIRECLI.c order.</li>
+<li>Scope to <code>wire.fetch</code>; no protocol change.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Move the <code>wfd</code> close into the <code>finally</code> as a guarded <code>try/catch</code>, keep<p>
+or drop the inline :170 close (guarded re-close makes it idempotent).
+</p>
+</li>
+<li>Order in <code>finally</code>: close <code>wfd</code>, close <code>rfd</code>, then <code>reap(pid)</code>.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/wire/*</code>: force a pre-:170 throw (peer advert with<p>
+ no usable ref) and assert <code>wfd</code> is closed (no leaked fd / no hang).
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Add the guarded <code>io.close(wfd)</code> to <code>finally</code>, before the reap.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Verify <code>io.close</code> on an already-closed fd is a harmless no-op (catch<p>
+EBADF) so the happy-path double-close is safe.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

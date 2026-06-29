@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PUT-003</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PUT-003 <a href="">MED</a>: multi-path / glob <code>be put</code> is per-path, not aggregated (repeat banner + PUTNONE spam)</h1>
+<p>
+A glob (or shell-expanded multi-path) <code>be put</code>, e.g. <code>be put */*/*.sh</code>, where most matches are unchanged, emits — PER ineligible match — a fresh <code>put:</code> banner, a <code>sniff: put: no eligible paths</code> line, <code>Error: PUTNONE</code>, AND a redundant <code>Error: NONE</code>.  The eligible matches DO stage; it is the unchanged ones that turn a benign &quot;most files unchanged&quot; put into a wall of error spam.  An unchanged match in a multi-path put should be a SILENT skip, not a per-path error pair.  Native <code>be</code> (sniff). Sibling of <a href="../BE/BE-008.html">BE-008</a> (unchanged empty-put → silent no-op) and the <a href="../BE/BE-003.html">BE-003</a>/<a href="../BE/BE-006.html">BE-006</a> error-line work.  Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Observed (<code>be put */*/*.sh</code> over the beagle test dir, most <code>.sh</code> unchanged):<p>
+-  <code> 23:02  put put:beagle</code> / <code>        put …/tag-blobs-from-keeper.sh</code>  (staged OK) -  <code>…/tags-from-git.sh is unchanged — skipped</code> -  <code>sniff: put: no eligible paths</code> / <code>Error: PUTNONE</code> / <code>Error: NONE</code>  (×N)
+</p>
+</li>
+<li>Even with NO unchanged paths, a multi-path put REPEATS the banner per path:<p>
+<code>be put be/test/bro/reentry/driver.js be/test/get/guard/guard.js</code> → two <code>put:be/test</code> hunks (one file each), NOT one hunk listing both (the user ask).
+</p>
+</li>
+<li>Same PUTNONE/NONE spam recurs under <code>be post</code> sub-recursion: an unchanged /<p>
+empty sub-put prints <code>put put:</code> + <code>Error: PUTNONE</code> + <code>Error: NONE</code> per sub (seen landing this batch: subs <code>html</code>, <code>beagle/abc</code>).
+</p>
+</li>
+<li><code>sniff/PUT.c:1119-1121</code>: `if (emitted==0){ if (skipped&gt;0) fprintf(stderr,<p>
+&quot;sniff: put: no eligible pathsn&quot;); return PUTNONE; }` — a put PASS that stages nothing but skipped ≥1 unchanged path returns PUTNONE + the stderr line.
+</p>
+</li>
+<li><code>sniff/PUT.c:207</code> / <code>:1026</code> set the <code>is unchanged</code> skip reason; the single-file<p>
+<code>be put file.c</code> unchanged-skip (<code>:987</code>) is the intended quiet case.
+</p>
+</li>
+<li>The glob/multi-path dispatch runs the put pass per match (or per project/sub),<p>
+so each all-unchanged pass re-emits the banner + PUTNONE (the repeated <code>put:beagle</code>).
+</p>
+</li>
+<li>The redundant 2nd line <code>Error: NONE</code> is the dog/sniff CLI error reporter<p>
+surfacing the suffix-NONE twice — the <a href="../BE/BE-003.html">BE-003</a>/<a href="../BE/BE-006.html">BE-006</a> stacked-error class.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>ONE <code>put:</code> banner / HUNK per invocation listing ALL staged paths — not one<p>
+banner per path (the &quot;must be one hunk&quot; requirement).
+</p>
+</li>
+<li>A glob / multi-path <code>be put</code> stages the eligible matches and SILENTLY skips the<p>
+unchanged ones: NO per-match banner for a wholly-skipped match, NO per-match <code>PUTNONE</code>, NO <code>Error: NONE</code> spam.
+</p>
+</li>
+<li>Overall exit OK when ≥1 path staged; PUTNONE only when the WHOLE expansion had<p>
+nothing eligible (then ONE clean line, not a per-match pair).
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Do NOT regress: single-file <code>be put file.c</code> <code>is unchanged</code> skip (<code>PUT.c:987</code>),<p>
+the truly-empty bare put → PUTNONE (<code>BE.cli.c</code>), or <code>-q</code> swallowing *NONE (<code>sniff/SNIFF.cli.c:193</code>).  Native sniff/keeper only; no JS.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Treat a glob / multi-path put as ONE staging set: aggregate eligibility, so a<p>
+skipped match neither prints a banner nor returns PUTNONE on its own; only the aggregate emptiness yields a single PUTNONE.
+</p>
+</li>
+<li>Suppress the redundant second <code>Error: NONE</code> (fold into <a href="../BE/BE-003.html">BE-003</a> uniform line).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: a tree where <code>*/*/*.sh</code> matches many files, ≤1 changed; assert<p>
+ today's per-match PUTNONE/<code>Error: NONE</code> spam, then a single clean result.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Aggregate the multi-path/glob dispatch (one pass; skipped ⇒ silent).</li>
+<li class="open"><input type="checkbox" disabled> Verify single-file unchanged-skip + bare-empty-put PUTNONE unchanged; <code>-q</code> quiet.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Decide where the glob expands (shell vs <code>be</code> internal) — the fix must handle a<p>
+received PATH LIST (shell-expanded) and an internal glob alike.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FIXED (working tree, pending land): <code>sniff/PUT.c::put_stage_named</code> — a<p>
+multi-path/glob put (<code>nuris&gt;1</code>) silently skips unchanged matches (no per-path banner / PUTNONE / <code>no eligible paths</code>); one-changed → ONE <code>put:</code> hunk. Single-file <code>is unchanged — skipped</code> + bare-empty PUTNONE preserved. Tests: <code>sniff/test/refuse.sh</code> (PUT-003 cases), <code>test/put/01-states</code>. beagle 464/464 + be 65/65 green. Residual (DESIGN, not a one-liner): a wholly no-op SUB still relays a banner-only <code>put:&lt;sub&gt;</code> hunk — needs a HUNKTableAbort / defer-banner / relay-filter change to the shared HUNK contract (status/get/ls). The doubled <code>Error: NONE</code> 2nd line is the <a href="../BE/BE-003.html">BE-003</a>/<a href="../BE/BE-006.html">BE-006</a> error-line class.
+</p>
+</li>
+</ul>
+</body>
+</html>

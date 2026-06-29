@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-090</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-090 <a href="">LOW</a>: modularity cleanup batch — dead checkout.apply, 3 short-hex resolvers, duplicated helpers</h1>
+<p>
+A batch of low-severity modularity nits surfaced across the JS tree: dead code whose header still advertises an unused API, three overlapping short-hex resolvers, and helpers (ancestor walk, sub-traversal, stdout writers, require idioms) re-implemented per module instead of shared. One TODO per item; each is independently landable.  Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>checkout.js:125-162 <code>apply()</code> + its <code>scanWt(:129)</code> are dead —<p>
+the header (:7) advertises apply() but no caller drives it.
+</p>
+</li>
+<li>THREE short-hex resolvers: resolve.js:40 (tips-only resolveHex),<p>
+store.js:302 (resolveHexAny, any-object), log.js:104-134 (a pack-walk re-impl, see <a href="./JS-085.html">JS-085</a>).
+</p>
+</li>
+<li>patchscope.js:82-119 <code>ancestorSet</code>/<code>lca</code> re-implement the dag<p>
+walk locally (&quot;so patchscope has no dag cycle&quot;, :81).
+</p>
+</li>
+<li>status.js:247-304 + diff.js:229-248 re-implement sub-recurse<p>
+(joinPrefix/isMount) that core/recurse.js already exports (walk :74, isMount :32, joinPrefix :63).
+</p>
+</li>
+<li>delete.js:47-49 re-defines <code>join</code>/<code>statExists</code>/<code>statKind</code>.</li>
+<li>THREE stdout writers: bro.js:33-44 (writeStdout/writeStderr),<p>
+render.js:35 (writeStdout), pager.js:26 (ttyWrite) — all <code>io.buf+feed+io.writeAll(fd,…)</code>.
+</p>
+</li>
+<li>subs.js:53 lazy <code>require(.../core/discover.js)</code> — a shared→core<p>
+upward require (also in <a href="./JS-088.html">JS-088</a>).
+</p>
+</li>
+<li>refs.js:26-36 writes fd1 via <code>io.log(...)</code> directly instead of<p>
+the ctx.out header sink (refs.js:4 admits ctx.out is a no-op stub).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Delete checkout.apply()+scanWt; trim the header (:7) claim.</li>
+<li>Make resolve.resolveHex a thin tips-first wrapper over<p>
+store.resolveHexAny; drop the log.js variant (<a href="./JS-085.html">JS-085</a>).
+</p>
+</li>
+<li>Fold patchscope ancestorSet/lca onto dag.js.</li>
+<li>Consolidate status/diff sub-recurse onto core/recurse.js::walk.</li>
+<li>delete.js uses shared/util/path.js join + a shared statExists.</li>
+<li>One fd-parameterised writer shared by bro/render/pager.</li>
+<li>refs.js emits via ctx.out, not io.log.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Byte-identical output for every touched verb (get/log/diff/<p>
+status/patch/refs); existing parity tests stay green.
+</p>
+</li>
+<li>No new bindings; libabc/libdog only.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Land as independent commits, one per TODO — each reversible.</li>
+<li>resolveHex stays the SEED-only tips fast-path (resolve.js:39<p>
+comment) but delegates the prefix scan to resolveHexAny.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: a parity test per touched verb pinning current bytes.</li>
+<li class="open"><input type="checkbox" disabled> Delete checkout.apply()+scanWt; trim header.</li>
+<li class="open"><input type="checkbox" disabled> resolveHex -&gt; wrapper over resolveHexAny; drop log.js variant.</li>
+<li class="open"><input type="checkbox" disabled> Fold patchscope ancestorSet/lca onto dag.js.</li>
+<li class="open"><input type="checkbox" disabled> Status/diff sub-recurse -&gt; core/recurse.js::walk.</li>
+<li class="open"><input type="checkbox" disabled> delete.js -&gt; shared util join/statExists.</li>
+<li class="open"><input type="checkbox" disabled> One fd-parameterised stdout writer (bro/render/pager).</li>
+<li class="open"><input type="checkbox" disabled> refs.js header -&gt; ctx.out instead of io.log.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul class="todo">
+<li class="blocked"><input type="checkbox" disabled> ← <a href="./JS-085.html">JS-085</a> (log.js resolver) + <a href="./JS-088.html">JS-088</a> (subs.js require).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

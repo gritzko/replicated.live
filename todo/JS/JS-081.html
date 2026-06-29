@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-081</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-081 <a href="">MED</a>: <code>views/bro/bro.js</code> fd-1 capture monkey-patch is re-entry-fragile</h1>
+<p>
+<code>driveSpell</code> captures the re-entrant <code>loop.cli</code>'s fd-1 'H'-record stream by swapping the GLOBAL <code>io.writeAll</code> for the duration of the call (restored in a <code>finally</code>). The loop EDGE is correctly gated (<code>core/loop.js:318</code> checks both <code>mode!==&quot;tlv&quot;</code> AND <code>!opts2.queuePath</code>), but the bro VERB handler's <code>wantPager</code> check (<code>bro.js:130</code>) is NOT gated on <code>mode===&quot;tlv&quot;</code>. So a <code>:bro:foo</code> spell re-enters the handler, which re-evaluates <code>wantPager</code> true, re-patches the already-patched <code>io.writeAll</code>, and tries to launch a NESTED pager; under a <code>/dev/tty</code>-open failure fallthrough (<code>:143-145</code> falls to fd 1) this can pollute the outer capture. Self-flagged interim (JAB-029). Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>views/bro/bro.js:84</code> <code>const orig = io.writeAll;</code> then <code>:86-89</code> swaps the<p>
+GLOBAL <code>io.writeAll</code> to push fd-1 chunks; <code>:96</code> restores it in <code>finally</code>.
+</p>
+</li>
+<li><code>:94-95</code> re-enters <code>loop.cli([…, spell, &quot;--tlv&quot;], { queuePath })</code> — the<p>
+<code>--tlv</code> + per-call queue suppress the loop EDGE pager (<code>core/loop.js:318</code>).
+</p>
+</li>
+<li><code>:130</code> `const wantPager = io.isatty(1) &amp;&amp; (ctx.flags||[]).indexOf(&quot;--plain&quot;)<p>
+&lt; 0;<code> — NOT gated on </code>ctx.mode!==&quot;tlv&quot;`, unlike the edge.
+</p>
+</li>
+<li><code>core/loop.js:306</code> sets <code>ctx.mode</code> from the run flags, so the handler CAN<p>
+see <code>--tlv</code>; the gate is just missing here.
+</p>
+</li>
+<li><code>:131-151</code> the <code>wantPager</code> branch opens <code>pager.Pager</code>; <code>:143-145</code> the<p>
+<code>/dev/tty</code> open can fail and fall through to <code>fd=1</code>, the fd <code>driveSpell</code> is mid-patching — a nested pager would write into the capture.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A <code>:bro:&lt;spell&gt;</code> re-entry takes the plain/tlv dump path (the captured<p>
+branch), NEVER the nested-pager branch — matching the loop edge.
+</p>
+</li>
+<li>A repro: drive <code>bro</code> with a <code>bro:</code>-prefixed spell and assert no nested<p>
+pager / no fd-1 capture pollution.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>views/bro/bro.js</code>; keep the tty pager behaviour for the OUTER (non-tlv)<p>
+run byte-identical. The fd-1 monkey-patch stays interim (JAB-029).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Short fix: add <code>&amp;&amp; ctx.mode!==&quot;tlv&quot;</code> to the <code>:130</code> <code>wantPager</code> (mirror the<p>
+edge gate), so a re-entrant tlv run never re-pages; a re-entry marker on ctx is the alternative if mode is not reliably tlv.
+</p>
+</li>
+<li>Long-term (JAB-029): pass an explicit out-sink into <code>loop.cli</code> so the<p>
+capture is a parameter, not a mutation of global <code>io.writeAll</code>.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/bro/*</code>: a <code>bro</code> drive whose spell is <code>bro:&lt;x&gt;</code><p>
+ asserts NO nested pager opens and the outer capture is intact.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Gate <code>:130</code> <code>wantPager</code> on <code>ctx.mode!==&quot;tlv&quot;</code> (+ note JAB-029 for the<p>
+ sink-injection follow-up).
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> The explicit-sink refactor is JAB-029-scoped; this ticket is the gate<p>
+ only, keep it 1-2 LoC.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

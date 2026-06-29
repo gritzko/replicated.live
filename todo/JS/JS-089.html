@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-089</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-089 <a href="">MED</a>: back-edge require cycle — <code>views/bro/bro.js</code> requires <code>core/loop.js</code></h1>
+<p>
+<code>core/loop -&gt; views/bro/bro -&gt; core/loop</code> is a require cycle broken only by a LAZY in-body require.  A leaf view re-entering the whole dispatcher — driving the loop and capturing fd-1 via a monkey-patch of io.writeAll — is a layering inversion: the <a href="">BRO</a> view should consume a sub-run capability, not own one.  Pairs with <a href="./JS-081.html">JS-081</a> (the fd-1 patch). Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>bro.js:83 <code>const loop = require(&quot;core/loop.js&quot;);</code> inside a<p>
+function body — the cycle is only &quot;OK&quot; because it's deferred.
+</p>
+</li>
+<li>bro.js:84-88 then monkey-patches <code>io.writeAll</code> to capture fd 1<p>
+(<code>chunks.push(b.data().slice())</code>) around the sub-run.
+</p>
+</li>
+<li>bro.js:79-82 the comment itself flags the trap: requiring the<p>
+be/loop.js ENTRY shim self-runs and recurses (JAB-028) — so it must reach for the core/loop.js MODULE, deepening the inversion.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Expose a re-entry / sub-run capability through ctx, e.g.<p>
+<code>ctx.driveSubRun(argv)</code> returning the captured hunks, so bro consumes an INJECTED callback instead of requiring core/loop.
+</p>
+</li>
+<li>Removing the cycle ALSO removes the fd-1 monkey-patch (<a href="./JS-081.html">JS-081</a>).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Byte-identical <code>be bro …</code> output: the captured-hunks stream must<p>
+match the current io.writeAll-capture path exactly.
+</p>
+</li>
+<li>ctx.driveSubRun lives at the loop edge (core owns re-entry), so<p>
+bro never imports core — the arrow points down only.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>loop.js builds <code>ctx.driveSubRun</code> once at dispatch and threads it<p>
+into ctx; bro calls it, captures the returned hunks, no patch.
+</p>
+</li>
+<li>Keep the self-run-shim guard reasoning in a comment at the seam<p>
+so a future caller doesn't reintroduce the entry-shim require.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: a <code>test/js/bro</code> case asserting captured-hunk bytes<p>
+ for a nested <code>bro</code> run, against the current monkey-patch path.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Add ctx.driveSubRun(argv) at the loop edge; thread into ctx.</li>
+<li class="open"><input type="checkbox" disabled> Rewrite bro.js:83-88 to call ctx.driveSubRun; drop the require<p>
+ + the io.writeAll patch.
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul class="todo">
+<li class="blocked"><input type="checkbox" disabled> ← <a href="./JS-081.html">JS-081</a> (the fd-1 capture monkey-patch is removed together).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

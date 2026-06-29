@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PATCH-006</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PATCH-006 <a href="">HIGH</a>: whole-tree <code>be patch</code> fails a sub with PATCHCFLCT where a DIRECT sub merge is a clean no-op (ours-ahead gitlink)</h1>
+<p>
+After <a href="PATCH-005.html">PATCH-005</a>, <code>be patch be://spot/journal?main!</code> merges the journal level and the <code>be</code> sub cleanly, then reports <code>failed beagle</code> / <code>PATCHCFLCT</code> (<code>content-conflict=0, failed=1</code>) and aborts the whole merge (<code>BEDOGEXIT</code>). But running the SAME beagle merge DIRECTLY — <code>cd beagle &amp;&amp; be patch be://spot/journal/beagle?main!</code> — exits 0 with &quot;nothing absorbed — no patch row staged&quot; (a clean no-op; ours beagle <code>7f9163dd</code> already contains spot's pinned <code>~8a1f8413</code>, and it recurses <code>abc</code> fine). So the parent's gitlink-diff sub-recursion (<code>BEActSubsPatch</code>) raises a SPURIOUS conflict for a sub that has nothing to absorb (ours is ahead of / equal to theirs), and the whole-tree merge dies on it. The beagle worktree stays clean (<code>1333 ok</code>) — no markers written; the sub just rolls back to ours and the parent aborts. Method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro (live 2026-06-26, treadmill): in a <code>be get be://localhost/journal</code> clone,<p>
+<code>be patch be://spot/journal?main!</code> → <code>applied be</code>, <code>failed beagle</code>, summary <code>noop=203 take-theirs=5 merged=1 added=4 ... content-conflict=0 ... failed=1</code>, <code>PATCHCFLCT</code> / <code>BEDOGEXIT</code>.
+</p>
+</li>
+<li>Direct: <code>cd beagle &amp;&amp; be patch be://spot/journal/beagle?main!</code> → rc=0,<p>
+<code>noop=86 ... failed=0 (nothing absorbed — no patch row staged)</code>, recurses <code>abc</code>. So there is NO real beagle conflict — ours ⊇ theirs.
+</p>
+</li>
+<li>beagle sub <code>be status</code> after the failed whole-tree merge: <code>?7f9163dd…  1333 ok</code><p>
+(clean, unchanged) — the parent recursion didn't write conflict markers, it just failed the sub and aborted.
+</p>
+</li>
+<li>So the gitlink-diff recursion mishandles an ours-AHEAD (or nothing-to-absorb) sub<p>
+pin: it should be a clean take-ours no-op (keep ours, stage no patch row), not PATCHCFLCT. Distinct from <a href="PATCH-005.html">PATCH-005</a> (sub-source resolution, fixed).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>The whole-tree merge's sub-recursion treats an ours-ahead / nothing-to-absorb sub<p>
+gitlink as a clean no-op (keep ours), never PATCHCFLCT; <code>be patch be://spot/journal?main!</code> completes the whole tree.
+</p>
+</li>
+<li>A sub that genuinely DOES conflict still reports loudly (don't suppress real<p>
+conflicts) — only the no-op/ahead case is reclassified.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Native sniff. Repro-first (CLAUDE.md §17): a hermetic be:// parent+sub where ours'<p>
+sub pin is AHEAD of theirs' pin; assert the whole-tree merge is a clean no-op for that sub (RED today → PATCHCFLCT). Reuse the direct-merge &quot;nothing absorbed&quot; path.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>In <code>BEActSubsPatch</code>'s gitlink-diff: when theirs-pin is reachable from ours-pin<p>
+(ours ahead) OR the recursive sub merge stages nothing, record NO patch row and NO conflict (take ours) — mirror exactly what the direct <code>be patch &lt;sub&gt;?main!</code> does. The spurious PATCHCFLCT is the parent classifying that no-op as a failure.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: hermetic be:// parent+sub, ours-sub-pin ahead of theirs; whole-tree<p>
+ merge must no-op the sub (RED today).
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Fix <code>BEActSubsPatch</code> gitlink-diff: no-op/ahead → take-ours, not PATCHCFLCT.</li>
+<li class="open"><input type="checkbox" disabled> Rebuild <code>beagle/build</code>; verify <code>be patch be://spot/journal?main!</code> completes.</li>
+<li class="open"><input type="checkbox" disabled> Regression: a genuinely-conflicting sub still reports loudly; patch ctest green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Live blocker for the whole-tree spot merge (the treadmill goal); the only sub left.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><code>9ed6f41b</code> (2026-06-26) — sniff <code>PATCH.c</code> gitlink arm: an ours-AHEAD/equal<p>
+sub (SUBSDirty stale==NONE in the sub shard) is keep-ours — stage no <code>put &lt;sub&gt;</code> row, no take-theirs.  DISTINCT from PATCH-003 (test 37, theirs==base): here theirs ALSO advanced off base but ours descends theirs (real commit-walk, not a string compare).  beagle <code>BEGetDrainSubs</code> grew a <code>keep_ahead</code> arm (same SUBSDirty + KEEPClose lock release).  Repro <code>test/patch/39-sub-ours-ahead-keep</code> RED (take-theirs=1, backward gitlink bump) → GREEN (take-theirs=0, ours kept).  ctest 350/350.
+</p>
+</li>
+</ul>
+</body>
+</html>

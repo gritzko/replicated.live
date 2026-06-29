@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-082</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-082 <a href="">LOW</a>: full 40-hex object id fails in <code>size:</code>/<code>type:</code>/<code>blob:</code>/<code>commit:</code></h1>
+<p>
+Each of <code>size:</code>/<code>type:</code>/<code>blob:</code>/<code>commit:</code> accepts a FULL 40-char sha through its hex gate (<code>isHexish</code>/<code>isHexPrefix</code>), then hands it to <code>store.resolveHexAny</code> — which is bounded to <code>^[0-9a-f]{1,39}$</code> and returns <code>undefined</code> for a 40-char string. So <code>size:#&lt;40hex&gt;</code> (etc.) reports SIZENONE/TYPENONE/BLOBNONE/no-commit even though every view's header promises full-sha support. <code>sha1.js</code> and <code>log.js</code> avoid this with an <code>isFullSha</code> fast-path that returns the sha verbatim (after a <code>getObject</code> presence check) BEFORE the prefix resolver. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>shared/store.js:303</code> <code>resolveHexAny</code>: `if (!/^<a href="">0-9a-f</a>{1,39}$/.test(prefix))<p>
+return undefined;` — a full 40-hex sha fails the regex outright.
+</p>
+</li>
+<li><code>views/size/size.js:54-61</code> gates <code>hex</code> then `const full = k.resolveHexAny(<p>
+hex); if (!full) return null;<code> — a 40-hex </code>frag<code>/</code>query` → null → SIZENONE.
+</p>
+</li>
+<li><code>views/type/type.js:54-57</code> <code>if (hex) return k.resolveHexAny(hex) || null;</code><p>
+— same, full sha → null → TYPENONE.
+</p>
+</li>
+<li><code>views/blob/blob.js:60-64</code> and <code>:119-123</code> <code>sha = k.resolveHexAny(hex)</code> —<p>
+full sha → <code>!sha</code> → BLOBNONE (both the root-tree and bare-object paths).
+</p>
+</li>
+<li><code>views/commit/commit.js:101-103</code> <code>resolveHashlet</code>: `const sha =<p>
+k.resolveHexAny(hexish); if (!sha) return undefined;` — full commit sha lost.
+</p>
+</li>
+<li><code>views/sha1/sha1.js:81</code> `if (frag.length &gt;= 40) return isFullSha(frag) ?<p>
+frag : undefined;<code> and </code>views/log/log.js:88<code> </code>if (isFullSha(frag)) return k.getObject(frag)?frag:undefined;` — the fast-path the four views lack.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>size:</code>/<code>type:</code>/<code>blob:</code>/<code>commit:</code> resolve a full 40-hex object id (frag or<p>
+query slot) to the object iff it exists — matching the header promise.
+</p>
+</li>
+<li>Repro: each view fed a known full object sha returns the object, not NONE.</li>
+<li>Short-prefix and ambiguous-prefix behaviour unchanged.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Reuse the existing <code>isFullSha</code> (<code>shared/util/sha.js</code>) + <code>k.getObject</code>; do<p>
+NOT widen <code>resolveHexAny</code>'s <code>{1,39}</code> regex (it is the prefix scanner).
+</p>
+</li>
+<li>Per-view 1-line short-circuit; also fix the <code>descendFrom</code>/<code>resolveRootTree</code><p>
+paths that feed off the same gate.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Add <code>if (isFullSha(hex)) return k.getObject(hex) ? hex : null;</code> (or the<p>
+view's NONE/undefined) BEFORE the <code>resolveHexAny(hex)</code> call in each view, mirroring <code>sha1.js</code>/<code>log.js</code>. Keeps the prefix path untouched.
+</p>
+</li>
+<li>Centralising into a <code>resolveHexOrFull</code> helper is optional; four 1-liners<p>
+are the minimal, file-disjoint fix.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> commit: part CO-LANDED with <a href="../COMMIT/COMMIT-004.html">COMMIT-004</a> (PENDING-COMMIT): <code>commit.js</code><p>
+ resolveHashlet <code>isFullSha(hex) ? hex : resolveHexAny(hex)</code> short-circuit  (~:101); store.js {1,39} prefix regex left UNTOUCHED per the constraint.  Repro <code>be/test/commit/resolve/run.sh</code> (the <code>?&lt;40hex&gt;</code>/<code>?#&lt;40hex&gt;</code>/<code>#&lt;40hex&gt;</code>  rows) — RED pre-fix (COMMITNONE), GREEN after; full be/ suite 60/60.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> size:/type:/blob: DONE (PENDING-COMMIT): <code>isFullSha(hex)?present:hex</code> short-<p>
+ circuit before <code>resolveHexAny</code> in each view — size.js:49/70, type.js:60,  blob.js:49/71/131 (bare-object + resolveRootTree descend paths).  store.js  {1,39} regex UNTOUCHED.  Repro tests test/{size,type,blob}/fullsha/run.sh:  RED pre-fix (SIZE/TYPE/BLOBNONE on <code>#&lt;40hex&gt;</code>/<code>?#&lt;40hex&gt;</code>/<code>?&lt;40hex&gt;</code>), GREEN  after; full be/ suite 64/64 (bro-universal is a pre-existing unrelated xfail).
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> sha1: already had the <code>isFullSha</code> fast-path (sha1.js:81/95) — no change.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> None expected; verify the banner key still renders the full sha.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>LANDED: size:/type:/blob: be <code>d80b0a33</code> (per-view <code>isFullSha</code> short-circuit +<p>
+repro tests test/{size,type,blob}/fullsha, full suite green).
+</p>
+</li>
+<li>commit: part co-landed with <a href="../COMMIT/COMMIT-004.html">COMMIT-004</a> in the commit: bundle (be <code>aef4caef</code>).<p>
+sha1: needed no change (already had the fast-path).
+</p>
+</li>
+</ul>
+</body>
+</html>

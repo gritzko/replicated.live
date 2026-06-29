@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>COMMIT-004</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>COMMIT-004: <code>jab commit:</code> must resolve &amp; SHOW the target commit in every slot form (hash in <code>?</code>/<code>#</code>, branch), at parity with C <code>be commit:</code></h1>
+<p>
+The JS <code>commit:</code> view (be/) resolves the target commit for almost no slot shape: a hash in the PATH is silently ignored (shows cur tip), a hash in <code>?</code> throws <code>RESOLVE</code> at the seed, a full hash in <code>#</code> throws <code>COMMITNONE</code>. So <code>jab commit:&lt;target&gt;</code> diverges from C <code>be commit:&lt;target&gt;</code>. Goal: <code>jab commit:&lt;target&gt;</code> SHOWS the requested commit (headers + body, byte-parity with C) for every form C accepts — bare (cur), <code>?&lt;branch&gt;</code>, a hash in <code>?</code> or <code>#</code>, short hashlet AND full 40-hex. Found via the COMMITNONE investigation 2026-06-26. Sibling of <a href="COMMIT-003.html">COMMIT-003</a> (render) and <a href="../JS/JS-082.html">JS-082</a> (in-view full-sha). Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Behavior table today (cur tip <code>4e07ab84…</code>; native <code>be commit:</code> resolves ALL of these):
+</p>
+<ul>
+<li><code>jab commit:&lt;sha&gt;</code> (PATH) → silently IGNORES the sha, prints the cur tip — even<p>
+<code>commit:0000…0000</code> prints cur tip. The path slot is never read.
+</p>
+</li>
+<li><code>jab commit:?&lt;40hex&gt;</code> → <code>RESOLVE</code>: <code>core/resolve.js::classifyArg</code> (~:111) ignores<p>
+the <code>commit:</code> scheme and misroutes <code>?&lt;sha&gt;</code> as a branch ref-write (<code>_resolveHex</code>) BEFORE the view runs — the view never fires (Defect A, uncovered).
+</p>
+</li>
+<li><code>jab commit:#&lt;40hex&gt;</code> → <code>COMMITNONE</code>: <code>store.js:303</code> <code>resolveHexAny</code> regex<p>
+<code>^[0-9a-f]{1,39}$</code> rejects any 40-char sha (Defect B = <a href="../JS/JS-082.html">JS-082</a>, open).
+</p>
+</li>
+<li>Short forms (<code>?&lt;short&gt;</code>/<code>#&lt;short&gt;</code>) render but can still show the cur tip, not the<p>
+requested commit; <code>?&lt;branch&gt;</code> parity is unverified. C <code>be commit:</code> resolves all.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>jab commit:&lt;target&gt;</code> resolves the requested commit and SHOWS it (the `commit<p>
+&lt;sha40&gt;<code> metadata + body), byte-parity with C </code>be commit:&lt;target&gt;<code>, for: bare (cur tip), </code>?&lt;branch&gt;<code>, hash in </code>?<code> (</code>?&lt;sha&gt;<code> / </code>?#&lt;sha&gt;<code>), hash in </code>#<code> (</code>#&lt;sha&gt;`) — BOTH short hashlet and full 40-hex.
+</p>
+</li>
+<li>A nonexistent / ambiguous target ERRORS cleanly (matching C), never silently<p>
+falls back to the cur tip.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Native is the oracle: for each form, <code>jab commit:X</code> must match <code>be commit:X</code><p>
+byte-for-byte (modulo the one documented HUNK trailing-blank delta from <a href="COMMIT-003.html">COMMIT-003</a>).
+</p>
+</li>
+<li>Reuse the existing slot/resolve helpers; ragel/URI machinery, no hand-rolled parsing.</li>
+<li>RESOLUTION + slot routing only; the render path is <a href="COMMIT-003.html">COMMIT-003</a>, the tok-TLV<p>
+binding is <a href="../JS/JS-092.html">JS-092</a> — keep those separate.
+</p>
+</li>
+<li>be/ is a detached sub: committing needs the <a href="../SUBS/SUBS-035.html">SUBS-035</a> bootstrap binary.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Three fix sites (from the investigation):<p>
+-  SEED (Defect A) — <code>core/resolve.js::classifyArg</code> (~:97-130): for a read-only    view/projector scheme (<code>commit:</code>/<code>size:</code>/<code>type:</code>/<code>blob:</code>/<code>sha1:</code>…) do NOT    consume <code>?&lt;ref&gt;</code>/<code>?&lt;sha&gt;</code>/<code>?#&lt;sha&gt;</code> as a ref-write; carry the whole token    through as a path so the view re-parses its own <code>?</code>/<code>#</code> slots (the pattern    <code>seed</code> already uses for <code>get</code>, ~:165-167). -  PATH slot — <code>views/commit/commit.js</code> must READ the sha from the path slot,    not fall through to the cur tip. -  IN-VIEW full-40-hex (Defect B) — lands via <a href="../JS/JS-082.html">JS-082</a> (<code>store.js:303</code> +    <code>commit.js:101-106</code>, the <code>isFullSha</code> short-circuit). A must land WITH B, since    fixing A alone then exposes B for the <code>?&lt;40hex&gt;</code> form.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Repro-first: a per-form parity table (bare / <code>?&lt;branch&gt;</code> / <code>?&lt;sha&gt;</code> / <code>?#&lt;sha&gt;</code><p>
+ / <code>#&lt;sha&gt;</code>, each short AND full-40-hex) diffing <code>jab commit:</code> vs <code>be commit:</code>. RED  pre-fix at <code>?&lt;40hex&gt;</code> (COMMITNONE), GREEN after.  test/commit/resolve/run.sh.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Fix SEED routing (Defect A) so a re-parse projector's <code>?</code>/<code>#</code> ride through as a<p>
+ path; <code>core/resolve.js</code> isReparseView + the get-style passthrough (~:37,180).
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Fix the path-slot read (no silent cur-tip): <code>commit.js</code> resolveSlot path branch<p>
+ (~:150) + parsed.path (~:250); <code>commit:0000…</code> now FAILs, never shows the tip.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Land the in-view full-40-hex resolve (<a href="../JS/JS-082.html">JS-082</a> commit: part): <code>commit.js</code><p>
+ resolveHashlet isFullSha short-circuit (~:101); store.js regex left untouched.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Parity green for every form; be/ suite green (60/60).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="../JS/JS-082.html">JS-082</a> (in-view full-sha) must land together with Defect A; tracked there.</li>
+<li>Committing the fix needs the <a href="../SUBS/SUBS-035.html">SUBS-035</a> bootstrap binary (prebuilt <code>be</code> can't<p>
+commit the detached be/ sub).
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>PENDING-COMMIT (human gates the commit; <a href="../SUBS/SUBS-035.html">SUBS-035</a> bootstrap to land be/).<p>
+Fixes: <code>core/resolve.js</code> (Defect A SEED passthrough), <code>views/commit/commit.js</code> (path-slot read + <a href="../JS/JS-082.html">JS-082</a> commit: full-sha short-circuit).  store.js untouched.
+</p>
+</li>
+<li>Parity table <code>be/test/commit/resolve/run.sh</code> (be-js-commit-resolve): all 7 forms<p>
+GREEN modulo the +1 trailing-separator (<a href="COMMIT-003.html">COMMIT-003</a>); negatives FAIL clean. Full be/ suite 60/60.  <a href="COMMIT-003.html">COMMIT-003</a>'s render fix preserved (be-js-commit-render green).  <a href="../JS/JS-082.html">JS-082</a> co-landed (commit: part only; size/type/blob/sha1 stay open there).
+</p>
+</li>
+</ul>
+</body>
+</html>

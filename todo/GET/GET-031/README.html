@@ -83,7 +83,34 @@ put/patch row's recorded blob sha (<code>uri.fragment</code>).
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(pending)</li>
+<li>*<strong>LANDED beagle <code>8a1f8413</code></strong>* (test/get/66-staged-overlap-merge).  <code>be get</code><p>
+no longer silently overwrites put/patch-staged content for a path the target also changed: such a path is now weave-merged (same arm as the unstamped case), and <code>--force</code> (<code>be get!</code>) remains the explicit opt-in to overwrite it.
+</p>
+</li>
+<li>*<strong>Classifier change</strong>* (<code>sniff/GET.c</code>, <code>get_overlap_step</code>): the three<p>
+dirty-protection branches keyed on <code>!SNIFFAtKnown(mr)</code> now key on a single <code>b8 dirty = !SNIFFAtKnown(mr) || get_pending_stage_stamp(mr)</code>. The unstamped weave-merge + clean-drift no-op-skip + <code>--force</code> overwrite arms are untouched — a pending-staged path simply enters the <strong>same</strong> arms an unattributed mtime already did.
+</p>
+</li>
+<li>*<strong>Pending-vs-baseline stamp</strong>* (<code>get_pending_stage_stamp</code>, new static<p>
+helper): for a path whose mtime IS in the stamp-set, look up the owning ULOG row via <code>SNIFFAtRowAtTs(mtime,…)</code>.  YES (dirty/staged) iff the verb is <code>put</code>/<code>patch</code>/<code>delete</code> AND the row's ts is strictly above <code>SNIFFAtPatchFloorTs()</code> (the latest <code>get</code>/<code>post</code> anchor) — i.e. a <strong>pending</strong> stage after the boundary.  A <code>get</code>/<code>post</code> stamp, or a stale put/patch at/below the floor (already committed / reset away), returns NO → safe to overwrite, unchanged behaviour.  The merge baseline stays the base-tree leaf blob (<code>base-&gt;uri.fragment</code>, the common ancestor the user <code>get</code>'d before staging); a plain <code>be put</code> row carries an empty fragment, so the base-tree blob — not the put row — is the correct weave ancestor, and the staged wt bytes are read from disk by <code>get_drain_merges</code>.
+</p>
+</li>
+<li>*<strong>Two-arm test</strong>*: promoted <code>repro.sh</code> into<p>
+<code>test/get/66-staged-overlap-merge/run.sh</code> (auto-discovered by the <code>*/*/run.sh</code> glob; ctest <code>be-get-66-staged-overlap-merge</code>).  ARM A (staged via <code>be put</code>) must <code>mrg</code>/refuse with <code>mine</code> preserved; ARM B (unstamped raw edit) must still <code>mrg</code>.
+</p>
+</li>
+<li>*<strong>RED → GREEN</strong>*: pre-fix, ARM A asserted-failed with <code>upd f.txt</code> /<p>
+<code>f.txt = [theirs]</code> (staged bytes LOST, rc 0) while ARM B <code>mrg</code>'d (verified by reverting <code>dirty</code> to the bare <code>!SNIFFAtKnown(mr)</code> and rebuilding).  Post-fix, both arms <code>mrg</code> and preserve <code>mine</code>; test passes under <code>build/</code> and <code>build-debug/</code> (ASan).
+</p>
+</li>
+<li>*<strong>Regressions clean</strong>*: <code>test/get/49</code> (force-reset), <code>test/get/09</code> &amp;<p>
+<code>test/get/10</code> (atomicity) all green; full <code>be-get-*</code> (78), the put/patch/post/del families (114), and the whole ctest suite (471/471) pass in <code>build/</code>, and get/put/patch (92) pass under <code>build-debug/</code> ASan.
+</p>
+</li>
+<li>*<strong>Files changed</strong>*: <code>sniff/GET.c</code> (new <code>get_pending_stage_stamp</code><p>
+helper + the <code>dirty</code>-flag refactor of the three branches); <code>test/get/66-staged-overlap-merge/run.sh</code> (new two-arm case).  No <code>be/</code> changes (concurrent JS-065 worker).
+</p>
+</li>
 </ul>
 </body>
 </html>

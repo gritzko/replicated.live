@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>URI-009</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>URI-009 <a href="">MED</a>: JABC <code>uri</code> binding flattens absent vs present-empty components</h1>
+<p>
+The JABC <code>uri</code> binding (<code>beagle/js/uri.cpp</code>) mapped all 8 parsed components through <code>JABCSliceStr</code>, which returns <code>&quot;&quot;</code> for any zero-length slice — collapsing an ABSENT slot and a PRESENT-BUT-EMPTY slot to the same JS <code>&quot;&quot;</code>. So <code>?b</code> and <code>?b#</code> both parse to <code>{query:&quot;b&quot;,fragment:&quot;&quot;}</code>, and JS can't tell <code>/p</code> (no query) from <code>/p?</code> (empty query), making POST.mkd's <code>#</code>/<code>?</code>-presence rows unhonorable. Native <code>URIPattern</code> (<code>abc/URI.c:533</code>) already tracks presence (slot data-ptr non-NULL = sigil seen), so the fix maps ABSENT→<code>undefined</code>, PRESENT-EMPTY→<code>&quot;&quot;</code>, PRESENT→string. Unblocks <a href="../DIS/DIS-054.html">DIS-054</a>, whose <code>isBareTrunkQuery</code>/<code>isSlotArg</code> reparse the raw CLI arg only because bare <code>?</code> was indistinguishable from absent. Scope: the JABC binding (<code>beagle/js/</code>) — the <code>be/</code> JS that runs on <code>jab</code> inherits it. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>js/uri.cpp</code> <code>JABCuriParse</code> set every component via <code>JABCSliceStr</code> → <code>&quot;&quot;</code> whether the slot is absent or present-empty; the distinction native code keeps was dropped at the JS boundary.</li>
+<li><code>be/</code> compensated with forbidden raw-string hacks: <code>isBareTrunkQuery(arg,u)</code>=<code>arg===&quot;?&quot;</code>, <code>isSlotArg(a)</code>=<code>a===&quot;?&quot;</code> (<code>verbs/post/post.js:140,178</code>) (<a href="../../beagle/CLAUDE.md">CLAUDE</a> no manual parsing).</li>
+<li>The presence data already existed native-side (<code>URIPattern</code> bitmask); only the binding flattened it.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>JS <code>URI</code> parse: ABSENT → <code>undefined</code>, PRESENT-EMPTY → <code>&quot;&quot;</code>, PRESENT → decoded string. <code>new URI(&quot;/p&quot;).query===undefined</code>, <code>new URI(&quot;/p?&quot;).query===&quot;&quot;</code>.</li>
+<li><code>URI.make(...)</code> keeps its <code>|| &quot;&quot;</code> guards so <code>undefined</code> args still serialize omitted — no make regression.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Binding only; route presence through existing <code>URIPattern</code>, no new C path (<a href="../../beagle/CLAUDE.md">CLAUDE</a> reuse). Repro in <code>js/test/uri.js</code>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Add <code>JABCSetComp(obj,name,slice,present)</code> → <code>present ? string : undefined</code>, driven by <code>URIPattern(&amp;u)</code> bits, replacing the 8 unconditional <code>JABCSliceStr</code> sets.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Repro <code>js/test/uri.js</code>: <code>/p</code> query <code>undefined</code>, <code>/p?</code> query <code>&quot;&quot;</code>, <code>/p#</code> fragment <code>&quot;&quot;</code>, beagle-shape host <code>undefined</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> <code>JABCSetComp</code> via <code>URIPattern</code>; rebuild <code>jab</code>; <code>JABCuri</code> ctest + be/ post suite green.</li>
+<li class="open"><input type="checkbox" disabled> Commit (pending human gate).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None — backward-compatible: be/'s pervasive <code>u.x || &quot;&quot;</code> guards make <code>undefined</code> behave as the old <code>&quot;&quot;</code> (verified: be-js-post-* green on the rebuilt jab).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>IMPLEMENTED, pending commit: <code>js/uri.cpp</code> <code>JABCSetComp</code>+<code>URIPattern</code>, <code>js/test/uri.js</code> cases; <code>jab</code> rebuilt, <code>JABCuri</code> + be/ post tests pass. Unblocks <a href="../DIS/DIS-054.html">DIS-054</a> (drop the raw-arg <code>?</code> hacks) and the bare-<code>.</code> detection in <a href="URI-010.html">URI-010</a>.</li>
+</ul>
+</body>
+</html>

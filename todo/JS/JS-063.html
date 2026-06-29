@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-063</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-063: JABCulogLib/JABCstore add_test point at deleted test/js paths</h1>
+<p>
+<code>beagle/js/CMakeLists.txt:82-83</code> register <code>JABCulogLib</code>/<code>JABCstore</code> as <code>jab ${CMAKE_SOURCE_DIR}/test/js/{ulog,store}.js</code>, but <a href="JS-061.html">JS-061</a> moved those be-shard unit tests to <code>be/test/{ulog,store}.js</code> and deleted the beagle copies, so ctests #457/#458 abort <code>cannot open …/beagle/test/js/{ulog,store}.js</code>. <a href="JS-061.html">JS-061</a> DESIGNED this exact rewire (→ <code>../be/test/*.js</code>, <code>if(EXISTS)</code>-guarded, its TODO l.59-60) but the edit is NOT in this working tree — the be/test/*.js files exist on disk, only the CMake rewire is missing. Method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Reproduce: `ctest --test-dir beagle/build -R '^JABC(ulogLib|store)$'<p>
+--output-on-failure<code> → </code>Error: cannot open …/beagle/test/js/{ulog,store}.js`.
+</p>
+</li>
+<li><code>js/CMakeLists.txt:82-83</code> still read <code>${CMAKE_SOURCE_DIR}/test/js/…</code>; that<p>
+dir now holds only <code>lib/</code>, <code>get/</code> (the be-side ulog/store were removed).
+</p>
+</li>
+<li>Targets are be-shard unit tests (shared/ulog, shared/store); their home<p>
+after <a href="JS-061.html">JS-061</a> is <code>be/test/ulog.js</code> + <code>be/test/store.js</code> (both present).
+</p>
+</li>
+<li>Distinct from the sibling binding test <code>JABCulog</code> (l.70 →<p>
+<code>js/test/ulog.js</code>, the <code>abc.ram(&quot;ULOG&quot;)</code> surface) which still passes.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>JABCulogLib</code> + <code>JABCstore</code> green, running the migrated <code>be/test/*.js</code>.</li>
+<li>CMake target paths survive a missing be-shard (guarded), no hard failure.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Touch ONLY <code>beagle/js/CMakeLists.txt</code>; the test files already exist.</li>
+<li>Mirror <a href="JS-061.html">JS-061</a>'s designed form exactly so the eventual 061 land is a<p>
+clean fast-forward, not a conflicting re-edit.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Repoint both to <code>${CMAKE_SOURCE_DIR}/../be/test/{ulog,store}.js</code>, each<p>
+wrapped <code>if(EXISTS …)</code> so a checkout without the <code>be</code> submodule skips rather than errors (per <a href="JS-061.html">JS-061</a> l.60).
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Edit <code>js/CMakeLists.txt:82-83</code>: repoint + <code>if(EXISTS)</code> guard.</li>
+<li class="open"><input type="checkbox" disabled> Reconfigure build; <code>ctest -R '^JABC(ulogLib|store)$'</code> 2/2 green.</li>
+<li class="open"><input type="checkbox" disabled> Confirm the guard-list at l.104 still names both targets.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Overlaps <a href="JS-061.html">JS-061</a>'s uncommitted rewire — coordinate the land so the two<p>
+don't both touch l.82-83 on divergent bases.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><code>0c2063ee</code> — landed: <code>js/CMakeLists.txt:82-89</code> repointed JABCulogLib/JABCstore<p>
+to <code>${CMAKE_SOURCE_DIR}/../be/test/{ulog,store}.js</code>, each <code>if(EXISTS)</code>-guarded. Both pass under the prebuilt jab (rc=0).
+</p>
+</li>
+</ul>
+</body>
+</html>

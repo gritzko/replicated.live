@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-095</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-095 <a href="">MED</a>: <code>js/CMakeLists.txt</code> configure FAILS when the <code>be/</code> submodule is absent (EXISTS-guarded test referenced unconditionally in set_tests_properties)</h1>
+<p>
+A <code>be get be://...</code> clone that lacks the <code>be/</code> submodule (no <code>be/test/ulog.js</code>, <code>be/test/store.js</code>) cannot even CONFIGURE the default <code>WITH_JS=ON</code> build: cmake aborts with <code>set_tests_properties Can not find test to add properties to: JABCulogLib</code>. The <code>add_test(JABCulogLib/JABCstore)</code> are EXISTS-guarded (only created when <code>be/</code> is present) but <code>set_tests_properties(... JABCulogLib JABCstore ...)</code> at <code>js/CMakeLists.txt:117</code> lists them UNCONDITIONALLY. Hit while building a clone for <a href="../LOG/LOG-003.html">LOG-003</a>. Method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro (live 2026-06-26): <code>be get be://localhost?/beagle</code> (clone at<p>
+<code>?#213c9003</code>, lacks the <code>be/</code> submodule), then <code>CC=clang CXX=clang++ cmake -DCMAKE_BUILD_TYPE=Debug -DWITH_ASAN=ON -DWITH_INET=OFF -GNinja -B. -S..</code> → <code>CMake Error at js/CMakeLists.txt:117 (set_tests_properties): set_tests_properties Can not find test to add properties to: JABCulogLib</code> → &quot;Configuring incomplete&quot;.
+</p>
+</li>
+<li>Cause: <code>js/CMakeLists.txt:84-86</code> wraps <code>add_test(NAME JABCulogLib ...)</code> in<p>
+<code>if(EXISTS ${CMAKE_SOURCE_DIR}/../be/test/ulog.js)</code>; <code>:87-89</code> wraps <code>JABCstore</code> in <code>if(EXISTS .../be/test/store.js)</code>. But <code>:117</code> <code>set_tests_properties(... JABCulogLib ... JABCstore ... PROPERTIES ENVIRONMENT LSAN_OPTIONS=...)</code> names BOTH unconditionally. Absent <code>be/</code> → tests not created → set_tests_properties hard-errors.
+</p>
+</li>
+<li><code>be/</code> is the JS trunk submodule; a <code>be://</code> C-core clone need not carry it<p>
+(the same clone also lacks <code>be/views/log/log.js</code>, flagged by <a href="../LOG/LOG-003.html">LOG-003</a>).
+</p>
+</li>
+<li>Workaround used for LOG-003: configure with <code>-DWITH_JS=OFF</code> (skips the whole<p>
+<code>js/</code> subdir). Not a fix — it disables all JS tests.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>cmake ... -DWITH_JS=ON</code> configures cleanly whether or not the <code>be/</code><p>
+submodule is checked out; present-<code>be/</code> builds still attach the LSAN suppression env to JABCulogLib/JABCstore.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Keep the EXISTS guards; make the <code>set_tests_properties</code> apply per-test only<p>
+when that test exists — e.g. move the <code>ENVIRONMENT LSAN_OPTIONS</code> property INTO each <code>if(EXISTS ...)</code> block, or split the one bulk <code>set_tests_properties</code> so the two <code>be/</code>-gated names are set inside their guards. Native (full-submodule) build behavior unchanged.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) Two clean options: (a) split line 117 — drop JABCulogLib/JABCstore<p>
+from the bulk call and set their ENVIRONMENT inside the existing <code>if(EXISTS ...)</code> blocks at :84-89; or (b) guard the bulk call's name list with a CMake list built up only from created tests. (a) is the smaller diff.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: a configure of <code>WITH_JS=ON</code> against a tree WITHOUT <code>be/</code><p>
+ (rename/hide <code>be/</code> or use a <code>be://</code> clone) FAILS today, PASSES after.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Move the LSAN_OPTIONS ENVIRONMENT for JABCulogLib + JABCstore into their<p>
+ <code>if(EXISTS ...)</code> blocks; drop them from the unconditional :117 list.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Sanity: full-submodule build still sets the property (grep the generated<p>
+ CTestTestfile or <code>ctest -N</code> shows the env).
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Blocks any C-core-only <code>be://</code> clone from building the default <code>WITH_JS=ON</code><p>
+ config; forces <code>-DWITH_JS=OFF</code> and loses all JS test coverage in such trees.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open) Found mid-fix while seeding a clone for <a href="../LOG/LOG-003.html">LOG-003</a>; filed 2026-06-26.</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-069</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-069 <a href="">MED</a>: diff follows tracked symlinks via io.mmap (info leak)</h1>
+<p>
+<code>be diff</code>'s wt-vs-base path reads symlink leaves by dereferencing the link, so a TRACKED symlink to <code>/etc/passwd</code> leaks that file into the wt side of the diff.  Symlink leaves wrongly land in the <code>files</code> map and get <code>io.mmap</code>'d.  Reachable once an attacker tree is checked out. Masked today by <a href="">DIFF</a> handler unreachability (<a href="./JS-071.html">JS-071</a>).  Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>views/diff/diff.js:134-135</code> <code>treeMap</code> routes only <code>kind === &quot;s&quot;</code><p>
+to <code>subs</code>; symlink leaves (<code>kind === &quot;l&quot;</code>) fall into <code>files</code>.
+</p>
+</li>
+<li><code>views/diff/diff.js:201-211</code> per base file: <code>join(repo.wt,p)</code> then<p>
+<code>readWtFile(wtPath)</code> — no lstat, no symlink kind branch.
+</p>
+</li>
+<li><code>views/diff/diff.js:216-218</code> <code>readWtFile</code> does<p>
+<code>io.mmap(path,&quot;r&quot;).data().slice()</code> — FOLLOWS the link, reads target.
+</p>
+</li>
+<li>A tracked symlink <code>link -&gt; /etc/passwd</code> thus emits the TARGET's<p>
+bytes as the wt-side blob, not the link target string.
+</p>
+</li>
+<li>Read sink is real now; the diff handler is just currently<p>
+unreachable (see <a href="./JS-071.html">JS-071</a>) so it is not yet exploitable end-to-end.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Diff symlink leaves as the stored link-target blob body, not contents.</li>
+<li>wt-side symlink read uses <code>lstat</code>+<code>readlink</code> (or <code>O_NOFOLLOW</code>).</li>
+<li>Repro: tracked symlink to an outside file leaks nothing into diff.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Keep <code>diffWtTree</code>/<code>diffTreeRefs</code> lex order + sha-skip parity.</li>
+<li>No new follows in <code>readWtFile</code>; gate by leaf kind upstream.</li>
+<li>Pairs with <a href="./JS-071.html">JS-071</a> (reachability) — land together.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Split symlinks out of <code>files</code> into a <code>links</code> map (like <code>subs</code>);<p>
+diff their target-string blobs, never <code>mmap</code> the wt path.
+</p>
+</li>
+<li>For wt side, <code>io.lstat</code> kind==&quot;lnk&quot; → <code>io.readlink</code>, else mmap.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: tracked symlink → outside file; assert diff body<p>
+ shows only the link target string (test/js/diff/symlink-leak).
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Route <code>kind === &quot;l&quot;</code> to a links map; readlink wt side.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul class="todo">
+<li class="blocked"><input type="checkbox" disabled> ← <a href="./JS-071.html">JS-071</a> (diff handler currently unreachable).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

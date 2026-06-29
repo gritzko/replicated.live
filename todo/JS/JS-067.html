@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-067</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-067 <a href="">MED</a>: <code>shared/wire.js</code> ssh host argv injection + unquoted DOG_REMOTE_PATH</h1>
+<p>
+<code>shared/wire.js</code>'s <code>classify()</code> (the upload-pack CLIENT spawn) passes the remote URI host as <code>argv[1]</code> of <code>ssh</code> with no <code>--</code>/leading-dash guard, so a host like <code>-oProxyCommand=…</code> is read by ssh as an OPTION → local command exec (the CVE-2017-1000117 class). The command body is <code>shQuote</code>d but the host is not, and <code>$DOG_REMOTE_PATH</code> is interpolated UNQUOTED into the remote shell string. Native single-quotes it. Realistic vector: a user/script-supplied <code>be get &lt;uri&gt;</code>. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>shared/wire.js:33</code> <code>host = u.host || u.authority || &quot;&quot;</code> — straight from the<p>
+URI, never validated.
+</p>
+</li>
+<li><code>:65</code> ssh-keeper spawn <code>argv: [sshBin, host, cmd]</code> — <code>host</code> is <code>argv[1]</code>,<p>
+so <code>be://-oProxyCommand=touch%20pwned/…</code> makes ssh exec a local command.
+</p>
+</li>
+<li><code>:68</code> vanilla-git spawn <code>argv: [sshBin, host, &quot;git-&quot;+verb+&quot; &quot;+shq(path)]</code><p>
+— same unguarded <code>host</code> (body <code>shq</code>'d, host not).
+</p>
+</li>
+<li><code>:61</code> <code>remPath = io.getenv(&quot;DOG_REMOTE_PATH&quot;) || &quot;&quot;</code>.</li>
+<li><code>:63</code> <code>cmd = &quot;PATH=&quot;+remPath+&quot;:$PATH exec keeper &quot;+verb+&quot; &quot;+shq(sp)</code> —<p>
+<code>remPath</code> is concatenated RAW into the remote shell line (<code>sp</code> is <code>shq</code>'d), so a space/<code>;</code>/<code>$()</code> in <code>DOG_REMOTE_PATH</code> injects remote commands; native single-quotes it.
+</p>
+</li>
+<li>Entry: <code>fetch()</code> <code>:135-136</code> <code>classify(remoteUri,…)</code>→<code>io.spawn(sp.bin,sp.argv)</code><p>
+on the user-supplied <code>be get &lt;uri&gt;</code> (cited <a href="../../wiki/GET.html">GET</a>).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Reject (or neutralize) a host that ssh would read as an option, so<p>
+<code>be get be://-oProxyCommand=…/p</code> cannot exec a local command.
+</p>
+</li>
+<li><code>$DOG_REMOTE_PATH</code> is shell-quoted in the remote <code>cmd</code> exactly like native,<p>
+so a hostile value cannot inject remote commands.
+</p>
+</li>
+<li>Repro tests asserting the spawned <code>argv</code> for both vectors.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Mirror <code>keeper/WIRECLI.c</code> <code>wcli_spawn</code> transport classify; keep the<p>
+file/keeper-local/ssh-keeper/vanilla-git branches and serve-path rules.
+</p>
+</li>
+<li>Pure JS over <code>io.spawn</code>+<code>pkt.js</code>; reuse the existing <code>shQuote</code><p>
+(<code>../view/render.js</code>). Scope: <code>classify()</code> only.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Validate <code>host</code> as <code>[user@]host</code>: reject a leading <code>-</code> (and bare <code>/</code>); or, if<p>
+parity needs odd hosts, insert a <code>--</code> end-of-options marker before <code>host</code> in the ssh <code>argv</code> so ssh stops option parsing.
+</p>
+</li>
+<li><code>shQuote(remPath)</code> before splicing into <code>cmd</code> (single-quote like native);<p>
+keep the no-<code>DOG_REMOTE_PATH</code> branch byte-identical.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/wire/*</code>: <code>classify(&quot;be://-oProxyCommand=x/p&quot;,…)</code><p>
+ asserts the host is rejected (or <code>--</code>-guarded), NOT placed as a bare  ssh option; and <code>DOG_REMOTE_PATH=&quot;x; touch pwn&quot;</code> asserts a quoted <code>cmd</code>.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Add the host guard + <code>shQuote(remPath)</code> in <code>classify()</code>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Confirm native's exact host-acceptance set so the guard keeps parity.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

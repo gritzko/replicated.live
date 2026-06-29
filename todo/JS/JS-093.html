@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-093</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-093 jab mis-routes a <code>scheme:&lt;path&gt;.js</code> URI to the script loader</h1>
+<p>
+<code>jab diff:view/bro.js</code> (and any <code>scheme:</code> URI whose path tail ends <code>.js</code>) threw <code>require: cannot find 'be/diff:view/bro.js'</code> — the C entry router (<code>js/main.cpp</code>) decided &quot;run as a script vs route to the loop&quot; purely on the <code>.js</code> suffix, so a <code>diff:</code>/<code>cat:</code>/<code>blob:</code> URI ending in <code>.js</code> was loaded as a file instead of dispatched. <code>be diff:view/bro.js</code> and <code>jab diff diff:view/bro.js</code> (explicit verb) worked, isolating it to the URI-shape entry route.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro: <code>cd ~/journal/be &amp;&amp; jab diff:view/bro.js</code> → require error;<p>
+<code>jab diff:main.js</code> same; <code>jab diff:small.c</code> (non-.js) OK; <code>jab diff &lt;uri&gt;</code> OK.
+</p>
+</li>
+<li><code>js/main.cpp:275</code> routed <code>JABCEndsWithJs(script_file)</code> first-args to the<p>
+script loader (<code>__runScript</code>/<code>JABCRunFile</code>); a <code>scheme:</code> token never excluded.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A <code>scheme:</code> URI always routes to the loop (<code>__main</code>), even with a <code>.js</code> tail.</li>
+<li>A bare/relative <code>.js</code> path still runs as a script (no regression).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>C entry only (<code>js/main.cpp</code>); pre-existing, not the BRO-009 diff-colour work.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Add <code>JABCHasScheme(s)</code> — YES iff <code>s</code> opens <code>&lt;alpha&gt;&lt;alnum|+|-|.&gt;*:</code> BEFORE any<p>
+<code>/</code> (a URI scheme). Guard the <code>.js</code> script route with <code>&amp;&amp; !JABCHasScheme</code>.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="">v</a> <code>js/main.cpp</code>: <code>JABCHasScheme</code> + guard at the <code>.js</code>-suffix branch.</li>
+<li><a href="">v</a> Verified: <code>jab diff:view/bro.js</code>/<code>diff:main.js</code> now diff; <code>jab cat:main.js</code><p>
+routes to loop; bare <code>./probe.js</code> still hits the script route; 24 JS suites green.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Pending land (built into <code>build/bin/jab</code>; beagle core, <a href="">GET-033</a>).</li>
+</ul>
+</body>
+</html>

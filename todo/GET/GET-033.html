@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-033</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-033: be get can't clone a current <code>beagle</code> worktree from the local store</h1>
+<p>
+<code>be get</code> against the local store (<code>file:/home/gritzko/.be/?/&lt;shard&gt;</code>) restores <code>be</code>/<code>abc</code> cleanly but CANNOT produce a current <code>beagle</code> worktree: every beagle form either errors (<code>SNIFFFAIL</code>) or hands back a stale snapshot missing the just-committed <code>test/bin</code>, <code>test/js</code>. The live <code>beagle</code> is clean at <code>ac4ef2a3</code> (<code>be status</code> → <code>1324 ok</code>, includes <code>test/bin/*</code>), so the tip IS in the store — but trunk get won't restore it. This blocks the <a href="../../meta/work.html">Issues</a> loop for every beagle-side ticket (<a href="../SUBS/SUBS-034.html">SUBS-034</a>, <a href="../JS/JS-062.html">JS-062</a>, <a href="../JS/JS-063.html">JS-063</a>). Found via the worktree setup for those. Method <a href="../../meta/work.html">Issues</a>. Drove with <code>~/journal/beagle/build/bin/be</code>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>WORKS, current + committable: <code>be get file:/home/gritzko/.be/?/be</code><p>
+(be/beagle-ext trunk, recurses the <code>test</code> sub) and <code>?/abc</code> (<code>?/libabc</code>).
+</p>
+</li>
+<li>FAILS, no files written: <code>?/beagle</code>, <code>?/beagle/.beagle-journal</code>, <code>?/journal</code>,<p>
+<code>?beagle</code> → <code>be: worktree from /home/gritzko/.be/</code> then <code>SNIFFFAIL</code>/<code>BEDOGEXIT</code>.
+</p>
+</li>
+<li>WRONG STATE: <code>?/beagle#.beagle-journal</code> restores <code>?trunk</code> and <code>?/beagle-journal</code><p>
+restores beagle@<code>5a95cd15</code> — both an OLDER beagle MISSING <code>test/bin</code>+<code>test/js</code> (and <code>?/beagle-journal</code> omits the <code>be</code> submodule entirely). <code>dog/HOME.c</code> in them is byte-identical to live, so only the recent test dirs are absent.
+</p>
+</li>
+<li>Transcript (from <code>~/tmp/beagle-clone</code>, prebuilt <code>be</code>; repo is <code>~/journal</code>,<p>
+there is no <code>/journal</code>) — <code>file:///</code> vs <code>file:/</code> give DIFFERENT errors for the same bad path, and the journal-projector forms all <code>WIRECLFL</code>: -  <code>be get file:///journal?/beagle</code> → <code>WIRECLFL</code>. -  <code>be get file:///journal?/beagle/.journal</code> → <code>WIRECLFL</code>. -  <code>be get file:///journal?/beagle/.beagle-journal</code> → <code>WIRECLFL</code>. -  <code>be get file:/journal?/beagle</code> → <code>SNIFFFAIL</code> &quot;get: cannot restore /journal    — no baseline in <code>.be/wtlog</code>&quot; (single-slash parsed the path differently).
+</p>
+</li>
+<li>Two more store-addressing defects seen alongside (likely same root):<p>
+-  <code>be head file:/home/gritzko/.be/?/&lt;shard&gt;</code> → <code>BEDOGEXIT</code> (hangs first) for    every shard tried (beagle, be, libabc, beagle-ext-tests). -  The <code>.be</code> anchors RECORD an unreplayable get-URI    <code>file:/home/gritzko/.be//?/&lt;shard&gt;#&lt;hash&gt;</code> (double slash); replaying it →    <code>SNIFFFAIL</code> &quot;no baseline in <code>.be/wtlog</code>&quot;.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>be get</code> yields a current, committable <code>beagle</code> worktree from the local store<p>
+(the tip the live worktree is pinned to, <code>ac4ef2a3</code>, with <code>test/bin</code>+<code>test/js</code>).
+</p>
+</li>
+<li>The recorded <code>.be</code> get-URI round-trips: a worktree can be re-gotten from its<p>
+own anchor.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Local store only (<code>WITH_INET=OFF</code> build; the <code>?/beagle</code> journal-projector form<p>
+<code>file:///home/gritzko/journal?/beagle</code> already fails <code>WIRECLFL</code> chasing the github submodule source — must resolve to the LOCAL shard, never the wire).
+</p>
+</li>
+<li>No manual store surgery; fix the get/sniff path. Repro-first (CLAUDE.md §17).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Diagnosis split in two: (1) STORE STATE — the <code>beagle</code> shard trunk ref never<p>
+pointed at the live tip <code>ac4ef2a3</code>; the original SNIFFFAIL was &quot;no post row&quot;, later a divergent older <code>5a95cd15</code> (author replicated.live) was the only post, so plain <code>?/beagle</code> legitimately restored the WRONG older commit (no <code>test/bin</code>/<code>test/js</code>). (2) CODE BUG — <code>be get &lt;store&gt;?/&lt;shard&gt;#&lt;sha&gt;</code> silently DROPPED the explicit <code>#&lt;sha&gt;</code> pin and always took the shard trunk tip.
+</p>
+</li>
+<li>Pin fix is scoped by a <code>pinned_explicit</code> flag (YES only for a user-typed<p>
+<code>#&lt;sha&gt;</code> on a bare-store clone) so worktree-source clones (whose <code>hash</code> is the primary's resolved tip) still track+advance their branch — avoids regressing <code>be-get-52/56</code>.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Repro: <code>beagle/test/be-get-store-shard-pin.sh</code> (+ CMake <code>be-get-store-shard-pin</code>)<p>
+ — clones <code>?/&lt;proj&gt;#&lt;OLD&gt;</code>, asserts pin honoured + committable trunk-state. RED→GREEN.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Localize: <code>BE.cli.c</code> <code>be_sub_shard_setup</code> (~l.896 dropped <code>u-&gt;fragment</code>) +<p>
+ <code>sniff/GET.c</code> <code>SNIFFGetURI</code> (~l.2052 NULLed query unconditionally).
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Fix: carry the fragment + <code>pinned_explicit</code> (BE.cli.c l.894/902/1072); gate<p>
+ the query NULL-out on <code>u8csEmpty(u-&gt;fragment)</code> (GET.c l.2052). No regressions  (ctest: the 8 known fails unchanged, zero new).
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Store ref now carries <code>post ?#ac4ef2a3</code> so plain <code>?/beagle</code> restores the<p>
+ current tree with <code>test/bin</code> (verified) — unblocks <a href="../SUBS/SUBS-034.html">SUBS-034</a>/<a href="../JS/JS-062.html">JS-062</a>/<a href="../JS/JS-063.html">JS-063</a>.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Separately (no longer reproduce in current store state — re-open if they<p>
+ recur): <code>be head ?/&lt;shard&gt;</code> hang; <code>file:///…journal?/&lt;sub&gt;</code> WIRECLFL.
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>CAVEAT — the shared store <code>/home/gritzko/.be/beagle/refs</code> was MUTATED during<p>
+investigation: <code>post ?#5a95cd15</code> then <code>post ?#ac4ef2a3</code> rows appended (the latter an unintended side effect of a <code>be get '?#&lt;sha&gt;'</code> run inside a beagle-anchored wt). Trunk now points at the live tip — arguably correct, but not deliberate. Human to decide keep-vs-clean. (<code>get_fail</code> log rows also grew.)
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><code>f425d6a8</code> — landed (posted by the human): <code>BE.cli.c</code> carries the <code>#&lt;sha&gt;</code><p>
+fragment + a <code>pinned_explicit</code> scope, <code>sniff/GET.c</code> gates the empty-query NULL-out on <code>u8csEmpty(u-&gt;fragment)</code>, + repro <code>be-get-store-shard-pin</code>. <code>be get …?/&lt;shard&gt;#&lt;sha&gt;</code> now honours the pin as committable trunk-state. The beagle store trunk ref was also advanced to the live tip so plain <code>?/beagle</code> restores the current tree (the original &quot;no baseline&quot; blocker is gone).
+</p>
+</li>
+</ul>
+</body>
+</html>

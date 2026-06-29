@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-070</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-070 <a href="">MED</a>: untrusted regex compiled/run per-line with no ReDoS guard</h1>
+<p>
+<code>views/spot/match.js</code>'s <code>regexMatcher</code> compiles <code>new RegExp(jsBody)</code> from the user URI fragment, then runs <code>re.exec</code> per line over every candidate file behind the <code>regex:</code> VIEW. The only ceiling is a whole-file 16 MiB gate — no per-line length cap and no time/step budget — so <code>(a+)+$</code> against a long line hangs the single-threaded runtime. Native used a Thompson NFA (linear), so this is also a parity divergence; <code>matchFlat</code> (the spot backtracker) likewise has no guard. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>views/regex/regex.js:1-6</code> — the <code>regex:</code> verb is one line; it just<p>
+<code>module.exports = require(&quot;../spot/search.js&quot;)</code>, riding the shared scaffold.
+</p>
+</li>
+<li><code>views/spot/match.js:47</code> <code>re = new RegExp(jsBody)</code> where <code>:45</code><p>
+<code>jsBody = body.replace(…)</code> and <code>body</code> is the user URI fragment — untrusted, backtracking JS-RegExp (catastrophic for <code>(a+)+$</code>).
+</p>
+</li>
+<li><code>:50-66</code> <code>run()</code>: <code>splitLinesBytes</code> then <code>re.exec(lineText)</code> per line, per<p>
+file — no per-line length cap, no step/time budget.
+</p>
+</li>
+<li>Only ceiling: <code>views/spot/search.js:273-274</code> whole-file SPOTBIG gate<p>
+<code>if (bytes.length &gt;= (1&lt;&lt;24)) return</code> (16 MiB) — does NOT bound a single long line's backtracking.
+</p>
+</li>
+<li>Parity: the comment <code>:8</code> <code>:37-40</code> notes native walked a Thompson NFA<p>
+(<code>NFAu8Search</code>, linear); the JS RegExp diverges on adversarial input.
+</p>
+</li>
+<li><code>views/spot/match.js:158</code> <code>matchFlat</code> — recursive backtracker<p>
+(<code>:222</code> <code>:243</code> <code>:269</code> <code>:311</code> <code>:329</code> <code>:376</code> recurse with no depth/step guard), so the structural spot mode is exposed to the same blowup.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A <code>regex:</code> (and <code>spot:</code>) search over a hostile file cannot wedge the runtime:<p>
+a per-line length cap and/or a step/time budget bounds the work.
+</p>
+</li>
+<li>A repro test: <code>regex:(a+)+$</code> (or <code>spot</code> analogue) over a long single-line<p>
+file completes within a wall-clock budget instead of hanging.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Pure JS, rides <code>views/spot/search.js</code>; keep the <code>{,m}</code>→<code>{0,m}</code> dialect<p>
+rewrite (<code>:45</code>) and the per-line first-match byte-span behavior.
+</p>
+</li>
+<li>Stay a faithful subset of native (<code>grep_match_span</code>); don't regress the<p>
+parity corpus. Scope: <code>regexMatcher</code>/<code>matchFlat</code> guards (+ a size cap).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Add a per-line byte cap (skip / truncate over-long lines) plus a step or<p>
+wall-clock budget around <code>re.exec</code>; on overflow treat the line as no-match.
+</p>
+</li>
+<li>Minimum bar: reject nested unbounded quantifiers (<code>(a+)+</code>, <code>(a*)*</code>) at<p>
+compile time so the worst exponentials never run.
+</p>
+</li>
+<li>Add a step-counter guard to <code>matchFlat</code> (bail → no-match on overflow);<p>
+longer-term, port the bounded Thompson NFA for true linear parity.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/regex/*</code> (+ <code>spot</code>): <code>regex:(a+)+$</code> over a long<p>
+ single-line file hangs today; assert it returns within a budget.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Add the per-line cap + step/time budget (and nested-quantifier reject)<p>
+ to <code>regexMatcher</code>; add the step guard to <code>matchFlat</code>.
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> No preemption in the JS runtime → a step COUNTER (not a wall clock) is the<p>
+ portable budget; pick a bound that keeps the parity corpus green.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

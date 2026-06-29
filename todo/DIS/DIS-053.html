@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-053</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-053: <code>be head</code> reports ahead/behind against a phantom <code>?trunk</code>; URI-less <code>be get --nosub</code> regresses a submodule worktree to its stale <code>.be</code> pin</h1>
+<p>
+A store-backed submodule worktree (<code>be/test</code>, beagle-ext-tests) at its posted tip <code>c0b8ffed</code> was refreshed with a URI-less <code>be get --nosub</code>; instead of FF-ing forward it RE-APPLIED the stale <code>.be</code>-recorded pin <code>?#b8dc7f52</code> (1 behind the tip), detaching HEAD and REVERTING the committed+posted <code>CMakeLists.txt</code> and <code>bro/lib/brocase.sh</code> in the working tree. <code>be get ?</code> recovered files+commit (trunk <code>?</code> tip IS <code>c0b8ffed</code>, per <code>be log ?</code>), but <code>be head</code> then reports <code>?trunk: 2 ahead, 0 behind</code> — comparing against a NON-EXISTENT <code>?trunk</code> (the trunk is <code>?</code>, abs <code>?/beagle-ext-tests</code>); an at-tip HEAD must read <code>0 ahead, 0 behind</code>. No data lost (the commit was posted), but both the update and the status report misbehave. Hit live 2026-06-25 while refreshing be/test. Related <a href="DIS-039.html">DIS-039</a> (bare get = status no-op), <a href="DIS-022.html">DIS-022</a> (log empty in a sub/detached wt), <a href="DIS-038.html">DIS-038</a> (bogus ahead-count from a non-DAG tip), <a href="../SUBS/SUBS-026.html">SUBS-026</a>; rules in <a href="../../meta/work.html">/meta/work</a>.
+</p>
+<h2>Issues</h2>
+<p>
+<code>be head</code>'s baseline resolves to a literal <code>?trunk</code> that does not exist instead of trunk <code>?</code> / the synthetic <code>?/project/.parent/pbranch</code>, and URI-less get re-pins the last <code>.be</code> hash rather than FF-ing.
+</p>
+<ul>
+<li><code>be head</code> prints <code>?trunk: N ahead</code> — there is no <code>?trunk</code>; trunk is <code>?</code> (abs<p>
+<code>?/beagle-ext-tests</code>). HEAD==trunk tip c0b8ffed wrongly reads <code>2 ahead, 0 behind</code>.
+</p>
+</li>
+<li>Pristine state read <code>?.beagle-ext/.journal: 1 ahead</code>; once knocked off that synthetic<p>
+branch the baseline stays <code>?trunk</code>, and <code>be get ?</code> does not restore it.
+</p>
+</li>
+<li>URI-less <code>be get --nosub</code> re-applied <code>.be</code>'s last pin <code>?#b8dc7f52</code> (behind the tip),<p>
+reverting committed+posted files — regressive, not the FF the <a href="../../skill/Issues.html">Issues</a> loop expects.
+</p>
+</li>
+<li><code>be get ?.beagle-ext/.journal</code> and the abs <code>?/beagle-ext-tests/.beagle-ext/.journal</code><p>
+both <code>SNIFFFAIL</code>, so there is no CLI route to re-bind a sub to its synthetic branch.
+</p>
+</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None; data is safe — c0b8ffed is posted to <code>?/beagle-ext-tests/.beagle-ext/.journal</code> and is the trunk <code>?</code> tip. Re-attaching the wt to the synthetic branch is a commit-the-parent action per <a href="../../meta/work.html">/meta/work</a>.
+</p>
+<h2>Design decisions</h2>
+<p>
+Both defects share a root cause: the sub at its posted tip sits on its SYNTHETIC dot-branch, but head/get fell back to the sub shard's stale trunk <code>?</code>.
+</p>
+<ul>
+<li>head: on a synthetic dot-branch the implicit target is that branch's<p>
+OWN tip (REFS key <code>?/&lt;proj&gt;/&lt;br&gt;</code>), not trunk <code>?</code> → at-tip = 0/0.
+</p>
+</li>
+<li>get: a bare/<code>?</code>-trunk re-sync whose target is an ANCESTOR of the<p>
+synthetic cur tip is a forward NO-OP — never a backward revert.
+</p>
+</li>
+<li>Trunk label is the bare <code>?</code> (no phantom <code>?trunk</code>); the JS <code>refs.js</code><p>
+in be/ still spells <code>?trunk</code> (own follow-up; refs-parity normalises).
+</p>
+</li>
+<li>Sub re-attach route: confirmed commit-the-parent (SUBS-035 by pin) —<p>
+no CLI <code>be get</code> to the synthetic branch is needed/added.
+</p>
+</li>
+</ul>
+<h2>TODOs</h2>
+<p>
+ -<a href="">v</a> head baseline: synthetic-branch tip target — <code>graf/LOG.c:851</code>.  -<a href="">v</a> head trunk label <code>?trunk</code>→<code>?</code> — <code>graf/LOG.c:1138</code>.  -<a href="">v</a> bare get no backward revert on synthetic tip — <code>sniff/GET.c:1321</code>.  -<a href="">v</a> repro test (file://, no ssh) — <code>test/get/66-dis053-sub-tip-no-revert</code>.  -<a href="">v</a> be/ <code>refs.js</code> trunk label <code>?trunk</code>→<code>?</code> (JS-side parity follow-up).
+</p>
+<h2>Outcome</h2>
+<p>
+PENDING-COMMIT (human gates the commit; debug-verified, full ctest green).
+</p>
+<ul>
+<li>ROOT CAUSE 1 (head): <code>graf_head_resolve_target</code> resolved the implicit<p>
+target to trunk <code>?</code> even when cur was on a synthetic dot-branch → sub at its tip read <code>N ahead</code> vs the stale pin; label printed <code>?trunk</code>.
+</p>
+</li>
+<li>ROOT CAUSE 2 (get): the FF gate captured the cur tip ONLY when cur was<p>
+on trunk (empty query); a synthetic-branch cur (<code>?/&lt;sub&gt;/.&lt;par&gt;#sha</code>) skipped it, so bare get checked out the trunk pin backward.
+</p>
+</li>
+<li>FIX: <code>graf/LOG.c:851</code> head target + <code>:1138</code> <code>?</code> label; <code>sniff/GET.c:889</code><p>
+helper + <code>:1321</code> synthetic no-op arm; refs-parity trunk-label normalise.
+</p>
+</li>
+<li>TEST: <code>test/get/66-dis053-sub-tip-no-revert</code> — FAILS on prebuilt<p>
+<code>build/bin/be</code>, PASSES on rebuilt build-debug; full ctest 378/378 green.
+</p>
+</li>
+<li>be/ FOLLOW-UP (PENDING-COMMIT, separate be/ tree): <code>views/refs/refs.js:26</code><p>
+<code>cur.branch || &quot;trunk&quot;</code> → <code>|| &quot;&quot;</code>, so trunk emits bare <code>?</code> not <code>?trunk</code>, matching C <code>be head</code>. Test <code>test/refs/trunk-sigil</code> (FAILS pre-fix on <code>?trunk</code>, PASSES post-fix; cross-checks <code>be head</code> oracle); be ctest green.
+</p>
+</li>
+</ul>
+</body>
+</html>

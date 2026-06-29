@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-064</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-064: <code>jab &lt;projector&gt;</code> leaks the JS context on exit (LSan)</h1>
+<p>
+Running a bareword projector through <code>jab</code> — e.g. <code>jab grep:.js#emit</code> — exits under LeakSanitizer with a leak entirely inside <code>libjavascriptcoregtk</code> (<code>fastMalloc</code>/<code>fastRealloc</code>): 640 B direct in 14 objects + 65035 B indirect in 3 objects (17 allocs, 65675 B). Native <code>be grep:.js#emit</code> is clean — the leak is jab-specific: the JS global context (and its JSC heap) is not released on the projector/loop exit path. Same family as <a href="JS-054.html">JS-054</a> (error-exit paths leak the whole context) and <a href="JS-007.html">JS-007</a> (main script load). The JABC test suite masks this class via the <code>leak:libjavascriptcoregtk</code> suppression; a bareword <code>jab</code> run does not. Method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro (from a tree with <code>be/</code>+<code>beagle/</code> siblings, ASAN-built <code>jab</code>):<p>
+<code>jab grep:.js#emit</code> → <code>==ERROR: LeakSanitizer: detected memory leaks</code> → <code>SUMMARY: AddressSanitizer: 65675 byte(s) leaked in 17 allocation(s)</code>.
+</p>
+</li>
+<li>Leak frames are all JSC-internal (<code>libjavascriptcoregtk-4.1.so</code><p>
+<code>WTF::fastRealloc</code> / <code>malloc</code>); no jab frame, so the JS context teardown is the suspect, not a jab-side container.
+</p>
+</li>
+<li>Native oracle <code>be grep:.js#emit</code> runs clean (C path, no JSC).</li>
+<li><a href="">JS-063</a> review already flagged this class: <code>jab store.js</code> bare exits rc=1 on<p>
+14 JSC-internal allocs (the singletons the suppression covers).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>jab &lt;projector&gt;</code> (grep:/diff:/etc.) exits with NO LSan leak under ASAN —<p>
+the JS global context is released on EVERY exit path (success + error).
+</p>
+</li>
+<li>Distinguish a REAL missing teardown (fixable, <a href="JS-054.html">JS-054</a> pattern) from benign<p>
+JSC process-lifetime singletons; if benign, make the suppression/teardown cover the bareword path so a clean <code>jab</code> run is leak-free.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>jab is <code>js/main.cpp</code> (+ <code>js/JABC.hpp</code>); build <code>WITH_JS</code> + ASAN per<p>
+<code>CLAUDE.md</code> §0/§8. Repro-first (§17): a red→green ASAN check.
+</p>
+</li>
+<li>The 65 KB indirect (3 fastRealloc objects) may be a real un-freed buffer, not<p>
+a singleton — confirm before declaring benign. Don't blanket-suppress a real leak. ABC/JABC idioms (no pointer arithmetic); funnel exits through one teardown (the <a href="JS-054.html">JS-054</a> <code>JABCRunFile</code>-style worker).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>NOT a teardown defect (the <a href="JS-054.html">JS-054</a> hypothesis was DISPROVEN): the<p>
+projector/loop path DOES reach <code>JSClose</code>→<code>JSGlobalContextRelease</code> (<code>main.cpp:291-298</code>). The leak is benign JSC lazy-init VM singletons — <code>jab --eval 0</code> (same teardown) is clean; the leak tracks JS features used (RegExp, iterators), does NOT scale with data (<code>ls:.</code> vs <code>ls:beagle</code> same fixed ~12-18 KB), and <code>JSGarbageCollect</code> reclaims nothing. The &quot;65 KB real buffer&quot; suspicion was wrong — process-lifetime VM state, all JSC frames.
+</p>
+</li>
+<li>Real bug: <code>js/lsan.supp</code> is applied only by the ctest ENV, so a bareword<p>
+end-user <code>jab</code> run has no suppression and reports the singletons. Fix = embed the suppression in the ASAN binary, scoped to JSC frames only.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Repro under ASAN (<code>jab ls:.</code>, faster proxy; grep: is verb-independent same class).</li>
+<li class="done"><input type="checkbox" checked disabled> Localize: teardown is fine; the singletons are JSC-internal, unsuppressed standalone.</li>
+<li class="done"><input type="checkbox" checked disabled> Fix: embed <code>__lsan_default_suppressions()</code>→<code>leak:libjavascriptcoregtk</code><p>
+ (<code>js/main.cpp:11-20</code>, <code>__has_feature(address_sanitizer)</code>-guarded) + repro  <code>js/test/run-064.sh</code> + <code>JABCleakLoop</code> (<code>js/CMakeLists.txt:112-113</code>, NOT in  the suppression group). RED 18793 B/16 → GREEN exit 0, 16 suppressed.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> JABC suite green: <code>ctest -R JABC</code> 30/30 incl. JABCleakLoop.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Trade-off: <code>leak:libjavascriptcoregtk</code> masks ANY leak whose stack hits JSC<p>
+(incl. a hypothetical real JSValue-not-released) — but this only extends the EXISTING <code>js/lsan.supp</code> policy (already used in ctest) to the standalone binary, not a new risk. Flagged for the reviewer.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><code>c9395c2f</code> — landed on beagle trunk: embed <code>__lsan_default_suppressions</code><p>
+(<code>leak:libjavascriptcoregtk</code>, ASAN-only) in <code>js/main.cpp</code> + <code>JABCleakLoop</code> repro (<code>js/test/run-064.sh</code> + <code>js/CMakeLists.txt</code>). Clean 3-way merge with <a href="">JS-063</a>'s <code>js/CMakeLists.txt</code> repoint. JABC 30/30; benign JSC singletons, no real leak. Main tree needs <code>be get</code> to pull <code>c9395c2f</code>.
+</p>
+</li>
+</ul>
+</body>
+</html>

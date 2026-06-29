@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>COMMIT-006</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>COMMIT-006: jab <code>commit:</code> must inline the full diff (tree vs parent) hunks, like C COMMIT-002</h1>
+<p>
+The C <code>commit:</code> view inlines the commit's full diff as relayed graf hunks after the metadata (<a href="COMMIT-002.html">COMMIT-002</a>, landed <code>df596d0f</code>). The JS <code>commit:</code> (<code>be/views/commit/commit.js</code>) emits ONLY the metadata hunk (commit/tree/parent/author/body) — no diff. So <code>jab commit:?&lt;sha&gt;</code> shows who/when/why but not WHAT changed. Port COMMIT-002's diff-relay to the JS view. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>C: <a href="COMMIT-002.html">COMMIT-002</a> (<code>df596d0f</code>) — <code>commit:</code> inlines the full diff as relayed graf<p>
+hunks (keeper/graf), superseding COMMIT-001's <code>diff:?&lt;sha&gt;</code> link.
+</p>
+</li>
+<li>JS <code>be/views/commit/commit.js</code>: emits the metadata hunk only (the recent<p>
+COMMIT-003/004/005 + the BRO-006 tree/parent U-links work). No diff hunks.
+</p>
+</li>
+<li>The JS <code>diff:</code> VIEW is inert (ctx.views unset, <a href="../JS/JS-071.html">JS-071</a>); but the diff<p>
+GENERATION (graf weave/diff binding, used by <code>be/views/diff/diff.js</code>) may work independently of the dead view-routing — the producer can call it directly.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>After the metadata, <code>jab commit:?&lt;sha&gt;</code> inlines the FULL diff of the commit's<p>
+tree vs its parent's tree, as relayed hunks — matching C <code>be commit:</code>.
+</p>
+</li>
+<li>ALL commits diff vs the FIRST parent (parent¹): non-merge = its one parent,<p>
+MERGE (2+ parents) = parent¹ (the mainline net change, git <code>--first-parent</code>). Root (0 parents): diff vs the empty tree (all-added) or skip.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Reuse the graf diff machinery (<code>be/views/diff/diff.js</code>'s hunk generation / the<p>
+graf binding); do NOT depend on the inert diff VIEW routing (<a href="../JS/JS-071.html">JS-071</a>). PRESERVE COMMIT-003/004/005 + the BRO-006 tree/parent U-links (uncommitted in commit.js).
+</p>
+</li>
+<li>Plain/colour/tlv parity with C <code>be commit:</code> where feasible. Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>RULING (user 2026-06-26): the diff is ALWAYS <code>commit.tree</code> vs <code>parent[0].tree</code><p>
+(the FIRST parent) — merges included (git <code>--first-parent</code>; consistent with beagle's first-parent log spine, <a href="../LOG/LOG-001.html">LOG-001</a>). No merge special-case, no skip.
+</p>
+</li>
+<li>DRIVE: call the diff VIEW handler (<code>../diff/diff.js</code>) with a PINNED <code>views</code><p>
+spec {mode:range, fromSha:parent<a href="">0</a>, toSha:sha} — bypasses dead ctx.views.
+</p>
+</li>
+<li>ATTACH: PLAIN folds the diff TEXT (out.chunk) into the ONE metadata record<p>
+(HUNK plain adds a sep PER record; native has none mid-stream).  COLOR/TLV feed the diff's own records after metadata (no sep; native tlv = 2 hunks).
+</p>
+</li>
+<li>ROOT (0 parents): SKIP (no base; native's root diff is wt-driven/odd — skip<p>
+is simpler).  All others (incl. merges) diff vs parent<a href="">0</a>.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="wontfix"><input type="checkbox" disabled> <del>Repro-first: <code>jab commit:?&lt;sha&gt;</code> 1-parent shows NO diff (RED, verified);</del><p>
+ after, the diff hunks follow the metadata (asserts vs native <code>be commit:</code>).
+</p>
+</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Inline the diff vs parent¹ for ALL commits (non-merge + merge alike, real</del><p>
+ 2-parent merge tested vs native); root → SKIP.
+</p>
+</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Preserve metadata + U-links + plain parity; be/ suite green (bar 1 pre-</del><p>
+ existing unrelated stale xfail be-js-bro-universal).
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Merge base DECIDED (user): the FIRST parent (parent¹), git <code>--first-parent</code> style<p>
+— uniform with the non-merge path. <a href="../JS/JS-071.html">JS-071</a> (dead diff view): call the diff generator directly, not via ctx.views.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>LANDED: be <code>aef4caef</code> (commit.js) + be/test <code>6a8c8b3c</code> (links+diff tests).  Fix:<p>
+<code>be/views/commit/commit.js</code> — require <code>../diff/diff.js</code> (l.39); gate + diffPlainText/diffFeedRecords/diffSpecRow helpers (~l.267-307); inline at the handler feed (~l.382-407): <code>inline = parents.length&gt;=1 ? parents[0]</code>, PLAIN folds diff text into the 1 record, COLOR/TLV feed diff records after.
+</p>
+</li>
+<li>Test: <code>be/test/commit/diff/run.sh</code> (CONFIGURE_DEPENDS, no CMakeLists edit)<p>
+— 1-parent inline+native-parity, root SKIP, real 2-parent merge first-parent diff vs native.  RED-verified (no '+++' pre-fix).  <code>be-js-commit-diff</code> GREEN.
+</p>
+</li>
+<li>Preserved: COMMIT-003/004/005 metadata + BRO-006 U-links (render/resolve/<p>
+links GREEN).  links/check.js <code>hunks.length==1</code>→<code>&gt;=1</code> (FORCED one-line relax: native <code>commit: --tlv</code> now = 2 hunks; U-target logic on hunks<a href="">0</a> unchanged). Color = best-effort (be --color pages via bro, not a producer oracle).
+</p>
+</li>
+</ul>
+</body>
+</html>

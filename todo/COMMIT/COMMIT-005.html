@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>COMMIT-005</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>COMMIT-005: <code>jab commit:</code> renders NOTHING in the PAGER (TTY); only <code>--plain</code>/piped works</h1>
+<p>
+<code>jab commit:&lt;target&gt;</code> resolves the commit correctly (<a href="COMMIT-004.html">COMMIT-004</a>) but to a TTY — where jab forks the JS pager — it renders NOTHING (empty). Piping (<code>jab commit:… | cat</code>, non-TTY → plain sink) shows the full commit. So <a href="COMMIT-003.html">COMMIT-003</a> fixed ONLY the <code>--plain</code> render; the PAGER (color) path drops the commit (content) hunk. This is the normal interactive case, so <code>commit:</code> looks completely broken at a terminal. Likely the same defect <a href="../JS/JS-092.html">JS-092</a> names: <a href="COMMIT-003.html">COMMIT-003</a> sidestepped the tok-TLV mangle by feeding EMPTY toks in <code>--plain</code>, but the pager feeds NON-EMPTY colour toks → the C binding mangles them → the record never drains. Found live 2026-06-26. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Evidence (cur tip <code>1c6e3ea9</code>, journal project, SAME binary + cwd):<p>
+-  <code>jab commit:?1c6e3ea9</code>  → TTY → EMPTY (only the LSan suppression block). -  <code>jab commit:?1c6e3ea9 | cat</code> → pipe (non-TTY) → full commit metadata + body.
+</p>
+</li>
+<li>So resolution (<a href="COMMIT-004.html">COMMIT-004</a>) and the plain sink (<a href="COMMIT-003.html">COMMIT-003</a>) are fine; the<p>
+TTY/pager branch (jab forks the JS pager <code>be/view/bro.js</code> / <code>be/views/bro/pager.js</code> when stdout is a tty) fails to render the commit hunk.
+</p>
+</li>
+<li><a href="COMMIT-003.html">COMMIT-003</a> root cause was <a href="../JS/JS-092.html">JS-092</a>: the C binding <code>js/hunk.hpp:63</code> computes the<p>
+TOK-TLV end with token-COUNT byte arithmetic, mangling NON-empty toks → the record fails to drain. COMMIT-003 dodged it in <code>--plain</code> by feeding EMPTY toks (no colour). The PAGER needs colour toks (NON-empty) → it hits the SAME mangle.
+</p>
+</li>
+<li>Likely a SECOND, JS-side edge too: COMMIT-003 guarded <code>bro.js:244</code> (empty-URI<p>
+getter) in the plain edge; the pager (colour) edge may drop the empty-URI hunk the same way.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>jab commit:&lt;target&gt;</code> to a TTY renders the commit (headers + body) in the pager,<p>
+matching the plain/piped output and C <code>be commit:</code> (which pages via C bro).
+</p>
+</li>
+<li>Other paged content views (<code>blob:</code>/<code>cat</code>) likely share the path — verify they render.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The proper fix is <a href="../JS/JS-092.html">JS-092</a> (<code>js/hunk.hpp</code> TOK-TLV byte length) so NON-empty colour<p>
+toks drain → a COLOURED pager; a JS-only &quot;feed empty toks in the pager&quot; is an uncoloured fallback, not the goal. <code>js/hunk.hpp</code> is beagle C-core → needs a build.
+</p>
+</li>
+<li>Don't regress the plain/piped path (<a href="COMMIT-003.html">COMMIT-003</a>), resolution (<a href="COMMIT-004.html">COMMIT-004</a>), or<p>
+non-empty-URI paged views (log/status/diff). Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>ANSWER: BOTH, and BOTH are C-binding bugs in <code>js/hunk.hpp</code> (not <code>bro.js</code>).<p>
+(a) <a href="../JS/JS-092.html">JS-092</a> tok-TLV 1/4-byte mangle → the colour-tok commit record fails to drain → <code>hunksFromLog</code> yields 0 hunks → the universal pager edge (loop.js:335 <code>if(hunks.length)</code>) opens NO pager → 0 bytes.
+</p>
+</li>
+<li>With (a) fixed the record drains but exposes (b): the empty-URI <code>_hunk_uri</code><p>
+getter does <code>NULL - buf[0]</code> (HUNK.c:129 never TLVs an empty uri), so <code>JABCSubU8</code> throws <code>RangeError</code> in <code>hunksFromLog</code>'s <code>utf8.Decode(log.uri)</code>. Fix both in <code>js/hunk.hpp</code> (co-land <a href="../JS/JS-092.html">JS-092</a>); no <code>bro.js</code>/<code>commit.js</code> change — COMMIT-003's <code>renderHunkLog</code> uri-getter guard stays (now redundant).
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Repro-first: pty harness shows the TTY/pager <code>commit:</code> render EMPTY (0 bytes)<p>
+ on the buggy binding; <code>js/test/hunk.js</code> K=1,2,3,4,7 toks round-trip is RED  pre-fix (<code>next()</code> false at K=1), GREEN post-fix.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Diagnose: traced sink→<code>hunksFromLog</code>→pager — (a) tok drain reject (<a href="../JS/JS-092.html">JS-092</a>),<p>
+ then (b) empty-URI <code>_hunk_uri</code> NULL-offset RangeError (probe.js isolated both).
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Fix BOTH in <code>js/hunk.hpp</code>: tok END = byte-end (<code>toks[1]</code>); empty uri/text<p>
+ getter → empty Uint8Array (JABChunkField). Rebuilt jab.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Verify: pty pager renders <code>commit:</code> COLOURED, matching plain; <code>cat:</code>/<code>log</code>/<p>
+ <code>status</code> page OK; COMMIT-003/004 tests PASS; 377/377 ctest green.
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="../JS/JS-092.html">JS-092</a> is a beagle C-core fix (<code>js/hunk.hpp</code>) needing a build; the main beagle<p>
+tree is occupied by DIS-053, so use an ISOLATED <code>$HOME/todo</code> worktree to rebuild jab.
+</p>
+</li>
+<li>Pre-existing (NOT this fix): 9 be/ banner-verb parity FAILs (diff/01,02,03,08,11,<p>
+regex, spot/search+submount, put/bare — <code>grep a.c</code> vs <code>a.c</code> banner) fail IDENTICALLY on the baseline buggy binding; parity/post + post/file are wall-clock-second flakes (PASS on re-run). None caused by the JS-092 fix.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>PENDING-COMMIT (agent does not commit; human gates).  Co-lands <a href="../JS/JS-092.html">JS-092</a>.<p>
+Changed (beagle C-core, worktree <code>~/todo/COMMIT-005</code>): <code>js/hunk.hpp</code> (the tok-TLV byte-end + the empty uri/text getter), <code>js/test/hunk.js</code> (the K=1,2,3,4,7 toks round-trip repro).  NO be/ script change (COMMIT-003/004 preserved as-is). Verified: 377/377 ctest green; pty pager <code>commit:</code> renders coloured, matching plain.
+</p>
+</li>
+</ul>
+</body>
+</html>

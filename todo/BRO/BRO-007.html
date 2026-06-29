@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-007</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-007: jab pager — collapse status-line hints to <code>h: help</code>, add a <code>help:</code> screen (shortcuts + URI schemes)</h1>
+<p>
+The jab/JS pager (<code>be/views/bro/pager.js</code>) ends its status line with a hardcoded hint blob <code>   (j/k space g/G : q)</code> (<code>_statusLine</code>, :215) — noisy, partial (omits <code>m</code> / Enter / <code>. # ? /</code> / back), and it grows every time a key is added. Replace it with a single <code>h: help</code> hint, and bind <code>h</code> to open a HELP screen listing the pager shortcuts AND the URI schemes you can type at the <code>:</code> address bar. The screen fits the existing model as a <code>help:</code> URI/view: <code>h</code> runs the <code>help:</code> spell like any typed URI, so it PUSHES onto the view stack and <code>-</code>/BS backs out — no new pager state machine. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Status line: <code>_statusLine</code> (<code>be/views/bro/pager.js:200-218</code>) appends a literal<p>
+<code>   (j/k space g/G : q)</code> after <code>statusURI + pos</code>. The other keys (<code>m</code>, Enter, <code>. # ? /</code>, <code>-</code>/BS back) are undocumented in the UI.
+</p>
+</li>
+<li>Keys: <code>_keyScroll</code> (<code>:249-276</code>) — <code>q</code> quit, <code>j</code>/<code>k</code> line, space/<code>b</code> page, <code>g</code>/<code>G</code><p>
+top/bottom, <code>m</code> mouse (<a href="BRO-005.html">BRO-005</a>), <code>:</code> address bar (+ <code>. # ? /</code> pre-insert, JAB-030), Enter follow-row URI, <code>-</code>/<code>BS</code>/<code>^H</code> back (<code>popView</code>). <code>h</code> (0x68) is currently UNBOUND — free for help.
+</p>
+</li>
+<li>Spell / view-stack model: a typed URI runs via <code>_runSpell</code> (<code>:298</code>) → <code>driveSpell</code><p>
+→ <code>pushView</code> (back-navigable stack, <code>popView</code> :108). So <code>h</code> → <code>_runSpell(&quot;help:&quot;)</code> reuses the whole path — the help screen is just another pushed view (<code>-</code> returns).
+</p>
+</li>
+<li>URI schemes = the registry's views (<code>be/core/registry.js</code>; <code>views/&lt;v&gt;/&lt;v&gt;.js</code>):<p>
+blob, cat, commit, diff, grep, log, ls, lsr, refs, regex, sha1, size, spot, status, tree, type (+ bro). These are what a <code>help:</code> screen enumerates.
+</p>
+</li>
+<li>C bro has NO in-pager help (only a <code>-h</code>/<code>--help</code> CLI flag, <code>bro/BRO.exe.c:106</code>),<p>
+so this is a jab-first feature; C parity is a follow-up, not a blocker.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>The scroll-mode status line ends with exactly <code>h: help</code> (drop the<p>
+<code>(j/k space g/G : q)</code> blob); <code>statusURI#L</code> + TOP/%/BOT position stay.
+</p>
+</li>
+<li><code>h</code> opens a help screen showing: (1) the pager SHORTCUTS — every <code>_keyScroll</code><p>
+binding, one line each (key → action); (2) the URI SCHEMES typeable at <code>:</code> (scheme → one-line description), e.g. <code>commit:&lt;rev&gt;</code>, <code>diff:&lt;path&gt;?&lt;rev&gt;</code>, <code>log:</code>, <code>tree:&lt;path&gt;</code>, <code>blob:&lt;path&gt;</code>, <code>status:</code>, <code>ls:&lt;dir&gt;</code>, <code>cat:&lt;file&gt;</code>, <code>grep:#&lt;word&gt;</code>, …
+</p>
+</li>
+<li>The screen is a normal pushed view: scrollable, <code>-</code>/BS returns to the prior<p>
+view, <code>q</code> quits.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Prefer a <code>help:</code> URI/view so <code>h</code> reuses <code>_runSpell</code>/<code>pushView</code> — NO bespoke<p>
+&quot;help mode&quot; state machine. PRESERVE <a href="BRO-005.html">BRO-005</a> mouse-nav, the <a href="BRO-006.html">BRO-006</a> <code>U</code> click-targets, and the pale-yellow header band.
+</p>
+</li>
+<li>Plain/colour/tlv: the help hunk is an ordinary <code>dog/HUNK</code> (text + tok32), rendered<p>
+by the pager like any view. Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) <code>help:</code> as a REAL producer view (<code>be/views/help/help.js</code>, auto-dispatched<p>
+by the registry so <code>be help:</code> works outside the pager too) vs a pager-built synthetic hunk. A view is more consistent; but the SHORTCUT list is pager-internal, so a producer would duplicate/drift from <code>_keyScroll</code>. Candidate split: the <code>help:</code> view emits the URI-SCHEME table (sourced from the registry), the pager prepends its own LIVE shortcut table; OR the view owns both and is documented as &quot;the jab pager help&quot;.
+</p>
+</li>
+<li>(open) URI-scheme table: auto-list the registry view names (no prose) vs a curated<p>
+<code>scheme → description</code> table (small drift risk, far more readable). Likely curated.
+</p>
+</li>
+<li>(open) C parity (<code>help:</code> view + the <code>h: help</code> hint in C bro <code>bro/</code>) — a follow-up,<p>
+out of scope here unless wanted.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="wontfix"><input type="checkbox" disabled> <del>Status line: replace <code>(j/k space g/G : q)</code> with <code>h: help</code> (<code>_statusLine</code> :215).</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Bind <code>h</code> (0x68) in <code>_keyScroll</code> → open the help screen (run the <code>help:</code> spell /</del><p>
+ push the help hunk), reusing <code>_runSpell</code>/<code>pushView</code>.
+</p>
+</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Build the help content: SHORTCUT table (single-sourced from pager.SHORTCUTS) +</del><p>
+ URI-SCHEME table (curated scheme→desc). Producer view help.js (auto-dispatched).
+</p>
+</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Repro-first test: <code>h</code> from a <code>log:</code> view shows the help hunk (shortcuts AND</del><p>
+ schemes present); <code>-</code>/BS returns to the prior view; the status line reads  <code>h: help</code>. RED before (no <code>h</code>, old hint), GREEN after.
+</p>
+</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>be/ suite green; mouse-nav / <code>U</code>-targets / band preserved.</del></li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None; self-contained jab pager feature.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+LANDED: be <code>4bf8e3dc</code> (pager.js + views/help/help.js) + be/test <code>246b0624</code> (be-js-bro-help).  Decision: <code>help:</code> is a REAL producer view — <code>be/views/help/help.js</code>, auto-dispatched by the registry (scheme <code>help</code> → <code>views/help/help.js</code>, NO registry edit), so <code>jab help:</code> works outside the pager too and <code>h</code> pushes it like any view.
+</p>
+<ul>
+<li>STATUS LINE: <code>_statusLine</code> (:215) <code>(j/k space g/G : q)</code> → <code>   h: help</code>;<p>
+statusURI#L + TOP/%/BOT kept, command-mode line unchanged.
+</p>
+</li>
+<li>BIND: <code>h</code> (0x68) in <code>_keyScroll</code> → <code>_runSpell(&quot;help:&quot;)</code> → driveSpell →<p>
+pushView (scrollable, <code>-</code>/BS pops back, <code>q</code> quits — no help state machine).
+</p>
+</li>
+<li>HELP VIEW: emits ONE <code>dog/HUNK</code> (text + tok32) via <code>ctx.sink.feed</code>, two<p>
+sections — SHORTCUTS + URI SCHEMES (commit/diff/log/tree/blob/cat/status/ ls/lsr/refs/grep/regex/spot/sha1/size/type, cross-checked vs be/views/).
+</p>
+</li>
+<li>ANTI-DRIFT: shortcut table single-sourced — pager exports <code>SHORTCUTS</code> (the<p>
+live <code>_keyScroll</code> map), help.js imports it; cross-ref comments both sides.
+</p>
+</li>
+<li>TEST: <code>be/test/bro/help/</code> (glob, no CMakeLists edit) — <code>h</code> from <code>log:</code><p>
+pushes help (shortcuts j/k,q + schemes commit:,diff:,log:), <code>-</code>/BS returns, <code>_statusLine</code> reads <code>h: help</code> not the old blob.  RED→GREEN verified.
+</p>
+</li>
+<li>SUITE: be/ ctest green bar the pre-existing <code>be-js-bro-universal</code> stale<p>
+WILL_FAIL xfail (not mine).  BRO-005 mouse-nav, BRO-006 <code>U</code> targets, the pale-yellow <code>_banner</code> band all preserved (rowclick/pager/view tests pass).
+</p>
+</li>
+</ul>
+</body>
+</html>

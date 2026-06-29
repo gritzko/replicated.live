@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-084</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-084 <a href="">LOW</a>: confirmed-minor correctness/perf cleanup batch</h1>
+<p>
+A batch of confirmed low-severity correctness/perf nits from the review, each a 1-2 line fix, grouped into ONE ticket (a TODO checkbox per item) to avoid ticket sprawl. Every cited file:line is verified below. The cheap ones land together; any item that grows past a couple of lines splits out into its own ticket. Repro where the bug is observable (the CR-in-line matcher, the oversized-line split, the empty-dir/dead-branch cases). Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>view/bro.js:67</code> <code>io.mmap(path,&quot;r&quot;).data()</code> — the file mmap handle is never<p>
+closed/unmapped (classify.js:125 already fled io.mmap for this leak).
+</p>
+</li>
+<li><code>view/bro.js:88-91</code> <code>buildDirHunk</code> calls <code>utf8.Encode(text)</code> 3× per entry on<p>
+the GROWING <code>text</code> → re-encodes the whole buffer each iteration, O(n^2).
+</p>
+</li>
+<li><code>views/diff/diff.js:259-261</code> <code>prefixingSink</code> blind <code>.split().join()</code> rewrite<p>
+of <code>--- a/</code>/<code>+++ b/</code>/<code>diff:</code> — matches those substrings anywhere in a chunk.
+</p>
+</li>
+<li><code>core/loop.js:139-148</code> <code>_hunkSink.feed</code> 40-iteration retry cap + a substring<p>
+<code>(&quot;&quot; + e).includes(&quot;full&quot;)</code> error match (fragile error classification).
+</p>
+</li>
+<li><code>shared/store.js:358-367</code> <code>readRecord</code> retries on ANY caught error (comment<p>
+says NOROOM) doubling <code>cap</code> to ~1GB before rethrow — a non-NOROOM error burns 24 grows.
+</p>
+</li>
+<li><code>shared/store.js:277</code> <code>locate</code>: <code>if (fileIdx &lt; 0) return true;</code> — an unknown<p>
+(keeper-less) file_id is silently dropped, the scan continues.
+</p>
+</li>
+<li><code>shared/pkt.js:30</code> <code>if (total &gt; 0xffff) throw</code> — accepts <code>total===0xffff</code>,<p>
+but 0xffff is the RESERVED pkt-line flush marker; should reject <code>&gt;=</code>.
+</p>
+</li>
+<li><code>shared/classify.js:122-139</code> <code>wtEqBase</code> reg-file path uses the lstat <code>st.size</code><p>
+from an EARLIER stat to size the read; a racing truncation → short read, stale-<code>ok</code>.
+</p>
+</li>
+<li><code>core/job.js:57,85,107</code> <code>c._read | 0</code> / <code>startOff | 0</code> / <code>c.after | 0</code> — the<p>
+<code>| 0</code> truncates the ULOG offset to 32-bit signed; a &gt;2GB queue wraps.
+</p>
+</li>
+<li><code>views/spot/match.js:77</code> <code>splitLinesBytes</code> line range <code>{lo, hi:i}</code> excludes<p>
+<code>\n</code> but KEEPS a trailing <code>\r</code> — a CRLF source matches with the CR in-line.
+</p>
+</li>
+<li><code>views/tree/tree.js:115-120</code> <code>commitOrTree</code> derefs <code>tree</code>/<code>commit</code> but<p>
+returns null for a <code>tag</code> — an annotated tag is never dereferenced.
+</p>
+</li>
+<li><code>views/blob/blob.js:122</code> <code>if (sha === null) throw &quot;BLOBFAIL&quot;</code> is DEAD —<p>
+<code>resolveHexAny</code> returns <code>undefined</code> (store.js:344), never null, so an ambiguous prefix throws BLOBNONE, not BLOBFAIL.
+</p>
+</li>
+<li><code>views/blob/blob.js:161-167</code> a single line longer than CAP (1 MiB) has no<p>
+<code>\n</code> in <code>[off,end)</code>, the back-scan hits <code>off</code>, <code>if(nl&gt;off)</code> is false → the line is SPLIT mid-content rather than kept whole.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Fix each nit with the minimal change; preserve byte-parity output.</li>
+<li>Repro the observable ones: full-line CR (match.js), oversized-line split<p>
+(blob.js), the dead BLOBFAIL / empty-dir cases.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>One file per item where possible (file-disjoint, parallel-safe). Keep each<p>
+fix 1-2 lines; split any item that grows into its own ticket.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Cheap fixes land in one changeset; CR-strip + oversized-line each get a<p>
+repro. The error-classification nits (<code>includes(&quot;full&quot;)</code>, NOROOM retry) swap to a typed/<code>NOROOM</code>-specific check if the binding exposes one.
+</p>
+</li>
+<li><code>job.js</code> <code>| 0</code> → <code>Number()</code>/BigInt-safe offset; verify the done-row format.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> <code>view/bro.js:67</code> close/unmap the file mmap after <code>.data()</code> (or fd-read<p>
+ like classify.js:125).
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> <code>view/bro.js:88-91</code> build the dir hunk with byte-length accumulation, not<p>
+ a per-entry full <code>utf8.Encode</code>.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> <code>diff.js:259-261</code> anchor the prefix rewrite to line starts, not blind<p>
+ substring replace.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> <code>loop.js:139-148</code> classify the grow error precisely (not `includes<p>
+ &quot;full&quot;`); revisit the 40-retry cap.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> <code>store.js:358-367</code> <code>readRecord</code> retry-grow only on NOROOM, rethrow other<p>
+ errors immediately.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> <code>store.js:277</code> <code>locate</code> — surface or log a keeper-less file_id rather than<p>
+ silently dropping it.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> <code>pkt.js:30</code> reject <code>total &gt;= 0xffff</code> (0xffff is the reserved marker).</li>
+<li class="open"><input type="checkbox" disabled> <code>classify.js:122-139</code> re-lstat (or fstat the open fd) for the size used to<p>
+ read; guard the short read.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> <code>job.js:57,85,107</code> drop the <code>| 0</code> 32-bit truncation on the ULOG offsets.</li>
+<li class="open"><input type="checkbox" disabled> Repro+fix <code>match.js:77</code> — strip a trailing <code>\r</code> from the line range.</li>
+<li class="open"><input type="checkbox" disabled> <code>tree.js:115-120</code> deref an annotated <code>tag</code> to its commit/tree.</li>
+<li class="open"><input type="checkbox" disabled> <code>blob.js:122</code> remove the dead <code>sha === null</code> BLOBFAIL branch (or make<p>
+ resolveHexAny signal ambiguity distinctly).
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Repro+fix <code>blob.js:161-167</code> — keep an oversized (&gt;CAP, no-<code>\n</code>) line whole.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> An item that needs a binding change (typed grow error, ambiguity signal)<p>
+ splits into its own ticket rather than bloating this batch.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

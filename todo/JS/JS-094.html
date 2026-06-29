@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-094</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-094 jab diff of a file under a submodule shows it wholly &quot;added&quot;</h1>
+<p>
+<code>jab diff &lt;sub&gt;/&lt;file&gt;</code> (e.g. <code>diff:be/view/bro.js</code> from the journal root) rendered <code>@@ -1,0 +1,N @@</code> — the WHOLE file as new — while <code>be</code> shows the real <code>@@ -1,M +1,N @@</code>. The baseline of a file UNDER a mounted submodule lives in the SUB's store; jab's parent-tree walk (<code>blobAtTree</code>) hits the gitlink, finds no blob, and <code>diffFile</code> treats the from-side as empty. <code>be</code> recurses the mount.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro (from <code>~/journal</code>): <code>jab diff be/view/bro.js</code> → <code>@@ -1,0 +1,663 @@</code>;<p>
+<code>be diff:be/view/bro.js</code> → <code>@@ -1,291 +1,663 @@</code>. Same-store files (<code>todo/BRO/README.mkd</code>) were already byte-identical — only mount-nested paths broke. Surfaced while dogfooding the BRO-009 diff-colour work.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>jab diff:&lt;sub&gt;/&lt;file&gt;</code> byte-matches <code>be</code> (wt-vs-base AND range), the<p>
+emitted names prefixed under the mount.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Pure JS; reuse <code>core/recurse.isMount</code> + <code>be.find</code> + the existing<p>
+<code>prefixingSink</code>; no new binding.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>mountSplit(repo, path)</code> finds the longest mounted prefix → {subPath, rest}.<p>
+The handler opens the sub repo/store, resolves the baseline THERE (wt: the sub's <code>wtlog.baselineTip</code>; range: the gitlink pin at each parent commit via <code>gitlinkAtTree</code>/<code>subTreeAtParent</code>), and diffs <code>rest</code> through a <code>prefixingSink(out, subPath)</code>.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="">v</a> views/diff/diff.js: mountSplit + gitlinkAtTree + subTreeAtParent +<p>
+handler delegation (wt + range).
+</p>
+</li>
+<li><a href="">v</a> test/diff/14-sub-file-baseline (git submodule fixture, dirtied sub file).</li>
+<li><a href="">v</a> Verified: <code>jab diff be/view/bro.js</code> == <code>be</code> byte-for-byte (plain+color);<p>
+<code>beagle/dog/HUNK.c</code> too; same-store unaffected; diff suite 9/9.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Pending land (beagle-ext shard). Sibling of the whole-tree submodule-order<p>
+gap noted in <a href="">BRO-009</a> (that one reproduces in <code>--plain</code> too; own ticket).
+</p>
+</li>
+</ul>
+</body>
+</html>

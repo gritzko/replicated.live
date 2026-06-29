@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-035</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-035: a detached submodule must COMMIT (staying detached), and a parent commit must re-attach it to its dot-branch via the gitlink bump</h1>
+<p>
+A <code>be post</code> that reaches a DETACHED submodule worktree refuses <code>POSTDET</code> (&quot;re-attach to a branch first&quot;) and aborts the whole commit with <code>BEDOGEXIT</code> — seen live: <code>be post!</code> from <code>beagle</code> → <code>post abc</code> → <code>POSTDET</code>; <code>be post --nosub</code> from <code>be</code> → <code>POSTDET</code>. Per the corrected <a href="../../wiki/Submodules.html">Submodules</a> §&quot;Committing detached subs&quot; two clauses must hold: (1) a detached sub still COMMITS, leaving its wt detached at the new commit <code>?newhash</code>; (2) a parent commit puts the sub onto its synthetic dot-branch <code>?/&lt;sub&gt;/.&lt;parent&gt;/&lt;pbranch&gt;</code> by bumping the <code>160000</code> gitlink. POSTDET-refuse is correct ONLY for a top-level wt (<a href="../DIS/DIS-009.html">DIS-009</a> / <a href="../GET/GET-024.html">GET-024</a>); a submodule is the exception. Blocks landing <a href="../DIS/DIS-052.html">DIS-052</a>, <a href="../DIS/DIS-042.html">DIS-042</a>, <a href="../COMMIT/COMMIT-003.html">COMMIT-003</a> (all sit on detached subs). Live 2026-06-26. Method <a href="../../meta/work.html">/meta/work</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>be post!</code> from <code>~/journal/beagle</code> → <code>post abc</code> / `sniff: post: refusing on<p>
+detached wt — re-attach to a branch first<code> / </code>POSTDET<code> / </code>BEDOGEXIT<code>. Same from </code>~/journal/be<code> (</code>be post --nosub<code> → </code>POSTDET`).
+</p>
+</li>
+<li>The subs (<code>beagle</code>, <code>abc</code>, <code>be</code>) read detached <code>?&lt;sha&gt;</code> because the journal post<p>
+recursion recorded detached cur-tips and never attached them to the dot-branch.
+</p>
+</li>
+<li><code>post_is_detached_wt</code> (<code>sniff/POST.c:945</code>, <a href="../DIS/DIS-009.html">DIS-009</a>) flags empty-fragment +<p>
+40-hex-query as detached → POST refuses; <a href="../GET/GET-024.html">GET-024</a> confirms the refusal is CORRECT for a top-level wt. The submodule case is the unhandled exception.
+</p>
+</li>
+<li>The error's advice <code>be get ?&lt;branch&gt;</code> resets the wt (losing uncommitted work);<p>
+re-attach-by-NAME is <a href="SUBS-023.html">SUBS-023</a> (closed WON'T-FIX: re-attach is by PIN, i.e. clause (2) here, not a named get) — so there is NO recovery route today.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>(1) <code>be post</code> on a detached SUB (parent-driven OR standalone) COMMITS, leaving<p>
+the wt detached at the new commit <code>?newhash</code> — never <code>POSTDET</code>.
+</p>
+</li>
+<li>(2) A parent <code>be post</code> that bumps the sub's <code>160000</code> gitlink (re)attaches the<p>
+sub onto <code>?/&lt;sub&gt;/.&lt;parent&gt;/&lt;pbranch&gt;</code> at the new tip (create if absent, FF if present) — the post-order R4→R2→R1 drive (<a href="../../wiki/Submodules.html">Submodules</a> §four-records).
+</p>
+</li>
+<li>The top-level detached-wt <code>POSTDET</code> refusal stays intact (<a href="../DIS/DIS-009.html">DIS-009</a>/<a href="../GET/GET-024.html">GET-024</a>);<p>
+ONLY the submodule context changes.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>ABC style; reuse <code>SUBSDirty</code> / <code>SNIFFSubReadTip</code> / the <a href="SUBS-027b.html">SUBS-027b</a> R2 emit;<p>
+ragel/REFS only, no branch-string hand-rolling. Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17).
+</p>
+</li>
+<li>Do NOT regress <a href="SUBS-006.html">SUBS-006</a> (clean sub no-op), <a href="SUBS-019.html">SUBS-019</a> (never an empty/phantom<p>
+gitlink), <a href="SUBS-027b.html">SUBS-027b</a> (R2), or the top-level POSTDET tests (<code>test/get/33</code>).
+</p>
+</li>
+<li>BOOTSTRAP: this fix is what unblocks committing <a href="../DIS/DIS-052.html">DIS-052</a>/<a href="../DIS/DIS-042.html">DIS-042</a>/<a href="../COMMIT/COMMIT-003.html">COMMIT-003</a>;<p>
+the freshly-built binary may drive that land step (an exception to the prebuilt-binary rule, since the prebuilt <code>be</code> carries the POSTDET bug).
+</p>
+</li>
+<li>MAIN-TREE HYGIENE: the beagle wt currently also holds uncommitted <a href="../DIS/DIS-052.html">DIS-052</a><p>
+(<code>sniff/GET.c</code>, <code>sniff/test/*</code>) and <a href="../DIS/DIS-042.html">DIS-042</a> (<code>test/post/40</code>, <code>test/post/53</code>, <code>test/post/INDEX.md</code>). Keep SUBS-035's files DISJOINT (<code>sniff/POST.c</code>, <code>beagle/SUBS.c</code>, <code>beagle/BE.cli.c</code>, <code>sniff/PUT.c</code> + a FRESH test dir); do not touch those files, and append to a shared INDEX without disturbing their lines.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>SIGNAL = mount-anchor probe (not a recursion flag): a secondary wt has<p>
+<code>&lt;wt&gt;/.be</code> as a FILE; a top-level wt has it as a DIRECTORY. New <code>post_wt_is_secondary()</code> mirrors PATCH.c's <code>wt_is_secondary</code> (POST-004) — one consistent discriminator across PATCH and POST. The detached-wt POSTDET refusal now gates <code>!detached_sub</code>; top-level keeps refusing (<a href="../DIS/DIS-009.html">DIS-009</a>/<a href="../GET/GET-024.html">GET-024</a>).
+</p>
+</li>
+<li>STANDALONE commit stays DETACHED: a bare sub post records the cur-tip in the<p>
+detached <code>?&lt;newhash&gt;</code> shape (sha in query, empty fragment — same writer GET uses) and advances NO branch REFS (no phantom trunk, <a href="../DIS/DIS-053.html">DIS-053</a>); the commit is ref-less until the next parent post re-attaches it.
+</p>
+</li>
+<li>Clause 2 (parent bump re-attach) NEEDED NO new code: the existing<p>
+<code>bepost_recurse_cb</code> → <code>bepost_synth_child_uri</code> → child POST-onto-synth + <code>bepost_bump_sub</code> + <a href="SUBS-027b.html">SUBS-027b</a> R2 emit already creates/FFs <code>?/&lt;sub&gt;/.&lt;parent&gt;/&lt;pbranch&gt;</code> and bumps the gitlink. Repro confirmed R1/R2/R4 all land; the only gap was clause 1's standalone-detached refusal.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Repro-first hermetic: a detached sub with a local edit → <code>be post</code> COMMITS,<p>
+ no POSTDET, wt reads <code>?newhash</code> (still detached). <code>test/post/54</code>.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Repro-first: parent <code>be post</code> bumps the sub gitlink AND the sub lands on<p>
+ <code>?/&lt;sub&gt;/.&lt;parent&gt;/&lt;pbranch&gt;</code> at the new tip (ref exists, points to the bump).
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Implement (1): gate the POSTDET refusal to top-level wts; a sub commits detached.<p>
+ <code>sniff/POST.c</code> <code>post_wt_is_secondary</code> + <code>detached_sub</code> (refuse/REFS/cur-tip arms).
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Implement (2): already in place (bepost recursion + SUBS-027b R2); verified, no<p>
+ new code needed.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Regression: top-level POSTDET preserved (<code>get/33</code>); SUBS-006/019/027b green;<p>
+ ctest 467/467 (WITH_SSH) + 376/376 (build-debug), 0 fail.
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="SUBS-023.html">SUBS-023</a> (re-attach by NAME) is closed WON'T-FIX — re-attach happens by PIN<p>
+via the parent bump (clause (2)); this ticket implements exactly that, so the named-get route the error message suggests is not needed.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><strong>(pending-commit — human gates the commit)</strong> Root cause: <code>POSTCommit</code><p>
+(<code>sniff/POST.c:2572</code>) refused <code>POSTDET</code> for ANY bare detached wt with no target branch. A submodule mount is detached at the pin BY DESIGN, so a standalone <code>be post</code> inside it (and <code>be post --nosub</code> from a sub) hit the refusal — there was no top-level-vs-sub discriminator (PATCH already had one, POST-004; POST never got it). Clause 2 was already correct.
+</p>
+</li>
+<li>Fix (file:line, <code>sniff/POST.c</code>): (a) new <code>post_wt_is_secondary()</code> at ~963<p>
+(mirror of PATCH.c <code>wt_is_secondary</code>); (b) <code>bare_detached</code>/<code>detached_sub</code> at POSTCommit entry ~2578 — refuse only <code>!detached_sub</code>; (c) skip the trunk REFS advance for <code>detached_sub</code> (~3180); (d) record the cur-tip in the detached <code>?&lt;newhash&gt;</code> shape for <code>detached_sub</code> (~3247); (e) skip the ff pre-flight for <code>detached_sub</code> (~2669). Clause 2 unchanged (existing <code>bepost_recurse_cb</code>).
+</p>
+</li>
+<li>Test: <code>test/post/54-sub-detached-standalone-commit</code> (SSH-gated, registered in<p>
+<code>test/CMakeLists.txt</code>) — RED on revert (POSTDET), GREEN with fix. Asserts: clean detached sub no-ops (no POSTDET), dirty commits + stays detached <code>?&lt;40hex&gt;</code> + ref-less, parent post re-attaches <code>?/sub/.parent</code> + bumps gitlink.
+</p>
+</li>
+<li>Tests: build-debug 376/376 (WITH_SSH=OFF) and 467/467 (WITH_SSH=ON), 0 fail;<p>
+top-level POSTDET (<code>get/33</code>) + SUBS-006/019/027b (<code>post/29/39/49/50/51/52</code>) green.
+</p>
+</li>
+<li>Prohibited files (DIS-052 <code>sniff/GET.c</code>, <code>sniff/test/*</code>; DIS-042 <code>test/post/40</code>,<p>
+<code>test/post/53</code>, <code>test/post/INDEX.md</code>) NOT touched. STOPPED before committing.
+</p>
+</li>
+<li>BOOTSTRAP NOTE for the human: the freshly-built <code>build-debug/bin/be</code> is the<p>
+bootstrap that can now drive the commit of the detached beagle/abc/be subs (incl. <a href="../DIS/DIS-052.html">DIS-052</a>/<a href="../DIS/DIS-042.html">DIS-042</a>/<a href="../COMMIT/COMMIT-003.html">COMMIT-003</a>) — the prebuilt <code>build/bin/be</code> still carries the POSTDET bug.
+</p>
+</li>
+</ul>
+</body>
+</html>

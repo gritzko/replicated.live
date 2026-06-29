@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-091</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-091 <a href="">LOW</a>: rev-anchored path descent <code>#&lt;sha&gt;./path</code> broken in size/blob/type</h1>
+<p>
+A path descent off a SPECIFIC rev — <code>size:#&lt;sha&gt;./a.txt</code>, <code>blob:?&lt;ref&gt;./a.txt</code> — never fires: <code>new URI</code> folds the whole <code>&lt;sha&gt;./a.txt</code> into the fragment (or <code>&lt;ref&gt;./a.txt</code> into the query), but the views read descent segments only from the URI <code>path</code> component, so the leading sha/ref is treated as the whole id and the <code>./path</code> tail is dropped.  Broken for short AND full shas alike (so unrelated to <a href="JS-082.html">JS-082</a>'s <code>{1,39}</code> resolve gap).  Surfaced verifying <a href="JS-082.html">JS-082</a>. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Reproduce: <code>jab size &quot;size:#&lt;commit40&gt;./a.txt&quot;</code> returns the COMMIT's size (or<p>
+the cur-tip), not a.txt's; <code>jab blob &quot;blob:#&lt;commit&gt;./a.txt&quot;</code> likewise misses.
+</p>
+</li>
+<li><code>views/size/size.js:49-89 resolveObject</code>: <code>segs</code> come from <code>path.split(&quot;/&quot;)</code>,<p>
+but for <code>size:#&lt;sha&gt;./a.txt</code> the URI gives <code>path=&quot;&quot;</code>, <code>frag=&quot;&lt;sha&gt;./a.txt&quot;</code> — <code>isHexish(frag)</code> is false (the <code>./a.txt</code> tail), so it falls through to the cur-tip branch; the <code>#&lt;hex&gt;./path</code> case at <code>:67-69</code> is never reached.
+</p>
+</li>
+<li>Same shape in <code>views/blob/blob.js</code> and <code>views/type/type.js</code>; only the bare<p>
+<code>size:./a.txt</code> (cur-tip descent, no query/frag) works today.
+</p>
+</li>
+<li>The view headers DOCUMENT <code>#&lt;hex&gt;./path</code> descent (size.js:67) — so this is a<p>
+real gap vs the intended contract, not a missing feature.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>#&lt;sha&gt;./path</code> and <code>?&lt;ref&gt;./path</code> descend the named rev's tree to the leaf in<p>
+size/blob/type; bare <code>#&lt;sha&gt;</code> / <code>?&lt;ref&gt;</code> keep returning the object itself.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>No hand-rolled URI parsing beyond splitting the leading hex/ref run from the<p>
+trailing <code>./path</code> within the frag/query slot; keep direct-sha behaviour intact.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>In each view's resolver, when frag/query is <code>&lt;hexrun&gt;(./|/)&lt;path&gt;</code>, split off<p>
+the leading <code>[0-9a-f]{1,40}</code> (or the ref up to the first <code>/</code>) as the id and feed the remainder as descent segs; reuse one shared helper across the views.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: <code>test/hexviews</code> cases for <code>size:#&lt;commit&gt;./a.txt</code> +<p>
+ <code>blob:?&lt;ref&gt;./a.txt</code> (red), then green; re-enable the descopes in  <code>be-js-hexviews-full-sha</code>.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Add the split-leading-id helper; wire into size/blob/type resolvers.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Pre-existing; the <a href="JS-082.html">JS-082</a> hexviews test descopes these two asserts pointing here.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

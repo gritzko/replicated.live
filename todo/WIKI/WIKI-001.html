@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WIKI-001</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WIKI-001: implicit links in beagle/mark — a bare <code>[Page]</code> with no def renders as <code>./Page.html</code> (StrictMark.mkd:46)</h1>
+<p>
+StrictMark now defines a THIRD link case — Implicit (<a href="../../wiki/StrictMark.html">StrictMark</a>:46): a shortcut <code>[StrictMark]</code> with NO definition becomes a link to <code>./StrictMark.mkd</code>. The <code>beagle/mark</code> renderer implements explicit refs, defined shortcuts, and an unresolved ABSOLUTE shortcut <code>[/path]</code> (a root-relative path link via <code>mark_emit_pathlink</code>), but an unresolved RELATIVE shortcut <code>[Page]</code> currently falls through to an EMPTY href (<code>MARK.c:243-250</code>; the <code>236-240</code> comment states undefined brackets keep the empty-href behavior). This ticket adds the implicit relative case so <code>[Page]</code> renders <code>&lt;a href=&quot;./Page.html&quot;&gt;Page&lt;/a&gt;</code> (<code>.mkd</code>→<code>.html</code>, like every page link). The change is presentation-only in <code>mark</code> — the MKDT grammar (<code>dog/tok</code>) is untouched; <code>mark</code> drives <code>MKDTDecomposeSpan</code> and emits HTML. See <a href="../../wiki/StrictMark.html">StrictMark</a>; method <a href="../../skill/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><a href="../../wiki/StrictMark.html">StrictMark</a>:46 — &quot;Implicit: <code>[StrictMark]</code> becomes a link to <code>./StrictMark.mkd</code>&quot;: the wiki convention's &quot;definition is optional&quot; shortcut, the bare-<code>[Page]</code> cross-link used across the wiki and tickets.</li>
+<li><code>mark_emit_link</code> (<code>MARK.c:223</code>): a found ref/shortcut → its url; unresolved + shortcut + ABSOLUTE (<code>PATHu8sIsAbsolute</code>) → <code>mark_emit_pathlink</code> (root-absolute, root-probe → <code>.html</code>); unresolved + RELATIVE → EMPTY href. The relative-implicit case is the gap.</li>
+<li>Reusable helpers already exist: <code>mark_emit_url</code> (<code>.mkd</code>→<code>.html</code>), <code>mark_trim_pageext</code>, <code>s_dot_html</code>, <code>mark_emit_pathlink</code> (<code>MARK.c:129-221</code>).</li>
+<li>Tests: table-driven <code>test/MARK.c</code> (render/escape/link/budget) + the <code>MARKpathlinks</code> fixture; <code>fuzz/MARK.c</code> is no-crash only.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>An unresolved RELATIVE shortcut <code>[Page]</code> (label == text, not absolute, not found) renders <code>&lt;a href=&quot;./Page.html&quot;&gt;Page&lt;/a&gt;</code> — extensionless <code>[Page]</code> → <code>./Page.html</code>; an explicit <code>.mkd</code>/<code>.md</code> in the bracket → <code>.html</code>.</li>
+<li>UNCHANGED: defined shortcuts/refs (→ their url), an explicit <code>[text][L]</code> with an undefined label (→ empty href; it is NOT a shortcut), images <code>![..]</code>, and the absolute <code>[/x]</code> path link.</li>
+<li>Repro-first table cases; <code>ctest</code> green; no fuzz crash.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>beagle</code> C core, ABC style (<a href="../../beagle/CLAUDE.md">CLAUDE</a>): typed slices + PATH helpers, no pointer arithmetic, <code>sane()</code>/<code>call()</code>/<code>done</code>. Render-only change in <code>mark</code>; do NOT touch the MKDT grammar.</li>
+<li>Add cases to the EXISTING table-driven <code>test/MARK.c</code> (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §3); update <code>mark/INDEX.md</code> and the <code>MARK.c:236</code> comment if the behavior note changes.</li>
+<li>Works in the MAIN tree (<code>/home/gritzko/journal/beagle</code>); no <code>be get</code> (a committable <code>beagle</code> clone is GET-033-blocked).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>In <code>mark_emit_link</code> add <code>implicit = !found &amp;&amp; shortcut &amp;&amp; !PATHu8sIsAbsolute(text)</code>. Emit href <code>./</code> + text with the page extension rewritten to <code>.html</code> (extensionless → append nothing, just <code>./text.html</code>; explicit <code>.mkd</code>/<code>.md</code> → <code>.html</code>). Display = the bracket text (basename/trim — harmless for a plain name).</li>
+<li>A small helper <code>mark_emit_implicitlink</code> parallel to <code>mark_emit_pathlink</code> but RELATIVE (<code>./</code> prefix, NO root probe — the spec mandates the link unconditionally, no existence check).</li>
+<li>Keep the absolute path-link branch as-is; implicit is its relative sibling. Update the <code>MARK.c:236-240</code> &quot;empty href&quot; comment to record the new relative-implicit behavior.</li>
+<li>Open: for a relative <code>[dir/Page]</code>, mirror the absolute basename/trim display (show &quot;Page&quot;)? Spec example is a single token; confirm whether relative <code>[dir/Page]</code> forms are expected before special-casing.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> RED table case in <code>test/MARK.c</code>: <code>[Page]</code> (no def) → <code>&lt;a href=&quot;./Page.html&quot;&gt;Page&lt;/a&gt;</code>; assert the absolute/explicit/image/defined cases are unchanged.</li>
+<li class="open"><input type="checkbox" disabled> Implement <code>mark_emit_implicitlink</code> + the implicit branch in <code>mark_emit_link</code>.</li>
+<li class="open"><input type="checkbox" disabled> <code>ctest</code> green (build-debug, <code>ctest -j16 --timeout 10</code>); fuzz no-crash spot-check.</li>
+<li class="open"><input type="checkbox" disabled> Update <code>mark/INDEX.md</code> + the <code>MARK.c:236</code> comment.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None — main-tree work, no <code>beagle</code> get needed.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-06-29 from <a href="../../wiki/StrictMark.html">StrictMark</a>:46 (the new Implicit link case).</li>
+</ul>
+</body>
+</html>

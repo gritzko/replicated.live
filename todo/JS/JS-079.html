@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-079</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-079 <a href="">MED</a>: <code>verbs/get/get.js</code> fan-out reads <code>ctx._get</code> with no guard</h1>
+<p>
+The get fan-out smuggles whole-run state through <code>ctx._get</code> (the pinned reader + wt + kinds map), but ONLY <code>handleSeed</code> sets it; <code>reconcileDir</code>/<code>leaf</code>/<code>delSweep</code> all assume it is present. Fine on a fresh run where the seed row dispatches first, but if the queue ever resumes PAST the consumed seed (a survivor resume, JSQUE-003), these children dispatch with <code>ctx._get===undefined</code> and throw a bare TypeError instead of a clean refusal. It also violates the loop per-row contract (state on ctx, not the row). Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>verbs/get/get.js:187</code> — `ctx._get = { k, wt, tip, oldTip, fresh, branch,<p>
+ts, kinds, dels }<code> is set ONLY in </code>handleSeed`.
+</p>
+</li>
+<li><code>:268</code> <code>reconcileDir</code>: <code>const g = ctx._get;</code> then <code>treeMap(g.k, …)</code> — a<p>
+null <code>g</code> throws <code>TypeError: Cannot read properties of undefined</code> at <code>g.k</code>.
+</p>
+</li>
+<li><code>:318</code> <code>leaf</code>: <code>const g = ctx._get, out = ctx.out;</code> then <code>g.wt</code>/<code>g.k</code> — same<p>
+bare TypeError on a seed-less dispatch.
+</p>
+</li>
+<li><code>:365</code> <code>delSweep</code>: <code>ctx._get.delSwept = res.acc;</code> — null-deref on assign.</li>
+<li>Dispatch (<code>:165-170</code>) routes a non-seed, non-delsweep row straight to<p>
+<code>handleReconcileOrLeaf</code>; no row carries the pinned reader (the queue round-trip keeps only the URI, comment <code>:264-266</code>).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A reconcile/leaf/delsweep row arriving before its seed REFUSES cleanly<p>
+(a named throw), never a bare TypeError.
+</p>
+</li>
+<li>A repro that dispatches a <code>get ?&lt;tree&gt;#&lt;old&gt;</code> row on a ctx with no <code>_get</code><p>
+and asserts the clean refusal.
+</p>
+</li>
+<li>Keep the fresh-run fan-out byte-identical (the guard is a no-op there).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>verbs/get/get.js</code> only; no change to the seed-pin shape (JSQUE-004).</li>
+<li>Either guard the children or re-derive coordinates from <code>ctx.resolved</code>;<p>
+do NOT widen the per-row contract. A few LoC.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Cheapest: a guard at the head of each child — `if (!ctx._get) throw &quot;be<p>
+get: reconcile row before seed&quot;;` — turns the latent TypeError into a named refusal and documents the seed-first invariant.
+</p>
+</li>
+<li>Alternative: re-derive <code>{ k, wt }</code> from <code>ctx.resolved</code>/<code>io.cwd()</code> so a<p>
+resumed fan-out self-heals; heavier, only if resume must survive.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/get/*</code>: invoke <code>reconcileDir</code>/<code>leaf</code> with <code>ctx._get</code><p>
+ unset and assert the named refusal (not a TypeError).
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Add the <code>if(!ctx._get)</code> guard to <code>reconcileDir</code>, <code>leaf</code>, <code>delSweep</code>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Confirm whether a get queue can actually resume past the seed today; if<p>
+ not, this is hardening — keep it minimal.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

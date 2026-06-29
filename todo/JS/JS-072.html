@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-072</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-072 <a href="">HIGH</a>: <code>patchscope.lca</code> returns a stale (non-recent) merge base</h1>
+<p>
+<code>patchscope.resolve</code> pins the 3-way <code>fork</code> for <code>be patch</code> via <code>lca(ours, theirs)</code> (<code>patchscope.js:139</code>); <code>patch.js:354</code> consumes <code>sc.fork</code> as the common base of the merge. But <code>lca()</code> walks <code>theirs</code> with a LIFO stack and returns the FIRST popped sha present in <code>ancestorSet(ours)</code> — DFS pop order has no relation to recency, so a diamond/merge history can hand back an older shared ancestor as the base. A too-old fork yields a noisier, wrong 3-way merge. Both walks are also uncapped. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>patchscope.js:101-119</code> <code>lca(reader,a,b)</code>: DFS-pops <code>b</code>, returns the<p>
+first sha in <code>ancestorSet(a)</code> — pop order is arbitrary, not recency.
+</p>
+</li>
+<li>The header comment <code>patchscope.js:104-105</code> says &quot;BFS … in ts order is<p>
+overkill; a DFS that returns the first b-ancestor … is the merge base&quot; — wrong: a DFS first-hit is NOT the most-recent common ancestor.
+</p>
+</li>
+<li><code>patchscope.js:82-100</code> <code>ancestorSet</code>: unbounded <code>stack.pop()</code> DFS over<p>
+<code>commitParents</code>, no WALK_CAP.  <code>lca</code> adds a second unbounded DFS.
+</p>
+</li>
+<li><code>patch.js:354</code>: <code>treeMap(reader, sc.fork)</code> is the 3-way base; a stale<p>
+fork makes file-level merges take/keep the wrong side (noise/conflicts).
+</p>
+</li>
+<li>Contrast <a href="">PATCH</a>'s <code>dag.js</code>: <code>ancestors</code> BFS is WALK_CAP-bounded<p>
+(<code>dag.js:30,43</code>), the divergence is recency-ordered by commit ts.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>lca()</code> returns the MOST-RECENT common ancestor on a diamond/merge<p>
+graph (a recency-aware merge base), not a DFS first-hit.
+</p>
+</li>
+<li>Both ancestor walks are bounded by a WALK_CAP (no unbounded DFS).</li>
+<li><code>be patch</code> over a merged-side-branch history picks the recent base.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Keep <code>lca</code> returning <code>undefined</code> for no-shared-history (the caller<p>
+drops to an empty base — <code>patchscope.js:122-123,139</code>).
+</p>
+</li>
+<li>Prefer delegating to <code>dag.js</code> (WALK_CAP + ts recency already there) over<p>
+a third local walk; keep the no-dag-cycle note honest if kept local.
+</p>
+</li>
+<li>Same <code>{scope,branch,ours,theirs,fork}</code> shape; scope to patchscope.js.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Recency-aware base: BFS by commit ts, or a two-colour generation LCA<p>
+matching <code>dag.js</code>'s parent-edge model (first-parent + merge parents).
+</p>
+</li>
+<li>Reuse <code>dag.ancestors</code>/<code>dag.isAncestor</code> (WALK_CAP-bounded) instead of<p>
+the local <code>ancestorSet</code> DFS, removing the unbounded-walk hazard.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first parity <code>test/js/patch/*</code>: a merge-side-branch-then-patch<p>
+ graph asserting <code>lca</code> returns the RECENT base, not the old ancestor.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Replace the DFS first-hit with a recency-aware merge base + WALK_CAP.</li>
+<li class="open"><input type="checkbox" disabled> Re-run the existing patch parity suite (no regression on linear DAGs).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Confirm <code>dag.commitParents</code> parent set matches patchscope's intent<p>
+(foster/rebase edges excluded — <code>dag.js:18-24</code>) before delegating.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

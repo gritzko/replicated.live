@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STATUS-003</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>STATUS-003 <a href="">HIGH</a>: full-repo <code>be</code> / <code>be post</code> SNOROOM on a large sub aborts the parent commit</h1>
+<p>
+Bare <code>be</code> (full-repo status) and <code>be post</code> recurse into the <code>html</code> submodule (483 files on disk, 481 tracked); AFTER html's clean <code>481 ok</code> summary a cumulative status/HUNK buffer overflows → <code>Error: SNOROOM</code> → <code>Error: BEDOGEXIT</code>, and <code>be post</code> then ABORTS the parent commit (&quot;sub recursion failed — worst=BEDOGEXIT&quot;). Crucially <code>be status:html</code> ALONE is fine (rc=0, <code>481 ok</code>), so the overflow is in the AGGREGATE recursion, not html's own scan. A clean/unchanged big sub wedges all landing. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro (journal root, with the <code>html</code> sub present): bare <code>be</code> →<p>
+<code>status:html</code> / <code>?91ae5b53…  481 ok</code> then <code>Error: SNOROOM</code> / <code>Error: BEDOGEXIT</code>, then it continues to <code>status:be/test</code>, … — so SNOROOM fires at the html→parent aggregate boundary, not fatally to the scan.
+</p>
+</li>
+<li><code>be post '&lt;msg&gt;'</code> → on the html sub: <code>Error: SNOROOM</code> / <code>Error: BEDOGEXIT</code> /<p>
+<code>be: post: aborting parent commit — sub recursion failed (worst=BEDOGEXIT)</code> — the whole commit aborts even though <code>html</code> is UNCHANGED (nothing to stage).
+</p>
+</li>
+<li>ISOLATION: <code>be status:html</code> standalone → rc=0, <code>481 ok</code>, NO SNOROOM (verified).<p>
+So html's per-sub status fits; the OVERFLOW is the parent accumulating sub results across many subs (parent 31 + be/test 17 + beagle 6 + html 481 + …).
+</p>
+</li>
+<li><code>SNOROOM</code> (<code>abc/01.h:124</code>) is returned by an abc slice feed (<code>abc/Sx.h</code>/<code>BUF.h</code>)<p>
+when the caller's <code>into</code> slice is too small — a FIXED buffer, not grow-on-room.
+</p>
+</li>
+<li>Candidate buffers in the dispatcher status/post recursion:<p>
+<code>beagle/BE.cli.c:237 a_carve(u8, cbuf, 1UL&lt;&lt;20)</code> (1 MiB) and <code>:322 a_carve(u8, sbuf, 64UL&lt;&lt;10)</code> (64 KiB) — the 64 KiB one is the likely cumulative overflow once a 481-row sub piles onto the aggregate.
+</p>
+</li>
+<li>ALSO affects be/ STANDALONE: <code>cd be &amp;&amp; be status</code> → <code>SNOROOM</code>/<code>BEDOGEXIT</code> (no<p>
+<code>ok</code> count) — be/'s own tracked set overflows the same buffer.  So be/ can't be statused or <code>be post</code>-ed standalone EITHER, and it drops from the parent submodule list (<a href="">BE-009</a>).  No <code>be post</code> workaround exists for be/ until fixed.
+</p>
+</li>
+<li>Impact: BLOCKS <code>be post</code> for any tree containing a large sub AND blocks landing<p>
+the be/ code-review fixes (JS-065..091) entirely; surfaced this session.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Full-repo <code>be</code> and <code>be post</code> handle a large sub (≥481 entries / large cumulative<p>
+output) WITHOUT SNOROOM; an unchanged/clean sub NEVER aborts the parent commit.
+</p>
+</li>
+<li>A repro fixture (a sub with ≥N files that overflows the aggregate today) that<p>
+passes after the fix; full beagle ctest stays green.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Native sniff/keeper/dog only. Prefer grow-on-NOROOM (the JS-055 <code>_grow</code>-on-<p>
+SNOROOM pattern / <code>a_carve</code>+retry) over a bigger fixed cap — a fixed bump just moves the cliff. Don't regress small-repo status/post output bytes.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Locate the overflowing carve/feed (start at <code>BE.cli.c:322</code> <code>sbuf</code> 64 KiB and the<p>
+HUNK-table sink the sub-recursion writes into); size it to the cumulative row/ byte count or grow it on SNOROOM and retry, mirroring git.pack's NOROOM grow.
+</p>
+</li>
+<li>Decouple a sub's recursion failure from the parent commit where the sub is a<p>
+no-op (an UNCHANGED sub must not contribute a fatal BEDOGEXIT).
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: a fixture worktree with a many-file sub that SNOROOMs bare <code>be</code><p>
+ / <code>be post</code> today; assert clean status + a completed parent commit after.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Find + grow (or right-size) the aggregate buffer; rebuild <code>beagle/build</code>.</li>
+<li class="open"><input type="checkbox" disabled> Verify: bare <code>be</code> + <code>be post</code> over the journal tree (incl. html) succeed;<p>
+ <code>ctest</code> beagle suite green; small-repo output unchanged.
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Two failure modes are tangled: the SNOROOM (buffer) and the PUTNONE/NONE spam<p>
+(<a href="../PUT/PUT-003.html">PUT-003</a>) both appear in the same <code>be post</code> recursion — fix independently.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FIXED (working tree, pending land): <code>dog/ULOG.c</code> — the fixed 1024-row scratch<p>
+index in ULOGOpenRO/ULOGOpenBooked/ULOGOpenIdx now sizes to content (<code>log_size/16 + 1024</code>); <code>be/.be</code> (1030 wtlog rows) overflowed it. The dispatcher carve (BE.cli.c:237/:322) was a red herring (diff:-only). Repro <code>dog/test/ULOG.c::T_open_over_1024_rows</code>. Verified: bare <code>be</code> over the journal tree rc=0 (6 status: blocks, no SNOROOM); <code>cd be &amp;&amp; be status</code> rc=0; beagle 464/464 + be 65/65. The BEDOGEXIT-decouple WIP item is moot (SNOROOM gone).
+</p>
+</li>
+</ul>
+</body>
+</html>

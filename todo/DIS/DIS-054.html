@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-054</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-054: be/ JS <code>be post</code> ignores the Path/Query/Host URI slots — silently local-commits instead of narrow/retarget/push, diverging from POST.mkd</h1>
+<p>
+The <code>be/</code> JS <code>post</code> handler (<code>verbs/post/post.js</code>) implements only ONE of POST.mkd's URI shapes: a local fast-forward commit onto cur's wtlog-tracked branch (plus submodule recursion). It never reads the command URI's Path, Query, or Host — <code>decide()</code> takes no path/query/host, <code>post.js</code> touches <code>cur.query</code> only for the detached-sha check, and there is no push/wire routing in <code>main.js</code>/<code>loop.js</code>. So three POST.mkd slots are silently dropped: *<strong>Host</strong>* (push) runs a local commit instead of pushing; *<strong>Query</strong>* (<code>?branch</code>/<code>?other#msg</code>) is ignored, so a retarget lands on cur not the named branch; *<strong>Path</strong>* (<code>./path</code>) does not narrow, the whole change-set commits. The PATCH-message shapes (<code>#</code>,<code>#!</code>,<code>#msg!</code>) are the one DECLARED gap (<code>POSTSCOPE</code>/<code>POSTNOMSG</code>), not a silent one. Scope is <code>be/</code> only (not <code>beagle/</code>). See <a href="../../wiki/POST.html">POST</a>, <a href="../POST/POST-024.html">POST-024</a>, <a href="DIS-009.html">DIS-009</a>; method <a href="../../skill/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Audit of <code>verbs/post/post.js</code> against <a href="../../wiki/POST.html">POST</a> (the 5-slot scheme + CLI cases) found the JS path is a strict subset of the spec; surfaced from the POST-023 push session (<code>jab post ssh://localhost/src/dogs?/main</code> → <code>POSTDET</code>, never pushed — same session as <a href="../POST/POST-024.html">POST-024</a>).</li>
+<li>Host/push UNIMPLEMENTED: no push code anywhere in the post flow; <code>//host</code>, <code>//host#msg</code>, <code>//host?branch</code>, <code>ssh://…?branch</code>, <code>be://…?branch</code> (<a href="../../wiki/POST.html">POST</a> CLI) all run <code>postOne</code> → a LOCAL commit onto cur (or <code>POSTNONE</code>/<code>POSTDET</code>), never a wire push. The detached wt in that session made it <code>POSTDET</code>; a clean attached wt would <code>POSTNONE</code>; a dirty one would commit locally — all wrong, all silent.</li>
+<li>Query IGNORED: <code>branchKey = cur.branch</code> from the wtlog (<code>post.js:184</code>); the command URI's <code>?ref</code> is never read as a target. <code>be post ?other#msg</code> (<a href="../../wiki/POST.html">POST</a> CLI) lands the commit on cur, NOT <code>?other</code> (no untie); bare <code>?branch</code>/<code>?..</code>/<code>?</code> (<a href="../../wiki/POST.html">POST</a> CLI: &quot;advance X to the wt hash&quot;) advance no label at all.</li>
+<li>Path IGNORED: <code>decideM.decide(info, wtl, reader)</code> (<code>fold-decide.js:79</code>) takes no path and classifies the whole worktree; <code>be post ./path</code> / <code>./path#msg</code> (<a href="../../wiki/POST.html">POST</a> CLI: &quot;narrow commit to path/submodule&quot;) commit everything, no narrowing.</li>
+<li>PATCH msg shapes are the DECLARED gap (not silent): any in-scope <code>patch</code> row throws <code>POSTSCOPE</code> (&quot;use native be post&quot;, <code>post.js:190</code>) and an empty message throws <code>POSTNOMSG</code> (<code>post.js:234</code>), so <code>#</code>/<code>#!</code>/<code>#msg!</code> reuse-absorbed-msg + foster/forget provenance (<a href="../../wiki/POST.html">POST</a> point 2) are simply not done here.</li>
+<li>NICETY worth keeping: the JS throws DESCRIPTIVE STRINGS, not bare <code>ok64</code> codes — e.g. <code>&quot;POSTDET: refusing on detached wt — re-attach (be get ?&lt;branch&gt;)&quot;</code>. That is friendlier to the user than native's terse <code>ok64</code> and should be preserved (and ideally adopted native-side).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>The <code>be/</code> <code>post</code> either IMPLEMENTS or LOUDLY REFUSES every POST.mkd slot it parses — no slot is silently dropped into a local commit. A push URI must not local-commit; a <code>?ref</code> retarget must not land on cur; a <code>./path</code> must not commit the whole tree.</li>
+<li>Minimal landing (refuse-loud) first: detect a populated Host/Query/Path slot and throw a friendly string (e.g. <code>POSTPUSH</code>/<code>POSTQRY</code>/<code>POSTPATH</code> &quot;not yet in JS post — use native <code>be post</code>&quot;), mirroring the existing <code>POSTSCOPE</code> punt, so behaviour is safe and honest before full parity.</li>
+<li>Full parity (follow-up): wire push (Host), <code>?ref</code> target-branch advance + untie (Query), path-narrowed commit (Path) — each its own sub-task / ticket once the refuse-loud guard lands.</li>
+<li>Keep human-readable string throws; do not regress to bare <code>ok64</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> (the JS ext / JABC) ONLY — do not touch <code>beagle/</code> native. Pure JS over libabc+libdog per the be/ rules. (The <code>js/uri.cpp</code> binding this leans on is <a href="../URI/URI-009.html">URI-009</a>, a separate beagle/ ticket.)</li>
+<li>Path-slot narrowing MUST resolve a relative path (<code>./</code>/<code>../</code> or path-rooted) against cwd then re-anchor to the wt root per <a href="../URI/URI-010.html">URI-010</a> — <code>jab post .?</code> in <code>be/test</code> means <code>be/test?</code>; the current <code>makeNarrow</code> (<code>fold-decide.js:90</code>) <code>./</code>-strip is wt-root-relative and ignores cwd.</li>
+<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17 / <a href="../../skill/Issues.html">Issues</a>): add <code>be/test/</code> cases asserting a push/<code>?other</code>/<code>./path</code> <code>be post</code> does NOT silently local-commit (refuse or correct), before the fix.</li>
+<li>Do not regress the working local-FF path: <code>#msg</code>/<code>-m</code>, bare-words, submodule post-order recursion, <code>POSTNOFF</code>/<code>POSTNONE</code>/<code>POSTCFLCT</code>/<code>POSTDET</code> guards.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Two-step: (1) refuse-loud guard for populated Path/Query/Host (cheap, safe, honest) → (2) real impl per slot (push/retarget/narrow) as follow-ups.</li>
+<li>Error surface stays STRINGS (the <a href="../../wiki/POST.html">POST</a>-friendly nicety), shape <code>CODE: human message — hint</code>, matching <code>POSTDET</code>/<code>POSTSCOPE</code>; do not introduce bare <code>ok64</code> throws.</li>
+<li>Slot detection should read the PARSED URI, not the raw arg: <code>isBareTrunkQuery(arg,u)</code>/<code>isSlotArg(a)</code> key on <code>=== &quot;?&quot;</code> (<code>post.js:140,178</code>) only because the binding flattened bare <code>?</code>; with <a href="../URI/URI-009.html">URI-009</a> (absent→<code>undefined</code>, present-empty→<code>&quot;&quot;</code>) they collapse to <code>u.query !== undefined</code> / <code>=== &quot;&quot;</code> — drop the raw-arg re-parse.</li>
+<li>Open: should the JS push reuse <code>shared/wire.js</code>/<code>shared/pkt.js</code>, or stay punted to native <code>keeper post</code>? Decide when the push sub-task is scoped.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: <code>be/test/</code> — <code>be post ssh://h/r?b</code> / <code>//h</code> does not silently local-commit (assert refuse/push). RED today.</li>
+<li class="open"><input type="checkbox" disabled> Repro: <code>be post ?other#msg</code> lands on <code>?other</code> (or refuses), not cur; <code>be post ./path</code> narrows (or refuses).</li>
+<li class="open"><input type="checkbox" disabled> Fix (step 1): refuse-loud guard for populated Host/Query/Path, friendly string throw, mirroring <code>POSTSCOPE</code>.</li>
+<li class="open"><input type="checkbox" disabled> Follow-up tickets: Host push, Query retarget+untie, Path narrow (each repro-first).</li>
+<li class="open"><input type="checkbox" disabled> Adopt <a href="../URI/URI-009.html">URI-009</a> parsed-URI slot detection (drop the raw-arg <code>?</code> hacks) + <a href="../URI/URI-010.html">URI-010</a> cwd→wt-root resolver in <code>makeNarrow</code> (drop the root-relative <code>./</code>-strip).</li>
+<li class="open"><input type="checkbox" disabled> Green: new repros pass; local-FF path + sub recursion + existing guards intact; be ctest green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Overlaps <a href="../POST/POST-024.html">POST-024</a> (native): the same push URI is broken native-side (<code>pure_push</code> misroute) and unimplemented JS-side — fix independently, cross-link.</li>
+<li>Path-slot narrowing is UNSOUND until <a href="../URI/URI-010.html">URI-010</a> lands: the landed-pending <code>makeNarrow</code> matches wt-root-relative and ignores cwd, so a <code>./path</code> from a subdir targets the wrong tree.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-06-28 from the <a href="../../wiki/POST.html">POST</a> vs <code>be/</code> post audit. Captures three silent slot-drops (Host/Query/Path) + one declared gap (PATCH msg), and the keep-the-string-throws UX note.</li>
+</ul>
+</body>
+</html>

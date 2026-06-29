@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-006</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-006: be/ JS views emit <code>U</code> click-targets (the producer half of BRO-005 mouse nav)</h1>
+<p>
+<a href="BRO-005.html">BRO-005</a> landed the pager's click→<code>U</code>-target CONSUMER (<code>be/views/bro/pager.js</code> <code>_uriAt</code>/<code>_screenToByte</code>), but NO JS view emits <code>U</code> tokens, so a click finds no target and mouse nav is inert. The C views DO emit <code>U</code> (<code>sniff/LS.c</code>, <code>graf/GRAF.c</code>, <code>sniff/SNIFF.exe.c</code>, <code>bro/BRO.c</code>). This ports <code>U</code>-target EMISSION to the JS views, per-view, mirroring C. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>CONSUMER contract (<code>be/views/bro/pager.js</code> <code>_uriAt</code>): for a clickable token,<p>
+the NEXT token must be tag <code>U</code>, and its hidden text bytes <code>[prevEnd..end)</code> ARE the URI. Mirrors C <code>tok32Pack('U', u8bDataLen(out))</code> (<code>graf/GRAF.c:522,535</code>).
+</p>
+</li>
+<li>EMIT convention (JS): (1) push the visible token (its colour tag, end = visible<p>
+text length); (2) append the URI bytes to the hunk TEXT; (3) push a token tagged <code>U</code> with end = new text length. Tok pack: <code>((tag &amp; 0x1f) &lt;&lt; 27) | (end &amp; 0xffffff)</code>, tag <code>U</code> = <code>'U'.charCodeAt(0) - 65</code> = 20. The committed <code>be/views/log/log.js</code> (<code>tok()</code> / <code>appendRow</code> / <code>spans</code>) is the JS tok-build model.
+</p>
+</li>
+<li><code>U</code> bytes stay hidden in plain + colour (the pager skips them; <code>_uriAt</code> reads them).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Each navigational JS view emits <code>U</code> click-targets matching its C counterpart, so a<p>
+left-click in the pager navigates to the row/token's URI (end-to-end with <a href="BRO-005.html">BRO-005</a>).
+</p>
+</li>
+<li>Per-view (workers below), each pointed at its JS file + the C source it mirrors.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Match <code>_uriAt</code> EXACTLY (visible tok → <code>U</code> tok → URI bytes). No new hunk format.<p>
+Plain/colour output unchanged except the (hidden) <code>U</code> bytes. Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs (one worker per family; each mirrors the named C source)</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> ls/lsr/tree (<code>be/views/{ls,lsr,tree}/*.js</code>) ← <code>sniff/LS.c</code> — each entry → <code>U</code> to its path.</li>
+<li class="done"><input type="checkbox" checked disabled> log (<code>be/views/log/log.js</code>) ← <code>graf/LOG.c</code> + <code>graf/GRAF.c:522/535</code> — commit/file rows → <code>U</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> diff (<code>be/views/diff/diff.js</code>) ← <code>graf/GRAF.c</code> — file headers/hunks → <code>U</code> to file:line.</li>
+<li class="done"><input type="checkbox" checked disabled> status (<code>be/views/status/status.js</code>) ← <code>sniff/SNIFF.exe.c</code> — per-file rows → <code>U</code> to the file.</li>
+<li class="done"><input type="checkbox" checked disabled> cat (<code>be/views/cat/cat.js</code>) ← <code>bro/BRO.c</code> — grepable tokens → <code>U</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> commit (<code>be/views/commit/commit.js</code>) ← <code>keeper/PROJ.c</code> — tree → <code>tree:?&lt;sha&gt;</code>,<p>
+ parent → <code>commit:?&lt;sha&gt;</code>; synthetic <code>commit</code> header carries NO <code>U</code>.  C cat-view emits NO per-token <code>U</code> (its 8 <code>'U'</code> sites are CONSUMERS); its  only file-view symbol nav is right-click <code>grep:#&lt;word&gt;</code> (bro_word_around,  BRO.c:2968/1108). Ported to a left-click <code>U</code>: each grepable token → <code>U</code>  <code>grep:#&lt;token&gt;</code>. JS <code>tok.parse</code> has no DEFMark (ids are <code>S</code>, not <code>N</code>/<code>C</code>),  so the gate is byte-level (word char / &gt;=0x80), matching bro_word_around.
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>refs (JS-only) and grep/regex/spot (no <code>'U'</code> in their C) have no C model — out of scope here.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>ALL LANDED: producers in the bulk <code>fda1986f</code>; commit U-links <code>aef4caef</code>;<p>
+consumed by the BRO-005 pager (<code>579b251f</code> + <code>4febec96</code>).
+</p>
+</li>
+<li>log (pending-commit): <code>views/log/log.js:340-398</code> appendRow splices a hidden<p>
+<code>commit:?&lt;sha&gt;</code> + TAG_U(20) <code>U</code> tok per sha8 (mirrors <code>LOG.c:260</code>/<code>GRAF.c:535</code>).
+</p>
+</li>
+<li>Test <code>be/test/log/links/{run.sh,check.js}</code> (glob <code>be-js-log-links</code>) GREEN; U-<p>
+targets match native <code>be log: --tlv</code>, plain byte-identical (LOG-001 kept).
+</p>
+</li>
+<li>cat (pending-commit): <code>views/cat/cat.js:36-66</code> <code>withLinks</code> rebuilds body+toks<p>
+in lockstep (GRAF.c:517-535 model), splicing <code>grep:#&lt;token&gt;</code> + TAG_U(20) <code>U</code> after each grepable token; wired at <code>views/cat/cat.js:153-155</code>.
+</p>
+</li>
+<li>Test <code>be/test/cat/links/{run.sh,links.js}</code> (glob <code>be-js-cat-links</code>) GREEN;<p>
+RED→GREEN verified, plain/visible bytes byte-identical (U hidden), e2e through pager <code>_uriAt</code>. DEFERRED: a cross-file jump to a symbol's DEFINITION needs a symbol index cat.js lacks (no <code>spot:</code>/<code>path:line</code> target — grep only).
+</p>
+</li>
+<li>diff (pending-commit): <code>views/diff/diff.js:37-47</code> <code>withUTarget</code> appends the<p>
+hunk's own <code>diff:&lt;path&gt;?&lt;navver&gt;#L&lt;n&gt;</code> uri + TAG_U(20) <code>U</code> tok per hunk; the handler's <code>diffOut</code> (<code>:311-320</code>) feeds it to ctx.sink, <code>emitHunks</code> (<code>:121-131</code>) feeds the raw record, <code>prefixingSink</code> (<code>:291-305</code>) prefixes the sub uri too.
+</p>
+</li>
+<li>Test <code>be/test/diff/links/{run.sh,links.js}</code> (glob <code>be-js-diff-links</code>) GREEN;<p>
+RED→GREEN verified, U-target decodes to the hunk file URI, <code>.plain</code> render byte-identical (U hidden). NOTE: the JS diff view is still inert e2e (ctx.views unwired, 5 cases xfail) — the producer logic + unit test land; e2e is separate.
+</p>
+</li>
+<li>status (pending-commit): <code>views/status/status.js:265-267</code> emits a per-file nav<p>
+(<code>diff:</code> for <code>mod</code>, else <code>cat:</code>, move→DST); <code>sinkOut</code> (<code>:108-176</code>) builds a HUNK (text+tok32, hidden TAG U=20) fed to ctx.sink for the pager/<code>--tlv</code> (mode-gated <code>:76-84</code>), while plain/colour keep ctx.out (parity). Mirrors SNIFF.exe.c:539.
+</p>
+</li>
+<li>Test <code>be/test/status/links/{run.sh,assert_u.js}</code> (glob <code>be-js-status-links</code>)<p>
+GREEN; RED→GREEN verified (flat text → no toks pre-fix), U-targets byte-match native <code>be status --tlv</code>, plain byte-identical; e2e <code>_uriAt</code> on a path click resolves <code>diff:</code>/<code>cat:</code>. be/ suite 68/69 (lone red = stale <code>bro-universal</code> xfail).
+</p>
+</li>
+<li>ls/lsr/tree (pending-commit): <code>views/ls/ls.js:43-94</code> appendRow/emitHunk build<p>
+ONE content HUNK (text+tok32, hidden U=20 per row) fed to ctx.sink; wired mode- gated at <code>ls.js:130,169-178</code> (sink for color/--tlv, ctx.out columnar for plain). Row→nav: file <code>cat:&lt;navPfx+name&gt;</code>, move <code>cat:&lt;dst&gt;</code>, dir <code>ls:&lt;sub&gt;/</code>. lsr inherits (one-line re-export). tree <code>views/tree/tree.js:51-66,160,209-237</code>: blob <code>blob:&lt;path&gt;</code>, tree <code>tree:&lt;path&gt;/</code>, <code>..</code> row no U. Mirrors <code>LS.c:79-92</code>/<code>HUNK.c:1454-1520</code>.
+</p>
+</li>
+<li>Test <code>be/test/ls/links/{run.sh,assert_u.js}</code> (glob <code>be-js-ls-links</code>) GREEN;<p>
+RED→GREEN verified (pre-fix <code>--tlv</code> had NO HUNK → no U). U-targets decode via pager <code>_uriAt</code>/<code>hunksFromTlv</code>; ls/tree root plain byte-identical to native, scoped plain stable (U hidden). ls/listing+ls/submount stay GREEN. be/ suite 58 pass / 9 red = the documented xfail set (diff<strong>5, spot</strong>2, regex, put-bare).
+</p>
+</li>
+<li>commit (pending-commit): <code>views/commit/commit.js:193-202</code> buildHunk tags each<p>
+<code>tree</code>/<code>parent</code> sha value with a <code>uri</code> (tree → <code>tree:?&lt;sha40&gt;</code>, parent → <code>commit:?&lt;sha40&gt;</code>); <code>:245-262</code> splices the URI bytes + TAG_U(20) <code>U</code> tok after that span into a U-bearing body, fed by the handler (<code>:331-338</code>) for color/tlv while plain keeps the U-free body+empty toks (COMMIT-003 parity).  Synthetic <code>commit &lt;sha&gt;</code> header carries NO <code>U</code> (PROJ.c:431-436; COMMIT-001's <code>diff:?&lt;sha&gt;</code> link stays superseded by COMMIT-002's relay).  COMMIT-003/004/005 preserved.
+</p>
+</li>
+<li>Test <code>be/test/commit/links/{run.sh,check.js}</code> (glob <code>be-js-commit-links</code>)<p>
+GREEN; RED→GREEN verified (pre-fix <code>--tlv</code> had 0 U toks → 0 targets, post-fix 2).  U targets decode via pager <code>_uriAt</code> on a 2-commit chain; <code>--plain</code> byte- identical to native metadata (U hidden, no <code>:?</code> leak).  commit/render+resolve stay GREEN; sibling links (log/cat/status/ls) unaffected.
+</p>
+</li>
+<li>GAP (not blocking ls/tree): native ls <code>--plain</code> is htbl_trim'd (no trailing<p>
+blank); the JS non-tty dump uses <code>bro.renderHunkLog</code>→<code>HUNKu8sFeedText</code> which appends a separator <code>\n</code> and never trims. So PLAIN ls keeps the columnar ctx.out path (byte-exact); only color/--tlv take the U-bearing sink.
+</p>
+</li>
+</ul>
+</body>
+</html>

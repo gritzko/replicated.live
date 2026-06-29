@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TEST-001</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>TEST-001 <a href="">done</a>: pin git default branch to master in the wire-parity harness</h1>
+<p>
+git 2.52 defaults <code>init.defaultBranch</code> to <code>main</code>, but the keeper/git wire-parity tests hardcode <code>master</code>; a bare origin then carries a dangling <code>HEAD → refs/heads/main</code> (only <code>master</code> is pushed), so the stock-<code>git</code> ORACLE clone checks out an empty tree while beagle correctly fetches <code>?master</code> — the comparison then reports a spurious diff. Six tests fail (ROUNDtest, BEroundtrip, blobs-from-git, tag-blobs-from-keeper, clone-from-git, clone-from-keeper). Make the branch explicit. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>git --version</code> = 2.52.0; a fresh <code>git init</code> → <code>refs/heads/main</code>. The harness<p>
+builds <code>master</code>-tipped toys, so the oracle's HEAD-driven checkout is empty.
+</p>
+</li>
+<li><code>keeper/test/ROUND.c:286</code> did a plain <code>git init $T</code> (→ <code>main</code>) then<p>
+<code>git push origin master</code> (<code>:294</code>) which pushes nothing → clone of an empty origin.
+</p>
+</li>
+<li>Shell tests build a bare origin with <code>git init --quiet --bare</code> (default HEAD<p>
+<code>main</code>), push <code>master</code>, then <code>git clone</code> it: &quot;warning: remote HEAD refers to nonexistent ref, unable to checkout&quot; → empty <code>git.list</code> vs beagle's <code>wt.list</code>.
+</p>
+</li>
+<li>clone-from-keeper is special: keeper's canonical trunk is <code>refs/heads/main</code><p>
+(<code>keeper/REFADV.c:67</code>), so a <code>master</code>-only keeper mirror advertises a dangling <code>HEAD→main</code>; the <code>git clone --upload-pack='keeper upload-pack'</code> oracle then checks out nothing even after the origin pin.
+</p>
+</li>
+<li>Reproduce: <code>ctest --test-dir beagle/build -R 'ROUNDtest|BEroundtrip|blobs-from-git|tag-blobs-from-keeper|clone-from-git|clone-from-keeper'</code>.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>All six tests green; the default branch is explicit, not environment-derived.</li>
+<li>No product-code change; the harness stays <code>master</code>-themed by intent.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Touch only test harness files; keep the toy repos on <code>master</code>.</li>
+<li>The fix must work on both old (default <code>master</code>) and new (default <code>main</code>) git.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Pin <code>git -c init.defaultBranch=master init …</code> on EVERY bare-origin init (and<p>
+ROUND.c's working seed), so the bare HEAD is <code>refs/heads/master</code> at init time.
+</p>
+</li>
+<li>clone-from-keeper: the oracle <code>git clone</code> gets <code>--branch master</code> so it checks<p>
+out the branch explicitly and never relies on keeper's served HEAD symref.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Pin master in clone-from-git.sh, clone-from-keeper.sh, blobs-from-git.sh,<p>
+  tag-blobs-from-keeper.sh, roundtrip.sh (bare origin + seed), ROUND.c (3 inits).
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> clone-from-keeper.sh oracle: <code>git clone --branch master …</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Rebuild ROUNDtest; <code>ctest</code> the six → 6/6 green; full beagle suite 464/464.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Latent interop gap (NOT fixed here, low impact): keeper advertises <code>HEAD→main</code><p>
+even when <code>main</code> is absent on the served mirror; a stock <code>git clone</code> of a <code>master</code>-only keeper repo checks out nothing. Harmless in normal <code>main</code> usage; a more correct keeper would advertise HEAD at the actual default/only branch. Candidate follow-up <a href="">KEEP</a> ticket if real-world non-<code>main</code> mirrors matter.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Applied to the working tree (pending commit): <code>beagle/keeper/test/ROUND.c</code>,<p>
+<code>beagle/beagle/test/{clone-from-git,clone-from-keeper,blobs-from-git, tag-blobs-from-keeper,roundtrip}.sh</code>. Full <code>beagle/build</code> suite 464/464 green.
+</p>
+</li>
+</ul>
+</body>
+</html>

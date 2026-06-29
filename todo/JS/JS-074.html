@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-074</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-074 <a href="">MED</a>: <code>core/registry.js</code> — <code>build</code> masks load/syntax errors as unresolved verb</h1>
+<p>
+<code>registry.build</code> resolves a verb to its handler via two nested <code>require</code> attempts (views/ then verbs/).  Both catches are BLIND to the error kind, so a module that EXISTS but throws at load (syntax error, bad require, throwing top-level) is swallowed and recorded <code>null</code> — later surfacing far away as the misleading &quot;no handler for verb&quot; loop refusal.  Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>core/registry.js:36</code>: <code>try { mod = req(&quot;views/&quot; + verb + &quot;/&quot; + verb + &quot;.js&quot;); }</code></li>
+<li><code>core/registry.js:37-39</code>: `catch (e) { try { mod = req(&quot;verbs/&quot;...) }<p>
+catch (e2) { table<a href="">verb</a> = null; continue; } }<code> — </code>e<code>/</code>e2` discarded.
+</p>
+</li>
+<li>A real not-found is the jab loader's &quot;cannot find&quot; string; a SYNTAX<p>
+error or a throwing top-level require throws a DIFFERENT error, yet both land in the same <code>table[verb] = null</code> not-found bucket.
+</p>
+</li>
+<li><code>core/loop.js:102-106</code>: a null handler is retried lazily, then<p>
+<code>throw &quot;loop: no handler for verb '&quot; + row.verb + &quot;' ...&quot;</code> — so a broken-but-present module is reported as MISSING, hiding the syntax error from the author.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A view/verb module that throws at load must SURFACE its real error,<p>
+not be reported as an unresolved verb.
+</p>
+</li>
+<li>Only a genuine not-found (&quot;cannot find&quot;) stays the try-other-tree /<p>
+leave-absent path.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Keep <code>build</code>'s signature + return shape (<code>table[verb] = fn | null</code>).</li>
+<li>Keep the two-tree probe order (views/ then verbs/, names disjoint).</li>
+<li>Match on the jab loader's &quot;cannot find&quot; not-found string ONLY.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Re-throw any caught error whose message does NOT contain the require<p>
+&quot;cannot find&quot; not-found marker; treat only not-found as fall-through.
+</p>
+</li>
+<li>The views/ catch: if <code>e</code> is NOT not-found, re-throw immediately (do<p>
+NOT fall to the verbs/ probe — the module was found, it threw).
+</p>
+</li>
+<li>The verbs/ catch: if <code>e2</code> is NOT not-found, re-throw; else <code>null</code>.</li>
+<li>Verify the EXACT jab loader not-found string (require.cpp) before<p>
+hard-coding it — a wrong substring re-masks everything.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: a fixture view module with a top-level <code>throw</code> (or a<p>
+ syntax error); assert <code>build</code> PROPAGATES it, not &quot;no handler for verb&quot;.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Confirm the jab &quot;cannot find&quot; not-found string in require.cpp.</li>
+<li class="open"><input type="checkbox" disabled> Gate both catches on that string; re-throw otherwise.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul class="todo">
+<li class="blocked"><input type="checkbox" disabled> None — local to <code>core/registry.js</code>; loop.js:102-106 unchanged.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

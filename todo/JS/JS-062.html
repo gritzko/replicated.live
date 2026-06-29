@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-062</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-062: be-bin/* parity harnesses use stale pre-reorg JS paths</h1>
+<p>
+The five <code>beagle/test/bin/*/run.sh</code> parity harnesses hardcode the pre-<a href="JS-061.html">JS-061</a> <code>be/</code> layout (<code>be/lib/*.js</code>, <code>be/refs.js</code>, <code>be/status.js</code>); the by-verb reorg moved those scripts to <code>be/shared/</code>, <code>be/views/refs/</code>, <code>be/views/status/</code> and <code>be/core/discover.js</code>, so each harness aborts at its existence check with <code>… missing</code>. Five ctests fail: <code>be-bin-dag-divergence</code>, <code>-keeper-verify</code>, <code>-refs-parity</code>, <code>-status-parity</code>, <code>-sub-status-parity</code> (#195–199). This is the be-js-* shell-harness path rewrite <a href="JS-061.html">JS-061</a> explicitly DEFERRED. Method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Reproduce: <code>ctest --test-dir beagle/build -R '^be-bin-' --output-on-failure</code><p>
+— all five fail with <code>FAIL: /…/be/&lt;stale&gt;.js missing</code>.
+</p>
+</li>
+<li>Stale paths confirmed by per-test localization (actual location at right):<p>
+-  <code>dag-divergence/run.sh:30</code> <code>$BINDIR/lib/dag.js</code> → <code>be/shared/dag.js</code>. -  <code>keeper-verify/run.sh:25</code> <code>LIB=&quot;$BINDIR/lib&quot;</code> (store.js) → <code>be/shared/</code>. -  <code>refs-parity/run.sh:35</code> <code>$BINDIR/refs.js</code> → <code>be/views/refs/refs.js</code>. -  <code>status-parity/run.sh:30</code> <code>$BINDIR/status.js</code> → <code>be/views/status/status.js</code>. -  <code>sub-status-parity/run.sh:36</code> <code>$BINDIR/status.js</code> → <code>be/views/status/</code>.
+</p>
+</li>
+<li>Each <code>run.sh</code> aborts at the FIRST missing path; embedded JS probes in<p>
+<code>dag-divergence</code> (l.50–52) and <code>keeper-verify</code> (l.55) also require <code>lib/be.js</code> (the discovery helper) — now <code>be/core/discover.js</code>.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>All five <code>be-bin-*</code> ctests green again, byte-parity oracles unchanged.</li>
+<li>Every <code>run.sh</code> (and its embedded <code>require</code>) points at the post-reorg path.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Touch ONLY the five <code>run.sh</code> (+ their inline JS); no file moves, no oracle<p>
+edits. The reorg already moved the scripts — this is path math only.
+</p>
+</li>
+<li><code>lib/be.js</code> → <code>core/discover.js</code> is an API shape change (was <code>be.find()</code>):<p>
+verify discover.js's export before repointing, don't assume <code>.find()</code>.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Path map to apply verbatim: <code>lib/dag.js</code>→<code>shared/dag.js</code>,<p>
+<code>lib/store.js</code>→<code>shared/store.js</code>, <code>refs.js</code>→<code>views/refs/refs.js</code>, <code>status.js</code>→<code>views/status/status.js</code>, <code>lib/be.js</code>→<code>core/discover.js</code>.
+</p>
+</li>
+<li>Prefer a single base var per harness (e.g. keeper-verify's <code>LIB</code>) repointed<p>
+once over scattering <code>views/…/</code> into every reference.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Read <code>be/core/discover.js</code> exports; settle the <code>be.find()</code> replacement.</li>
+<li class="open"><input type="checkbox" disabled> dag-divergence/run.sh: repoint l.30 + embedded-JS requires l.50–52.</li>
+<li class="open"><input type="checkbox" disabled> keeper-verify/run.sh: repoint <code>LIB</code> l.25 + the be.js require l.55.</li>
+<li class="open"><input type="checkbox" disabled> refs-parity/run.sh: repoint <code>REFS</code> l.35.</li>
+<li class="open"><input type="checkbox" disabled> status-parity + sub-status-parity: repoint <code>STATUS</code> (l.30 / l.36).</li>
+<li class="open"><input type="checkbox" disabled> <code>ctest -R '^be-bin-' --output-on-failure</code> 5/5 green; full suite no regress.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Land ordering vs <a href="JS-061.html">JS-061</a>: if 061's tree lands first it may already carry<p>
+some of these — reconcile, don't double-edit. These five were 061's deferred chunk, so most likely land here.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><code>04449a47</code> — landed: the 5 <code>test/bin/*/run.sh</code> repointed to the post-reorg be/<p>
+layout (<code>shared/</code>/<code>views/</code>/<code>core/discover.js</code>), driving the resident-loop views via <code>main.js &lt;verb&gt;</code> (JAB-024 recursion default-on handled). All 5 <code>be-bin-*</code> PASS under the prebuilt be+jab.
+</p>
+</li>
+</ul>
+</body>
+</html>

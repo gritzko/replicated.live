@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>URI-010</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>URI-010 <a href="">HIGH</a>: relative URI paths (path-rooted or <code>./</code>/<code>../</code>) must resolve against the wt root via cwd</h1>
+<p>
+A URI with a RELATIVE path — path-rooted (no scheme/authority: <code>.?</code>, <code>dir/file?</code>) or opening <code>./</code>/<code>../</code> — MUST resolve its path against the current cwd, then re-express it relative to the WORKTREE ROOT. Example: from the <code>be/test</code> submodule dir, <code>jab post .?</code> resolves <code>.</code> → <code>be/test</code>, so the effective URI is <code>be/test?</code> and the <code>be/test</code> submodule posts onto its trunk. Today <code>be/</code> does the opposite: the <code>./</code>-strip pattern (<code>verbs/put/put.js:46</code>, <code>verbs/delete/delete.js:55</code>, and DIS-054's new <code>makeNarrow</code> <code>verbs/post/fold-decide.js:90</code>) drops the <code>./</code> and matches wt-ROOT-relative leaves with NO cwd rebasing — cwd is read only by <code>core/discover.js:find()</code> to locate the <code>.be</code> anchor — so <code>.?</code>/<code>./foo</code> from a subdir silently hit the wrong path. First consumer: be/ post/put/delete narrowing (<a href="../DIS/DIS-054.html">DIS-054</a>); the pure URI parser stays cwd-agnostic. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>jab post .?</code> in <code>be/test</code> MUST mean &quot;post the <code>be/test</code> submodule onto its trunk&quot; — resolved URI <code>be/test?</code>; the <code>?</code> is the bare-trunk (present-empty) query, the <code>.</code> is the cwd path. Not &quot;post <code>.</code> at the wt root&quot;.</li>
+<li>Confirmed cwd is never consulted for the path: no <code>io.cwd()</code> in the post→narrow flow; <code>makeNarrow</code> (<code>fold-decide.js:90</code>) <code>n.slice(2)</code> then <code>underNarrow</code> matches root-relative leaves; cwd serves only <code>core/discover.js:find()</code> (walk UP to the <code>.be</code> shard anchor).</li>
+<li>Same root-relative-not-cwd assumption in the sibling verbs: <code>verbs/put/put.js:46</code>, <code>verbs/delete/delete.js:55</code>, <code>views/log/log.js</code> all <code>./</code>-strip without rebasing on cwd.</li>
+<li>Diverges from git: <code>git commit -- ./foo</code> is cwd-relative; Beagle's <code>be post ./foo</code> is silently wt-root-relative. POST.mkd's Path slot (&quot;narrow to that path/submodule&quot;) never pins cwd semantics — this ticket pins it.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A relative URI path resolves as: (1) join with cwd, (2) normalize dot-segments, (3) re-express relative to the wt root; verbs consume that wt-root-relative path. <code>.</code>→cwd, <code>./foo</code>→cwd/foo, <code>../x</code>→parent/x.</li>
+<li><code>jab post .?</code> from <code>be/test</code> → <code>be/test?</code> (submodule onto trunk); <code>jab post ./foo?</code> from <code>be/test</code> → <code>be/test/foo?</code>.</li>
+<li>ABSOLUTE paths (<code>/abs</code>) and scheme/authority URIs (<code>ssh://…</code>, <code>be://…</code>, <code>file:/…</code>) are NOT cwd-rebased — left as-is.</li>
+<li>A <code>../</code> that climbs ABOVE the wt root is an error, not a silent clamp.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Resolve in the layer that owns cwd+wtRoot (be/ side: at/after <code>core/discover.js:find()</code>); the pure parser (<code>abc/URI.h</code>) stays cwd-agnostic — context can't live in the grammar (<a href="../../beagle/CLAUDE.md">CLAUDE</a>).</li>
+<li>No hand-rolled path surgery beyond <code>shared/util/path.js</code>/PATH helpers (<a href="../../beagle/CLAUDE.md">CLAUDE</a> no manual parsing).</li>
+<li>be/ post/put/delete/log narrowing first; native <code>be</code> CLI should honor the same rule — cross-check, split a beagle/ ticket if it diverges.</li>
+<li>Repro-first: a SUBDIR-invocation test asserting the resolved wt-root-relative path, before the fix.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>One shared <code>resolveWtPath(uriPath, cwdRelRoot)</code> in <code>shared/util/path.js</code>, applied once per command before verbs read <code>u.path</code>; verbs stop <code>./</code>-stripping ad hoc.</li>
+<li>Trigger = relative path: path-rooted URI (no scheme &amp;&amp; no authority) OR path opens <code>./</code>/<code>../</code>. Absolute <code>/…</code> and scheme/authority URIs bypass.</li>
+<li>Orthogonal to <a href="URI-009.html">URI-009</a> but both feed <a href="../DIS/DIS-054.html">DIS-054</a> slot detection: <a href="URI-009.html">URI-009</a> tells a bare <code>.</code> path from an absent one, this ticket then anchors it to cwd.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: <code>cd &lt;wt&gt;/be/test &amp;&amp; jab post .?</code> resolves to <code>be/test?</code> (RED today — targets root); add a subdir case to be/test.</li>
+<li class="open"><input type="checkbox" disabled> <code>resolveWtPath</code> in <code>shared/util/path.js</code>: join cwd, normalize, re-anchor to wt root, refuse climb-above-root.</li>
+<li class="open"><input type="checkbox" disabled> Route post/put/delete/log narrow paths through it; drop the ad-hoc <code>./</code>-strips (<code>fold-decide.js:90</code>, <code>put.js:46</code>, <code>delete.js:55</code>, <code>log.js</code>).</li>
+<li class="open"><input type="checkbox" disabled> Cross-check native <code>be</code> CLI; split a beagle/ ticket if it diverges.</li>
+<li class="open"><input type="checkbox" disabled> Green: subdir repro + existing post/put/delete suites pass.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Overlaps <a href="../DIS/DIS-054.html">DIS-054</a> Path-slot narrowing (landed-pending in the clone with the WRONG root-relative assumption) — that <code>makeNarrow</code> must adopt this resolver before it is sound.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-06-28 from the <code>jab post .?</code> (be/test submodule onto trunk) rule. Pins POST.mkd's underspecified Path-slot cwd semantics to git-like cwd resolution, re-anchored at the wt root.</li>
+</ul>
+</body>
+</html>

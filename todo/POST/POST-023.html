@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-023</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>POST-023 <a href="">HIGH</a>: <code>be post</code> commits staged MODIFICATIONS but silently DROPS staged ADDITIONS (<code>new</code> rows) — the added files stay staged, never land in the commit</h1>
+<p>
+<code>be post</code> writes a commit containing only the staged <code>mod</code> rows (modified tracked files) and SILENTLY OMITS the staged <code>new</code> rows (added files). The additions remain staged after the post — the commit is incomplete and no error is raised. (Terminology: in <code>be status</code>, <code>new</code> = a STAGED add, <code>unk</code> = unstaged/untracked, <code>mod</code> = staged modification.) Any commit that introduces new files — a merge that brings them in, or a plain <code>be put &lt;newfile&gt;</code> + <code>be post</code> — loses them from the recorded tree. Live-hit landing the PATCH-003..009 merge. Method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Live repro (2026-06-27, <code>gritzko@spot ~/journal/beagle</code>): a <code>be patch ?62b7c62a!</code><p>
+merge staged 5 <code>mod</code> rows (<code>put beagle/BE.cli.c</code>, <code>beagle/SUBS.c</code>, <code>beagle/SUBS.h</code>, <code>sniff/PATCH.c</code>, <code>test/CMakeLists.txt</code>) AND 12 <code>new</code> rows (added files under <code>test/patch/36-cherry-pick-hashlet</code> … <code>42-diverged-sub-merge</code>).
+</p>
+</li>
+<li><code>be post! --nosub 'PATCH-003..009: numerous fixes to be patch'</code> → commit <code>a16aa332</code><p>
+whose body lists ONLY the 5 <code>mod</code> rows. No <code>new</code>/add row was committed.
+</p>
+</li>
+<li><code>be status</code> AFTER the post: <code>?a16aa332…  1335 ok, 12 new</code> — the 12 additions are STILL<p>
+staged, not in the commit. So <code>be post</code> dropped every staged add while committing every staged mod. No warning, exit 0.
+</p>
+</li>
+<li>Consequence: <code>a16aa332</code> committed <code>test/CMakeLists.txt</code> (which references the new test<p>
+dirs) WITHOUT the test files themselves — an internally-inconsistent commit.
+</p>
+</li>
+<li>The <code>!</code> (force) only overrode the benign <a href="POST-006.html">POST-006</a> marker scan; the drop is unrelated<p>
+to force — verify it reproduces with plain <code>be post</code> too.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>be post</code> commits ALL staged rows — both <code>mod</code> (modified tracked) and <code>new</code> (staged<p>
+adds). A staged addition lands in the recorded tree; it is NEVER silently left staged.
+</p>
+</li>
+<li>After a post that had staged adds, <code>be status</code> shows them committed (0 stray <code>new</code>).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Native sniff/beagle post path (the wtlog→commit tree builder — likely <code>BEActPost</code><p>
+/<code>bepost_*</code> in <code>beagle/BE.cli.c</code> or the sniff post commit that enumerates staged rows). Repro-first (CLAUDE.md §17): a hermetic test that stages BOTH a new file and a mod, posts, and asserts BOTH are in the commit (and <code>be status</code> is clean after). Don't regress mod-only posts or empty-put no-ops (<a href="../BE/BE-008.html">BE-008</a>). Beagle-only, C.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) Localize where the post commit builder enumerates the staged set; determine why<p>
+<code>new</code>/add rows are excluded while <code>mod</code>/<code>put</code> rows are kept (a row-kind filter, a wtlog range/tail bound, or the tree-writer skipping add entries). Repro plain vs <code>!</code>/<code>--nosub</code>.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: hermetic post test — stage a new file + a modified file, <code>be post</code>,<p>
+ assert the commit's tree contains BOTH and <code>be status</code> is clean (RED today: add dropped).
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Localize + fix the staged-row enumeration so adds are committed with mods.</li>
+<li class="open"><input type="checkbox" disabled> Green: adds land; mod-only + empty-put no-op paths unaffected; full ctest.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Surfaced consolidating the PATCH-003..009 fixes into <code>~/journal/beagle</code>; the fix code<p>
+landed (<code>a16aa332</code>) but its repro tests (36-42) were left staged-but-uncommitted by this bug, leaving a <code>CMakeLists.txt</code>-references-missing-tests commit.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>LANDED <code>100cd237</code> (2026-06-27). Root cause: <code>post_classify_step</code>'s<p>
+&quot;Untracked + selective = ignore&quot; guard (<code>!src_base &amp;&amp; c-&gt;any_pd → return OK</code>, sniff/POST.c:584) fired BEFORE the POST-005 <code>has_thr</code> (absorbed-tree) rescue, so a patch-added <code>new</code> file (on disk, stamped, no put row) was dropped in SELECTIVE mode (any explicit put present). Implicit/mod-only posts were fine (<code>any_pd</code> NO). Fix: <code>&amp;&amp; !has_thr</code> exempts absorbed adds; the in-scope stamp check below still validates them. Repro <code>test/post/56-selective-post-keeps -absorbed-adds</code> (RED→GREEN); full ctest 351/351, ASAN-clean.
+</p>
+</li>
+<li>NOTE: an explicit <code>be put &lt;newfile&gt;</code> add was NEVER dropped (the<p>
+<code>has_put</code> branch handles it); only patch/absorb-introduced adds in selective mode. New ticket <a href="">KEEP-003</a> filed: a <code>keeper post</code> self- deadlock on the libabc <code>.lock</code> (parent holds, its receive-pack child re-acquires) blocked the clone — abc/ sourced from the pinned tree.
+</p>
+</li>
+<li>OPEN — filed 2026-06-27 from the PATCH-003..009 land.</li>
+</ul>
+</body>
+</html>

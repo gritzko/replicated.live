@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TEST-002</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>TEST-002 <a href="">done</a>: be/ stale CTest config inverted bro WILL_FAIL flags</h1>
+<p>
+The <code>be/build</code> generated <code>CTestTestfile.cmake</code> was out of date with the source <code>test/CMakeLists.txt</code> <code>_BE_WILL_FAIL</code> xfail list: it marked <code>be-js-bro-color</code> and <code>be-js-bro-view</code> as <code>WILL_FAIL</code> (so their clean <code>exit 0</code> counted as failures) and did NOT mark <code>be-js-bro-universal</code> (so its tracked divergence failed). Three false failures with no code cause — the build was never re-cmaked after the list edit. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>be/build</code> uses Unix Makefiles + a <code>CONFIGURE_DEPENDS</code> glob; <code>ctest</code> does not<p>
+trigger a reconfigure, so an edit to <code>_BE_WILL_FAIL</code> left the generated config stale.
+</p>
+</li>
+<li>Source <code>test/CMakeLists.txt:20-31</code>: only <code>be-js-bro-universal</code> is xfail<p>
+(comment &quot;JS bro universal-pager checks differ&quot;). color/view are expected to PASS.
+</p>
+</li>
+<li>Generated <code>build/test/CTestTestfile.cmake</code> (stale): WILL_FAIL on color+view,<p>
+none on universal — the exact inverse. color/view print <code>PASS</code> and <code>exit 0</code>, so WILL_FAIL flips them to FAILED; universal exits nonzero with no WILL_FAIL.
+</p>
+</li>
+<li>Reproduce: <code>ctest --test-dir be/build -R be-js-bro-</code> → 3 failed before the fix.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>be/ suite 58/58 green; generated CTest config matches source intent.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>No source or product change — purely a build-config refresh.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>cmake -S be -B be/build</code> to regenerate <code>CTestTestfile.cmake</code> from current source.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Reconfigure be/build; confirm only <code>be-js-bro-universal</code> carries WILL_FAIL.</li>
+<li class="done"><input type="checkbox" checked disabled> <code>ctest --test-dir be/build</code> → 58/58 green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><code>be-js-bro-universal</code> stays a tracked xfail (TTY universal-pager output still<p>
+diverges from native — a JS-port gap, not a harness bug). Related runtime fix: <a href="">JS-081</a>/<a href="">JS-089</a> (bro fd-1 monkey-patch + the bro→loop re-entry cycle).
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Reconfigured <code>be/build</code>; no files changed in the tree. be/ suite 58/58 green.</li>
+</ul>
+</body>
+</html>

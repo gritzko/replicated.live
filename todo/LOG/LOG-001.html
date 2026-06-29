@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LOG-001</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>LOG-001: <code>be log</code> / <code>jab log</code> follow non-spine (merge) parents too, rendering non-spine commits in grey</h1>
+<p>
+<code>be log</code> (and the JS <code>jab log</code>) walk only the FIRST-PARENT spine, so commits merged in as a second (or later) parent never appear — even though they are fully reachable. Live: a merge <code>213c9003</code> whose 2nd parent is <code>d6f7e138</code> (DIS-053) → <code>be log | grep d6f7e138</code> is EMPTY; the commit is reachable (a parent of cur) but off the first-parent line <code>be log</code> prints. Goal: log also follows non-spine parents so merged-in commits show, rendered in GREY to distinguish them from the first-parent spine. Both the C (<code>graf/LOG.c</code>) and JS (<code>be/views/log/log.js</code>) versions, at parity. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>C <code>be log</code>: <code>graf/LOG.c</code> <code>GRAFLog</code> walks the first-parent chain only (note the<p>
+&quot;Hard cap on the first-parent walk&quot; ~<code>:51</code>); <code>graflog_render_commit</code> / <code>graflog_pack</code> tag each row with a tok32 tag (<code>L</code>/<code>W</code>/<code>S</code>) the theme colours.
+</p>
+</li>
+<li>JS <code>jab log</code>: <code>be/views/log/log.js</code> mirrors GRAFLog (one row per commit,<p>
+newest-first) — the same first-parent-only walk.
+</p>
+</li>
+<li>Live repro: merge <code>213c9003</code> (parent1 <code>04aca8e9</code>, parent2 <code>d6f7e138</code>). <code>be log</code><p>
+shows the parent1 spine; <code>d6f7e138</code> (parent2, DIS-053) is reachable but absent. <code>be map:</code> (<code>graf/MAP.c</code> <code>GRAFMap</code>) shows the full branch tree, but <code>log</code> itself never surfaces merged-in commits.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>be log</code> and <code>jab log</code> follow non-spine parents (a merge's 2nd+ parents and their<p>
+chains), so merged-in commits appear in the listing — reachable history is visible, not only the first-parent line.
+</p>
+</li>
+<li>Non-spine commits render in GREY (a distinct tok32 tag → SGR) so the first-parent<p>
+spine stays visually primary and merged-in commits read as secondary.
+</p>
+</li>
+<li>C and JS output at parity (same rows, same grey marking, same order).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Respect the existing walk bound (the <code>#N</code> count / first-parent cap) so a<p>
+merge-heavy/deep DAG doesn't explode; apply a sensible cap across the non-spine walk too. Topo- or time-order the combined listing.
+</p>
+</li>
+<li>Grey via the tok32 tag → SGR theme (<code>dog/THEME</code> for C, <code>be/view/theme.js</code> for JS),<p>
+NOT a hand-rolled SGR; the plain (non-colour) sink stays uncoloured. Keep the tag in parity across C and JS.
+</p>
+</li>
+<li>Reuse the DAG navigation (<code>DAGParents</code> / <code>DAGAncestors</code> / <code>DAGTopoSort</code> in <code>graf/</code>);<p>
+no new graph index. ABC style; ragel/typed only. Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Listing shape (JS, chosen): INTERLEAVE non-spine commits into the spine listing<p>
+in time order (newest-first by commit ts, the key fileHistory/aheadBehind use), no indent/marker — the grey tag alone marks them secondary. Combined <code>#N</code> cap.
+</p>
+</li>
+<li>Grey tag (JS, chosen): reuse the existing <code>Q</code> tok32 slot (&quot;unk/dir&quot; = grey,<p>
+FG16(90)) — already grey in BOTH dog/THEME (C binding paints it) AND <code>be/view/theme.js</code>, so NO new tag/theme edit was needed; whole non-spine row is <code>Q</code>-tagged.
+</p>
+</li>
+<li>GREY TAG (C, chosen) = <code>Q</code>, ALIGNED to the landed JS choice (same tok32 byte).<p>
+<code>Q</code> reused, no new slot/SGR change; <code>dog/THEME</code> doc-comment only.  Non-spine row: EVERY span tagged <code>Q</code>; spine keeps per-column tags.
+</p>
+</li>
+<li>Listing shape (C): ONE flat list of the tip's full closure, TOPO-ordered<p>
+(<code>DAGTopoSort</code>) emitted reversed = newest-first (as file-history).  Topo (not time) keeps tied-author-ts merges deterministic (be-log-projector <code>#N</code> cap relies on it). Spine = first-<code>parent</code> chain from the commit BODY.  Bound: <code>#N</code> AND <code>LOG_MAX_WALK</code> over the closure; index-miss → linear fallback.  Differs from JS time-interleave.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Repro-first (JS): hermetic merge tip M=<a href="">mainline C2, side C1</a>; <code>jab log</code> (via<p>
+ log.js branchHistory) OMITS C1 pre-fix (RED proven), shows it GREY after.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> C: <code>graf/LOG.c</code> <code>GRAFLog</code>/<code>graflog_branch</code> walks the full closure (DAGAncestors<p>
+ + DAGTopoSort, bounded); non-spine rows greyed via <code>graflog_pack</code> tag <code>Q</code>.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> JS: <code>be/views/log/log.js</code> follows non-spine parents (bounded), greys them via<p>
+ tag <code>Q</code>; NO <code>be/view/theme.js</code> edit needed (<code>Q</code> already grey there).
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Bound holds (LOG_MAX_WALK + #N over the closure); plain sink unchanged (both<p>
+ sides verified: 2nd-parent present + uncoloured in plain).
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Strict be-vs-jab byte-parity test: deferred — C topo-orders, JS time-interleaves,<p>
+ so rows + grey tag <code>Q</code> match but order can differ on tied-ts merges.
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Order divergence: C topo-orders the closure, JS time-interleaves — same rows + same<p>
+grey tag <code>Q</code>, but row order can differ on a tied-author-ts merge.  Acceptable for now (colour, not order, marks merged-in); a strict byte-parity test is deferred.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending-commit) JS side done. Fix: <code>be/views/log/log.js</code> — branchHistory<p>
+(<code>:170</code> rewrite, +non-spine BFS) returns <code>[{sha,nonspine}]</code>; appendRow (<code>:340</code>) greys a non-spine row with tag <code>Q</code>; handler (<code>:411</code>) normalises rows. Test: <code>be/test/log/nonspine.js</code> (+<code>be/test/CMakeLists.txt</code> reg) — RED pre-fix, GREEN post-fix; full be/ suite green (only the pre-existing <code>bro-universal</code> xfail-inversion remains). Grey tag used: <code>Q</code>. STOPPED before commit (human gates).
+</p>
+</li>
+<li>(pending-commit) C side done. ROOT CAUSE: <code>graf/LOG.c</code> <code>graflog_branch</code> walked the<p>
+first-parent spine only, so a merge's 2nd+ parent was reachable but never listed. FIX (<code>graf/LOG.c</code>): <code>graflog_branch</code> (~<code>:395</code>) takes the FULL closure (<code>DAGAncestors</code>), topo-sorts (<code>DAGTopoSort</code>), emits newest-first; spine marked via body first-<code>parent</code> (<code>graflog_first_parent</code> ~<code>:339</code>); non-spine greyed with tag <code>Q</code> (<code>LOG_TAG_GREY</code> ~<code>:221</code>); index-miss → <code>graflog_branch_linear</code>.  <code>dog/THEME.c/.h</code> doc-comment only.  REPRO <code>graf/test/log-merge.sh</code> (CMake <code>GRAFlogMerge</code>): hermetic 2-parent merge — 2nd-parent surfaces + greys, spine primary, plain uncoloured. RED proven (linear path → &quot;2nd-parent absent&quot;); GREEN after.  ctest 378/378. Grey tag <code>Q</code>.  STOPPED before commit (human gates).
+</p>
+</li>
+</ul>
+</body>
+</html>

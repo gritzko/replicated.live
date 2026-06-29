@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-083</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-083 <a href="">LOW</a>: <code>shared/checkout.js</code> <code>apply</code> materialises a missing object as empty</h1>
+<p>
+<code>checkout.apply</code>'s tree walk fetches each leaf's object and, on an UNRESOLVED object (<code>getObject</code> → null), falls back to <code>bytes = new Uint8Array(0)</code> — then writes a zero-byte file AND records a <code>new</code>/<code>upd</code> row anyway. The live <code>verbs/get/get.js:334</code> leaf does the right thing (<code>if (!obj) return;</code> — skip the leaf, no row). Currently latent because <code>apply</code> is DEAD: it is exported but neither <code>get.js</code> nor <code>patch.js</code> calls it (they use <code>leafUnchanged</code>/<code>materialise</code>/ <code>scanWt</code>). It becomes a real data-integrity bug — silent zero-byte truncation — the moment <code>apply</code> is wired in. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>shared/checkout.js:142-143</code> `const obj = keeper.getObject(leaf.sha); const<p>
+bytes = obj ? obj.bytes : new Uint8Array(0);` — null object → empty bytes.
+</p>
+</li>
+<li><code>:147-148</code> `materialise(wtRoot, rel, leaf, bytes); rows.push({ verb: existed<p>
+? &quot;upd&quot; : &quot;new&quot;, path: rel });` — writes the empty file + records a row regardless of whether the object resolved.
+</p>
+</li>
+<li><code>verbs/get/get.js:333-334</code> the live leaf: `const obj = g.k.getObject(newSha);<p>
+if (!obj) return;` — the correct early-return (skip, no row).
+</p>
+</li>
+<li><code>shared/checkout.js:125</code> <code>function apply(...)</code> is exported (<code>:168</code>) but has<p>
+NO caller in <code>verbs/get/get.js</code> or <code>verbs/patch/patch.js</code> (both use <code>checkout.leafUnchanged</code>/<code>materialise</code>/<code>scanWt</code>, never <code>apply</code>) — dead code.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>apply</code> never writes empty bytes for an unresolved object: skip the leaf<p>
+(or throw), matching <code>get.js:334</code>. The well-known empty-blob sha (a real 0-byte file) is the ONLY case that legitimately writes nothing.
+</p>
+</li>
+<li>Decide the dead-<code>apply</code> cleanup: remove it, or fix-and-keep if it is the<p>
+intended checkout entry point.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>shared/checkout.js</code> only; keep <code>materialise</code>/<code>scanWt</code>/<code>leafUnchanged</code><p>
+(live callers) byte-identical. Pairs with the dead-apply cleanup decision.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>If keeping <code>apply</code>: `const obj = keeper.getObject(leaf.sha); if (!obj)<p>
+return;<code> before </code>materialise<code> — mirror </code>get.js`. Distinguish the empty-blob sha (write 0 bytes, with a row) from a missing object (skip).
+</p>
+</li>
+<li>If removing: delete <code>apply</code> + its export; document that get.js/patch.js own<p>
+materialisation. Confirm no out-of-tree caller first.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: call <code>apply</code> (or its fixed twin) with a leaf whose sha is<p>
+ absent from the store; assert NO zero-byte file is written and NO row.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Either skip-on-missing in <code>apply</code>, or remove the dead <code>apply</code> + export.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Decide keep-vs-remove with the modularity pass before touching exports.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

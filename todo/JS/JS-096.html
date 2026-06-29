@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-096</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-096: port 10 <code>beagle/test/get</code> store-internals cases to the JS <code>jab get</code> (<code>be/test/get</code>)</h1>
+<p>
+The <code>be/test/get</code> JS suite has 4 transport cases (be/file/git/traversal) that assert WORKTREE+stdout+<code>be status</code> PARITY (native vs <code>jab</code>) and deliberately EXCLUDE <code>.be</code> (the JS clone writes a byte-different store). 10 native cases instead assert ON the <code>.be</code> store layout itself — flat shards, peer-URI ref rows, anchor-file shape, no escape. Port those 10 as <code>jab</code>-driven STRUCTURAL store-layout assertions, triaging each: a real assertion where <code>jab get</code> owns the path, a documented N/A (+ split ticket) where it only exercises the C keeper/dog layer <code>jab</code> reuses. Method <a href="../../meta/work.html">Issues</a>; harness <a href="../../be/test/lib/getcase.sh">getcase</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Native source: `beagle/test/get/{21-nosub-local-refs, 25-remote-shard,<p>
+26-cached-no-wire, 26-remote-shard-refs, 39-be-pathless-project, 40-no-ancestor-wtlog-escape, 43-home-bound-no-escape, 44-file-subs-parent-no-getrow, 48-walk-dot-be-quiet, 54-file-project-selector}`.
+</p>
+</li>
+<li>Each native case sources <code>beagle/test/lib/case.sh</code> and asserts on <code>.be/</code><p>
+(shard dirs, <code>refs</code> rows, <code>wtlog</code> anchor bytes) — NOT a parity diff.
+</p>
+</li>
+<li>JS get is <code>be/verbs/get/get.js</code> (SEED → fan-out reconcile); store writes go<p>
+through <code>be/shared/{store,ingest,ulog,wire}.js</code>. <code>parseRemote</code> classifies <code>file:</code>/scheme-less/<code>keeper+local</code> as <code>localish</code>; remotes go <code>seedRemote</code>.
+</p>
+</li>
+<li>KEY DIVERGENCE already encoded in <a href="../../be/test/lib/getcase.sh">getcase</a> <code>tree_eq</code>: the JS clone does NOT<p>
+write <code>..be.idx</code> and lays a different <code>.be</code>; so these ports CANNOT be byte parity on <code>.be</code> — they are STRUCTURAL invariants (shard exists, row carries <code>//host</code>, <code>.be</code> is a FILE, no <code>remotes/</code> dir) checked against <code>jab</code>'s store.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>For EACH of the 10: a <code>be/test/get/&lt;name&gt;/run.sh</code> that drives <code>jab get</code> and<p>
+asserts the native case's store-layout invariant against <code>jab</code>'s <code>.be</code>.
+</p>
+</li>
+<li>Where <code>jab get</code> does not own the path (pure C keeper/dog, or a form <code>jab</code><p>
+doesn't implement yet), DON'T fake it: document N/A in the ticket with the reason, split a follow-up ticket, and either omit or register <code>WILL_FAIL</code>.
+</p>
+</li>
+<li>A new <code>be/test/lib/storecase.sh</code> (sibling to <a href="../../be/test/lib/getcase.sh">getcase</a>): resolve <code>jab</code>+<code>be</code>,<p>
+hermetic scratch + <code>.be</code> firewall, helpers to inspect <code>.be</code> (shard/row/anchor).
+</p>
+</li>
+<li>Register the new cases in <code>be/test/CMakeLists.txt</code> (glob already picks up<p>
+<code>get/*/run.sh</code>); xfail entries go in <code>_BE_WILL_FAIL</code>.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-FIRST per case (<code>CLAUDE.md</code> §17): write the JS case, RUN it, observe<p>
+what <code>jab</code> actually writes, THEN decide port-vs-N/A. No guessing.
+</p>
+</li>
+<li>No hand-rolled URI parsing in JS — reuse the URI binding (abc.md rule).</li>
+<li>POSIX sh; no bash. Cases stay file-disjoint (own dir) for clean reconcile.</li>
+<li>Do NOT touch <code>beagle/</code> (native). Work only in the <code>be/</code> worktree + its <code>test</code><p>
+sub. <code>jab</code>/<code>be</code> come from the prebuilt <code>~/journal/beagle/build/bin</code> on PATH.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Triage (CONFIRM each repro-first; this is the starting hypothesis, not gospel):<p>
+-  54 file-project-selector — PORT. Directly tests <code>parseRemote</code> <code>?/proj</code>    shard selection + tip; <code>jab get file:&lt;wt&gt;?/sub</code> → only <code>sub.c</code>, sub's tip. -  26-remote-shard-refs — PORT. ssh clone → assert <code>.be/&lt;proj&gt;/refs</code> carries    <code>//localhost</code>, no <code>&lt;proj&gt;/&lt;ref&gt;</code> leaf shard, no <code>remotes/</code> dir. -  48 walk-dot-be-quiet — PORT. clone a tree with a committed <code>.be</code> entry →    <code>real.txt</code> out, <code>jab</code>'s checkout/walk emits no <code>bad path '.be'</code> spam. -  40 no-ancestor-wtlog-escape — PORT (adapt). <code>jab get</code> from a fresh subdir    writes its OWN <code>.be</code> FILE anchor; ancestor <code>.be/wtlog</code> byte-identical. -  25 remote-shard — ADAPT/xfail. Native writes the shard BEFORE the (failing)    fetch; <code>seedRemote</code> fetches first → writes nothing on wire-fail. Port the    SUCCEEDING-clone layout arm; the pre-fetch-shard arm is a <code>jab</code> gap → split. -  26-cached-no-wire — N/A→IMPL. <code>//host?ref</code> cached form is unimplemented in    <code>parseRemote</code> (treats empty-scheme as local). Split a <code>jab</code> cached-form ticket. -  39 be-pathless-project — N/A. <code>keeper://local?/proj</code> empty-path local-exec    is a C keeper(WIRECLI) path <code>jab</code> doesn't run; document + split if wanted. -  44 file-subs-parent-no-getrow — N/A here (SUBS). Sub-source candidate    ordering lives in <code>subs.js</code>; route to a SUBS ticket, not this one. -  21 nosub-local-refs — N/A. Asserts the native <code>keeper upload-pack</code> SERVER    doesn't rewrite <code>refs</code>; <code>jab</code> reuses that binary — nothing JS to assert. -  43 home-bound-no-escape — N/A. <code>dog/HOME.c</code> walk-up ceiling via strace on    <code>be status</code>; C dog-layer, not <code>jab get</code>. Out of scope.
+</p>
+</li>
+<li>Net expected: ~4 solid ports (54, 26r, 48, 40), 1 partial (25), ~5 documented<p>
+N/A with split tickets. The agent MUST report the actual repro outcome, not this estimate — a &quot;N/A&quot; that turns out portable should be ported.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Set up the isolated <code>be/</code> worktree (see Blockers for the exact recipe).</li>
+<li class="open"><input type="checkbox" disabled> Add <code>be/test/lib/storecase.sh</code> (jab+be resolve, hermetic <code>.be</code> firewall,<p>
+ <code>.be</code>-inspection helpers); model env wiring on <code>be/test/lib/getcase.sh</code>.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> 54 — port <code>be/test/get/file-project-selector/run.sh</code>.</li>
+<li class="open"><input type="checkbox" disabled> 26r — port <code>be/test/get/remote-shard-refs/run.sh</code> (ssh, WITH_SSH-gated skip).</li>
+<li class="open"><input type="checkbox" disabled> 48 — port <code>be/test/get/walk-dot-be-quiet/run.sh</code>.</li>
+<li class="open"><input type="checkbox" disabled> 40 — port <code>be/test/get/no-ancestor-escape/run.sh</code>.</li>
+<li class="open"><input type="checkbox" disabled> 25 — port the clone-layout arm; xfail/split the pre-fetch-shard arm.</li>
+<li class="open"><input type="checkbox" disabled> 26-cached / 39 / 44 / 21 / 43 — repro, confirm N/A, write the rationale here,<p>
+ split follow-up tickets (<a href="../GET/README.html">GET</a>/<a href="../SUBS/README.html">SUBS</a>/<a href="">JS</a>) where a real <code>jab</code> gap exists.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Register new cases in <code>be/test/CMakeLists.txt</code>; xfails into <code>_BE_WILL_FAIL</code>.</li>
+<li class="open"><input type="checkbox" disabled> Run the new cases green with prebuilt <code>jab</code>; STOP at the commit boundary,<p>
+ report root-cause/triage table/test results for the human gate (no commit).
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Worktree recipe (VERIFIED 2026-06-28; the <a href="../../meta/work.html">work</a> <code>?/be</code> recipe is STALE — the<p>
+shard is <code>beagle-ext</code>, and a pre-made empty <code>.be</code> triggers SNIFFFAIL): <code>mkdir $HOME/todo/JS-096 &amp;&amp; cd $HOME/todo/JS-096 &amp;&amp;  PATH=$HOME/journal/beagle/build/bin:$PATH be get &quot;file:$HOME/.be/?/beagle-ext&quot;</code> — fresh dir, NO pre-made <code>.be</code>; checks out all of <code>be/</code> (62 ok) and recurses the <code>test</code> sub (mounts <code>test/.be</code>). Never pipe <code>be get</code> to <code>head</code> (SIGPIPE truncates the checkout).
+</p>
+</li>
+<li>ssh-transport cases (26r, and 26-cached if pursued) need passwordless ssh to<p>
+localhost; SKIP (exit 0) when absent — mirror <code>getcase.sh</code>'s SKIP guards.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open) Filed 2026-06-28 off the GET test-port plan; worker dispatched into an<p>
+isolated <code>beagle-ext</code> worktree at <code>$HOME/todo/JS-096</code>.
+</p>
+</li>
+</ul>
+</body>
+</html>

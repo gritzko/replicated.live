@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LOG-003</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>LOG-003 <a href="">HIGH</a>: <code>be log</code> row order is STORE-LAYOUT-DEPENDENT — a <code>be get be://…</code> clone renders the SAME history jumbled (tip row is an ancient commit, dates non-monotonic)</h1>
+<p>
+<code>be log</code> over a <code>be://</code>-cloned store lists the SAME commit closure in a jumbled order: the first (tip) row is an ancient commit, not the cur, and the dates run non-monotonic (06Jan, 02Mar, 19Oct24, 28Mar25, 13Apr, 31Aug24, 07May, 11Jun, 12Jun, 03Apr…). The SAME binary over a natively-built store with the SAME closure renders correctly newest-first / time-descending. So the log walk's ROW ORDER depends on the physical store layout (the order objects/graf landed during the wire fetch), not solely on the DAG — a clone scrambles the listing. Distinct from <a href="LOG-001.html">LOG-001</a> (non-spine greying); this is the ordering of the spine listing itself. Method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro (live 2026-06-26, treadmill): <code>cd ~/treadmill/journal7/beagle &amp;&amp; be log</code> — the<p>
+<code>beagle</code> sub of a <code>be get be://localhost/journal</code> clone whose <code>be patch be://spot/journal?main!</code> advanced it. cur = <code>9721f5328b06…</code> (spot's beagle, the <code>post ?#9721f532</code> row in <code>.be/beagle/refs</code>), but <code>be log</code> prints:   <code>6c969149  06Jan  Add cat command to RDX CLI (Claude)</code>   ← tip row, NOT the cur, ancient   <code>6faf2fc8  02Mar  be docs</code>   <code>0b6cce1b  28Mar  spot tweaks</code>   <code>69a72a4f 19Oct24 RDXJ test files initial</code>   <code>b0daa83d 28Mar25 fix: missed commit, bug, regression</code>   <code>fcfeade5  13Apr  Merge branch 'dogs-graf' into dogs-sniff</code>   <code>71f25366 31Aug24 I see the light</code>  …  — dates non-monotonic throughout.
+</p>
+</li>
+<li>CONTRAST (same binary <code>~/journal/beagle/build/bin/be</code>, built 16:14): `cd<p>
+~/journal/beagle &amp;&amp; be log<code> — cur </code>213c9003<code>, log is CLEAN, strictly time-descending: </code>213c9003 10:53 … / 04aca8e9 10:48 / ae64dc7f 10:34 / 25851a5a 09:52 / 607c3048 09:30 …`. Tip row = the cur, newest-first.
+</p>
+</li>
+<li>Both stores hold the SAME closure: <code>be log | grep -c '^[0-9a-f]'</code> = *<strong>1557</strong>* in BOTH.<p>
+<code>~/journal/beagle</code> is the NATIVE locally-built store; <code>journal7/beagle</code> is a <code>be get be://…</code> CLONE (objects/graf landed in wire-fetch order). The ONLY difference is the store layout → the only variable that can explain the jumble.
+</p>
+</li>
+<li>Reproducible, do NOT hand-edit: journal7 is a throwaway clone+merge artifact; the bug<p>
+reproduces from a fresh <code>be get be://localhost/journal</code> of a diverged journal.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>be log</code> renders newest-first / topo-stable from the cur REGARDLESS of how the store<p>
+was populated: a <code>be get be://…</code> clone and a natively-built store with the same closure produce the SAME row order (tip row = cur, dates monotonic on a linear spine).
+</p>
+</li>
+<li>The ordering key must be intrinsic to the commits (author/commit ts + topo tiebreak),<p>
+not the store's physical object/graf insertion order.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Native graf (<code>graf/LOG.c</code> <code>GRAFLog</code>/<code>graflog_branch</code>/<code>DAGTopoSort</code>); keep <a href="LOG-001.html">LOG-001</a>'s<p>
+non-spine greying intact and at C/JS parity. Repro-first (CLAUDE.md §17): a hermetic fixture that populates a store in a SCRAMBLED object/graf order (mimicking a wire fetch) and asserts <code>be log</code> row order == the natively-built store's (RED today).
+</p>
+</li>
+<li>Don't regress the natively-built store's already-correct ordering.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>PROVEN ROOT CAUSE (<code>graf/DAG.c</code> <code>DAGTopoSort</code>, the closure-orderer): it descended into<p>
+a merge commit's parents in *<strong>LSM-run scan order</strong>*, which is the store's physical ingest order.  Chain: <code>topo_parents_of</code> → <code>DAGParents</code> → <code>DAGRange</code> scans the LSM runs newest-first and yields the equal-key (<code>COMMIT,COMMIT</code>) parent edges run-by-run, in place.  A merge whose two <code>parent</code> edges landed in DIFFERENT runs (the norm for a <code>be get be://…</code> CLONE — objects/graf arrive in wire-fetch order, scattering across levels) therefore handed back its parents in store-layout order.  Plain <code>DAGTopoSort</code>'s <code>topo_parents_of</code> did NOT sort the parents (unlike <code>DAGTopoSortTunable</code>'s <code>topo_links_of</code>, which calls <code>topo_sort_u64</code>), so the DFS descended into a layout-dependent parent first → the topo order, and hence the reverse-emitted log rows, scrambled with the layout.  The <code>DAGAncestors</code> hash SET iteration is NOT the culprit (slot is keyed on the intrinsic commit hashlet); the parent-descent order is.
+</p>
+</li>
+<li>Note (events overtook the original repro): the working tree's <code>graflog_branch</code> is now a<p>
+pure first-parent walk (NOT the <a href="LOG-001.html">LOG-001</a> full-closure <code>DAGTopoSort</code> walk described in LOG-001's Outcome — that C change is NOT in this tree, and <code>graf/test/log-merge.sh</code> / <code>GRAFlogMerge</code> are absent).  So default <code>be log</code> no longer hits <code>DAGTopoSort</code> and the original jumble does not reproduce on either the old <code>build/bin/be</code> (rebuilt 16:14) or the new <code>build-log/bin/be</code>.  But <code>be log:&lt;path&gt;</code> (file history) AND <code>be head</code> still use plain <code>DAGTopoSort</code>, and if <a href="LOG-001.html">LOG-001</a>'s closure-topo <code>graflog_branch</code> is re-landed the jumble returns.  Fix at the <code>DAGTopoSort</code> primitive so it is layout-invariant for ALL callers (file-history today, branch-history when LOG-001 re-lands).
+</p>
+</li>
+<li>FIX: sort the parents by hashlet in <code>topo_parents_of</code> (one <code>topo_sort_u64</code> call),<p>
+making the DFS descent — and thus the whole topo order — a pure function of the commit hashlets (content), independent of ingest order.  Mirrors the per-kind hashlet sort already in <code>topo_links_of</code> (<code>DAGTopoSortTunable</code>).  Tiebreak is content-derived (hashlet); the walk is seeded from the cur's ancestor closure.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Repro-first: hermetic unit fixture <code>graf/test/LOGORD01.c</code> builds the SAME merge DAG<p>
+ under two LSM-run layouts (native vs scrambled clone) and asserts <code>DAGTopoSort</code> row  order is identical + intrinsic (tip=cur, newest-first).  RED before fix, GREEN after.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Located the layout-dependent input (<code>topo_parents_of</code> parent-descent order in<p>
+ <code>DAGTopoSort</code>); made it intrinsic (hashlet-sorted parents).
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Verified journal7/beagle-style clone logs newest-first (tip = cur 9721f532);<p>
+ ~/journal/beagle unchanged (tip = cur 213c9003); ctest green.
+</p>
+</li>
+</ul>
+<p>
+-<a href="">~</a> JS <code>be/views/log/log.js</code> not present in this working tree (the be/ JS tree referenced
+</p>
+<div>
+<p>
+ by LOG-001 is not checked out here) — could not cross-check; flagged for the JS owner.
+</p>
+</div>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Surfaced while auditing a treadmill whole-tree spot merge — a jumbled clone log made<p>
+it hard to read what the merge produced; corrected reasoning depends on a trustworthy <code>be log</code>.
+</p>
+</li>
+<li>The original branch-history jumble can't be reproduced live because the tree's<p>
+<code>graflog_branch</code> was reverted to a first-parent walk after the ticket was filed; the fix is proven at the <code>DAGTopoSort</code> primitive (the shared orderer) instead, which is where the layout dependency actually lives and where LOG-001's closure walk would re-expose it.
+</p>
+</li>
+<li>A <code>be get be://localhost?/beagle</code> clone WITHOUT the be/ submodule cannot configure the<p>
+default <code>WITH_JS=ON</code> build (<a href="../JS/JS-095.html">JS-095</a>); built <code>WITH_JS=OFF</code> (348/348 C suite green).
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>LANDED <code>af8e40dd</code> (trunk, FF; full <code>af8e40dd3d4f35c2c88b703b8ad83b34519fa69a</code>).<p>
+FIXED.  ROOT CAUSE (proven, not asserted): <code>graf/DAG.c</code> <code>DAGTopoSort</code> descended a merge's parents in LSM-run (store-ingest) order via <code>topo_parents_of</code>→<code>DAGParents</code>→<code>DAGRange</code>, which <code>DAGRange</code> scans newest-run-first; a clone scatters a merge's two <code>parent</code> edges across runs, permuting the descent and so the reverse-topo log rows.  Plain <code>DAGTopoSort</code> (unlike <code>DAGTopoSortTunable</code>) never hashlet-sorted the parents.
+</p>
+</li>
+<li>FIX (<code>graf/DAG.c</code>): <code>topo_parents_of</code> now hashlet-sorts the parents (<code>topo_sort_u64</code>,<p>
++moved its fwd-decl above the function).  Descent — and the whole topo order — is now content-intrinsic, layout-invariant.  <code>graf/INDEX.md</code> <code>DAGTopoSort</code> line updated.
+</p>
+</li>
+<li>REPRO (<code>graf/test/LOGORD01.c</code>, CMake <code>LOGORD01test</code> in <code>graf/test/CMakeLists.txt</code>):<p>
+hand-builds a merge DAG <code>R←A1←A2 , R←B1←B2 , M=[A2,B2]</code> under TWO LSM-run layouts (native: M's parent edges in runs 0/1; clone: swapped) and asserts <code>DAGTopoSort</code>'s newest-first order is IDENTICAL and intrinsic (tip=M, root last, every parent after its child).  RED before fix (native <code>60 50 30 40 20 10</code> vs clone <code>60 30 50 40 20 10</code>); GREEN after (both <code>60 50 30 40 20 10</code>).
+</p>
+</li>
+<li>VERIFY: <code>build-log/bin/be log</code> — journal7 clone tip = cur <code>9721f532</code>, time-descending;<p>
+~/journal/beagle tip = cur <code>213c9003</code>, time-descending (unchanged).  File-history <code>be log:graf/DAG.c</code> on the clone is now deterministic run-to-run.  ctest (re-verified at land, 2026-06-26): full suite 348/348 at <code>-j8</code>, incl. <code>LOGORD01test</code>. Built only in <code>build-log</code>; did NOT touch <code>beagle/build</code>.
+</p>
+</li>
+<li>COMMITTED+POSTED to trunk as <code>af8e40dd</code> (clean fast-forward, no SNIFFNOFF; remote<p>
+<code>be://localhost</code> tip advanced <code>213c9003</code>→<code>af8e40dd</code>).  Change set: <code>graf/DAG.c</code>, <code>graf/INDEX.md</code>, <code>graf/test/CMakeLists.txt</code>, new <code>graf/test/LOGORD01.c</code>.  Filed 2026-06-26 (treadmill session); journal not committed.
+</p>
+</li>
+</ul>
+</body>
+</html>

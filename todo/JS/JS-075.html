@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-075</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-075 <a href="">HIGH</a>: <code>be get</code> fan-out row URIs break on tree names with <code>?</code>/<code>#</code> → wrong-path unlink</h1>
+<p>
+The <a href="">GET</a> fan-out builds per-path effect rows by raw string concat — <code>rel + &quot;?&quot; + ne.sha + &quot;#&quot; + oldSha</code> (<code>get.js:290-308</code>) — then the leaf re-parses each with <code>new URI(uri)</code> (<code>get.js:319-323</code>), reading <code>rel=u.path</code>, <code>newSha=u.query</code>, <code>oldSha=u.fragment</code>.  A tracked filename containing <code>?</code> truncates <code>rel</code> and corrupts <code>newSha</code> (wrong file written/skipped).  A name containing <code>#</code> makes <code>newSha</code> empty, so the leaf takes the delete branch and <code>io.unlink(join(wt,rel))</code> (<code>get.js:324,327-328</code>) — a destructive wrong-path delete.  Effects stay inside the worktree (correctness/integrity, not traversal).  Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>get.js:290-291,298-299</code>: rows are <code>rel + &quot;?&quot; + ne.sha + &quot;#&quot; + …</code> raw<p>
+concat — <code>rel</code> (the file name) is unescaped.
+</p>
+</li>
+<li><code>get.js:307-308</code>: the removed-entry row is <code>rel + &quot;?#&quot; + oe.sha</code> — same<p>
+unescaped concat for the delete case.
+</p>
+</li>
+<li><code>get.js:319-323</code> <code>leaf</code>: `const u = new URI(uri); rel=u.path;<p>
+newSha=u.query; oldSha=u.fragment<code> — URI splits on the FIRST </code>?<code>/</code>#`.
+</p>
+</li>
+<li><code>get.js:324,327-328</code>: <code>full = join(g.wt, rel)</code>; `if (!newSha) {<p>
+io.unlink(full); … }<code> — an empty </code>newSha<code> (from a </code>#<code> in the name) DELETES the path the truncated </code>rel` resolves to.
+</p>
+</li>
+<li>A name like <code>a#b</code> → <code>newSha=&quot;&quot;</code> → leaf deletes <code>join(wt,&quot;a&quot;)</code>; <code>a?b</code><p>
+→ <code>rel=&quot;a&quot;</code>, <code>newSha=&quot;b…&quot;</code> (corrupt) → wrong file written/skipped.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A tracked file named <code>a#b</code> or <code>a?b</code> round-trips through the get fan-out<p>
+and leaf with the correct new bytes and NO spurious deletion.
+</p>
+</li>
+<li>The delete branch fires only for a genuinely removed path, never from a<p>
+<code>#</code>/<code>?</code> in a live name.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Match the C URI grammar (the path component is percent-encoded there);<p>
+encode the path on row build, decode symmetrically in <code>leaf</code>.
+</p>
+</li>
+<li>Or pass <code>rel</code>/<code>sha</code> as separate structured row fields (avoid the<p>
+parse round-trip entirely) — keep the row verb <code>get</code> and the queue shape.
+</p>
+</li>
+<li>Scope to get.js fan-out + leaf; no change to tree-map building.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Percent-encode <code>rel</code> in every emitted row (<code>:290,298,301,306,308</code>) and<p>
+decode <code>u.path</code> in <code>leaf</code>, OR carry <code>{rel,newSha,oldSha}</code> structurally.
+</p>
+</li>
+<li>Guard the delete branch on &quot;old path existed AND no new sha&quot;, not on a<p>
+string-parse artifact.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/get/*</code>: track a file named <code>a#b</code> (and <code>a?b</code>),<p>
+ re-get, assert correct bytes and that the file is NOT unlinked.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Encode/decode the path component (or structuralize the row fields).</li>
+<li class="open"><input type="checkbox" disabled> Re-run the get parity suite (ordinary names unaffected, byte-equal).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Confirm <code>URI</code>/<code>new URI</code> percent-decoding matches the C decode so an<p>
+encoded name re-materializes byte-identically on disk.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

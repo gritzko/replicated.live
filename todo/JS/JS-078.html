@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-078</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-078 <a href="">MED</a>: <code>core/job.js</code> — dead crash-resume; crashed runs leak <code>/tmp/.bequeue</code></h1>
+<p>
+<code>job.openOrResume</code> documents a crash-safe RESUME (a surviving queue file is an interrupted run to re-open via its <code>.done</code> offset).  But the ONLY caller (<code>core/loop.js</code> cli) PID-KEYS the queue name and unlinks it on clean exit, so a fresh process can NEVER re-open a dead one — <code>fresh</code> is always true and the done-tracking is inert.  The net effect inverts the contract. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>core/job.js:37-44</code>: <code>openOrResume</code> computes <code>donePath</code>, stats the<p>
+file for <code>fresh</code>, books it — the whole RESUME split.
+</p>
+</li>
+<li><code>core/job.js:84</code>: <code>const startOff = fresh ? 0 : _readDone(donePath);</code><p>
+— the resume skip; with <code>fresh</code> always true it is never taken.
+</p>
+</li>
+<li><code>core/job.js:24-31</code> <code>_readDone</code> + <code>:106-109 markDone</code> + <code>:88 donePath</code><p>
+exist only to serve that unreachable resume.
+</p>
+</li>
+<li><code>core/loop.js:377-380 _tmpQueue</code>: `&quot;/tmp/.bequeue.&quot; + USER + &quot;.&quot; +<p>
+_pid() + &quot;.&quot; + key` — PID-keyed; a new PID is a new path.
+</p>
+</li>
+<li><code>core/loop.js:295-297</code>: every cli run keys the queue via <code>_queuePath</code>/<p>
+<code>_tmpQueue</code> (PID-keyed) — so two distinct PIDs never share a file.
+</p>
+</li>
+<li><code>core/loop.js:120</code>: <code>q.close(true)</code> on clean exit unlinks queue +<p>
+<code>.done</code>; a CRASH skips it.
+</p>
+</li>
+<li>Result is the OPPOSITE of the doc: a crash leaves<p>
+<code>/tmp/.bequeue.&lt;deadpid&gt;...</code> (+ its <code>.done</code>) on disk PERMANENTLY, with nothing — no new PID, no sweeper — that will ever re-open or remove them.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Remove the inverted contract: either make resume reachable, OR drop<p>
+the dead split AND stop the permanent stale-file leak.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Keep the queue PID-keyed for the concurrent-run no-collision property<p>
+(loop.js:289-294) if resume is dropped.
+</p>
+</li>
+<li>Keep <code>openOrResume</code>'s grow-on-demand + consume-while-append surface<p>
+(<code>append</code>/<code>next</code>/<code>markDone</code>/<code>close</code>) intact for <code>core/loop.js</code>.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Option A (simplify): drop the resume split — collapse to seed +<p>
+append + consume; delete <code>_readDone</code>/<code>markDone</code>/<code>donePath</code>/<code>fresh</code>. PID-keying makes resume unreachable, so this loses nothing live.
+</p>
+</li>
+<li>Option B (revive): stop PID-keying (key by repo/cwd only) AND add<p>
+stale-PID detection so a dead run's queue is re-opened, not collided.
+</p>
+</li>
+<li>Either option ADD a best-effort startup sweep of stale<p>
+<code>/tmp/.bequeue.*</code> (skip live PIDs) so crashed runs do not accumulate.
+</p>
+</li>
+<li>Prefer A + sweep: PID-keying is load-bearing for concurrency<p>
+(the <code>verb '0'</code> stale-dispatch fix, loop.js:289-294); do not unwind it.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: simulate a crash (skip <code>close(true)</code>); assert the stale<p>
+ <code>/tmp/.bequeue.&lt;pid&gt;</code> + <code>.done</code> persist and are never reclaimed.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Implement A: collapse openOrResume to seed+append+consume.</li>
+<li class="open"><input type="checkbox" disabled> Add a best-effort startup sweep of stale <code>/tmp/.bequeue.*</code>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul class="todo">
+<li class="blocked"><input type="checkbox" disabled> None — <code>core/job.js</code> + the <code>_tmpQueue</code> sweep hook in <code>core/loop.js</code>.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>
