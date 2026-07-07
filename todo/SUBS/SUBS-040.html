@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-040</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-040: submodule branch tracking — a mounted sub is left OFF / BEHIND its dot-branch <code>/&lt;title&gt;/.&lt;parent&gt;[/branch]</code>; list of inconsistencies below. Requirement: the sub must be ON the dot-branch and the dot-branch must ADVANCE on commit. (be/ JS today.)</h1>
+<p>
+Inconsistency list found while landing <a href="./DIS-057.html">DIS-057</a> via <code>jab post</code> (which cascade-committed the <code>test</code> sub <code>39097b42</code> and correctly bumped the PARENT gitlink to it — the branch tracking is what broke). Spec <a href="../../wiki/Submodules.html">Submodules</a>: a sub wt TRACKS a synthetic dot-branch <code>/&lt;child&gt;/.&lt;parent&gt;[/parent_branch]</code>, and <code>child worktree commits update the local synthetic branch</code>. Fix target <code>be/</code> JS today; the native <code>be</code> items are related evidence. See <a href="../../wiki/Submodules.html">Submodules</a>, <a href="SUBS-035.html">SUBS-035</a>, <a href="SUBS-037.html">SUBS-037</a>, <a href="../DIS/DIS-058.html">DIS-058</a>, <a href="../DIS/DIS-059.html">DIS-059</a>.
+</p>
+<h2>Input</h2>
+<h3>Context (the inconsistencies)</h3>
+<ul>
+<li>I1 — sub mounts OFF the dot-branch (DETACHED): in <code>~/todo/DIS-057</code> the sub's recentmost get is a bare <code>?be44a666</code> → detached at the pin, NOT on <code>/beagle-ext-tests/.beagle-ext</code>. Must mount ON the dot-branch.</li>
+<li>I2 — dot-branch does NOT advance on commit: in <code>~/journal/be</code> the sub IS on <code>?/beagle-ext-tests/.beagle-ext</code> but reads <code>137 ok (ahead 1)</code> — cur <code>39097b42</code> is 1 ahead; the cascade post committed the sub but never advanced the dot-branch ref (still <code>be44a666</code>).</li>
+<li>I3 — status diffs against the WRONG ref: the detached-case sub read <code>ahead 1</code> of TRUNK (<code>resolveRef('')</code> = <code>be44a666</code>), not its dot-branch. Ahead/behind must be measured against the dot-branch (a fresh cascade-committed sub should read CLEAN).</li>
+<li>I4 — <code>be put ?/&lt;dot-branch&gt;</code> writes the wrong sha+store (native): <code>be put ?/beagle-ext-tests/.beagle-ext</code> &quot;created … at 0a8c42f3&quot; — the PARENT commit, in the PARENT store, not the sub's <code>39097b42</code> in the sub store; <code>ahead 1</code> persisted.</li>
+<li>I5 — <code>be post ?/&lt;dot-branch&gt;</code> MANGLES the name (native): <code>?/beagle-ext-tests/.beagle-ext</code> → <code>?/beagle-ext-tests/.beagle-ext-tests/.beagle-ext</code> → <code>NOBRANCH</code> → sub recursion failed → <code>BEDOGEXIT</code> aborted the parent commit.</li>
+<li>I6 — interaction with <a href="../DIS/DIS-059.html">DIS-059</a>: the new detached-post path SKIPS <code>advanceRef</code> when detached, so a DETACHED-mounted sub (I1) can never advance any branch on commit (I2). Fixing I1 (mount ON the dot-branch) lets the cascade post's <code>advanceRef</code> move the dot-branch.</li>
+<li>CORROBORATION (2026-06-30): in <code>~/journal/be</code> the <code>test</code> sub is on <code>?/beagle-ext-tests/.beagle-ext</code> reading <code>(ahead 2)</code> — cur/HEAD/trunk AND the parent gitlink pin all equal <code>62eafd46</code>, but the dot-branch ref (in <code>&lt;store&gt;/.be/beagle-ext-tests/refs</code>, NOT a wtlog) is frozen at <code>6e359804</code>, exactly 2 behind (a clean FF, not diverged). The two commits (<code>6f5c6f69</code>, <code>62eafd46</code>) advanced trunk + the gitlink but never the dot-branch — the I2 symptom, live.</li>
+<li>RULING (the fix architecture): the current branch is GET-OWNED — only <code>get</code> sets cur's branch (a checkout/clone, or an explicit <code>be get ?branch</code>); a bare <code>be get</code> FFs the tip but KEEPS the branch; <code>post</code>/<code>put</code>/<code>delete</code> advance the tip but NEVER switch branch. So GET must MOUNT the sub on its dot-branch (I1), then a cascade POST advances THAT current branch's ref (the dot-branch in the sub shard) and bumps the gitlink to the same tip. Recorded in <a href="../../wiki/Worktree.html">Worktree</a>.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Mount a sub ON its dot-branch <code>/&lt;title&gt;/.&lt;parent&gt;[/branch]</code> (I1), advance that dot-branch when a cascade post commits the sub (I2), and measure <code>status</code> ahead/behind against the dot-branch (I3). Native <code>be put</code>/<code>be post ?/&lt;dot-branch&gt;</code> (I4/I5) target the sub store + sub commit and stop mangling the name.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> (JS) is today's target; do not regress the working gitlink bump or the read-side sub recursion. Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Branch is GET-owned (<a href="../../wiki/Worktree.html">Worktree</a>): GET mounts/keeps the sub on its dot-branch; POST advances the CURRENT branch's ref (the dot-branch in the sub shard), never picking a branch. Invariant after a clean cascade post: gitlink pin == dot-branch tip == sub HEAD.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: cascade-commit a sub via <code>jab post</code>; assert it reads CLEAN, not <code>ahead 1</code> (I2 RED).</li>
+<li class="open"><input type="checkbox" disabled> Fix I1+I2 (be/ JS): mount on the dot-branch (<code>submount.js syntheticBranch</code>), advance it on the cascade commit.</li>
+<li class="open"><input type="checkbox" disabled> Fix I3: sub divergence measured vs the dot-branch, not <code>resolveRef('')</code>.</li>
+<li class="open"><input type="checkbox" disabled> I4/I5 (native <code>be</code>): spin a <code>beagle/</code> follow-up if fixed separately.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-06-29 from the <code>jab post</code> <a href="./DIS-057.html">DIS-057</a> cascade. The sub committed + the parent gitlink bumped correctly, but dot-branch tracking is broken (I1-I5). Fix be/ JS: sub ON the dot-branch + dot-branch ADVANCES on commit.</li>
+</ul>
+</body>
+</html>

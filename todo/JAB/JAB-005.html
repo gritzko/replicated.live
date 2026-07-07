@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-005</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-005: split js/ (jabc) out of beagle into its own project on libabc + libdog</h1>
+<p>
+The beagle tree splits into subprojects; <code>js/</code> — jabc, the JavaScriptCore runtime building the <code>jab</code> binary — becomes a separate project consuming <a href="https://github.com/gritzko/libabc">libabc</a> and libdog (<a href="../DOG/DOG-007.html">DOG-007</a>) as submodules. <a href="JAB-001.html">JAB-001</a> already divorced <code>jab</code> from <code>be</code> (standalone runner, upward <code>be/</code>-scan), so the runtime has no build-time ties to the beagle dogs: <code>jab</code> links <code>${JSC_LIB} dog abc-core ${sodium}</code> and nothing else. What remains is repo mechanics plus untangling the test references that reach outside <code>js/</code>. Blocked on <a href="../DOG/DOG-007.html">DOG-007</a>. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>js/CMakeLists.txt</code> compiles <code>../abc/{POL,NET,TCP,UDP}.c</code> straight into <code>jab</code> (they are stripped from <code>abc-core</code>), so jabc needs the abc SOURCES — the libabc submodule provides them; only the <code>../abc</code> spelling changes to the in-repo path.</li>
+<li><code>js/CMakeLists.txt</code> reaches outside the dir twice: <code>${CMAKE_SOURCE_DIR}/test/js/get/zip.js</code> (beagle top-level <code>test/js/</code>) and <code>${CMAKE_SOURCE_DIR}/../be/test/{ulog,store}.js</code> (the sibling beagle-ext checkout) — the latter already breaks configure when <code>be/</code> is absent, filed as <a href="../JS/JS-095.html">JS-095</a>; <a href="../JS/JS-061.html">JS-061</a> is the umbrella for sorting JS tests to their owning repo.</li>
+<li>beagle's root CMake gates the whole dir behind <code>option(WITH_JS)</code> + <code>add_subdirectory(js)</code>; no other beagle module links against anything in <code>js/</code>.</li>
+<li>be/beagle-ext executes on the <code>jab</code> binary; after the split, beagle-side e2e runs need a <code>jab</code> built from the new repo (PATH or a pinned submodule — see the T2 ruling).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A standalone jabc repo: <code>js/</code> content at the root, <code>abc</code> + <code>dog</code> submodule pins, <code>project()</code> + JSC discovery; builds <code>jab</code> and runs the full <code>JABC*</code> ctest suite green with no sibling checkouts.</li>
+<li>beagle drops <code>WITH_JS</code> + <code>add_subdirectory(js)</code>; the full beagle ctest stays green, with jab-dependent tests moved out or pointed at an external <code>jab</code>.</li>
+<li><a href="../JS/JS-095.html">JS-095</a> fixed by construction: any reference to a beagle-ext checkout is existence-guarded in BOTH <code>add_test</code> and <code>set_tests_properties</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Blocked on <a href="../DOG/DOG-007.html">DOG-007</a>: libdog must be consumable as a submodule first.</li>
+<li>RULING needed (T2): does beagle keep jabc as a third submodule to pin a known-good <code>jab</code> for its e2e tests, or fully detach and take <code>jab</code> from PATH / <code>-DJAB=</code>?</li>
+<li>The GitHub repo is created by the USER (T3); repo name suggestion <code>jabc</code> (binary stays <code>jab</code>) — confirm before creating.</li>
+<li>abc/dog pins in jabc must track beagle's pins while be/beagle-ext straddles both trees.</li>
+<li>Own worktree per <a href="../../meta/work.html">Issues</a>; no edits to the beagle main tree before the cut-over is approved.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>History PRESERVED, not fresh-imported: <code>git subtree split --prefix=js</code> off the exported beagle main (<code>e5071f32</code>) → <code>/home/gritzko/src/jabc</code>, 96 commits, split head <code>14b6d109</code>. Repo name <code>jabc</code> confirmed by the user 2026-07-06.</li>
+<li>T2 resolved AS SUBMODULE: the beagle cut-over (<code>46f87bcd</code>) mounts jabc at <code>js/</code> (WITH_JS + <code>add_subdirectory(js)</code> unchanged), pinning a known-good <code>jab</code> for beagle's e2e tests.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> T1+T4b standalone: root <code>project(jabc C CXX)</code> dual-mode block (<code>ABC_DIR</code> for the stripped <code>abc/{POL,NET,TCP,UDP}.c</code>, guarded <code>add_subdirectory(abc)/(dog)</code>, existence-gated <code>JABCzip</code>); abc <code>server-sync 83d20aa</code> + dog <code>0ff3eb7</code> pins; jabc <code>main 3857f64</code>; ctest 94/95 (RONtest only; <code>_Alignof</code>/<code>_Thread_local</code> → C23 keywords fixed in abc for the C++ TUs).</li>
+<li class="done"><input type="checkbox" checked disabled> T2 ruling: submodule (see Design decisions).</li>
+<li class="done"><input type="checkbox" checked disabled> T3 USER: created github.com/gritzko/jabc (2026-07-06); local repo <code>/home/gritzko/src/jabc</code>, origin wired.</li>
+<li class="done"><input type="checkbox" checked disabled> T4a content+history: subtree split pushed to github.com/gritzko/jabc <code>main</code> = <code>14b6d109</code> (96 commits).</li>
+<li class="done"><input type="checkbox" checked disabled> T5 beagle cut-over <code>46f87bcd</code>: <code>js/</code> is the jabc submodule; WITH_JS + tests unchanged; beagle ctest 386/389 (all 3 reds pre-existing/known).</li>
+<li class="open"><input type="checkbox" disabled> T6 be/beagle-ext: document/CI how <code>jab</code> is obtained; publish jabc <code>main 3857f64</code> (after abc <code>server-sync</code> + libdog push, so the pins resolve).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="../DOG/DOG-007.html">DOG-007</a> must land first.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-07-06, the beagle-split planning session.</li>
+</ul>
+</body>
+</html>

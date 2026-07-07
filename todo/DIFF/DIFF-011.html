@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIFF-011</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIFF-011: <code>diff:&lt;sub&gt;/&lt;file&gt;</code> renders the file WHOLLY-ADDED — the single-file (scoped) diff branch isn't submodule-mount-aware</h1>
+<p>
+<code>be diff:&lt;sub&gt;/&lt;file&gt;</code> (a wt-vs-base or range diff of a file UNDER a mounted submodule) reads the from/baseline side from the PARENT's baseline tree, where <code>&lt;sub&gt;</code> is a <code>160000</code> gitlink. <code>blobAtTree</code> walks the path segments via <code>readTree</code> and at the gitlink it cannot descend the commit-sha → returns <code>undefined</code> → an EMPTY from-side → <code>diffFile</code>'s <code>f.length === 0</code> &quot;Addition&quot; branch fires, so the file renders WHOLLY-ADDED (<code>@@ -1,0 +1,N @@</code>, every line <code>+</code>) instead of the real wt-vs-base inline diff. The whole-tree wt path (<code>diffWtTree</code>) and the range path already recurse mounts via <code>recurseSubPins</code>/<code>recurse.isMount</code> (open the sub's shard, read the sub's own tree), but the single-file SCOPED branches (<code>views/diff/diff.js:437-441</code> range+path, <code>449-451</code> wt+path) have NO mount awareness — they walk the parent tree straight through the gitlink. PRE-EXISTING (diff.js byte-identical to trunk; independent of the DIS-058 sub-recursion work), surfaced by <code>be-js-diff-14-sub-file-baseline</code>. Scope <code>be/</code> JS. See <a href="../../wiki/Store.html">Store</a>, <a href="../../wiki/Submodules.html">Submodules</a>; method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro: <code>be-js-diff-14-sub-file-baseline</code> — <code>diff:chsub/c.txt</code> (chsub a mounted sub, c.txt dirtied in-place). Oracle <code>be …--plain</code> emits a real inline diff (<code>@@ -1,4 +1,4 @@</code> with <code>+</code>/<code>-</code> lines); <code>jab</code> emits wholly-added (<code>@@ -1,0 +1,4 @@</code>, baseline empty).</li>
+<li>Site: <code>views/diff/diff.js</code> — wt+path branch (<code>449-451</code>, <code>blobAtTree(k, baseTree, spec.path)</code>) and range+path branch (<code>437-441</code>, <code>fromTree</code>/<code>toTree</code>). <code>blobAtTree</code> descends segments via <code>k.readTree</code>; at the <code>chsub</code> gitlink (kind &quot;s&quot;) it can't <code>readTree</code> the commit-sha → <code>undefined</code>.</li>
+<li>The NON-scoped paths already handle this: <code>diffWtTree</code> (<code>:237</code>) + <code>recurseSubPins</code> (<code>:280</code>, gated on <code>recurse.isMount</code> <code>:285</code>) open the sub via <code>be.find</code>/<code>store.open</code> and read the sub's pin-range tree. The scoped single-file branch is the ONLY diff path missing mount awareness.</li>
+<li>Read <a href="../../wiki/Store.html">Store</a> (flat shard layout, <code>be.find</code>/<code>store.open</code> for the sub's sibling shard) and <a href="../../wiki/Submodules.html">Submodules</a> (the mount: <code>&lt;wt&gt;/&lt;path&gt;/.be</code> anchor + the sub's OWN baseline tree) to mirror how the recursive paths resolve the sub.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>diff:&lt;sub&gt;/&lt;file&gt;</code> (wt-vs-base AND range) renders the real inline diff against the SUB's baseline blob — byte-parity with native <code>be …--plain</code> (the <code>be-js-diff-14</code> oracle).</li>
+<li>A path NOT under a mount is unchanged; a path under a declared-but-unmounted sub degrades sanely (not a false wholly-added).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> JS only; REUSE the mount resolution the recursive paths use (<code>recurse.isMount</code> + <code>be.find</code>/<code>store.open</code>) — do NOT re-roll. Keep the friendly string throws.</li>
+<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): make <code>be-js-diff-14-sub-file-baseline</code> pass (un-xfail if it is marked); keep the other diff/sub cases green.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>In the wt+path and range+path branches, before <code>blobAtTree</code>, split <code>spec.path</code> at the deepest mount prefix (<code>recurse.isMount</code>/the subs set). If under a mount: open the sub's store (<code>be.find(join(repo.wt, subPath))</code> + <code>store.open</code>) and read the from-side blob from the SUB's baseline tree at the in-sub remainder; the to-side stays the wt file (wt+path) or the sub's to-pin tree (range). Mirror <code>recurseSubPins</code>.</li>
+<li>Single resolution path shared with the recursive diff so the two can't drift.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: <code>be-js-diff-14</code> shows the wholly-added (empty baseline) bug. RED.</li>
+<li class="open"><input type="checkbox" disabled> Make the scoped diff branches mount-aware (split at the mount, read from the sub's tree).</li>
+<li class="open"><input type="checkbox" disabled> Green: <code>be-js-diff-14</code> byte-parity + the other diff/sub cases (<code>diff-08</code>, etc.) intact.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None — PRE-EXISTING and independent of DIS-058 (diff.js untouched there); a fresh worktree from trunk reproduces it.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-06-29 from the DIS-058 failing-test sweep (one of the 2 pre-existing fails, NOT a DIS-058 regression). The scoped single-file diff must resolve a file under a mount against the sub's own baseline.</li>
+</ul>
+</body>
+</html>

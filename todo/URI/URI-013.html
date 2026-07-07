@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>URI-013</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>URI-013 <a href="./HIGH.html">HIGH</a>: URI hygiene — route ALL URI parse/compose through the URI class (retire manual indexOf/slice/split parsing + string-concat construction)</h1>
+<p>
+A READ-ONLY audit of the JS tree found URIs parsed and composed BY HAND across ~30 production files: Category A (manual PARSING — <code>indexOf(&quot;:&quot;)</code>/<code>slice</code>/<code>split</code>/regex to pull scheme/authority/path/query/fragment) and Category B (manual CONSTRUCTION — <code>scheme + &quot;:&quot; + …</code> string-concat). The canonical helpers themselves offend: <code>shared/nav.js</code> <code>navUri</code> concatenates and <code>navAuthorize</code> hand-splits — the helper that should BE the fix. Rule: ONLY the URI class (<code>new URI</code> / <code>uri._parse</code> / <code>URI.make</code> / <code>.toString</code>) and the nav/refKey helpers (built ON it) may parse or compose a URI. This is a behavior-PRESERVING refactor — the existing suite (esp. plain/tlv byte-parity) is the safety net. Highest value: <code>views/status/status.js:322</code> bypasses <code>navUri</code> (the scope-leak class <a href="URI-012.html">URI-012</a> fixed on the RESOLVE side, still open on the BAKE side), the nav helpers hand-roll, and ~39 <code>?branch#sha</code> refs-key concats want ONE shared <code>refKey()</code>. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Findings from the URI hand-parsing audit (read-only scan): two categories — A (manual parse: <code>indexOf</code>/<code>slice</code>/<code>split</code>/regex over a URI) and B (manual construct: string-concat instead of <code>URI.make</code>). ~30 production files; the idioms CLUSTER (not scattered).</li>
+<li>The canonical helpers hand-roll: <code>shared/nav.js:13 navUri</code> (<code>scheme + &quot;:&quot; + a + (a&amp;&amp;path?&quot;/&quot;:&quot;&quot;) + path</code>) and <code>:24-29 navAuthorize</code> (<code>indexOf(&quot;:&quot;)</code> + <code>slice</code> + <code>rest.slice(0,2)===&quot;//&quot;</code>). Fix these FIRST so every caller can route through them.</li>
+<li>Scope-leak class: <code>views/status/status.js:322</code> bakes <code>(&quot;diff:&quot;|&quot;cat:&quot;) + navPath</code> bypassing <code>navUri</code>, so click-targets DROP the <code>//authority</code> — the <a href="URI-012.html">URI-012</a> bug on the BAKE side (<a href="URI-012.html">URI-012</a> fixed only the RESOLVE side).</li>
+<li>Systemic idioms: ~10 read views strip <code>&lt;scheme&gt;:</code> by <code>slice</code> then re-prepend + re-parse (A9/B5/B6 — collapses to one <code>uri._parse</code>); ~39 sites concat <code>?branch#sha</code> / <code>path#sha</code> refs-log keys (B10 — one <code>refKey()</code>).</li>
+<li>A URI-class GAP (NOT a violation to &quot;fix&quot; by more hand-parsing): recovering slot-present-but-empty (<code>?</code>/<code>#</code> presence) via <code>indexOf</code> because <code>.query</code>/<code>.fragment</code> collapse <code>undefined</code> vs <code>&quot;&quot;</code> — see <a href="URI-009.html">URI-009</a>; leave + link, needs a binding API.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>No production JS parses or composes a URI by hand: every scheme/authority/path/query/fragment READ comes off <code>new URI</code>/<code>uri._parse</code>; every URI BUILT via <code>URI.make</code>/<code>.toString</code> or a nav/refKey helper.</li>
+<li><code>shared/nav.js</code> <code>navUri</code> + <code>navAuthorize</code> reimplemented on the URI class, idempotent, BYTE-IDENTICAL output.</li>
+<li><code>status.js</code> emits click-targets via <code>navlib.navUri</code> (authority-scoped) — closes the bake-side scope leak (twin of <a href="URI-012.html">URI-012</a>).</li>
+<li>ONE shared <code>refKey(branch, sha)</code> (<code>URI.make</code>-based) replaces the ~39 <code>?b#sha</code> concats.</li>
+<li>Behavior-PRESERVING: the whole suite stays green; plain/tlv paths stay byte-for-byte identical.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Refactor ONLY — no behavior change. Repro = the existing suite stays green (byte-parity for plain/tlv). Do NOT add features or touch test assertions.</li>
+<li>Allowed API only: <code>URI.make</code> / <code>uri._parse</code> / <code>new URI</code> / <code>.toString</code> + <code>shared/nav.js</code>. No new hand-parsing anywhere.</li>
+<li>The A8 / <a href="URI-009.html">URI-009</a> slot-presence workaround stays UNTIL the URI binding exposes presence — do NOT replace it with more <code>indexOf</code>; leave it, link <a href="URI-009.html">URI-009</a>.</li>
+<li>Byte-parity: <code>URI.make</code> must reproduce the exact old string (leading <code>/</code>, empty <code>?</code>/<code>#</code>, empty authority) — verify against plain/tlv parity tests.</li>
+<li>Parallel workers share ONE worktree with DISJOINT file sets; workers EDIT ONLY — the orchestrator runs the single build + <code>ctest -j16</code> + commit (no concurrent <code>ninja</code>/<code>jab</code> in the shared wt) (<a href="../../rule/Issues.html">Issues</a>).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Fix the helpers FIRST (<code>nav.js</code>) + add <code>refKey</code> so the systemic clusters collapse into helper calls, not open-coded <code>URI.make</code> repeated 39×.</li>
+<li>Partition the work by DISJOINT files into parallel clusters (the TODO Wn list); each cluster is behavior-preserving and independently checkable via the full suite.</li>
+<li>Each cluster may use <code>URI.make</code> DIRECTLY to avoid a hard dep on W1's helper landing first; consolidate to <code>refKey</code>/<code>navUri</code> in a follow-up sweep if needed.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> W1 helpers/foundation: <code>shared/nav.js</code> (navUri B0, navAuthorize A1), <code>shared/hunkrows.js</code> (A3), <code>view/bro.js</code> (A2 statusURI), <code>shared/store.js</code> (B10 keyURI + DEFINE <code>refKey</code>).</li>
+<li class="open"><input type="checkbox" disabled> W2 bake-side views: <code>views/status/status.js</code> (B1:322 via navUri, B2 joinPrefix, B10 294/296/332), <code>views/diff/diff.js</code> (B9:375 hunk-uri, B5:426 re-scheme).</li>
+<li class="open"><input type="checkbox" disabled> W3 read projectors: <code>views/{cat,blob,sha1,tree,size,type,log,commit,spot}</code> strip/re-scheme dance (A9/B5/B6); LEAVE A8 presence-scan, link <a href="URI-009.html">URI-009</a>.</li>
+<li class="open"><input type="checkbox" disabled> W4 verbs refs-key: <code>verbs/{get,put,post,patch,head}</code> <code>?b#sha</code> concats (B10) + head A5/B4, put A6 → <code>URI.make</code>/<code>refKey</code>.</li>
+<li class="open"><input type="checkbox" disabled> W5 core/shared: <code>core/loop.js</code> (A10/A11/B7), <code>core/discover.js</code> (B8), <code>shared/wire.js</code> (A4), <code>shared/submount.js</code> (A7/B3), <code>shared/ingest.js</code> (B10).</li>
+<li class="open"><input type="checkbox" disabled> Orchestrator: one build + <code>ctest -j16</code> (byte-parity green) + commit; final grep proves zero remaining Cat-A/Cat-B in production JS (except the <a href="URI-009.html">URI-009</a>-gated A8 sites).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="URI-009.html">URI-009</a> slot-presence (<code>undefined</code> vs empty) blocks fully retiring the A8 <code>indexOf(&quot;?&quot;|&quot;#&quot;)</code> presence scans — leave them, linked.</li>
+<li><code>refKey</code> adoption is a soft dep (W4/W5 want W1's helper); mitigate by using <code>URI.make</code> directly, consolidate later.</li>
+<li>Byte-parity risk: <code>URI.make</code> edge cases (empty authority, empty <code>?</code>, path leading slash) MUST match the old concat exactly — parity tests are the gate.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-07-04 from the URI hand-parsing audit; the systemic cleanup behind <a href="URI-012.html">URI-012</a>'s single-site resolve fix. Retires manual URI parse/compose across the JS tree in favor of the URI class + nav/refKey helpers.</li>
+</ul>
+</body>
+</html>

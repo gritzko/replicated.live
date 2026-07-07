@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-045</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-045: descended read views emit nav/hunk URIs WITHOUT the sub-mount prefix → hunk click-through resolves in the WRONG (super-repo) store <a href="./DIS-058, read-side twin of SUBS-039.html">DIS-058, read-side twin of SUBS-039</a></h1>
+<p>
+<a href="SUBS-039.html">SUBS-039</a>/<a href="../LOG/LOG-002.html">LOG-002</a> taught the <code>be/</code> JS READ views to DESCEND into a mounted sub when the query path falls there (<code>jab log:be</code> logs the sub's OWN history, correct). But a descended view still emits its per-row / per-leaf nav URIs STORE-AGNOSTIC — WITHOUT the descent prefix. The pager re-dispatches each nav URI as a fresh <code>jab &lt;uri&gt;</code> FROM ITS OWN CWD — the SAME base the original call used (<code>ctx.repo == be.find(cwd)</code>, <code>core/loop.js:269</code>). So an emitted URI's path must be expressed RELATIVE TO THAT BASE, exactly like the original <code>log:&lt;path&gt;</code> arg; a bare <code>commit:?&lt;sha&gt;</code> names a sub object the base store can't resolve → dead nav. The quantity to prepend is NOT an absolute top-wt path but the DESCENT DELTA relative to <code>ctx.repo</code> — precisely the <code>joinPrefix</code> accumulation <code>descendSub</code> computes and THROWS AWAY. This keeps links cwd-INVARIANT: from the journal root the link must read <code>commit:be?&lt;sha&gt;</code>, but <code>cd be &amp;&amp; jab log:</code> has base = the <code>be</code> sub itself, descends nothing, so the link must STAY <code>commit:?&lt;sha&gt;</code> — prepending <code>be</code> there would be WRONG. Worse still, the TARGET read views (<code>commit:</code>, <code>blob:</code>, <code>tree:</code>, <code>size:</code>) do NOT descend a <code>&lt;sub&gt;</code> prefix at all (sub-blind — only <code>log</code> learned <code>descendSub</code>), so even a correctly base-relative <code>commit:be?&lt;sha&gt;</code> won't round-trip yet. This is the READ-side twin of <a href="SUBS-039.html">SUBS-039</a> (the state-verb path-delegation primitive): a descended read view must (a) emit URIs prefixed by the descent delta relative to <code>ctx.repo</code>, and (b) the target read view must DESCEND that prefix from the same base before resolving. Scope <code>be/</code> JS; parent <a href="../DIS/DIS-058.html">DIS-058</a>; see <a href="../../wiki/Submodules.html">Submodules</a>, <a href="../BRO/BRO-006.html">BRO-006</a>; method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro (cwd = journal root, <code>jab</code> = beagle/build/bin/jab):<ul>
+<li><code>jab log:be</code> row 1 → <code>a715b0d3  07:21  SUBS-044: …</code> — the <code>be</code> SUB's own<p>
+commit (correct, per <a href="../LOG/LOG-002.html">LOG-002</a>).
+</p>
+</li>
+<li>The row's hidden <code>U</code> click-target is the QUERY form with the FULL 40-hex<p>
+sha and NO path — <code>commit:?a715b0d3604deac807d6262279e2ed48f968cac8</code> (verified via <code>jab log:be --tlv</code>). <code>log.js:359</code> <code>const uri = &quot;commit:?&quot; + sha;</code> builds it store-agnostic, unchanged by <code>descendSub</code> (<a href="../LOG/LOG-002.html">LOG-002</a> Outcome even notes &quot;<code>appendRow</code> is store-agnostic, unchanged&quot;).
+</p>
+</li>
+<li><code>jab commit:?a715b0d3</code> (from the journal ROOT, same base as the log call)<p>
+→ <code>JS exception: COMMITNONE</code>, rc=1 — the sub sha is NOT in the base store.
+</p>
+</li>
+<li><code>cd be &amp;&amp; jab commit:?a715b0d3</code> → renders (rc=0). So the click-through<p>
+fails ONLY because the emitted URI dropped the descent prefix; correct is <code>commit:be?&lt;sha&gt;</code> FROM the root (and unprefixed <code>commit:?&lt;sha&gt;</code> from <code>be</code>).
+</p>
+</li>
+</ul>
+</li>
+<li>Base = cwd: <code>core/loop.js:269</code> <code>repo = be.find()</code> re-roots at the pager's OWN<p>
+cwd (the invocation base), then the target view opens <code>store.open(repo. storePath, repo.project)</code> (e.g. <code>commit.js</code> <code>resolveSlot(k, repo, …)</code>). The emitted URI must be relative to THAT base — cwd-invariant, not absolute-top.
+</p>
+</li>
+<li>Target read views are sub-BLIND: only <code>log.js</code> has <code>descendSub</code> (<code>:406</code>);<p>
+<code>commit.js</code>/<code>blob.js</code>/<code>tree.js</code>/<code>size.js</code> never split a <code>&lt;sub&gt;</code> prefix (grep: no <code>descendSub</code>/<code>mountWtDir</code> there). <code>tree.js</code> even navs a <code>160000</code> gitlink row to <code>blob:&lt;name&gt;</code> (→ BLOBFAIL), never into the sub.
+</p>
+</li>
+<li>Whole-tree recursors (<code>status</code>, <code>diff</code>, <code>ls</code>/<code>lsr</code>) prefix names at emit<p>
+under <code>prefix</code> — AUDIT whether their nav/open targets (not just the visible column) also carry the full path, or share this defect.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A hunk emitted by a DESCENDED/recursing read view carries nav URIs that<p>
+round-trip: feeding a row's click-target back from the TOP wt resolves the SAME sub object. Concretely <code>jab log:&lt;sub&gt;</code> rows nav to <code>commit:&lt;sub&gt;?&lt;sha&gt;</code> and <code>jab commit:&lt;sub&gt;?&lt;sha&gt;</code> (from root) renders == <code>cd &lt;sub&gt; &amp;&amp; jab commit:?&lt;sha&gt;</code>.
+</p>
+</li>
+<li>The target read views (<code>commit:</code> first; then <code>blob:</code>/<code>tree:</code>/<code>size:</code>)<p>
+DESCEND a <code>&lt;sub&gt;/…</code> mount prefix to the sub store before resolving — reusing the SAME split-at-mount primitive, not a per-view re-roll.
+</p>
+</li>
+<li>A NON-sub path is unchanged (no prefix added, no regression).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> JS only. REUSE the existing seam: <code>log.js::descendSub</code> /<p>
+<code>core/recurse.js</code> (<code>isMount</code>/<code>mountWtDir</code>/<code>joinPrefix</code>) — do NOT hand-roll a second gitlink/<code>.be</code> probe. Prefer factoring ONE shared read-side <code>resolveRepoForPath(repo, path) → {repo, rest, prefix}</code> that <code>log</code> already needs and <code>commit</code>/<code>blob</code>/<code>tree</code>/<code>size</code> can share (the read twin of <a href="SUBS-039.html">SUBS-039</a>'s <code>delegatePath</code>).
+</p>
+</li>
+<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): extract a <code>log:&lt;sub&gt;</code> row's <code>U</code> target, feed it<p>
+back from the parent root, assert it renders the sub commit (RED today: COMMITNONE). Preserve <a href="../LOG/LOG-001.html">LOG-001</a> spine/grey + <a href="../BRO/BRO-006.html">BRO-006</a> <code>U</code> links.
+</p>
+</li>
+<li>Keep byte-parity intent with native <code>be</code> where it prefixes (confirm what C's<p>
+<code>graf/LOG.c</code> emits for a sub row's <code>U</code> target — parity target, not a guess).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) Add the shared read-side path→repo resolver (mirror <a href="SUBS-039.html">SUBS-039</a>'s<p>
+delegation split, read flavor): deepest mounted-sub prefix → <code>{subRepo, restPath, subPrefix}</code>. <code>log.js</code> replaces its private <code>descendSub</code> with it and RE-PREFIXES the emitted <code>commit:</code> target with <code>subPrefix</code>; <code>commit</code>/<code>blob</code>/ <code>tree</code>/<code>size</code> call it on their own path arg before resolving.
+</p>
+</li>
+<li>(open) URI shape for a prefixed target: <code>commit:&lt;sub&gt;?&lt;sha&gt;</code> vs<p>
+<code>commit:&lt;sub&gt;/?&lt;sha&gt;</code> — pick the one the target descender + native parity accept; verify the banner/<code>?query</code>/<code>#frag</code> split still parses (<code>new URI</code>).
+</p>
+</li>
+<li>(open) Whether to fix <code>tree</code>'s gitlink-row nav (<code>blob:&lt;name&gt;</code> → descend the<p>
+sub, or a <code>commit:&lt;sub&gt;?&lt;pin&gt;</code> link) here or split to a <code>tree</code> follow-up — prefer the smallest change that makes the log→commit round-trip green, then fan the same primitive out.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: a fixture parent mounting a ≥2-commit sub; extract a<p>
+ <code>jab log:&lt;sub&gt;</code> row <code>U</code> target, feed it back from the parent root, assert  the sub commit renders (RED: COMMITNONE) and == <code>cd &lt;sub&gt; &amp;&amp; jab commit:?&lt;sha&gt;</code>.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Add the shared read-side path→repo resolver (reuse <code>core/recurse.js</code>);<p>
+ <code>log.js</code> emits <code>commit:&lt;sub&gt;?&lt;sha&gt;</code> via it.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Teach <code>commit:</code> to descend the <code>&lt;sub&gt;</code> prefix (first consumer); confirm the<p>
+ round-trip GREEN.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Audit <code>blob</code>/<code>tree</code>/<code>size</code> (sub-blind) + <code>status</code>/<code>diff</code>/<code>ls</code> (recursors)<p>
+ for the same emit-URI defect; file follow-ups or fold minimal fixes.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Non-sub path unchanged; be/ suite green; <a href="../LOG/LOG-001.html">LOG-001</a>/<a href="../BRO/BRO-006.html">BRO-006</a> preserved.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Overlaps <a href="SUBS-039.html">SUBS-039</a> on the split-at-mount primitive (state-verb side) and<p>
+<a href="../DIS/DIS-058.html">DIS-058</a>/<code>core/recurse.js</code> — coordinate so read + write share ONE splitter, not two. The target views being sub-blind is the bulk of the work (the log emit-prefix alone is a 1-line change but is INERT until <code>commit:</code> descends).
+</p>
+</li>
+<li>Confirm native <code>be</code>'s sub-row <code>U</code> target format first — this is a parity fix,<p>
+not an invention.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-07-01, child of <a href="../DIS/DIS-058.html">DIS-058</a>, read-side twin of <a href="SUBS-039.html">SUBS-039</a>.<p>
+Root cause verified live: <code>jab log:be</code> emits <code>commit:?a715b0d3</code> (no sub prefix); <code>jab commit:?a715b0d3</code> from root → COMMITNONE, <code>cd be</code> → renders. Deliverable: full-path-prefixed nav URIs from descended read views + the target views descending that prefix, sharing SUBS-039's split primitive.
+</p>
+</li>
+</ul>
+<p>
+&lt;/content&gt; &lt;/invoke&gt;
+</p>
+</body>
+</html>

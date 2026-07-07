@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIT-018</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GIT-018 <a href="./JS.html">JS</a>: build the wire push-pack in pure JS — drop the keeper spawn</h1>
+<p>
+The JS wire push does not build its own pack: <code>shared/wire.js</code> <code>buildPushPack</code> shells to the native <code>keeper upload-pack &lt;store&gt;?/&lt;proj&gt;</code>, driving a full upload-pack negotiation with a spawned <code>keeper</code> just to harvest the packfile. That makes every <code>jab post</code>/<code>jab put</code> over the wire depend on the native <code>keeper</code> binary at runtime (and blocks a push wherever it is absent). The pieces to do it in JS already exist — the <code>git.pack</code> writer bindings, the keeper-store reader (<code>commitParents</code>/<code>readTree</code>/<code>getObject</code>), and <code>jab post</code>'s local pack build (<code>fold-commit.writePack</code>). Fix: replace the keeper spawn with a pure-JS thin push-pack — walk the reachability closure (want=tip MINUS have=remote tips) over the JS store and emit via <code>git.pack</code>, no subprocess. Reuse <a href="../PACK/PACK-002.html">PACK-002</a>'s OFS writer for offset-only deltas; keep the packfile fsck-clean on the peer. JS only (<code>be/</code>, via <code>jab</code>). Method: <a href="../../meta/work.html">work</a>; sibling <a href="GIT-013.html">GIT-013</a>/<a href="GIT-016.html">GIT-016</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>shared/wire.js</code> <code>buildPushPack(localServe, wantSha, haves)</code> (~L393) does <code>io.spawn(KEEPER_BIN, [&quot;keeper&quot;,&quot;upload-pack&quot;, localServe])</code>, drains keeper's advert, sends want/haves/done, and reads the pack after NAK — a native pack build wearing a wire-negotiation costume.</li>
+<li>Consumers: <code>verbs/post/post.js</code> <code>pushRemote</code> and <code>verbs/put/put.js</code> <code>pushWire</code> both call <code>buildPushPack</code> before <code>wire.push</code>, so BOTH break without a <code>keeper</code> binary.</li>
+<li>The JS already builds packs: the <code>git.pack</code> package (<code>git.pack.ram/over</code>, <code>feed</code>, <code>header</code>, <code>finish</code>), the store reader (<code>getObject</code>/<code>commitParents</code>/<code>readTree</code>), and <code>jab post</code> <code>fold-commit.writePack</code> (a local commit pack) — <a href="../PACK/PACK-002.html">PACK-002</a> tracks giving that writer OFS_DELTA.</li>
+<li>Fetch is already keeper-independent on the JS side (<code>wire.fetch</code> + <code>ingest</code>); only the push-pack BUILD still delegates to the native binary.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>buildPushPack</code> assembles the push pack in pure JS: compute the object closure reachable from <code>wantSha</code> and NOT from <code>haves</code>, then emit a valid packfile via <code>git.pack</code> — NO <code>keeper</code> spawn, no subprocess.</li>
+<li>A <code>jab post</code>/<code>jab put</code> over ssh/http completes with no native <code>keeper</code> binary present; the peer accepts the pack (git <code>receive-pack</code> fsck-clean, <code>unpack ok</code>).</li>
+<li>Include the store-anchor blob on a fresh-remote push (<a href="GIT-009.html">GIT-009</a>'s <code>WALK_INCL_ANCHOR</code>) so the peer does not fsck <code>missing blob</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>JS only, <code>be/</code>, run via <code>jab</code>. Do NOT run native <code>be</code>; do NOT open <code>beagle/</code>.</li>
+<li>Reuse before add: <code>git.pack</code> writer, the store reader closure walk, <code>fold-commit.writePack</code>, <a href="../PACK/PACK-002.html">PACK-002</a>'s OFS_DELTA encoder. No hand-rolled pack byte-twiddling outside <code>git.pack</code>; no new deps.</li>
+<li>Offset-only deltas (OFS_DELTA against an earlier object in the SAME pack), never REF_DELTA (<a href="../../wiki/PackLog.html">PackLog</a>); a self-contained (non-thin) closure sidesteps thin-pack base fixups if simpler and still correct.</li>
+<li>ABC/JS norms: ≤2-line <code>GIT-018</code> comments, greppable, ticket-coded ≤64-char commit.</li>
+<li>Do not regress the wire bucket (push-ssh/push-http/put-force-*) — they must pass with the JS builder AND (as a bridge) still pass if keeper is present.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Prefer a self-contained closure (send every object reachable from want but not from any have) over a thin pack: correctness first; a thin-pack optimisation (delta vs bases the remote holds) can be a follow-up.</li>
+<li>Keep <code>buildPushPack</code>'s signature <code>(localServe, wantSha, haves)</code> so <code>pushRemote</code>/<code>pushWire</code> are untouched; swap only the body (spawn → JS walk+emit).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> T1 — repro/bench: a push whose pack <code>buildPushPack</code> builds; assert the peer reports <code>unpack ok</code> and fsck is clean, with NO <code>keeper</code> on PATH.</li>
+<li class="open"><input type="checkbox" disabled> T2 — JS closure walk: from <code>wantSha</code>, gather commits/trees/blobs reachable but NOT reachable from <code>haves</code>, over the store reader (dedupe by sha).</li>
+<li class="open"><input type="checkbox" disabled> T3 — emit the pack via <code>git.pack</code> (OFS_DELTA per <a href="../PACK/PACK-002.html">PACK-002</a>); include the <a href="GIT-009.html">GIT-009</a> anchor on a fresh remote; write the trailer sha.</li>
+<li class="open"><input type="checkbox" disabled> T4 — swap <code>buildPushPack</code>'s body to the JS builder; drop the <code>keeper upload-pack</code> spawn.</li>
+<li class="open"><input type="checkbox" disabled> T5 — regression: wire bucket (push-ssh/http, put-force-ssh/http) green with keeper ABSENT; fetch/clone unaffected.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Thin-pack vs self-contained: git <code>receive-pack</code> accepts a non-thin pack, so the closure approach is safe; a thin pack needs base bookkeeping against <code>haves</code> — defer unless cheap.</li>
+<li>OFS_DELTA correctness is <a href="../PACK/PACK-002.html">PACK-002</a>'s remit; coordinate so the JS writer emits offset-only deltas (a RAW-only pack works but bloats the wire).</li>
+<li>Depends on the store reader exposing the full closure (commit→tree→blob); watch for submodule gitlinks (do NOT descend — record the gitlink object only).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

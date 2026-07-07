@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JGET-004</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JGET-004 <a href="./CRIT.html">CRIT</a>: dirty cross-branch <code>jab get ?feat</code> writes conflict markers into the uncommitted file (no up-front dirty refusal)</h1>
+<p>
+<code>jab get ?feat</code> against a worktree with a DIRTY tracked file (locally edited, uncommitted) does not refuse: its only dirty guard fires solely for NEW-in-target paths that lack a baseline, so a tracked file present in both trees falls straight into the leaf 3-way weave. The on-disk dirty bytes vs base vs target collide, jab WRITES <code>&lt;&lt;&lt;&lt;dirty||||-feat&gt;&gt;&gt;&gt;</code> into the file and grows the wtlog, then errors GETCONF. The user's uncommitted bytes are mangled and the refusal-atomicity invariant is violated. Native refuses up front (SNIFFDRTY), leaving the file and wtlog untouched. Part of <a href="JGET-001.html">JGET-001</a>; method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Native <code>beagle/test/get/09-refuse-no-commit</code> (cross-branch-dirty refusal,<p>
+SNIFFDRTY, must run BEFORE the commit point).
+</p>
+</li>
+<li>Repro: two-branch repo, edit tracked <code>x.txt</code> dirty, <code>jab get ?feat</code> → x.txt<p>
+becomes <code>&lt;&lt;&lt;&lt;dirty||||-feat&gt;&gt;&gt;&gt;</code>, wtlog 7→8 rows, then rc=1 (GETCONF). VERIFIED marker in evidence <code>/tmp/claude-1000/jabprobe/r09/wt/x.txt</code>. Native: rc≠0, x.txt still <code>dirty</code>, wtlog unchanged.
+</p>
+</li>
+<li>Root: <code>dirtyOverlapCheck</code> (<code>get.js:328</code>) only inspects paths with NO baseline<p>
+(new-in-target); a tracked file in both base+target skips it and reaches the leaf weave-merge (~<code>get.js:651/748</code>).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A switch/restore that would overwrite a DIRTY tracked file refuses up front<p>
+(before any wt write or wtlog append), wt + wtlog byte-identical, nonzero exit with a native-style dirty diagnostic.
+</p>
+</li>
+<li>A clean wt still switches/weaves as today.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The refusal must be a PRE-PASS barrier (before the fan-out commit point), like<p>
+native SNIFFDRTY / the existing SNIFFOVRL pre-pass. Repro-first.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Broaden the pre-pass: refuse if ANY tracked path that the target changes is<p>
+dirty on disk (baseline≠wt), not only un-baselined overlays. Keep the existing no-baseline overlay arm. Decide whether <code>--force</code>/weave is the opt-in to merge.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro test: dirty tracked file + <code>jab get ?feat</code> → no write, no wtlog growth, nonzero.</li>
+<li class="open"><input type="checkbox" disabled> Widen the dirty pre-pass to cover baselined-but-dirty target paths.</li>
+<li class="open"><input type="checkbox" disabled> Parity-port case 09 to <code>be/test/get</code>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Destroys uncommitted user edits; pair-review with <a href="./JGET-002.html">JGET-002</a> (both are<p>
+&quot;missing pre-flight refusal&quot; in the seed).
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open) Filed 2026-06-29.</li>
+</ul>
+</body>
+</html>

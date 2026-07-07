@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JGET-012</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JGET-012 <a href="./MED.html">MED</a>: relative submodule url (<code>../sub</code>) not resolved against the parent source</h1>
+<p>
+<code>jab get</code> of a git parent whose <code>.gitmodules</code> declares a RELATIVE submodule url (<code>url = ../sub</code>) passes it to the sub fetch without resolving it against the parent SOURCE URI, so the fetch targets a nonexistent project (<code>HOMENOPROJ</code> / &quot;peer advertised no usable ref&quot;), the sub is absent and the get exits 1. Native resolves <code>../sub</code> against the parent URI (the <a href="../SUBS/README.html">SUBS-020</a> rule). Part of <a href="JGET-001.html">JGET-001</a>; method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Native <code>beagle/test/get/50-file-subs-git-relative</code> (SUBS-020, relative <code>../sub</code>).</li>
+<li>Repro: git parent with <code>.gitmodules url=../sub</code>; <code>jab get &lt;parent&gt;</code> →<p>
+<code>HOMENOPROJ</code> / no usable ref, sub absent. Evidence <code>~/todo/JSGET-cases/c50/wk/c3a.err</code>.
+</p>
+</li>
+<li>Root: the sub-mount candidate builder takes the declared url verbatim; no<p>
+relative-to-parent-source resolution (<code>be/shared/submount.js</code>).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A relative <code>.gitmodules</code> url is resolved against the parent source locator before<p>
+fetch (matching native SUBS-020); absolute urls unchanged.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Use the URI binding's path-merge, not string concat. Repro-first. Sequence after<p>
+<a href="./JGET-006.html">JGET-006</a>/<a href="./JGET-007.html">JGET-007</a> (sub mount must work for non-relative first).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Resolve the declared url: if relative, merge against the parent source URI<p>
+(scheme/host/path) to form the sub locator; keep absolute urls as-is. Slot it as a candidate before the raw declared-url fallback.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro test: parent with <code>url=../sub</code> → sub mounts.</li>
+<li class="open"><input type="checkbox" disabled> Add relative-url resolution against the parent source in submount.</li>
+<li class="open"><input type="checkbox" disabled> Parity-port case 50 to <code>be/test/get</code>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Depends on the sub-mount path working (JGET-007/008).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open) Filed 2026-06-29.</li>
+</ul>
+</body>
+</html>

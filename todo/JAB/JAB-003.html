@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-003</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-003: arg-string → call mapping — (verb, params[]) with params as JS values; eval keyboard input, CLI packs strings+scalars</h1>
+<p>
+A <code>be</code>/<code>jab</code> invocation is a VERB plus N params; the dispatcher should split into <code>(verb, params[])</code>, <code>require</code> the verb code, and pass the params as JS values, leaving any URI parse to the verb. Today <code>core/loop.js cli()</code> instead routes every positional through <code>resolve.seed</code>→<code>classifyArg</code> (<code>new URI(arg)</code>) BEFORE the verb sees it — a uniform pre-classification that silently drops a colon-bearing POST commit message (<code>TICKET: log: …</code> re-parses to a <code>{kind:&quot;path&quot;}</code> row scoping the post to a nonexistent target → no-op rc=0; the <code>#msg</code> sigil is the only escape). Fix: retire the central classify; the CLI packs each shell-token as a string (differentiating only the SAFE scalars — number/<code>true</code>/<code>false</code>/<code>null</code>), while the pager <code>:</code> address line (keyboard) runs the JS dogenizer + a shape-gated <code>eval</code> so <code>{}</code>/<code>[]</code>/scalars become real JS values. Scope: <code>be/</code> (beagle-ext) dispatch + pager; reuses the existing <code>tok</code>/<code>eval</code> bindings, no <code>beagle/js</code> change. See <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>core/loop.js cli()</code> splits flags/positionals, picks <code>verb=args[0]</code> via the <code>_isVerb</code> file probe, then <code>resolve.seed(verb,args)</code> runs <code>classifyArg</code>=<code>new URI(arg)</code> per positional → branch-free queue rows; raw args only tag along on <code>ctx.args</code>.</li>
+<li>The POST silent-drop repro (isolated on a clean repo): <code>jab post 'AAA: bbb ccc'</code> commits, but <code>jab post 'AAA: bbb: ccc'</code> is a silent no-op rc=0 — the second colon-token makes <code>classifyArg</code> return a <code>{kind:&quot;path&quot;}</code> row that scopes the commit to a nonexistent path.</li>
+<li>Two entry paths differ: the CLI arrives shell-tokenized (each argv is one token); the pager <code>:</code> line (<code>views/bro/pager.js</code> <code>_runSpell</code>→<code>driveSpell</code>) is one un-split string we tokenize ourselves, so a space-separated <code>verb arg arg</code> spell never splits there today.</li>
+<li>JABC exposes standard <code>eval</code> (verified: <code>typeof eval===&quot;function&quot;</code>, <code>eval(&quot;2+3&quot;)</code>→5, object needs paren-wrap <code>eval(&quot;({a:1})&quot;)</code>); the dogenizer is a lexer only — it validates tokens, not that a token is data vs code.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Dispatcher maps an arg string to <code>(verb, params[])</code> and passes params as JS values to the <code>require</code>d verb; the verb parses a URI itself if it wants one (no central <code>classifyArg</code>).</li>
+<li>Keyboard (pager <code>:</code> line): dogenizer for token boundaries + leading-token TYPE; eval ONLY shape-whitelisted literals — string/number/<code>true</code>/<code>false</code>/<code>null</code> → value, <code>[</code>/<code>{</code> → <code>eval(&quot;(&quot;+t+&quot;)&quot;)</code> (paren-wrap, depth cap); anything identifier-led (<code>feat</code>, <code>NaN</code>, <code>undefined</code>, a call) → string verbatim, never eval; try/catch→string backstop.</li>
+<li>CLI: pack each shell-token as a string, differentiating only the safe scalars (a JSON number-shape → <code>JSON.parse</code>, exact <code>true</code>/<code>false</code>/<code>null</code>); NO eval, NO dogenizer, NO objects/arrays (keyboard-only) — so no code-exec surface and no <code>NaN</code>/<code>undefined</code>/<code>Infinity</code> trap.</li>
+<li>POST message: unquoted multiword (<code>post foo bar</code>) is arity, not grammar — a verb declares its last param GREEDY/rest, else quoting; solved by the verb, not the value parser.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> submodule (beagle-ext) ONLY: <code>core/loop.js</code>, <code>core/resolve.js</code>, <code>views/bro/pager.js</code>+<code>bro.js</code>; REUSE the <code>tok</code>/<code>eval</code>/<code>uri</code> bindings — do NOT touch <code>beagle/js</code> (per user).</li>
+<li>Verbs must treat a param as string-or-value and coerce what they need (a URI verb parses the string; a numeric arg does <code>+p</code>); never assume the type is already narrowed. Post-change the CLI↔keyboard type divergence is only <code>{}</code>/<code>[]</code> (pager-only).</li>
+<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): a RED test on the POST colon-message drop (a <code>TICKET: log: …</code> message must commit, message intact) before the fix; do not regress the parity suites.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Shape-gate eval on the leading token's TYPE, NOT on &quot;did it lex&quot; — the dogenizer passes <code>io.spawn(...)</code>/<code>x=1</code>/<code>undefined</code> too, so lexing is not a safety gate; the whitelist is.</li>
+<li>CLI stays eval-free: an exact match on the three keyword literals + one number regex covers the safe scalars; everything else verbatim string (fixes the POST colon drop for free — no URI parse on the message).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> RED: repro test — <code>jab post 'SUBS: log: msg'</code> commits with the message intact (currently silent no-op rc=0); assert both the commit and the stored message.</li>
+<li class="open"><input type="checkbox" disabled> CLI param packing in <code>cli()</code>/<code>resolve.seed</code>: retire the per-positional <code>classifyArg</code>; pack strings + safe scalars; verbs receive <code>params[]</code>.</li>
+<li class="open"><input type="checkbox" disabled> Keyboard param parsing in the pager <code>:</code> path: dogenizer boundaries + shape-gated eval (literals only, paren-wrap objects, depth cap, try/catch→string).</li>
+<li class="open"><input type="checkbox" disabled> Greedy/rest last-param for POST (unquoted multiword message) as a verb-declared arity.</li>
+<li class="open"><input type="checkbox" disabled> Update the affected verbs to coerce params (string-or-value); refresh any INDEX.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The POST silent-drop is a genuine spec-code discrepancy in its own right (a colon-bearing message drops the commit with rc=0); per <a href="../../meta/todo.html">todo</a> it may warrant its OWN POST ticket, linked both ways — flagged for the user, not filed here.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-07-01, surfaced while designing the JS verb dispatch; the POST colon-message silent-drop is the concrete symptom the redesign removes.</li>
+</ul>
+</body>
+</html>

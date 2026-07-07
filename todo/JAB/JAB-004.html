@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-004</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-004: uniform verb call convention — a verb is a JS fn, args are plain JS values, one tokenizer for CLI + pager, ambient global <code>be</code></h1>
+<p>
+Straighten the JS verb calling convention so a verb is a plain JS function invoked with plain JS args, driven identically from the CLI and the pager. THREE call shapes: (1) <code>verb</code> — 0 args; (2) <code>verb some args incl 'some quoted'</code> — shell-split string args; (3) <code>verb(&quot;proper&quot;, 132, &quot;js&quot;)</code> — JS-eval'd to real values. The CLI gets shape 2 pre-split by the shell; the pager <code>:</code> line must split the SAME way. Ambient state (repo, output sink, render mode, flags) rides a global <code>be</code> object, not call args; the verb understands paths/URIs on its own. Replaces the <code>(row, ctx)→{enqueue}</code> handler + central <code>resolve.js</code> classifier.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Today a verb is a queue HANDLER <code>(row, ctx)→{enqueue?}</code> (core/registry.js contract); the fan-out queue itself was just retired in <a href="../JSQUE/JSQUE-020.html">JSQUE-020</a>, so <code>{enqueue}</code> is already vestigial and dispatch is an in-memory FIFO in core/loop.js.</li>
+<li><code>core/loop.js cli()</code> pre-chews every positional through <code>resolve.seed</code>→<code>classifyArg</code> (<code>new URI(arg)</code>) BEFORE the verb runs, fanning one branch-free row per path arg — with a growing pile of per-verb escapes (post rides its message on ctx.args; get/head + reparse-views ride their token verbatim; patch pins a triple). This central pre-classification is what we retire.</li>
+<li>There is NO global <code>be</code> today: <code>be</code> is a per-module alias — ~15 files do <code>const be = require(&quot;core/discover.js&quot;)</code> (be.find/be.repoFromBe/be.projectFromQuery). The real C-injected runtime globals are <code>io</code>, <code>abc</code>, <code>uri</code>, <code>ron</code>, <code>utf8</code>, <code>URI</code>.</li>
+<li>Two entry surfaces differ: the CLI arrives shell-tokenized (one argv per token); the pager <code>:</code> line (views/bro/pager.js <code>_runSpell</code>→<code>driveSpell</code>) is ONE unsplit string we tokenize ourselves, so a spaced <code>verb arg arg</code> spell never splits there today.</li>
+<li>JABC exposes <code>eval</code> and a <code>tok</code> dogenizer; the POST colon-message silent-drop (<a href="JAB-003.html">JAB-003</a>) is the concrete symptom of the central classifier this ticket removes.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A verb is a plain JS function; ALL args map to plain JS args — <code>verb(&quot;proper&quot;, 132, &quot;js&quot;)</code>, NOT <code>(row, ctx)</code> and NOT <code>params[]</code>. The verb coerces string-or-value and parses any URI/path itself.</li>
+<li>ONE tokenizer feeds both surfaces, three shapes: (1) bare <code>verb</code> → <code>verb()</code>; (2) <code>verb a b 'c d'</code> → shell-split string args; (3) <code>verb(</code> ⇒ parse the rest as a JS call, eval args to real values. CLI shape-2 is pre-split by the shell; the pager splits shape-2 the same way.</li>
+<li>Global <code>be</code>: mint <code>globalThis.be</code> ONCE at loop entry as the unified beagle object — ambient repo, output sink, render mode, and flags — AND fold the discover API onto it (be.find/be.repoFromBe/…). Drop the ~15 <code>require(discover)</code> aliases. Nested verb calls inherit <code>be</code>, so flags apply recursively for free.</li>
+<li>Retire the central classifier: delete <code>resolve.js</code> classifyArg + the per-path seed fan-out; verbs receive raw args and resolve via shared helpers.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> (beagle-ext) ONLY: core/loop.js, core/registry.js, core/resolve.js, core/discover.js, views/bro/pager.js + bro.js, and each verb/view. REUSE the <code>tok</code>/<code>eval</code>/<code>uri</code> bindings — do NOT touch <code>beagle/js</code> (per user).</li>
+<li>Repro-first (meta/work.mkd §3): a RED test before each behavioural change; keep the parity suite GREEN (floor 122/122 after <a href="../JSQUE/JSQUE-020.html">JSQUE-020</a>); NO test edits without explicit user OK.</li>
+<li>Use <code>jab</code>, never native <code>be</code>. Comments ≤2 lines, prefixed <code>JAB-004:</code>. Report ≤ half a page per phase.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Eval is gated on the EXPLICIT call syntax (<code>verb(</code>), not on individual tokens: shape-2 CLI/pager tokens stay string + safe-scalar (number/<code>true</code>/<code>false</code>/<code>null</code>), no eval, no code-exec surface; shape-3 <code>verb(...)</code> is eval'd on BOTH surfaces. This reconciles <a href="JAB-003.html">JAB-003</a>'s &quot;CLI stays eval-free&quot; (which was about per-token eval) with the parenthesized call form.</li>
+<li>Ambient over args: repo/sink/format/flags are NOT call args — they ride the global <code>be</code> so a verb signature is exactly its user args. <code>be</code> is set before dispatch and inherited by every nested call (recursive flags).</li>
+<li>Flag→<code>be</code> mapping: a boolean flag sets its own field (<code>--force</code> → <code>be.force=true</code>); the mutually-exclusive render selectors collapse into ONE field (<code>--tlv</code>/<code>--color</code>/<code>--plain</code> → <code>be.format=&quot;tlv&quot;|&quot;color&quot;|&quot;plain&quot;</code>). A verb reads <code>be.force</code>/<code>be.format</code>, never a threaded ctx flag list.</li>
+<li><code>be</code> folds discover: one unified object rather than a separate module alias; the ~15 header requires collapse to reading the global.</li>
+<li>Verb owns its URIs: the dispatcher never pre-parses a path; a URI verb does <code>new URI(arg)</code> itself, a numeric arg does <code>+p</code>. Unquoted multiword (<code>post foo bar</code>) is arity (a verb declares a greedy/rest last param), not grammar.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./v.html">v</a> Phase 1 — the tokenizer <code>shared/argline.js</code> (bare / shell-split / <code>verb(</code>-eval), unit-driven; pager <code>:</code> line (bro.js spellCall) rewired to it. 122/122.  -<a href="./v.html">v</a> Phase 2 — global <code>be</code>: <code>globalThis.be</code> minted at loop entry (mintBe folds discover + repo/sink/format/flags); 18 <code>require(discover)</code> aliases dropped. 122/122.  -<a href="./v.html">v</a> Phase 3 — flags onto <code>be</code>: <code>be.force</code> set from <code>--force</code>, <code>be.format</code> from the render selectors; force/format reads migrated via the single <code>shared/ambient.js</code> ctx→be bridge (transitional, phase 5 removes it); bro driveSpell re-entry snapshots/restores the <code>be</code> ambient. 122/122.  -<a href="./v.html">v</a> Phase 4 — plain-arg conversion: dual-convention spine (registry marker <code>.jab=&quot;args&quot;</code> + loop.js plain branch calling <code>fn(...args)</code>), then ALL 24 verbs/views converted in a parallel worker-per-verb fan-out (shared worktree, disjoint files, own build dirs). Every handler reads ambient off <code>be</code>, owns its arg loop + fan-out (<code>{enqueue}</code> dead), and self-parses/classifies its URIs. POST colon-message drop FIXED + proven (post-colon-msg). lsr latent non-recursion bug fixed via <code>be.verb</code>. 122/122 throughout. RECIPE.md drove the fan-out (columnar + mutating + re-entrancy addenda).  -<a href="./v.html">v</a> Phase 5 — CLEANUP done (full classifyArg retirement, gritzko's call): put/delete parse their OWN args (a tiny bare/URI/file-list 3-way, NOT the classifyArg matrix); deleted resolve.seed/seedCtx/classifyArg/pinPath (<code>core/resolve.js</code> 208→27 lines, now just isHexish/resolveHex for the 6 view/put users); deleted cli()'s dead legacy dispatch branch + run()'s whole queue loop + <code>_memQueue</code> (<code>core/loop.js</code> net −65; run() is a thin plain-dispatch wrapper); dropped 3 orphaned requires; refreshed registry.js verb-contract doc. 122/122. KEPT (still live): shared/ambient.js ctx-fallback + per-verb dual-shape <code>(row,ctx)</code> fallbacks — direct-handler unit tests (cat/commit/blob) still call verbs that way; removing them needs a test-update pass (own follow-up).  -<a href="./ .html"> </a> Consistency follow-ups surfaced mid-fan-out: unify the search-trio fan-out (regex per-arg vs spot single-search); lift the re-entrancy <code>src = ctx || be</code> precedence into ambient.js (commit→diff needed an ad-hoc <code>be</code> I/O-surface swap).
+</p>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Blast radius: every verb + view signature changes (handler→plain fn) and every discover alias is touched — phase it so each phase lands green independently.</li>
+<li>The POST colon-message silent-drop is a spec-code discrepancy in its own right (rc=0 no-op on a colon-bearing message); per <a href="JAB-003.html">JAB-003</a> it may warrant its own POST ticket — its repro is the phase-4 landmark here.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>LANDED <code>b937076d</code> (on <code>928aaad5</code> <a href="../JSQUE/JSQUE-020.html">JSQUE-020</a>) — &quot;JAB-004: plain-args verb convention; retire central classifier&quot;. All 24 verbs/views are plain-arg fns reading the global <code>be</code>; the tokenizer (<code>shared/argline.js</code>), global <code>be</code>+discover, flags-on-<code>be</code>, and the whole central classifier/queue are gone. 122/122.</li>
+<li>Net simplification: <code>core/resolve.js</code> 208→27 lines (just isHexish/resolveHex); <code>core/loop.js</code> legacy dispatch + queue + <code>_memQueue</code> deleted; put/delete parse their own args.</li>
+<li>Bugs fixed en route: POST colon-message silent-drop (<a href="JAB-003.html">JAB-003</a> symptom; <code>post-colon-msg</code>), <code>lsr</code> bareword non-recursion.</li>
+<li>Follow-ups (open, minor): unify search-trio fan-out (regex per-arg vs spot single); lift the re-entrancy <code>src = ctx || be</code> precedence into ambient.js; prune the transitional dual-shape <code>(row,ctx)</code> fallbacks + ambient ctx-fallback once the direct-handler unit tests (cat/commit/blob) are updated to mint <code>be</code>.</li>
+<li>Related: <a href="JAB-003.html">JAB-003</a> (same call-mapping area + POST symptom — largely subsumed), <a href="../JSQUE/JSQUE-020.html">JSQUE-020</a> (the fan-out queue this sits on, now also fully deleted).</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-011</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-011: the jab bro-pager double-encodes multibyte UTF-8 (— renders as â…) — the frame is a JS string then utf8.Encode'd a 2nd time</h1>
+<p>
+The interactive bro pager (<code>views/bro/pager.js</code>) renders non-ASCII text as mojibake on a TTY: an em-dash <code>—</code> (UTF-8 <code>E2 80 94</code>) shows as <code>â…</code>. Root cause: <code>render()</code> assembles the frame as a JS STRING where each text byte becomes a code unit via <code>String.fromCharCode(text[pos])</code> (<code>paintRow</code> / <code>paintDiffRowStr</code>), then <code>ttyWrite</code> runs the whole frame through <code>utf8.Encode</code> a SECOND time — so <code>E2</code>→<code>C3 A2</code>, <code>80</code>→<code>C2 80</code>, <code>94</code>→<code>C2 94</code> (double-encoded). The piped <code>--plain</code>/<code>--color</code> paths are byte-correct (<code>renderHunkLog</code>→C <code>.plain</code>/<code>.color</code>, and <code>colorDiffHunk</code>'s enc/raw byte split); only the pager's string-frame path re-encodes. Scope: <code>be/</code> JS pager. See <a href="../../wiki/Bro.html">Bro</a>; method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro: any UTF-8 file (an em-dash <code>—</code>) viewed through the pager on a TTY renders <code>â…</code>; the same via <code>--plain</code> / <code>| cat</code> is byte-correct.</li>
+<li><code>render()</code> (<code>views/bro/pager.js:239</code>) builds <code>frame</code> (a JS string) then calls <code>ttyWrite</code> (<code>:47</code>), which does <code>utf8.Encode(str)</code> — a 2nd encode over text already carried as per-byte code units.</li>
+<li><code>paintRow</code> (<code>pager.js:101</code>) <code>out += String.fromCharCode(text[pos+i])</code> and <code>paintDiffRowStr</code> (<code>view/bro.js:332</code>) emit raw bytes as code units 0..255 — a latin1-ish string the frame re-encodes.</li>
+<li>The byte-correct reference already exists: <code>view/bro.js</code> <code>colorDiffHunk</code>/<code>paintDiffRow</code> use an enc/raw split (SGR utf8-encoded, text bytes fed VERBATIM) precisely to avoid this; the comment at <code>view/bro.js:279-281</code> warns of the double-encode.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>The pager writes UTF-8 to the fd byte-for-byte: text bytes verbatim, only SGR/ASCII utf8-encoded. An em-dash (and any multibyte codepoint) renders correctly on a TTY.</li>
+<li>No regression to the piped <code>--plain</code>/<code>--color</code> paths, or to the pager's colour / mouse / soft-wrap behaviour; <code>paintRow</code> keeps its string API for the driver/pty tests.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> JS only (<code>views/bro/pager.js</code>; <code>view/bro.js</code> only if needed). ABC/JS house style, ≤2-line comments.</li>
+<li>Preferred design (user): build each frame as UTF-8 bytes in an <code>io.buf</code> and <code>io.writeAll</code> it — NOT a JS string that <code>utf8.Encode</code> re-encodes whole.</li>
+<li>Repro-first: render an em-dash hunk to a <code>tty.openpty()</code> slave and assert the drained bytes contain <code>E2 80 94</code>, not the doubled form — like <code>test/bro/pager/pty.js</code>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Factor the cell walk into one emit sink <code>emitBody(hunk,off,end,color,pass,enc,raw)</code>; <code>render()</code> feeds an <code>io.buf</code> (enc=utf8.Encode, raw=<code>text.subarray</code> verbatim); <code>paintRow</code> wraps <code>emitBody</code> with a string sink (raw via <code>utf8.Decode</code>) so its API + the ASCII driver/pty asserts are unchanged.</li>
+<li>Route the pager's diff branch through the byte-based <code>view/bro.js paintDiffRow</code> (enc/raw) — retires the string-only <code>paintDiffRowStr</code> for the pager (then dead; drop or leave per review).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: pty render of an em-dash hunk; assert bytes carry <code>E2 80 94</code> (red before).</li>
+<li class="open"><input type="checkbox" disabled> Fix <code>render()</code> to emit bytes via <code>io.buf</code>; factor <code>emitBody</code>; keep <code>paintRow</code> string API.</li>
+<li class="open"><input type="checkbox" disabled> Green: be ctest bro/* (pager driver+pty+verbcolor, plain/colour parity) intact.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Same GET-036 caveat as <a href="BRO-010.html">BRO-010</a>: ensure <code>jab</code> resolves the LOCAL worktree (<code>be -&gt; .</code>) so the fix is exercised, not stale main-tree scripts.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-07-03 from a user bug report (em-dash → <code>â…</code> in the pager).</li>
+</ul>
+</body>
+</html>

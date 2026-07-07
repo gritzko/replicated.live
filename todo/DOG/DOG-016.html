@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOG-016</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG-016 <a href="./LOW.html">LOW</a>: dog/ correctness + API hardening grab-bag</h1>
+<p>
+Lower-severity correctness, UB, and API-consistency items from the review. None is individually urgent; grouped so they land in one hardening pass. Each is a one-liner with a cited site; split out any that grows a repro of its own (per <a href="../../meta/todo.html">Tickets</a>, a bug found mid-fix becomes its own ticket). Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context — correctness / UB</h3>
+<ul>
+<li><code>git/GIT.c:163-173</code> <code>git_drain_decimal</code> does <code>v=v*10+digit</code> on a signed <code>i64</code><p>
+with no bound → signed-overflow UB on a long digit run in a commit timestamp (flows into <code>gmtime_r</code>). Parse into <code>u64</code> with an overflow guard / cap digits.
+</p>
+</li>
+<li><code>git/SHA1.h:17-21</code> <code>sha1empty</code> reads the <code>u8[20]</code> struct via <code>u64*</code>/<code>u32*</code><p>
+casts — strict-aliasing + unaligned-load UB. Use <code>memcmp</code> vs a 20-byte zero.
+</p>
+</li>
+<li><code>DOG.c:761-828</code> <code>DOGutf8sFeedDate</code> uses non-reentrant <code>localtime</code>; correct<p>
+today (copies immediately) but <code>localtime_r</code> is the trivial fix (and check <code>abc/INT.h</code>/<code>TTY.h</code> for an existing date formatter before the month/day tables).
+</p>
+</li>
+<li><code>DPATH.h:126-136</code> <code>DPATHBranchResolveRel</code> resolves only ONE <code>../</code>/<code>./</code> level,<p>
+then fails <code>../../x</code> with <code>PATHBAD</code>; the header's &quot;<code>../X</code>, <code>..</code>&quot; oversells it. Loop the prefix-strip or document the single-level limit.
+</p>
+</li>
+<li><code>DOG.c:723,742,835,848</code> index <code>FILE_WANT_BUFS[fd]</code> with a <code>u64 fd</code> read back<p>
+from the kv store, unchecked; a stale/corrupt value is an OOB read of the fd table. Bound-check <code>fd &lt; FILE_MAX_OPEN</code> before indexing.
+</p>
+</li>
+<li><code>NEIL.c:483-523</code> <code>neil_shift_pass</code> → <code>NEILTokEq</code> (<code>:61-74</code>) → <code>tok32Val</code> indexes<p>
+<code>toks[0][i]</code> bounding the 24-bit offset wrap but NOT the token index — the bound <code>NEILCleanup</code> added (<code>:164-169</code>) and <code>NEILBoundaryScore</code>/<code>NEILIsIdent</code> have. <code>NEILShift</code> is public (<code>NEIL.h:41</code>); an over-run/mismatched EDL (the documented Myers-NOROOM fallback shape) reads far OOB. Latent via the current WEAVE caller.
+</p>
+</li>
+<li><code>ULOG.c:334-339</code> <code>ulog_idx_scan_cap</code> assumes ~16 B/row but the min row is ~6-8 B,<p>
+so a dense (~10 KB+) log opened read-only with a missing/stale sidecar UNDER-sizes the anon index (~2×) and fails to open. No overflow (pushes are <code>SNOROOM</code>-checked) — availability only. Size the cap by the min row width.
+</p>
+</li>
+</ul>
+<h3>Context — API / docs</h3>
+<ul>
+<li><code>HOME.c:190-200</code> <code>HOMEProjectExists</code>: impl comment says it checks <code>refs</code><p>
+non-empty, header (<code>HOME.h:198-203</code>) says existence-only; code does existence only. Delete the stale comment and pin the behaviour with a test (upload-pack fast-fail depends on it).
+</p>
+</li>
+<li><code>ULOG.h:200-204</code> <code>ULOGClose</code> <code>rw</code> flag is caller-replayed state — passing<p>
+<code>rw=YES</code> after an RO-ish open <code>FILETrimBook</code>s (ftruncate) a file it never owned for write; derive the mode from the booked fd instead.
+</p>
+</li>
+<li><code>ULOG.c:892</code> <code>ULOGCompactLatest</code> tmp-path feeds <code>path</code> unchecked and (unlike<p>
+<code>ulog_idx_path</code> <code>:299-300</code>) does not strip trailing NULs — a NUL-padded slice makes <code>unlink(tmp_path)</code> (<code>:897</code>) delete the LIVE log. Match the sibling's trim.
+</p>
+</li>
+<li><code>ULOG.c:325</code> <code>ULOG_FAULT_ALLOC_ANON</code> is a mutable global fault injector<p>
+compiled into release; gate behind a build flag / setter.
+</p>
+</li>
+<li><code>ULOG.c:1078</code> merge-walk silently drops tie-group members past<p>
+<code>LSM_MAX_INPUTS</code>(64) — records are user data, deserves an error.
+</p>
+</li>
+<li>Error-reporting consistency: <code>home_git_config_get</code> collapses &quot;unset&quot; and<p>
+&quot;spawn failed&quot; into <code>NODATA</code> (<code>HOME.c:62</code>); <code>HOMEResolveSibling</code> always falls back to OK with a bare name so callers can't tell &quot;found&quot; from &quot;guessing&quot; (<code>:1011,1099-1102</code>); <code>VERSNReport</code>/<code>WEAVEScope</code> return decorative <code>ok64</code>.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Each cited site fixed or explicitly documented; UB removed under UBSan;<p>
+behaviour-preserving on the happy path.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>dog/</code> + <code>dog/git</code> libdog, ABC style.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> T1 UB fixes: <code>git_drain_decimal</code> overflow, <code>sha1empty</code> aliasing, <code>localtime_r</code>.</li>
+<li class="open"><input type="checkbox" disabled> T2 bounds: <code>FILE_WANT_BUFS[fd]</code>, <code>neil_shift_pass</code> token index, ULOG tmp-path<p>
+ NUL strip, <code>ulog_idx_scan_cap</code> min-row sizing.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> T3 API/doc: <code>HOMEProjectExists</code> comment+test, <code>ULOGClose</code> rw derivation,<p>
+ fault-injector gating, tie-cap error, <code>DPATHBranchResolveRel</code> doc/loop.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> T4 error-code consistency sweep (config-get, resolve-sibling).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-07-06, the libdog code-quality review session.</li>
+</ul>
+</body>
+</html>

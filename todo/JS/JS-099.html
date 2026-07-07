@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-099</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-099 <a href="./HIGH.html">HIGH</a>: be/ JS must index every keeper pack it writes — unindexed packs are invisible to native's index-only lookup (false non-FF)</h1>
+<p>
+<code>be post</code> to a remote refused with a BOGUS non-fast-forward: native keeper <code>KEEPLookup</code> (keeper/KEEP.c) resolves a sha ONLY through the loaded <code>.keeper.idx</code> LSM runs and returns <code>KEEPNONE</code> on a miss — there is NO pack-scan fallback (<a href="../../wiki/Indices.html">Indices</a>). The be/ JS writers do not keep that index complete: a shard with 12 <code>NNNNN.keeper</code> packs carried only 2 <code>.keeper.idx</code> runs (1942 entries), so the newest locally-committed tip was unindexed. <code>KEEPIsAncestor(local, peer)</code> then dead-ends at the missing tip object → native reads it as a non-descendant → <code>KEEPFAIL</code>/<code>WIRECLNFF</code>. jab reads the tip fine via store.js's in-RAM scan fallback; native has none. Fix: index packs INCREMENTALLY, one run per written pack. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro: <code>be post --nosub ssh://localhost/src/journal/be</code> from a store-backed<p>
+wt → <code>keeper: post: non-fast-forward — local tip 4370d67… is not a descendant of peer tip 1f664aa…</code>, then <code>KEEPFAIL</code> / <code>BEDOGEXIT</code>; 0 changes to commit. (<code>?/beagle-ext</code> form of the same wt fails identically as <code>WIRECLNFF</code>.)
+</p>
+</li>
+<li>Verified split native-vs-JS: <code>keeper get .#4370d67</code> → <code>KEEPNONE</code> (native,<p>
+index-only); <code>jab commit:?4370d67</code> prints it (JS scan fallback). The object IS on disk in a pack, absent from every <code>.keeper.idx</code> run. parent 9c52537 too.
+</p>
+</li>
+<li>Store <code>~/.be/beagle-ext</code>: 12 <code>*.keeper</code>, 2 <code>*.keeper.idx</code> (29440+1632 B =<p>
+1942 wh128 entries). 6388c34e (also recent) PRESENT but 4370d67/9c525377 MISS — coverage is whatever the last native compaction folded, NOT every pack.
+</p>
+</li>
+<li>ROOT CAUSE (verified, <a href="../TEST/TEST-003.html">TEST-003</a>): <code>ingest.buildIndex</code> names the run<p>
+<code>ron.encode(ron.now())+&quot;.keeper.idx&quot;</code> (<code>ingest.js:66</code>) — it IGNORES the unique <code>fileId</code> it is passed, so two packs written in ONE <code>ron</code> tick (rapid <code>post</code>, or a frozen <code>SOURCE_DATE_EPOCH</code>) collide and the 2nd OVERWRITES the 1st run. Minimal repro: 2 same-epoch posts → ONE idx → first commit <code>commitTree</code> MISSING; <code>rm .be/*.keeper.idx</code> (in-RAM re-scan) recovers it. THIS is the &quot;12 packs → 2 runs&quot;.
+</p>
+</li>
+<li>Native lookup is index-only BY DESIGN (<a href="../../wiki/Indices.html">Indices</a>: &quot;a miss is a true miss; no<p>
+walk-up&quot;); the WRITER holds the completeness contract. store.js scan-fallback (<code>shared/store.js</code>, &quot;no <code>.keeper.idx</code> run → build in-RAM&quot;) hides the gap from jab but never from native <code>be</code>/<code>keeper</code>.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Every keeper pack the be/ JS writes (post <code>fold-commit</code>, wire <code>ingest</code><p>
+clone/add, any barrier re-fold) gets a covering <code>.keeper.idx</code> run — no pack left unindexed, ever. Native <code>keeper get .#&lt;sha&gt;</code> resolves it without scanning.
+</p>
+</li>
+<li>Incremental: append ONE run per new pack (<a href="../../wiki/Indices.html">Indices</a> size-tiered LSM); do not<p>
+rebuild the whole shard index; let compaction bound the run count.
+</p>
+</li>
+<li>Repro-first: a store-backed <code>be post</code> of locally-committed JS tips<p>
+fast-forwards (no false non-FF); native <code>keeper get</code>/<code>verify</code> find every tip.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> JS only (beagle-ext shard): <code>shared/ingest.js</code>, <code>verbs/post/*.js</code>. wh128<p>
+layout per <a href="../../wiki/Indices.html">Indices</a> / keeper/KEEP.h (<code>key=hashlet60|type4</code>, <code>val=offset40|file_id20|flags4</code>) plus the PACK-summary bookmark entry.
+</p>
+</li>
+<li>Do NOT lean on the store.js scan fallback as the fix — native cannot scan.</li>
+<li>No edits to native keeper; CLAUDE.md §17 (repro-first), §3 (table tests).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Indexing is a WRITE-side obligation, not a read-side repair: whoever emits a<p>
+pack emits its run in the same op — the idx run IS the commit's visibility to native. store.js's scan fallback stays only as a safety net.
+</p>
+</li>
+<li>PRIMARY fix (verified root cause): give each run a UNIQUE name — key it on the<p>
+keeper <code>fileId</code>/<code>logName</code> (e.g. <code>0000000002.keeper.idx</code>), which <code>buildIndex</code> already receives, NOT <code>ron.now()</code>. A <code>.keeper.idx</code> per <code>.keeper</code> is 1:1 and collision-free; the reader merges runs anyway. This alone stops the overwrite.
+</p>
+</li>
+<li>Secondary: the <code>verbs/post/post.js</code> barrier-re-fold path may ALSO (re)write a<p>
+pack without a fresh idx run — audit every pack-write site for a paired <code>ingest.buildIndex</code>. <a href="JS-077.html">JS-077</a> (orphan keeper pack) is the sibling no-index failure mode; <a href="JS-056.html">JS-056</a> is the read-side half.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> <code>ingest.buildIndex</code>: name the run by <code>logName</code>/<code>fileId</code>, not <code>ron.now()</code> — the<p>
+  verified collision fix (see ROOT CAUSE); tolerate old <code>&lt;ron&gt;.keeper.idx</code> shards.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Repro test: TWO posts under a frozen <code>SOURCE_DATE_EPOCH</code> (same tick) → assert<p>
+  BOTH commits' trees resolve (no MISSING) with NO idx-drop — RED before the fix.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Repro test: commit N objects via jab post into a store-backed wt, assert<p>
+  native <code>keeper get .#&lt;tip&gt;</code> resolves — RED before the fix.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Audit pack-write sites (<code>ingest.clone</code>/<code>add</code>, <code>fold-commit</code>, barrier<p>
+  re-fold) → each pairs with a <code>.keeper.idx</code> run; close the re-fold gap.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Make indexing incremental + idempotent: one run per pack, a re-fold replaces<p>
+  ITS OWN run not the world; honor <a href="../../wiki/Indices.html">Indices</a> size-tiered run discipline.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Backfill: a <code>be</code>/jab step (or native <code>keeper</code>-side rebuild) to index any<p>
+  pre-existing unindexed pack — the wild stores already in this state.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Parity: native <code>keeper get</code>/<code>verify</code>/<code>be post</code> FF on a JS-built store green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Pre-existing stores are already corrupt-by-omission (10 unindexed packs in the<p>
+repro shard); fixing the writer does not retro-index them — needs the backfill TODO or a native shard reindex.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

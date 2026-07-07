@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-038</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-038: <code>jab get</code> from a WORKTREE source records the worktree path as the store anchor → <code>jab status</code> reports everything <code>unk</code> (baseline unresolvable)</h1>
+<p>
+A <code>jab get file:&lt;worktree&gt;?/&lt;proj&gt;</code> (e.g. <code>file:/home/gritzko/journal/?/beagle-ext</code>) writes a full, correct checkout but records the WORKTREE URI as the wtlog store anchor (<code>.be</code> row 0), and a worktree is NOT a store — <code>&lt;wt&gt;/.be</code> is a wtlog FILE that redirects to the real store. So a later <code>jab status</code> reopens the anchor to read the baseline commit's tree, fails (no store dir there), gets an EMPTY <code>base</code>, and classifies every on-disk file as <code>unk</code> — the whole tree reads untracked. Verified in <code>~/todo/test</code>: <code>.be</code> row 0 = <code>get|file:/home/gritzko/journal/?/beagle-ext</code>, row 1 = <code>get|?#dbb828e6…</code>; <code>jab status</code> → all <code>unk</code>. The store form (<code>file:/home/gritzko/.be/?/beagle-ext</code>) anchors at the real store and status works — that is how the DIS-057/DIS-058 worktrees were made. This is the worktree-source <code>seedLocal</code> redirect that <a href="GET-037.html">GET-037</a> explicitly DEFERRED; the get must follow <code>&lt;wt&gt;/.be</code>'s row-0 <code>repo</code> redirect and record the REAL store (or refuse cleanly), never the worktree path. Scope: <code>be/</code> JS get. See <a href="GET-037.html">GET-037</a>, <a href="../DIS/DIS-055.html">DIS-055</a>; method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro: <code>jab get file:/home/gritzko/journal/?/beagle-ext</code> into a fresh dir → full checkout, but <code>.be</code> row 0 is the worktree URI; <code>jab status</code> → every entry <code>unk</code>.</li>
+<li>Contrast (works): <code>jab get file:/home/gritzko/.be/?/beagle-ext</code> → row 0 = the store path → <code>jab status</code> classifies against the real baseline.</li>
+<li>Mechanism: <code>shared/classify.js</code> baseline = <code>wtlogReader.baselineTip()</code> → <code>keeperReader.commitTree(sha)</code> → <code>readTreeRecursive</code>. The tip sha (<code>dbb828e6</code>) is in the wtlog, but <code>commitTree</code> can't read it because the store opened from the anchor (<code>/home/gritzko/journal</code>) has no beagle-ext objects (<code>/home/gritzko/journal/.be</code> is a wtlog file, not a store dir). Empty <code>base</code> ⇒ every wt file is &quot;on-disk, not-in-baseline&quot; ⇒ <code>unk</code>.</li>
+<li>The get DID resolve the source during checkout (files written), so the source IS reachable via the journal's <code>.be</code> redirect → <code>/home/gritzko/.be/</code>; only the RECORDED anchor is wrong.</li>
+<li>This is the worktree-source case <a href="GET-037.html">GET-037</a> deferred (&quot;the row-0-redirect-in-<code>seedLocal</code> is the GET-037 stretch&quot;). The C side flags the journal-projector form too (<code>work.mkd</code>: <code>file:///…/journal?/&lt;sub&gt;</code> → WIRECLFL); this is the JS get.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>jab get</code> from a worktree source records the RESOLVED real-store path in the new wt's <code>.be</code> anchor (follow <code>&lt;wt&gt;/.be</code> row-0 <code>repo</code> redirect), so <code>status</code>/<code>get</code> resolve the baseline afterward.</li>
+<li><code>jab status</code> after such a get classifies against the real baseline — NOT all-<code>unk</code>.</li>
+<li>If the worktree source can't be resolved to a store carrying the project, refuse with a friendly string and leave no broken/partial wt.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> JS only; ABC/JS house style; keep the friendly string throws.</li>
+<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): a <code>be:</code>/<code>file:</code> worktree-source get → assert the recorded anchor is the real store AND <code>jab status</code> is not all-<code>unk</code>.</li>
+<li>Coordinate with <a href="GET-037.html">GET-037</a> (same worktree-source area, fix lives in the same <code>~/todo/DIS-058</code> get.js changeset) and <a href="../DIS/DIS-053.html">DIS-053</a> (don't reintroduce the <code>--nosub</code> stale-<code>.be</code>-pin regression). Don't regress the store-form get or <code>be-js-sub-cycle</code>/<code>be-js-sub-selflink</code>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>In <code>verbs/get/get.js seedLocal</code> (the local-store seed): when the source PATH is a worktree (its <code>.be</code> is a FILE), read that <code>.be</code>'s row-0 <code>repo</code> redirect to the real store dir and record THAT as the new wt's anchor — not the worktree path. Reuse <code>be.find</code>/<code>store</code> resolution rather than hand-rolling.</li>
+<li>Keep the store-form path unchanged (it already records the store dir).</li>
+<li>Cross-project / unresolvable worktree source → friendly refuse (no broken wt).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> RED repro: worktree-source <code>jab get</code> → <code>.be</code> anchor is the worktree URI and <code>jab status</code> is all-<code>unk</code>.</li>
+<li class="open"><input type="checkbox" disabled> Fix <code>seedLocal</code> to resolve + record the real store anchor.</li>
+<li class="open"><input type="checkbox" disabled> GREEN: <code>jab status</code> classifies against the real baseline (no all-<code>unk</code>).</li>
+<li class="open"><input type="checkbox" disabled> Friendly refuse + no broken wt when the source can't be resolved to a store with the project.</li>
+<li class="open"><input type="checkbox" disabled> Suite green: get/status + <code>be-js-sub-cycle</code>/<code>be-js-sub-selflink</code> intact.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Lives in the same get.js the <a href="GET-037.html">GET-037</a>/<a href="./DIS-058.html">DIS-058</a> work touches — land it within that changeset to avoid a get.js 3-way merge.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-06-29 from a user <code>jab status</code> all-<code>unk</code> after <code>jab get file:/home/gritzko/journal/?/beagle-ext</code>. The checkout is correct; only the recorded store anchor is wrong, so status can't find the baseline.</li>
+</ul>
+</body>
+</html>

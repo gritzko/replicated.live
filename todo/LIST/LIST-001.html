@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LIST-001</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>LIST-001: a github-style <code>list:</code> view — fs ⊕ tree ⊕ per-entry last commit</h1>
+<p>
+<code>list:&lt;path&gt;</code> VIEW (<code>be/views/list/list.js</code>) renders a dir github-style: per entry <code>&lt;wt-marker&gt; &lt;name&gt;  &lt;pale-grey last-commit summary&gt;  &lt;short rel-age&gt;</code>, files AND dirs. It FUSES the wt listing (ls <code>classifyDir</code> — name + change bucket) with each entry's LAST COMMIT (message + age) from a BOUNDED backward history walk, so a user sees uncommitted state AND commit context in ONE view. <code>list</code> owns the expensive per-entry-commit fuse; <code>ls</code>/<code>tree</code> stay untouched and cheap. jab+libdog bindings + JS ONLY, NO dog binary. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>ls:</code> (<code>views/ls/ls.js</code>) is the O(dir) wt lister: a file row is `&lt;7date&gt; &lt;verb&gt;<p>
+&lt;name&gt;<code>, verb = wt bucket, date = the file MTIME (</code>classify.js:53`, io.lstat ron60), NOT a commit time; dirs get a BLANK date. libabc+libdog only, no log.
+</p>
+</li>
+<li><code>tree:</code> (<code>views/tree/tree.js</code>) is the raw committed tree `&lt;mode6&gt; &lt;type6&gt;<p>
+&lt;sha40&gt;t&lt;name&gt;` — no message, no age, byte-parity with native. Too technical for a friendly listing (gritzko ruling 2026-07-05: add a NEW word, not overload).
+</p>
+</li>
+<li>Commit reads already exist as JS bindings: <code>store.js</code> readTree / commitTree /<p>
+commitParents / parseCommit / descendPath (<code>store.js:468-531</code>), + <code>shared/ changedpaths.js</code> (changedTrees/changedCommits) — the per-commit changed-path diff.
+</p>
+</li>
+<li><code>views/log/log.js</code> already extracts a commit SUMMARY (first msg line) + author<p>
+and paints a grey tail (<code>log.js:362-402</code>, TAG_D/TAG_Q) — the message-render model.
+</p>
+</li>
+<li>No short RELATIVE-time helper exists in JS; <code>render.dateCol(ts)</code> (<code>render.js:16</code>,<p>
+ron.date) is the short ABSOLUTE date ls uses. Ruling: a JS relAge reimpl is fine.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A <code>list:&lt;path&gt;</code> view (<code>be/views/list/list.js</code>): one row per entry (files AND<p>
+dirs), <code>&lt;wt-marker&gt; &lt;name&gt;</code> left, a PALE-GREY last-commit summary on the far side, a short rel-age at the right; name carries the <code>U</code> click-target.
+</p>
+</li>
+<li>Each entry's LAST COMMIT via a BOUNDED backward walk from the tip: diff each<p>
+commit vs parent (changedpaths), attribute an unseen entry its FIRST-touch commit, halt when all entries attributed or a walk ceiling hits. ONE walk.
+</p>
+</li>
+<li>A dir's last commit = the newest commit touching ANYTHING under it (attribute a<p>
+dir the first time any path beneath it changes); the dir gets an age too.
+</p>
+</li>
+<li>Short rel-age (<code>3h</code>/<code>2d</code>/<code>1y</code>) via a JS <code>relAge(ts, now)</code> sibling of dateCol;<p>
+optionally the message run opens <code>commit ?&lt;sha&gt;</code> on click.
+</p>
+</li>
+<li><code>list:&lt;path&gt;?&lt;rev&gt;</code> lists AS OF a rev (walk from &lt;rev&gt;); bare/no query = cur tip<p>
+with the wt overlay (so uncommitted edits show), reusing the diff/tree ref-parse.
+</p>
+</li>
+<li>Register the scheme (help SCHEMES row + <code>views/list/</code>) so <code>:list &lt;path&gt;</code><p>
+dispatches as a view, not degrading to <code>ls</code> (cf <a href="../DIS/DIS-060.html">DIS-060</a>).
+</p>
+</li>
+<li>A DIR entry's marker ROLLS UP wt-dirtiness: if any file beneath it is non-eq<p>
+(mod/new/del/unk), the dir shows a DIRTY marker (coloured), not a plain &quot;dir&quot;.
+</p>
+</li>
+<li>The wt markers (files AND dirs) render in COLOUR using the SAME palette as the<p>
+<code>status</code> view (theme.VERB_SLOT) in BOTH the piped --color AND the pager paths.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>jab + libdog bindings + JS ONLY; NO dog binary spawn. A primitive absent from<p>
+the bindings goes to libdog FIRST (a jab binding), then consumed <a href="./gritzko 2026-07-05.html">gritzko 2026-07-05</a>. The walk fits existing bindings; relAge is a permitted JS helper.
+</p>
+</li>
+<li>Keep <code>ls:</code>/<code>tree:</code> UNCHANGED and cheap — <code>list</code> is additive, its own word, its<p>
+O(history) cost isolated in its own view.
+</p>
+</li>
+<li>Reuse, do not fork: ls <code>classifyDir</code>, tree <code>readTree</code>/<code>descendPath</code>, changedpaths<p>
+<code>changedTrees</code>, log's summary/author extract, the theme grey slot, the pager U-tag.
+</p>
+</li>
+<li>meta/work.mkd budgets: commit 1 line, comments ≤2 lines; no manual URI parse<p>
+(uri._parse); greppable no-wrap lines.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Producer = bounded walk: tip→parents, per commit changedpaths.changedTrees vs<p>
+parent ∩ the scope's entries; first-touch attribution; ceiling cap (cf <code>log.js:186</code> LOG_MAX_WALK). Unattributed-within-ceiling entries render blank.
+</p>
+</li>
+<li>Merges: attribute age along first-parent (github-like) unless a ruling says<p>
+otherwise; note the ambiguity in the repro.
+</p>
+</li>
+<li>Layout: <code>&lt;marker&gt; &lt;name&gt;</code> left, pale summary mid/right, rel-age far right; column<p>
+widths settled in the repro; the wt-marker reuses ls's verb-slot colour.
+</p>
+</li>
+<li>relAge lives in <code>view/render.js</code> (sibling of dateCol) so log/commit can reuse it;<p>
+coordinate the home with <a href="../COMMIT/README.html">COMMIT-007</a> (also wants human dates).
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro/test: fixture repo (N files over M commits + 1 uncommitted edit) → assert<p>
+ each row's first-touch summary+age, a dir gets the newest-under-it commit, and  the uncommitted file shows its wt-marker. Golden on the tlv hunk (toks+U+grey run).
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> <code>relAge(ts, now)</code> in view/render.js — short <code>Nm</code>/<code>Nh</code>/<code>Nd</code>/<code>Ny</code>; test boundaries.</li>
+<li class="open"><input type="checkbox" disabled> the bounded walk (a <code>shared/</code> helper): first-touch attribution over the scope<p>
+ entries via changedpaths, ceiling cap; returns entry → {summary, ts, sha}.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> <code>be/views/list/list.js</code>: fuse classifyDir (marker) ⊕ readTree (entries) ⊕ the<p>
+ walk (commit info); ONE hunk, name = U click, message+age in the grey slot.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> register: help SCHEMES row + confirm <code>:list &lt;path&gt;</code> dispatches (not ls).</li>
+<li class="open"><input type="checkbox" disabled> <code>list:&lt;path&gt;?&lt;rev&gt;</code>: walk from &lt;rev&gt; (reuse tree/diff ref-parse); bare → tip⊕wt.</li>
+<li class="open"><input type="checkbox" disabled> perf note: measure the walk on a deep-history dir; document the ceiling + the<p>
+ O(history × tree-diff) cost; file a graf-index follow-up if too slow.
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The one real cost is the walk on deep histories; the ceiling caps it but a big<p>
+dir with old entries may show blanks — acceptable first cut, revisit via graf.
+</p>
+</li>
+<li>Rename-follow (git <code>--follow</code>) is OUT of scope: the walk sees a path appear /<p>
+disappear only; note it, do not build it here.
+</p>
+</li>
+<li>relAge home overlaps <a href="../COMMIT/README.html">COMMIT-007</a>/<a href="../../be/views/log/log.js">log</a>; coordinate so it is single-sourced.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending — not yet started)</li>
+</ul>
+</body>
+</html>

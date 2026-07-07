@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PUT-004</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PUT-004 <a href="./MED.html">MED</a>: <code>be put</code> bare-walk + in-process submodule recursion (be/ JS)</h1>
+<p>
+Bare <code>be put</code> (no path args) is unimplemented in the <code>be/</code> JS port: the handler THROWS <code>PUT_BARE_DEFER</code> and <code>be-js-put-bare</code> is xfail in <code>be/test/CMakeLists.txt</code>. PUT also never descends into submodules (gitlink subtrees are skipped). This ticket lands two things: (1) BARE-WALK staging sourced from the NON-recursive classifier + the wtlog's already-staged put/delete rows, auto-pairing <code>mis</code>+<code>unk</code> moves by content sha; (2) IN-PROCESS submodule recursion (mirroring GET's <code>mountGitlink</code>/<code>recurseSubMounts</code>, NOT the job log) so a staged path crossing a mounted-sub root delegates into the sub. Prereq: consolidate the THREE copied <code>.gitmodules</code> parsers into one <code>shared/gitmodules.js</code>. Scope <code>be/</code> JS. Parent <a href="../DIS/DIS-058.html">DIS-058</a>; the <code>&lt;sub&gt;/&lt;path&gt;</code> delegation primitive is <a href="../SUBS/SUBS-039.html">SUBS-039</a>; depth-cap pattern <a href="../SUBS/SUBS-041.html">SUBS-041</a>; one-hunk-per-invocation is <a href="PUT-003.html">PUT-003</a>. Spec <a href="../../wiki/Submodules.html">Submodules</a> / <a href="../../wiki/PUT.html">PUT</a> / <a href="../../wiki/Dirty.html">Dirty</a>. Method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Bare <code>be put</code> THROWS <code>PUT_BARE_DEFER</code> — the <code>seededRowCount===0</code> arm of the<p>
+<code>be/verbs/put/put.js</code> handler; no tracked-dirty walk, no move auto-pair.
+</p>
+</li>
+<li><code>be-js-put-bare</code> is parked in <code>_BE_WILL_FAIL</code> (<code>be/test/CMakeLists.txt:24</code>);<p>
+its case <code>be/test/put/bare/run.sh</code> already covers move-pair + tracked-dirty + skipped-untracked + restamp.
+</p>
+</li>
+<li><code>shared/stage.js</code> already has a <code>bareWalk()</code>/<code>detectMoves()</code> (a native mirror),<p>
+UNUSED — the chosen source is the per-repo classifier instead (<code>shared/classify.js::classifyMerge</code>, which folds base⊕wt⊕wtlog-put/del).
+</p>
+</li>
+<li>PUT skips gitlink subtrees (<code>stage.js:149</code> baseOrder <code>kind===&quot;s&quot;</code>; <code>stage.js:261</code><p>
+expandDir), so <code>be put &lt;sub&gt;/file</code> and a dirty sub are silently dropped.
+</p>
+</li>
+<li>GET recurses subs IN-PROCESS: <code>leaf()</code> kind &quot;s&quot; → <code>mountGitlink</code> →<p>
+<code>submount.mount</code> + <code>recurseSubMounts</code> (<code>get.js:687/736/756</code>), depth-capped <code>MAX_SUBMODULE_DEPTH=8</code>; the job queue carries only single-repo rows.
+</p>
+</li>
+<li>THREE <code>.gitmodules</code> parsers exist: <code>core/recurse.js::gitmodulesOrder</code>,<p>
+<code>views/status/status.js::gitmodulesOrder</code>, <code>shared/submount.js::gitmodulesUrl</code>.
+</p>
+</li>
+<li>User-reported 2026-07-02 (JS): bare <code>jab put</code> (no path args) does not descend<p>
+into mounted submodules at all — the concrete symptom this ticket's in-process sub-recursion deliverable closes; the oracle is native <code>be put</code>.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Bare <code>be put</code> stages every tracked-and-dirty (<code>mod</code>) file as one <code>put</code> row each,<p>
+auto-pairs <code>mis</code>+<code>unk</code> same-content-sha paths as silent <code>mov</code> rows (PUTAMBIG if not strictly 1:1), restamps clean files, and NEVER stages untracked (<code>unk</code>) — per <a href="../../wiki/PUT.html">PUT</a> &quot;Bare be put&quot;.
+</p>
+</li>
+<li>The list comes from the per-repo NON-recursive classifier; paths already staged<p>
+(wtlog put/delete since the last get/post boundary) are not re-staged.
+</p>
+</li>
+<li>A staged path crossing a MOUNTED sub root delegates into the sub:<p>
+<code>be.find(&lt;wt&gt;/&lt;sub&gt;)</code> → run PUT in-process on the remaining subpath (pre-order, depth-first, cap 8); <code>--nosub</code> opts out; recursion is default-on.
+</p>
+</li>
+<li>ONE <code>put:</code> hunk PER repo (parent + each sub emits its own), not a merged or<p>
+path-prefixed banner.
+</p>
+</li>
+<li>ONE shared <code>shared/gitmodules.js</code> (<code>parse</code> / <code>paths</code> / <code>urlOf</code>) replaces the<p>
+three copies, byte-parity preserved.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> JS only; libabc+libdog. REUSE GET's in-process recursion shape +<p>
+<code>core/recurse.js</code> (<code>isMount</code>/<code>joinPrefix</code>) + <code>be.find</code>/store; do NOT route sub recursion through the job log (<code>ctx.repo</code> is pinned per run).
+</p>
+</li>
+<li>Parent wtlog is NOT written on descent — the gitlink pin bump stays POST's job<p>
+(<code>post.js::postSubs</code>, SUBS-019/DIS-058 D7).
+</p>
+</li>
+<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): a bare-put case (tracked-dirty + move-pair +<p>
+skipped-untracked + restamp) and a <code>&lt;sub&gt;/file</code> + dirty-sub bare case.
+</p>
+</li>
+<li>Do NOT regress named file/dir/move/ref forms, the manual <code>be put &lt;sub&gt;#&lt;sha&gt;</code><p>
+bump (SUBS-019), or DIS-058 get/post recursion.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Factor put.js into <code>putRepo(repo, ctx)</code> shared by the per-arg leaf and the bare<p>
+path; bare is a one-shot fold (like delete.js <code>_delDone</code>), not per-arg fan-out.
+</p>
+</li>
+<li>Source the bare dirty list from <code>classify.js</code> (non-recursive) + wtlog put/del;<p>
+auto-pair <code>mis</code>+<code>unk</code> by content sha (keep a sha→path map — the <code>mis</code> baseline blob sha vs the <code>unk</code> on-disk hash).
+</p>
+</li>
+<li>Submodule recursion is IN-PROCESS (mirror GET), NOT the job log (the ruling);<p>
+depth cap 8, <code>--nosub</code> opt-out, hunk per repo.
+</p>
+</li>
+<li>Consolidate <code>.gitmodules</code> parsing into <code>shared/gitmodules.js</code> FIRST; rewire<p>
+recurse.js / status.js / submount.js onto it (reuses the <a href="../SUBS/SUBS-039.html">SUBS-039</a> read spine).
+</p>
+</li>
+<li>Coordinate the <code>&lt;sub&gt;/&lt;path&gt;</code> split with <a href="../SUBS/SUBS-039.html">SUBS-039</a> (the general delegation<p>
+routine) so PUT does not fork a parallel walk.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: bare <code>be put</code> stages nothing (xfail be-js-put-bare); <code>be put &lt;sub&gt;/file</code><p>
+ dropped; dirty sub ignored by bare. RED.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Add <code>shared/gitmodules.js</code> (<code>parse</code>/<code>paths</code>/<code>urlOf</code>); rewire the 3 callers.</li>
+<li class="open"><input type="checkbox" disabled> <code>putRepo(repo, ctx)</code> refactor; bare-walk from classify + wtlog; mis/unk<p>
+ content-sha auto-pair; restamp clean; skip untracked.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> In-process sub recursion: mounted-sub split → delegate <code>putRepo</code> into the sub,<p>
+ hunk per repo, cap 8, <code>--nosub</code>.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Drop <code>be-js-put-bare</code> from <code>_BE_WILL_FAIL</code>; add bare + sub parity cases under<p>
+ <code>be/test/put/</code>.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Green: new repros; named forms + manual bump + DIS-058 sub-cycle intact.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Overlaps <a href="../SUBS/SUBS-039.html">SUBS-039</a> (shared delegation) + <a href="../DIS/DIS-058.html">DIS-058</a> on recurse.js / submount.js /<p>
+stage.js — keep changes minimal, reconcile on land.
+</p>
+</li>
+<li>classifyMerge is tuned for status/post (curTip baseline, patch axis); confirm its<p>
+bare-put row set matches native bare put (untracked never staged, clean→restamp).
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-06-30. Deliverables: <code>shared/gitmodules.js</code>, the <code>putRepo</code><p>
+bare-walk, in-process PUT submodule recursion; <code>be-js-put-bare</code> un-xfailed.
+</p>
+</li>
+</ul>
+</body>
+</html>

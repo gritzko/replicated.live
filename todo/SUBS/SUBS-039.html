@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-039</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-039: reusable submodule-path delegation — route a <code>&lt;sub&gt;/&lt;path&gt;</code> verb arg into the mounted submodule (PUT/DELETE first; EVERY state verb needs it) <a href="./DIS-058 D10.html">DIS-058 D10</a></h1>
+<p>
+<a href="../../wiki/Submodules.html">Submodules</a> Recursion §3: &quot;staging a submodule file delegates that to the submodule, then stages that submodule&quot;. The <code>be/</code> JS read spine (<code>core/recurse.js</code>: <code>walk</code>/<code>isMount</code>/<code>gitmodulesOrder</code>/<code>joinPrefix</code>) ENUMERATES every mounted sub for whole-tree read recursion, but there is NO shared routine that takes a SCOPED PATH ARGUMENT (<code>be put &lt;sub&gt;/file</code>, <code>be delete &lt;sub&gt;/file</code>) and DELEGATES the verb to the owning submodule on the remaining subpath, then stages the sub in the parent. Today the state verbs just SKIP gitlink subtrees (stage.js:149/261, delete.js:78), so a <code>&lt;sub&gt;/file</code> arg is silently dropped/mis-handled. This is CROSS-CUTTING: every verb that takes a path — put, delete, get (single-file restore), and the scoping side of status/diff — needs the same &quot;split the path at a sub mount, run the verb inside the sub, fold the staging back&quot; primitive. This ticket adds that ONE reusable routine and wires PUT/DELETE as its first consumers (the DIS-058 D10 slice). Scope <code>be/</code> JS. Parent <a href="../DIS/DIS-058.html">DIS-058</a> (D10); see <a href="../../wiki/Submodules.html">Submodules</a>, <a href="SUBS-037.html">SUBS-037</a>; method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>core/recurse.js::walk</code> enumerates mounted subs (<code>.gitmodules</code> order, <code>isMount</code> gate, <code>joinPrefix</code>) — the reusable spine for ENUMERATION (whole-tree), not for a single path arg.</li>
+<li>MISSING: a <code>delegatePath(repo, pathArg)</code>-style routine — find the deepest MOUNTED-sub prefix of <code>pathArg</code>, open that sub's repo (<code>be.find</code>/store), run the verb on the REMAINING subpath in the sub's wt, then stage the sub (gitlink) in the parent — pre-order (stage the sub file, THEN stage the submodule).</li>
+<li>put.js/delete.js/stage.js skip gitlink subtrees (<code>b.kind === &quot;s&quot; → continue</code>, stage.js:149/261; delete.js:78), so <code>be put &lt;sub&gt;/file</code> is not delegated. The ONLY sub-touching put today is the MANUAL gitlink bump <code>be put &lt;sub&gt;#&lt;sha&gt;</code> (fold-decide.js:178-184, SUBS-019).</li>
+<li>Reuse, don't re-roll: <code>isMount</code>/<code>gitmodulesOrder</code>/<code>joinPrefix</code> (recurse.js), <code>be.find</code>/store for the sub repo, and the existing gitlink-bump primitive to stage the sub after delegation.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>ONE shared routine (e.g. <code>shared/subdelegate.js</code>, or extend <code>core/recurse.js</code>) that, given a verb op + a path arg, routes a <code>&lt;sub&gt;/&lt;subpath&gt;</code> to the mounted sub and folds the staging back — callable by ANY state verb (single delegation point).</li>
+<li>PUT/DELETE (D10) use it: <code>be put &lt;sub&gt;/file</code> stages the file INSIDE the sub then stages the sub gitlink in the parent (pre-order); <code>be delete &lt;sub&gt;/file</code> likewise.</li>
+<li>A <code>&lt;sub&gt;/file</code> whose <code>&lt;sub&gt;</code> is NOT a mounted sub falls through to the normal path; a DECLARED-but-unmounted sub gets a friendly refuse, never a silent drop.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> JS only; REUSE the <code>core/recurse.js</code> spine — do NOT re-roll a parallel walk. Keep the friendly string throws.</li>
+<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): a <code>be put &lt;sub&gt;/file</code> / <code>be delete &lt;sub&gt;/file</code> case proving the file lands in the sub AND the parent stages the sub.</li>
+<li>Do NOT regress the read-side recursion, the manual <code>be put &lt;sub&gt;#&lt;sha&gt;</code> bump, or DIS-058's get/post recursion.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Add the reusable path-delegation routine (path-arg → deepest-mount split → delegate verb in sub → fold staging), the single point future verbs reuse (get single-file restore, scoped status/diff).</li>
+<li>Wire put.js + delete.js to call it for <code>&lt;sub&gt;/path</code> args; after the sub stages/commits, stage the parent gitlink by REUSING the existing bump primitive (coordinate with DIS-058's post-order auto-bump D7 so the tree-build path stays single).</li>
+<li>Pre-order per <a href="../../wiki/Submodules.html">Submodules</a> §3: delegate into the sub first, then stage the submodule.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: <code>be put &lt;sub&gt;/file</code> (and <code>be delete &lt;sub&gt;/file</code>) is dropped / not delegated today. RED.</li>
+<li class="open"><input type="checkbox" disabled> Add the reusable submodule-path delegation routine (shared), reusing <code>isMount</code>/<code>gitmodulesOrder</code>/<code>joinPrefix</code>.</li>
+<li class="open"><input type="checkbox" disabled> Wire PUT + DELETE to it; stage the sub gitlink after (reuse the bump primitive).</li>
+<li class="open"><input type="checkbox" disabled> Friendly handling for a declared-but-unmounted sub path.</li>
+<li class="open"><input type="checkbox" disabled> Green: new repros; read-side recursion + manual bump + DIS-058 sub-cycle intact.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Overlaps DIS-058 on <code>fold-decide.js</code>/<code>subs.js</code>/<code>recurse.js</code> (the bump primitive + the spine) — keep the put/delete changes minimal and reconcile on land.</li>
+<li>The routine must be GENERAL (every verb), not a put/delete special-case — that is the whole point of filing this as SUBS, not PUT.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — child of <a href="../DIS/DIS-058.html">DIS-058</a> D10, filed 2026-06-29. Deliverable: the reusable <code>&lt;sub&gt;/&lt;path&gt;</code> delegation routine + PUT/DELETE as first consumers.</li>
+</ul>
+</body>
+</html>

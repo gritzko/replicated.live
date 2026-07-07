@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-059</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-059: be/ JS <code>post</code> detached-wt handling wrong TWICE — POSTDET MISFIRES on an attached <code>?#&lt;sha&gt;</code>/trunk wt (status says trunk, post says detached), and POSTDET REFUSES a genuinely-detached post (contradicts <a href="../../wiki/GET.html">GET</a> &quot;a bare sha will stay detached on commit&quot;); root cause: status and post read attachment from DIFFERENT routines. Fix: ONE <code>wtlog.attachedBranch</code> reader (recentmost GET record) + let a detached post commit-and-hop.</h1>
+<p>
+<code>be/</code> JS <code>post</code> mishandled the detached/attached axis two ways, both surfaced while landing <a href="DIS-057.html">DIS-057</a> (a <code>jab post</code> of the classifier work threw <code>POSTDET</code> on a trunk-pinned wt). (1) DETECTION DIVERGENCE: <code>status</code> labels the branch from <code>baselineTip().rawQuery</code> (views/status/status.js) while <code>post</code>'s DIS-009 detached guard read <code>curTip().query</code>-is-40-sha + a separate backward <code>curHasFragment</code> scan (verbs/post/post.js) — two routines deriving attachment differently, so a <code>?#&lt;sha&gt;</code> (trunk PINNED at a sha — ATTACHED) read trunk in <code>status</code> but DETACHED in <code>post</code> → spurious <code>POSTDET</code>. (2) WRONG POLICY: even a genuinely-detached <code>?&lt;sha&gt;</code> wt was REFUSED, contradicting <a href="../../wiki/GET.html">GET</a> pt 3 &quot;a bare sha detaches (will stay detached on commit)&quot;. The rule (ruling 2026-06-29): a wt is attached as per the RECENTMOST <code>get</code> record — <code>?master</code>/<code>?</code>/<code>?branch#sha</code>/<code>?#sha</code> ATTACHED, only a bare <code>?&lt;sha&gt;</code> (full-sha in the query, no branch) DETACHED — and there must be exactly ONE routine reading it. FIX (in <code>~/todo/DIS-057</code>, uncommitted): added <code>shared/wtlog.js::attachedBranch()</code> (the single recentmost-GET reader → <code>{branch, detached, rawQuery, sha}</code>); rerouted the three readers (status label, post detach-guard, post <code>curBranch</code>); and let a detached post COMMIT — the FF pre-flight and <code>advanceRef</code> are gated on <code>!att.detached</code>, so it builds the commit on cur, advances only the cur wtlog row, and moves NO branch ref (git detached-HEAD &quot;hop to the next hash&quot;). <code>be/</code> only; method per <a href="../../beagle/CLAUDE.md">CLAUDE</a>. See <a href="../../wiki/GET.html">GET</a>, <a href="../../wiki/POST.html">POST</a>, <a href="DIS-009.html">DIS-009</a>, <a href="DIS-057.html">DIS-057</a>, <a href="DIS-058.html">DIS-058</a>, <a href="DIS-055.html">DIS-055</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Found landing <a href="DIS-057.html">DIS-057</a>: <code>jab post 'DIS-057: unifying the classifier part II'</code> threw <code>POSTDET: refusing on detached wt</code> on a wt whose recentmost get is <code>?#da7fa5a7</code> (trunk PINNED at a sha) — while BOTH C and JS <code>status</code> reported trunk (<code>?</code>). Verified by probe: <code>curTip().query=''</code>, recentmost get <code>?#da7fa5a7</code> → branch trunk.</li>
+<li>BUG 1 DETECTION DIVERGENCE: <code>status</code> reads <code>baselineTip().rawQuery</code> (status.js:218 — folds patch rows); <code>post</code> read <code>curTip().query</code>-length-40 + <code>isFullSha</code> + a separate <code>curHasFragment(wtl)</code> scan (post.js old <code>:363-364</code>,<code>:550</code>). Two readers, divergent answers → status trunk, post detached.</li>
+<li>BUG 2 WRONG POLICY: <code>POSTDET</code> refused ALL detached posts; <a href="../../wiki/GET.html">GET</a> pt 3 says a bare-sha get &quot;will stay detached on commit&quot; — a detached post must COMMIT and hop to the next hash, not refuse.</li>
+<li>RULE (ruling 2026-06-29, the user): attachment = the branch of the RECENTMOST <code>get</code> record (NOT get/post/patch); there must be exactly ONE routine reading it, shared by <code>status</code> + <code>post</code> + divergence — so they cannot disagree.</li>
+<li>Related: the <a href="DIS-058.html">DIS-058</a> tree carries a DISTINCT post FF bug (POSTNOFF ignores an in-scope patch's <code>theirsParents</code>, post.js:424) — same file, different defect; reconcile on land.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>ONE <code>attachedBranch(wtl)</code> reader (recentmost GET) → <code>{branch, detached, rawQuery, sha}</code>; <code>status</code> label, <code>post</code> detach-guard, <code>post</code> <code>curBranch</code> (and divergence) all route through it.</li>
+<li>A detached <code>?&lt;sha&gt;</code> post COMMITS and hops to the new hash; NO branch ref advanced; the wt stays detached (<a href="../../wiki/GET.html">GET</a> pt 3).</li>
+<li>Preserve attached/trunk post behavior + C/JS <code>status</code> byte-parity.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> (JS ext / JABC) ONLY — do not touch <code>beagle/</code>.</li>
+<li>Keep <code>test/parity/status</code> + the status/post corpora green; keep human-readable string throws.</li>
+<li>Repro-first for the new behavior (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): a detached-post test is still owed (see TODOs).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>attachedBranch</code> reads <code>get</code> rows ONLY (not get/post/patch): posts/patches advance the tip but do NOT change which branch you are ON. This is why status (baselineTip, folds patch) and post (curTip) drifted.</li>
+<li>Detached iff the recentmost get's query holds a full-sha AND <code>refOf</code> finds no branch; <code>?#&lt;sha&gt;</code> (sha in the FRAGMENT) is ATTACHED-trunk, <code>?&lt;sha&gt;</code> (sha in the QUERY) is DETACHED.</li>
+<li>A detached post writes the cur row <code>?#&lt;commit.sha&gt;</code> (so <code>curTip</code> advances → next post's parent) but SKIPS <code>advanceRef</code>; <code>attachedBranch</code> (GET-only) keeps the wt detached at the original get — status shows it ahead of the detach point, trunk untouched.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> <code>attachedBranch</code> in <code>shared/wtlog.js</code> (+ export); reroute status label (status.js:218 → <code>attachedBranch().rawQuery</code>), post detach-guard (post.js → <code>att.detached</code>), post <code>curBranch</code> (→ <code>att.branch</code>); delete the dead <code>curHasFragment</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Bug 2: let detached posts commit — remove the <code>POSTDET</code> throw; gate the FF pre-flight (<code>!att.detached</code>) and <code>advanceRef</code> (<code>if (!att.detached) advanceRef(...)</code>).</li>
+<li class="done"><input type="checkbox" checked disabled> Verified: live <code>attachedBranch()</code> = trunk/attached (POSTDET no longer fires); detached-post repro green — <code>jab post</code> on <code>?&lt;A&gt;</code> commits, new parent = the detached sha A, cur hops to the new hash, <code>resolveRef('')</code> (trunk) UNMOVED, wt still detached; full <code>be-js</code> 97/97 serially (parity-status, post-agree, get-detach, refs-trunk-sigil intact).</li>
+<li class="open"><input type="checkbox" disabled> Add a <code>be/test/</code> detached-post case (the manual repro: detach <code>?&lt;sha&gt;</code> → change → <code>jab post</code> → assert the commit lands, parent = the detached sha, trunk ref unmoved, wt still detached). Only <code>be-js-get-detach</code> (get-side row shape) exists today.</li>
+<li class="open"><input type="checkbox" disabled> Land: the edits are uncommitted in <code>~/todo/DIS-057</code>, joining its <code>ronStepMs</code> (<a href="DIS-057.html">DIS-057</a> reopen) changeset; reconcile <code>post.js</code> with <a href="DIS-058.html">DIS-058</a> (the POSTNOFF/<code>theirsParents</code> fix) on land.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>No detached-post regression test yet — behavior is verified by a manual scratch repro only; the <code>be/test/</code> case above must lock it in before close.</li>
+<li><code>post.js</code> is touched by THREE in-flight efforts (this, <a href="DIS-057.html">DIS-057</a> stamp, <a href="DIS-058.html">DIS-058</a> D17 patch-recursion + the POSTNOFF FF bug) — land-time reconcile needed.</li>
+<li>The detached cur row <code>?#&lt;commit.sha&gt;</code> makes <code>curTip</code> trunk-ish while <code>attachedBranch</code> stays detached; intentional (hop-the-hash), but confirm <code>status</code> divergence reads sensibly for a long detached chain.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FIXED — uncommitted in <code>~/todo/DIS-057</code> (joins the <a href="DIS-057.html">DIS-057</a> <code>ronStepMs</code> changeset); filed 2026-06-29 from the <code>jab post</code> POSTDET incident while landing the classifier work. DONE: <code>wtlog.attachedBranch</code> unifies the attach reader (recentmost GET record), the three readers rerouted, and a detached post commits-and-hops (no branch ref moved). <code>be-js</code> 97/97 serially; manual detached-post repro green. OPEN: the <code>be/test/</code> detached-post case; land + reconcile <code>post.js</code> with <a href="DIS-058.html">DIS-058</a>.</li>
+</ul>
+</body>
+</html>

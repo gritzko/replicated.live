@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIT-015</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GIT-015 <a href="./JS.html">JS</a>: jab post ref-target resolution — <code>?/project</code> funny ref + no-<code>?</code> retargets umbrella <code>main</code></h1>
+<p>
+Two defects on <code>jab</code>'s POST push-target resolution, one theme (the URI ref/path slot picks the wrong remote ref). *<strong>A.</strong>* <code>jab post ssh://host/path?/project</code> builds a receive-pack update for <code>refs/heads//project</code> — a doubled slash git rejects as a &quot;funny refname&quot; (<code>refusing to update funny ref 'refs/heads//beagle' remotely</code>); per <a href="../../wiki/URI.html">URI</a> <code>?/project</code> is the <strong>absolute project trunk</strong> and the trunk is named as the project, so it must resolve to <code>refs/heads/project</code>, but jab splices the raw post-<code>?</code> text <code>/project</code> (absolute-marker <code>/</code> and all) into <code>refs/heads/&lt;X&gt;</code>, leaking the <code>/</code>. *<strong>B.</strong>* Dropping <code>?</code> (<code>jab post ssh://host/path/project</code>) puts <code>project</code> in the <strong>path</strong>, leaves the ref unspecified, and jab silently retargets the *<strong>umbrella</strong>* <code>refs/heads/main</code> (an unrelated history) instead of the path's project or a clear refusal — a cross-project footgun the FF gate masks only by accident. Fix: resolve <code>?/project</code> to the trunk branch, never emit an empty ref segment, and never silently push cur onto an unrelated <code>main</code>. Push path is <a href="GIT-013.html">GIT-013</a>; wire alias documented at <code>keeper/REFADV.c</code> §&quot;Wire mapping&quot;. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro A (from <code>~/journal/beagle</code>, remote <code>~/src/journal</code>): <code>jab post ssh://localhost/src/journal?/beagle</code> → <code>refusing to update funny ref 'refs/heads//beagle' remotely</code> + <code>JS exception: wire.push: ref update rejected — refs/heads//beagle funny refname</code>.</li>
+<li>Repro B (same cwd): <code>jab post ssh://localhost/src/journal/beagle</code> → <code>JS exception: POSTNOFF: remote refs/heads/main is not an ancestor of cur</code>; local cur <code>59e4ac27</code> (ahead 1, parent <code>2a35dbd1</code>) IS a fast-forward over remote beagle main <code>2a35dbd1</code>, but jab compared it to the <strong>umbrella</strong> <code>~/src/journal</code> main <code>172a8688</code> (&quot;snapshot 25Jun26&quot;, unrelated lineage) → the refusal is a wrong-target artifact, not a real non-FF.</li>
+<li><a href="../../wiki/URI.html">URI</a> ref shapes: <code>?/project</code> = absolute project trunk (trunk named as project, <code>?/beagle</code> → <code>refs/heads/beagle</code>); the leading <code>/</code> is an absolute marker, not part of the branch name. An empty <code>?</code> means trunk (→<code>main</code>); NO <code>?</code> slot means cur — it must not become &quot;push cur onto the umbrella <code>main</code>&quot;.</li>
+<li><code>keeper/REFADV.c:65</code> documents the sole wire alias: <code>?</code> → <code>refs/heads/main</code>, <code>?&lt;X&gt;</code> → <code>refs/heads/&lt;X&gt;</code> — X must already be a resolved branch name; jab hands it <code>/beagle</code> (defect A) or falls through to bare <code>main</code> on a project path (defect B).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A: <code>jab post &lt;remote&gt;?/PROJ</code> resolves to <code>refs/heads/PROJ</code> (strip the absolute-marker <code>/</code>) and pushes that project trunk, FF-only as today.</li>
+<li>A: any resolved ref carrying an empty path segment (<code>refs/heads//…</code>, trailing <code>/</code>) is refused <strong>before</strong> the wire write with a clear jab error, never sent for git to reject as a funny refname.</li>
+<li>B: a no-<code>?</code> URI whose path names a project/submodule does not silently push cur onto the umbrella <code>refs/heads/main</code>; it targets that project's ref or refuses with a clear &quot;no branch selected — use <code>?/PROJ</code>&quot; message.</li>
+<li>A repro test per defect lands first (per <a href="../../rule/Issues.html">Issues</a>) and stays green.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fix in the jab JS ref/URI resolution on the push path (<code>be/</code> shared wire/URI code), not native C keeper; native <code>be</code> is unaffected here.</li>
+<li>ABC/JS norms: reuse before adding, ≤2-line <code>GIT-015</code> comments, greppable, ticket-coded ≤64-char commit.</li>
+<li>Do not regress the other ref shapes: empty <code>?</code> (trunk→<code>main</code>), <code>?branch</code>, <code>?/project/branch</code>, detached <code>?&lt;sha&gt;</code>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Root cause A: the push ref is built by concatenating the post-<code>?</code> URI text onto <code>refs/heads/</code>; the absolute form <code>?/project</code> keeps its leading <code>/</code>, so normalization of <code>?/project</code> → project-trunk branch is missing on the jab push path.</li>
+<li>Root cause B (hypothesis): with no <code>?</code>, the path segment is not classified as a project selector, so the target ref defaults to the umbrella <code>main</code> (<code>?</code>-empty alias) instead of the project trunk or an error.</li>
+<li>Belt-and-suspenders: add an empty-segment guard on the final <code>refs/heads/&lt;X&gt;</code> so any future resolver slip fails loud in jab, not opaquely at git.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> T1 — repro test A: hermetic <code>jab post &lt;local-remote&gt;?/PROJ</code> asserts the update ref is <code>refs/heads/PROJ</code>, not <code>refs/heads//PROJ</code>.</li>
+<li class="open"><input type="checkbox" disabled> T2 — resolve <code>?/project</code> (absolute trunk) to <code>refs/heads/project</code> on the jab push path.</li>
+<li class="open"><input type="checkbox" disabled> T3 — pre-wire guard: refuse a ref with any empty segment with a clear jab error.</li>
+<li class="open"><input type="checkbox" disabled> T4 — repro test B: no-<code>?</code> post to a project/submodule path does not target the umbrella <code>main</code>; asserts target ref or a clear refusal.</li>
+<li class="open"><input type="checkbox" disabled> T5 — B fix: classify the path's project or refuse &quot;no branch selected&quot;; never default cur onto the umbrella <code>main</code>.</li>
+<li class="open"><input type="checkbox" disabled> T6 — regression check: empty <code>?</code>→<code>main</code>, <code>?branch</code>, <code>?/project/branch</code> still map correctly.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Locate where jab builds the receive-pack update ref (<code>be/shared/wire.js</code> <code>wire.push</code> vs a URI/refs resolver module) before touching it.</li>
+<li>Defect B interacts with path-vs-ref slot classification (<a href="../../wiki/Verbs.html">Verbs</a> natural slot); confirm the intended no-<code>?</code> semantics with the user if a project path should ever auto-select its trunk vs always require <code>?</code>.</li>
+<li>Worktree caveat (from <a href="../PUT/PUT-005.html">PUT-005</a>, confirmed): this fix's worktree was made by <code>cp -a</code> of <code>be/</code>, which copies the <code>.be</code> redirect verbatim → a non-self-contained tree that mis-reports <code>put</code> status. Create fix worktrees via <code>be get</code>, not <code>cp -a</code>.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

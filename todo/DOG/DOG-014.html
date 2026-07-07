@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOG-014</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG-014 <a href="./MED.html">MED</a>: <code>PACKResolveOfs</code> ping-pong sizing — undocumented invariant, latent heap overflow</h1>
+<p>
+<code>dog/git/PACK.c</code>'s <code>PACKResolveOfs</code> applies the delta chain bottom-up, ping-ponging the apply result between <code>delta[0]+half</code> and <code>base[0]</code> (<code>PACK.c:265-285</code>), where <code>half = deltalen/2</code> (<code>:213</code>). Every <code>DELTApply</code> output gauge is <code>{dst,dst,dst+half}</code> (<code>:278</code>), so when <code>dst == base[0]</code> up to <code>half</code> bytes may be written into the <code>base</code> scratch — which is <code>baselen</code> bytes. Safety therefore REQUIRES <code>half &lt;= baselen</code>, i.e. <code>deltalen &lt;= 2*baselen</code>, and NOTHING checks or documents it. A symmetric over-read exists via <code>bsl = {src, src+outsz}</code> (<code>:277</code>). Latent today (keeper <code>KEEP.c:428-429</code> and the tests size both scratches equally, so <code>half = baselen/2 &lt; baselen</code>), but a future caller giving a larger delta scratch than base scratch gets an attacker-<code>result_sz</code>-driven heap overflow. Distinct from the keeper-side <a href="../MEM/MEM-022.html">MEM-022</a>/<a href="../GIT/GIT-004.html">GIT-004</a> resolver work — this bug is in the surviving OFS apply loop in <code>dog/git</code>. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>PACK.c:213</code> <code>half = deltalen/2</code>; apply gauge <code>:278</code> bounded by <code>half</code>, not by<p>
+<code>base</code>'s real capacity <code>baselen</code>; ping-pong flip <code>:285</code>.
+</p>
+</li>
+<li><code>DELTApply</code> bounds writes by <code>u8gRestLen(out)==half</code> (<code>DELT.c:32</code>), so it can<p>
+fill <code>half</code> bytes into a <code>baselen</code>-byte buffer if <code>half&gt;baselen</code>.
+</p>
+</li>
+<li>Current callers safe by convention only (equal buffers) — no guard, no doc.</li>
+<li>Related: <code>DELTApply</code> reads <code>base_sz</code> (<code>DELT.c:29</code>) but never validates it<p>
+against <code>$size(base)</code> (git does); harmless memory-wise (copy opcodes are bounds-checked at <code>DELT.c:52-53</code>) but lets malformed deltas through.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Add <code>if (half &gt; baselen) return NOROOM;</code> (or size the apply gauge to<p>
+<code>min(half, baselen)</code>), and state the <code>deltalen &lt;= 2*baselen</code> contract in PACK.h.
+</p>
+</li>
+<li>Validate <code>base_sz == $size(base)</code> in <code>DELTApply</code> and fail malformed deltas.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>dog/git</code> libdog, ABC style; success path byte-identical for equal-buffer<p>
+callers (keeper, tests).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Prefer the explicit guard + documented invariant over silently clamping, so a<p>
+mis-sized caller fails loudly instead of truncating a valid object.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> T1 repro: a <code>PACKResolveOfs</code> call with <code>deltalen &gt; 2*baselen</code> and a delta<p>
+ whose intermediate <code>result_sz</code> lands in <code>(baselen, half]</code>; assert it errors  rather than overflowing (ASan). Add to <code>dog/fuzz/PACKRESOLVE.c</code>.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> T2 add the <code>half &lt;= baselen</code> guard + PACK.h invariant note.</li>
+<li class="open"><input type="checkbox" disabled> T3 <code>base_sz</code> validation in <code>DELTApply</code>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="../GIT/GIT-004.html">GIT-004</a> deletes the REF_DELTA arm but the OFS apply loop (this bug) survives.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-07-06, the libdog code-quality review session.</li>
+</ul>
+</body>
+</html>

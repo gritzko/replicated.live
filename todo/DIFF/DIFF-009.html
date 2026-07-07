@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIFF-009</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIFF-009: tree diff silently drops files — 1-2 headers on Ubuntu CI, once ALL headers locally — exit 0 either way</h1>
+<p>
+<code>be diff:?v1..v2</code> (test <code>be-diff-17-tree-no-truncate</code>, 80 modified files) intermittently emits fewer file diffs than it should, with exit 0. Two observed signatures: (A) Ubuntu CI drops 1-2 MID-LIST headers with the tail intact (2026-07-06 run 28809192096: 79/80, highest header f079 present; earlier runs: 2 dropped); (B) once locally (musl, default build): <code>tree.got.out</code> entirely EMPTY, still exit 0. Local hammering never reproduces A (33 runs green across gcc/clang x default/Release, then 20 more). A partial fix is drafted (see WIP). Related: <a href="DIFF-007.html">DIFF-007</a> &quot;diff:&lt;largefile&gt; silently empty&quot; (the silent-empty family), DIFF-008 (the per-file BASS rewind this test guards).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>CI evidence (logs_77867460502.zip, ubuntu job): <code>FAIL: 79 / 80 file headers present</code>, <code>highest header: --- a/f079.txt</code>, last-12-lines tail complete — so ONE file among f000..f078 emitted nothing; runner scratch not preserved.</li>
+<li>Since DIFF-008, the per-file <code>GRAFDiff2Layer</code> is <code>call()</code>-propagated (<code>graf/DIFFREF.c:600</code>) — a per-file FAILURE cannot silently truncate anymore; the only remaining silent-skip paths in the loop are the two soft-guarded <code>KEEPGetExact</code> reads (<code>graf/DIFFREF.c:571-584</code>): ANY non-OK read left a side empty, and empty-vs-empty renders nothing — one dropped file, exit 0.</li>
+<li>Signature B (local, once): the whole diff empty with exit 0 — upstream of the per-file loop (ref resolve / set build / output path), undiagnosed; smells like <a href="DIFF-007.html">DIFF-007</a>'s family.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>No silent drops: a read/render failure inside a tree diff either fails the verb loudly or renders an explicit placeholder — never exit-0-with-missing-files.</li>
+<li>Signature A gone on Ubuntu CI (watch the next runs); signature B reproduced or bounded (keep <code>tree.got.out</code> + stderr on failure — the test already keeps scratch).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Do not regress the legitimate soft cases: KEEPNONE (absent object) and non-blob types still soft-skip a side; only genuine ERRORS propagate.</li>
+<li>Repro-first where possible; signature A has no local repro, so the CI runs ARE the verifier for the drafted guard.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Drafted (uncommitted, <code>graf/DIFFREF.c</code>): both <code>KEEPGetExact</code> calls in the to-set loop now <code>fail(code)</code> on any code other than OK/KEEPNONE, so a transient keeper read error aborts the diff loudly instead of dropping the file. Diff suite 17/17 locally with fresh scratch.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Land the KEEPGetExact guard; watch Ubuntu CI for signature A recurrence.</li>
+<li class="open"><input type="checkbox" disabled> Same audit for the from-only (deletion) loop + <code>diffref_set_*</code> builders: any other soft-skip that can eat a file?</li>
+<li class="open"><input type="checkbox" disabled> Signature B: instrument or keep stderr with the scratch; find how an entirely empty diff exits 0 (ref resolution? empty set? output path).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>No local repro for signature A despite 53 runs across compilers/opt levels — CI-environment-coupled (slower IO / different fs); verification is CI-statistical.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — evidence + drafted guard 2026-07-06 (the beagle-split session; failures pre-date the split).</li>
+</ul>
+</body>
+</html>

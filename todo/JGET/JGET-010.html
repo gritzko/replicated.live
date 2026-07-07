@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JGET-010</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JGET-010 <a href="./MED.html">MED</a>: bareword path-vs-branch misroute — <code>jab get</code> can't switch by branch name, detach by bare sha, or do <code>?..</code></h1>
+<p>
+<code>inRepoSeed</code> runs the path-restore branch BEFORE the branch-switch / detach branches, so any bareword with no <code>/</code> and no leading <code>?</code> is treated as a FILE path: a branch name (<code>feat</code>), a bare 40-hex sha (detach), and the parent form <code>?..</code> all misroute and error (<code>no such path …</code> / <code>cannot resolve ?..</code>), leaving the wt unswitched. Native classifies a bareword by TRACKED-in-baseline-tree status (<a href="../DIS/DIS-017.html">DIS-017</a>): a tree entry → restore, else → <code>?branch</code> switch; and resolves <code>..</code> to the parent branch. Non-destructive (no wt mutation) but <code>jab get</code> cannot switch by name, detach by sha, or navigate parents — and <code>?..</code> is used pervasively in the native suite. Part of <a href="JGET-001.html">JGET-001</a>; method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Native `beagle/test/get/{34-restore-deleted-tracked (arm C1), 33-detached-refuse-commit<p>
+(bare sha arm), 04-branch-switch-status (?.. )}`.
+</p>
+</li>
+<li>Root: <code>inRepoSeed</code> (<code>get.js:390</code>) `let path=u.path; … if (path) return<p>
+restorePath(...)<code> runs before the detach/branch arms; restorePath throws at </code>get.js:470<code> (</code>no such path &lt;p&gt; in source<code>). </code>?..<code> reaches the switch arm but </code>k.resolveRef(&quot;..&quot;)<code> is empty → throw </code>get.js:435<code> (</code>cannot resolve ?..`).
+</p>
+</li>
+<li>Repro: after a <code>?./feat</code> fork — <code>jab get feat</code> / <code>jab get &lt;40hex&gt;</code> / <code>jab get '?..'</code><p>
+→ rc=1, no switch. Evidence under <code>/tmp/claude-1000/jabprobe</code> (c34/c33/c04).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Bareword classification matches native (<a href="../DIS/DIS-017.html">DIS-017</a>): tracked tree entry → restore;<p>
+otherwise → branch switch. A bare 40-hex sha detaches (<code>?&lt;sha&gt;</code>). <code>?..</code> resolves to the parent branch.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Classify by baseline-tree membership, not on-disk existence. Repro-first.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Reorder/guard <code>inRepoSeed</code>: test tracked-in-baseline BEFORE treating a bareword as<p>
+a path; route a 40-hex bareword to detach; resolve <code>..</code>/<code>./</code> relative refs in the branch arm. Keep real path-restore for tracked entries.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro tests: branch-name switch, bare-sha detach, <code>?..</code> parent — all succeed.</li>
+<li class="open"><input type="checkbox" disabled> Reorder classification per DIS-017; add relative-ref resolution.</li>
+<li class="open"><input type="checkbox" disabled> Parity-port cases 34/33/04 to <code>be/test/get</code>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None (non-destructive); but <code>?..</code> blocks porting several native cases that use it.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open) Filed 2026-06-29.</li>
+</ul>
+</body>
+</html>

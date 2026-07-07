@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-040</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-040 <a href="./JS.html">JS</a> <a href="./HIGH.html">HIGH</a>: non-force <code>get</code> DELETES untracked files — only <code>get!</code> may clean</h1>
+<p>
+A plain (non-force) <code>jab get</code> must MERGE dirty tracked files and LEAVE UNTRACKED files alone; only <code>jab get!</code> may clean the worktree (<a href="../../wiki/GET.html">GET</a> wiki: &quot;<code>be get!</code> resets the worktree to a clean state, all local changes discarded&quot;). It does not: a non-force <code>get</code> that recurses into a submodule RESET the sub and SILENTLY DELETED every UNTRACKED file in it. Verified this session: in a <code>beagle-ext</code> worktree, <code>test/</code> is the <code>beagle-ext-tests</code> store-backed submodule; a non-force <code>jab get</code> swept 7 dirs of untracked, newly-authored test files (left empty), while tracked files survived — silent data loss. Suspected locus: get's del-sweep / prune (<code>verbs/get/get.js</code> <code>fanoutWholeTree</code> + <code>delSweep</code>) unlinks worktree paths absent from <code>newTree</code> WITHOUT checking they were TRACKED (in <code>oldTree</code>), and/or the submodule recursion does a wholesale clean re-checkout of the sub (should be read-only, <a href="../DIS/DIS-058.html">DIS-058</a>). JS only (<code>be/</code>, via <code>jab</code>). Evidence: cost the <a href="../GIT/GIT-016.html">GIT-016</a> T1–T4 tests. Method: <a href="../../meta/work.html">work</a>; siblings <a href="../JGET/JGET-001.html">JGET-001</a>/<a href="../DIS/DIS-058.html">DIS-058</a>/<a href="../JGET/JGET-013.html">JGET-013</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro-shaped evidence (this session): in a <code>beagle-ext</code> worktree <code>test/</code> is a SEPARATE store-backed submodule (<code>beagle-ext-tests</code>, own <code>.be</code>). A NON-force <code>jab get</code> (recursing) reset that sub and DELETED all UNTRACKED files under it — 7 test dirs emptied; the 40+ TRACKED test files survived.</li>
+<li><code>verbs/get/get.js</code> <code>fanoutWholeTree(ctx, r, wt, force)</code>: <code>noPrune = !!force || (sameTip &amp;&amp; !r.fresh)</code>; a del-sweep BARRIER (<code>DELSWEEP</code>/<code>delSweep</code>) folds delete leaves; <code>if (!force) dirtyOverlapCheck(...)</code> (get.js ~L382). The prune/del-sweep is what removes worktree files during a switch/update.</li>
+<li><a href="../../wiki/GET.html">GET</a> wiki: only <code>be get!</code> (force) &quot;resets the worktree to a clean state, all local changes discarded&quot; — so a non-force <code>get</code> must NOT discard untracked (or dirty tracked) content.</li>
+<li>An UNTRACKED file = a worktree path in NEITHER <code>oldTree</code> NOR <code>newTree</code>. A tracked deletion = a path in <code>oldTree</code> but gone from <code>newTree</code>. Only the latter may be unlinked, and only when not dirty.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A non-force <code>jab get</code> (switch / update / re-get / FF) NEVER deletes an untracked worktree path (in neither tree); it merges dirty tracked files and only removes TRACKED deletions.</li>
+<li><code>jab get!</code> keeps its clean-reset (may remove untracked/dirty) — force is the SOLE cleaning path.</li>
+<li>The invariant holds THROUGH submodule recursion: reconciling / re-getting a sub must not sweep the sub's untracked files (coordinate with <a href="../DIS/DIS-058.html">DIS-058</a>: sub recursion is read-only).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>JS only, <code>be/</code>, run via <code>jab</code>. Do NOT run native <code>be</code>; do NOT open <code>beagle/</code>.</li>
+<li>Repro-first (a silent-data-loss bug): make the failing case before the fix; verify untracked files survive a non-force <code>get</code>.</li>
+<li>ABC/JS norms: ≤2-line <code>GET-040</code> comments, greppable, ticket-coded ≤64-char commit. No new deps.</li>
+<li>Do NOT regress <code>get!</code> (still cleans), dirty-tracked merge, tracked-deletion sweep, or the get/dirty/restore buckets.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>The del-sweep must gate each unlink on &quot;the path was TRACKED in <code>oldTree</code>&quot;; a path in neither tree is untracked → LEAVE IT. Never unlink by &quot;absent from newTree&quot; alone.</li>
+<li>Force (<code>get!</code>) is the only mode that may remove untracked/dirty; everything non-force is merge-or-leave.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> T1 — repro: an untracked file in a worktree (top-level AND a submodule); a non-force <code>jab get</code> (switch/update/re-get) must PRESERVE it — fails today (deleted).</li>
+<li class="open"><input type="checkbox" disabled> T2 — fix the del-sweep/prune: unlink only tracked deletions (present in <code>oldTree</code>, gone in <code>newTree</code>), never an untracked path; keep dirty-tracked merge.</li>
+<li class="open"><input type="checkbox" disabled> T3 — submodule path: a sub recursion must not wholesale clean-reset the sub (DIS-058 read-only); untracked sub files preserved.</li>
+<li class="open"><input type="checkbox" disabled> T4 — regression: get/dirty/restore/traversal buckets, wire ssh/http update+incremental, and <code>get!</code> still clean-resets.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Determine the exact sweep locus (top-level del-sweep vs the submodule re-checkout) — the repro decides; both may need the tracked-only guard.</li>
+<li>Interacts with <a href="../DIS/DIS-058.html">DIS-058</a> (sub recursion should be read-only) and <a href="../JGET/JGET-013.html">JGET-013</a> (<code>--force</code> orphan sweep); coordinate so force still cleans and non-force never does.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

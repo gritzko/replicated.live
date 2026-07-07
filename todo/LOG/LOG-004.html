@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LOG-004</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>LOG-004: <code>jab log</code> exhausts file descriptors (EMFILE) on a many-pack store — probable fd/mmap leak on the pager path</h1>
+<p>
+On a restored ~130-pack <code>~/.be</code> store (project <code>beagle</code>, 1581-commit DAG), a TTY <code>jab log</code> dies with <code>Error: No file descriptors available</code> from <code>_mmap</code> via <code>load@_openPager@_cli</code> before rendering; <code>ulimit -n</code> is 1024. A PIPED <code>jab log</code> in the same worktree completes, and <code>jab status</code> is fine, so the exhaustion needs the pager path and scales with store reads (<code>jab list</code> is also very slow on this store — the <a href="../JS/JS-056.html">JS-056</a> rebuild-not-mmap index gap multiplies opens). Suspects: <code>be/shared/store.js</code> <code>packAt</code> mmaps each <code>.keeper</code> lazily and never unmaps, per-row store re-opens (submount probes) repeat that per pack, and the C++ <code>io.mmap</code> binding may hold the fd after mapping. Scope: be/ JS first (<code>store.js</code>, <code>views/log</code>), jabc C++ only if the binding provably holds fds. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Incident (2026-07-06, thinkcentre): <code>jab log</code> in <code>~/src/journal/beagle</code> → <code>JS exception: Error: No file descriptors available</code>, stack <code>_mmap@[native code] / load@ / _openPager@ / _cli@ / cli@</code>; same command piped (no TTY → no pager) prints all 1581 rows.</li>
+<li>Store shape: <code>~/.be</code> holds 5 project shards (<code>beagle</code>, <code>beagle-ext</code>, <code>beagle-ext-tests</code>, <code>beagle-journal</code>, <code>beagle.new</code>), 130 <code>.keeper</code> pack-logs total; <code>ulimit -n</code> 1024.</li>
+<li><code>jab status</code> works in the same tree; <code>jab list</code> works but is VERY slow with heavy store reads (<a href="../JS/JS-056.html">JS-056</a>: the JS store rebuilds the object index per run instead of mmapping <code>keeper.idx</code>; <a href="../JS/JS-099.html">JS-099</a>: unindexed packs force scans).</li>
+<li><code>be/shared/store.js</code> <code>packAt()</code> caches <code>git.pack.mmap(path,&quot;r&quot;)</code> per pack and has no close/unmap; <code>open()</code> is called per repo AND per submount probe, so mapped packs multiply across opens.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A TTY <code>jab log</code> completes on a 130-pack store within <code>ulimit -n</code> 1024; no fd growth proportional to commits rendered.</li>
+<li>A repro test FIRST (<a href="../../meta/work.html">Issues</a> §3): drive the log walk (or store.open×N + packAt×M) under a lowered fd ceiling and assert no EMFILE / bounded open-fd count.</li>
+<li>Identify the actual holder (JS pack cache vs re-opened stores vs the <code>io.mmap</code>/<code>git.pack.mmap</code> binding keeping fds) with evidence, not guesses.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Own worktree per <a href="../../meta/work.html">Issues</a> (<code>$HOME/todo/LOG-004</code>, store-backed <code>jab get file:/$HOME/.be?/beagle</code>); do NOT touch <code>~/src/journal/*</code> or <code>~/src/beagle</code>.</li>
+<li>Fix in be/ JS (<code>shared/store.js</code>, <code>views/log/</code>, <code>shared/submount.js</code>); no jabc C++ edits without evidence the binding itself leaks. No other tests edited.</li>
+<li>Don't regress <code>jab list</code>/<code>status</code>/<code>diff</code> on the same store; the JS unit suites (<code>be/test/*.js</code>) stay green.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(worker to fill, repro first)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro under a low <code>ulimit -n</code> (or fd-count probe) demonstrating the leak; identify the holder.</li>
+<li class="open"><input type="checkbox" disabled> Fix: bound/unmap pack mappings (LRU or close-on-done) or share one store reader per run; whichever the evidence picks.</li>
+<li class="open"><input type="checkbox" disabled> Green: repro passes, be/test JS suites pass, TTY <code>jab log</code> on the 130-pack store renders.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none yet)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-07-06 from the live incident; worker dispatched per <a href="../../meta/work.html">Issues</a>.</li>
+</ul>
+</body>
+</html>

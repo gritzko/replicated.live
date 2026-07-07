@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>URI-014</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>URI-014 <a href="./HIGH.html">HIGH</a>: hunk links/banners/status-bar must use <code>word URI</code> shape — get the verb/view OUT of the scheme slot</h1>
+<p>
+Hunk-carried URIs jam the VERB/VIEW word into the URI SCHEME slot — <code>diff://name/path</code>, <code>status://name</code>, <code>commit://name?sha</code>, <code>log://name?ref</code>, <code>cat://name/path#L&lt;n&gt;</code>. Per &quot;views are verbs, not schemes&quot; (<a href="../../wiki/Nav.html">Nav</a>, <a href="../DIS/DIS-060.html">DIS-060</a>) the verb belongs in the HEAD/word slot; the scheme addresses TRANSPORT only (<code>ssh:</code>/<code>https:</code>/<code>be:</code>/<code>file:</code>). The overload &quot;worked&quot; only because these URIs never carry a real transport scheme (the trick), but it is structurally wrong and blocks composition like <code>diff https://host/x?a..b</code> (a lens over a remote). Convert EVERY hunk-carried URI — embedded U-tag click-target LINKS, the hunk BANNER/record URI, AND the re-typeable STATUS-BAR address — to the <code>word URI</code> (verb-space-URI) form, the SAME <code>module(args)</code> shape ulogs, hunks, the CLI, and the address bar already use. HARD CUTOVER, JS-only (<a href="../../meta/work.html">beagle-ext</a>); the C weave/graf bakers are a linked follow-up. Completes the <a href="URI-012.html">URI-012</a> (resolution) + <a href="URI-013.html">URI-013</a> (composition) arc with SHAPE. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Today JS projectors bake U-tag click-targets + banners with the verb in the scheme slot: <code>navUri(&quot;diff&quot;, path)</code> → <code>diff://name/path</code>, <code>status://name</code>, <code>commit://name?sha</code>, <code>log://name?ref</code>, <code>cat://name/path#L&lt;n&gt;</code>, <code>tree://name/segs?rev</code>.  The pager (<code>_uriAt</code>/<code>_resolveSpell</code>) then parses them as SCHEMED URIs.</li>
+<li>The &quot;trick&quot; worked because a hunk link NEVER carries a real transport scheme (<code>ssh:</code>/<code>https:</code>/<code>be:</code>/<code>file:</code>), so overloading <code>scheme</code> with the verb didn't collide — but it forbids <code>diff https://host/x?a..b</code> (verb <code>diff</code> over a REMOTE), the very composition <a href="../../wiki/Nav.html">Nav</a> frees by emptying the scheme slot.</li>
+<li>The record ALREADY carries the verb SEPARATELY — ulog rows <code>{ts, verb, uri}</code>, hunk records <code>{uri, verb, ts}</code> — so the word is DUPLICATED (record <code>verb</code> field AND the uri's scheme).  <code>word URI</code> single-sources it.</li>
+<li>Design already says so: <a href="../../wiki/Nav.html">Nav</a> &quot;Click-targets are spells: a hunk's <code>U</code>-tag carries a <code>verb args</code> spell&quot; and &quot;Views are verbs, not schemes.&quot;  This ticket makes the IMPLEMENTATION match the spec.</li>
+<li>Follows <a href="URI-012.html">URI-012</a> (a relative link inherits the context authority) + <a href="URI-013.html">URI-013</a> (all URI compose/parse through the URI class); this is the third axis — link SHAPE.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Every hunk-carried URI uses <code>word URI</code> (verb SPACE uri): U-tag click LINKS, the hunk BANNER/record URI, and the pager STATUS-BAR re-typeable address.</li>
+<li>The <code>word</code> is the verb/view (<code>diff</code>/<code>cat</code>/<code>commit</code>/<code>log</code>/<code>tree</code>/<code>status</code>/<code>grep</code>/<code>spot</code>/<code>ls</code>/…); the URI part carries ONLY addressing (<code>//authority/path?ref#frag</code>) and a REAL scheme ONLY for a transport (<code>diff https://host/x</code>).</li>
+<li>The pager dispatches a link/banner as a <code>module(args)</code> SPELL (verb head + URI arg) via the SHARED spell machinery — never a <code>&lt;scheme&gt;:</code> parse.</li>
+<li>The scheme slot in these URIs is FREE for transports: <code>diff https://host/x?a..b</code> composes and clicks through.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>JS-only (<a href="../../meta/work.html">beagle-ext</a>): the JS projectors that bake U-targets+banners (status/diff/cat/blob/sha1/tree/size/type/log/commit/spot/ls/lsr/refs/grep/regex) and the pager (<code>views/bro/pager.js</code>) that parses them.  The C weave/graf bakers (beagle) that emit some <code>diff:</code>/<code>cat:</code> targets are OUT OF SCOPE → a linked follow-up; note the JS/C boundary (<a href="URI-012.html">URI-012</a> <code>navAuthorize</code> was the C-baked-target compat shim).</li>
+<li>Reuse the SHARED <code>word(context_uri, …rest)</code> composer/parser (<code>shared/spell.js</code>) — the SAME one the CLI + address bar use (<a href="../../wiki/Nav.html">Nav</a>, ONE resolver).  Do NOT fork a hunk-only link parser.</li>
+<li>Compose the URI PART via the URI class (<a href="URI-013.html">URI-013</a>) — <code>URI.make</code>/<code>navUri</code>, authority-scoped; the word is prepended as <code>&lt;verb&gt; </code>, NEVER folded into a scheme.</li>
+<li>NOT byte-parity: the on-wire link/banner TEXT changes shape by design.  The nav/click/pager tests that assert link text MUST be updated to the new shape (user-approved test edits, <a href="../../rule/Issues.html">Issues</a>).</li>
+<li>Repro-first: a baked link asserts <code>diff //name/path</code> (not <code>diff://name/path</code>) AND clicking it dispatches verb <code>diff</code> with arg <code>//name/path</code>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>The record <code>verb</code> field is the SINGLE source of the word; the <code>uri</code> field drops the verb-scheme and carries scheme-less addressing (real scheme only for a transport).  The U-tag click-target BYTES become the <code>&lt;verb&gt; &lt;uri&gt;</code> spell string (a space in the hidden bytes — <a href="../../wiki/Nav.html">Nav</a> click-targets are spells, already a <code>verb args</code> string).</li>
+<li>A link composer emits <code>&lt;verb&gt; &lt;scheme-less //name/path?ref#frag&gt;</code> — the URI part through <code>URI.make</code>/<code>navUri</code> (authority-scoped, <a href="URI-013.html">URI-013</a>); <code>navUri</code>'s <code>&lt;verb&gt;:</code>-scheme form is RETIRED for links (its query/frag params stay for the addressing part).</li>
+<li>Pager: <code>_uriAt</code>/<code>_followRow</code>/<code>_runSpell</code> treat the target as a spell and drive via <code>driveSpell</code>/<code>spellCall</code> (already handle <code>verb args</code>); the <code>&lt;scheme&gt;:</code>-for-verb branch in <code>_resolveSpell</code> is dropped for links (hard cutover) and falls to the bareword-verb + relative-URI path (<a href="URI-012.html">URI-012</a>).</li>
+<li>Status-bar: the re-typeable address becomes <code>&lt;verb&gt; &lt;uri&gt;</code> (<code>diff //name/path#L&lt;n&gt;</code>) — exactly what the user would type back.</li>
+</ul>
+<h4>API (concrete, URI-014)</h4>
+<ul>
+<li><code>navLink(verb, path, query, fragment)</code> (shared/nav.js) → `&lt;verb&gt; &lt;scheme-<p>
+less authority-scoped uri&gt;<code>: addressing via </code>URI.make<code> (authority INJECTED, rooted path), the verb prepended with a SPACE.  No authority ⇒ </code>&lt;verb&gt; path?q#f<code>; empty addressing ⇒ the bare </code>&lt;verb&gt;<code>.  Sibling to </code>navUri`.
+</p>
+</li>
+<li>Every projector swaps <code>navUri(&quot;&lt;verb&gt;&quot;,…)</code> → <code>navLink(&quot;&lt;verb&gt;&quot;,…)</code> for BOTH<p>
+its U-tag click-targets AND its banner/record uri; <code>navUri</code> (scheme form) survives ONLY for a real transport, retired for links.
+</p>
+</li>
+<li>The hunk record's <code>uri</code> field carries the WHOLE <code>&lt;verb&gt; &lt;uri&gt;</code> spell string<p>
+(the word single-sourced as the LEADING token); the record verb slot stays &quot;&quot; — hunksFromLog can't decode the RON60 verb slot to text, and the C plain/color banner reads <code>[&lt;verb&gt; ]&lt;uri&gt;</code>, so an empty slot + a word-carrying uri render identically on BOTH the pager AND the plain/color edge.
+</p>
+</li>
+<li>Banner-open: a projector that opened a hunk via a scheme-prefixed <code>raw()</code><p>
+(<code>status:</code>…) switches to the explicit <code>out.open(navLink(...))</code> (hunkrows has <code>open</code>; status.js's local sinkOut gains a one-line <code>open</code>).
+</p>
+</li>
+<li>Pager parse: <code>_resolveSpell</code>/<code>_runSpell</code> recognise a <code>&lt;verb&gt; &lt;rest&gt;</code> target<p>
+(leading bareword + SPACE) as a COMPLETE absolute spell → driveSpell (spellCall→argline already splits <code>verb arg</code>), NO URI-relative mangling; <code>_verbUri</code>/<code>_viewPath</code> SPLIT the spell on the first space (drop scheme-decode).
+</p>
+</li>
+<li>C-bridge: the <code>&lt;scheme&gt;:</code>-URI branch in <code>_resolveSpell</code> STAYS as a compat<p>
+shim for C-baked <code>diff:</code>/<code>cat:</code> residue (out of scope) till the C follow-up; diff/cat U-targets are FINALISED in JS (diffOut.feed / cat) so the JS SUT converts them — native <code>be</code> output stays scheme-form till the C fix.
+</p>
+</li>
+<li>Scope: the banner converts on ALL edges incl. the PLAIN columnar path, so<p>
+<code>jab status --plain</code>'s banner diverges from native <code>be --plain</code> (<code>status:</code> → <code>status //name</code>) until the C follow-up — INTENDED (not byte-parity); the plain-parity + links tests amend to the word shape (user-approved, <a href="../../rule/Issues.html">Issues</a>).
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Repro: a baked status/log/diff link asserts the <code>word URI</code> shape and click-dispatches verb+uri (status/links, log/subnav, diff/links, uri011).</li>
+<li class="done"><input type="checkbox" checked disabled> Link composer: ONE shared helper <code>navLink(verb,path,query,frag)</code> (shared/nav.js) → <code>&lt;verb&gt; &lt;scheme-less authority-scoped URI&gt;</code>; <code>navRelink</code> for the C-bridge; <code>navUri(&quot;&lt;verb&gt;&quot;,…)</code> retired for LINKS.</li>
+<li class="done"><input type="checkbox" checked disabled> Convert every JS projector's U-tag click-targets to word-space form (status/log/commit/tree/cat/ls/spot/diff).</li>
+<li class="done"><input type="checkbox" checked disabled> Convert hunk BANNER/record URIs to the <code>&lt;verb&gt; &lt;uri&gt;</code> word spell (the word rides as the leading token; record verb slot left &quot;&quot; — hunksFromLog can't decode the RON60 slot).</li>
+<li class="done"><input type="checkbox" checked disabled> Convert the pager STATUS-BAR re-typeable address to <code>&lt;verb&gt; &lt;uri&gt;</code> (<code>_verbUri</code>/<code>_splitSpell</code>).</li>
+<li class="done"><input type="checkbox" checked disabled> Pager parse: drive links/banners as <code>module(args)</code> spells (SHARED spell machinery); a <code>&lt;verb&gt;:</code> scheme parse KEPT as the C-bridge only.</li>
+<li class="done"><input type="checkbox" checked disabled> Update nav/click/pager tests to the new shape (17 test files, user-approved).</li>
+<li class="done"><input type="checkbox" checked disabled> Grep-prove no JS baker emits a <code>&lt;verb&gt;:</code> scheme link (all 13 views on navLink/navRelink; grep clean).</li>
+<li class="open"><input type="checkbox" disabled> C follow-up: the weave/graf <code>diff:</code>/<code>cat:</code> bakers + the C HUNK <code>hunk_uri_is_diff</code> render gate — so <code>jab diff --plain/--color</code> + native <code>be</code> emit the word shape (JS keeps diff plain/color scheme-form until then).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>C weave/graf still bakes some <code>diff:</code>/<code>cat:</code> scheme-form targets (out of scope) — the JS diff <code>--plain/--color</code> record uri STAYS scheme-form because the C HUNK <code>hunk_uri_is_diff</code> render gate keys off the <code>diff:</code> scheme (only <code>--tlv</code>/pager cuts over); filed as the C follow-up TODO above.</li>
+<li>Tests assert link TEXT → they changed shape (not byte-parity); user OK'd the amend (all-edges + amend, <a href="../../rule/Issues.html">Issues</a>).</li>
+<li><code>test/spot/submount</code> FAILS — a PRE-EXISTING spot sub-recursion gap (the <code>chsub/s.c</code> sub-hit is dropped; verified identical on the unconverted tree), ORTHOGONAL to URI-014; candidate for its own SPOT ticket.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>DONE (pending merge) — 2026-07-04, in worktree <code>$SRC_ROOT/URI-014</code> (store-backed, beagle-ext).  16 source files (shared/nav.js <code>navLink</code>/<code>navRelink</code>, views/bro/pager.js <code>_splitSpell</code>/<code>_verbUri</code>/<code>_resolveSpell</code>/<code>_runSpell</code>/<code>_viewPath</code>, core/emit.js <code>open</code>, + all 13 projectors) + 17 test files; 93 tests green, 1 pre-existing fail (spot/submount).  Links, banners, and the status-bar address are <code>word URI</code> spells — the verb out of the scheme slot, the scheme freed for real transports.  Third axis of the link-correctness arc after <a href="URI-012.html">URI-012</a> (resolution) and <a href="URI-013.html">URI-013</a> (composition): SHAPE.  NOT yet staged/committed — awaiting the user's explicit merge order.</li>
+</ul>
+</body>
+</html>

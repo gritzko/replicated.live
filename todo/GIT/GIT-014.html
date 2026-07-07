@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIT-014</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GIT-014 <a href="./JS.html">JS</a>: PUT ref-push over the wire (set/force to a remote)</h1>
+<p>
+<a href="GIT-012.html">GIT-012</a> gave the JS a FETCH client and <a href="GIT-013.html">GIT-013</a> a FF-only POST push; both ride git's <code>receive-pack</code>. PUT is the UNCONSTRAINED ref-writer — any ref to any sha, force/non-FF allowed — so <code>be put //host</code> (force-push cur to origin's counterpart) and <code>put ssh://host?br#sha</code> / <code>put https://host?br</code> (set a remote ref) need the same receive-pack wire but WITHOUT POST's FF gate. This ticket adds the <code>jab put</code> wire-push forms on top of <a href="GIT-013.html">GIT-013</a>'s shared <code>wire.push()</code>: compute the <code>&lt;old&gt; &lt;new&gt; &lt;ref&gt;</code> update (force = old is the advertised value, no ancestor check), reuse the pack build + report-status, over ssh: and http:. Ref-DELETE over the wire stays <a href="../../wiki/DELETE.html">DELETE</a>'s verb, not here. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><a href="GIT-013.html">GIT-013</a> introduces the shared <code>wire.push()</code> receive-pack core (advert → updates+pack → report-status) for POST; PUT reuses it unchanged.</li>
+<li>PUT is the only unconstrained ref-writer (<a href="../../wiki/Verbs.html">Verbs</a>/<a href="../../wiki/Invariants.html">Invariants</a>): any ref to any sha, force/non-FF allowed; <a href="../../wiki/POST.html">POST</a> only FF-advances and <a href="../../wiki/DELETE.html">DELETE</a> removes.</li>
+<li><code>be put //origin</code> (force-push cur to origin's counterpart) and <code>put ssh://host?br#sha</code> (set a remote ref) are unimplemented in <code>jab</code> — the <a href="GIT-012.html">GIT-012</a> push gap.</li>
+<li><a href="../DIS-011.html">DIS-011</a>: <code>be put ssh://host/path</code> with NO <code>?ref</code> should be log-only (record the URL), not a push — a related ref-write edge to honour.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Add <code>jab put</code> wire-push forms over ssh: + http: on top of <a href="GIT-013.html">GIT-013</a>'s <code>wire.push()</code>: set or force a remote ref to a sha.</li>
+<li>Force/non-FF allowed (NO FF gate) — PUT force-writes either side, mirroring the C <code>be put //host</code> behaviour.</li>
+<li>Reuse <a href="GIT-013.html">GIT-013</a>/<a href="GIT-012.html">GIT-012</a> infra entirely (receive-pack wire, curl adapter, <code>pkt</code>, <code>classify</code>); add only the verb-level update computation.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>No FF gate (unlike <a href="GIT-013.html">GIT-013</a>); the update old-sha is the advertised value, the new-sha is the target — a <code>must()</code>-free force write.</li>
+<li>non-blocking <code>pol</code>; curl https (no TLS binding); no git:// push — all as <a href="GIT-012.html">GIT-012</a>/<a href="GIT-013.html">GIT-013</a>.</li>
+<li>Ref-DELETE (push a zero-sha) is <a href="../../wiki/DELETE.html">DELETE</a>'s verb, OUT of scope here — PUT covers set/force/reset only.</li>
+<li>ABC/JS norms; do not regress fetch / POST-push / local paths.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>verbs/put/put.js</code> wire forms build a single <code>&lt;old&gt; &lt;new&gt; &lt;ref&gt;</code> update (old = advertised, new = target sha) and call <code>wire.push()</code>; force means skip the ancestor check, not a special cap.</li>
+<li>Pack: a reset to an already-present remote sha needs no pack; a reset to a local sha reuses <a href="GIT-013.html">GIT-013</a>'s missing-object closure builder.</li>
+<li>A bare <code>be put ssh://host/path</code> (no <code>?ref</code>) stays log-only per <a href="../DIS-011.html">DIS-011</a> — a wire push happens only when a <code>?ref</code> (or a <code>//host</code> push form) is present.</li>
+<li><code>be put //origin</code> resolves origin's counterpart ref from the reflog (reverse-grep, see <a href="../../wiki/Store.html">Store</a>) and force-writes it to cur's tip.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> T1 — <code>verbs/put/put.js</code>: detect the wire-push forms (<code>//host</code>, <code>ssh://host?br</code>, <code>https://host?br[#sha]</code>) and route to <code>wire.push()</code> (<a href="GIT-013.html">GIT-013</a>).</li>
+<li class="open"><input type="checkbox" disabled> T2 — build the force update (old = advertised, new = target sha); NO FF check; pack only when objects are missing.</li>
+<li class="open"><input type="checkbox" disabled> T3 — keep <code>be put ssh://host/path</code> (no <code>?ref</code>) log-only (<a href="../DIS-011.html">DIS-011</a>), not a push.</li>
+<li class="open"><input type="checkbox" disabled> T4 — tests: hermetic ssh: + http: force-push + ref-reset to a local receive-pack; assert the remote ref moved, incl. a non-FF case <a href="../../wiki/POST.html">POST</a> would refuse.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Depends on <a href="GIT-013.html">GIT-013</a> landing the shared <code>wire.push()</code> core (pack builder + report-status) — sequence after it.</li>
+<li>Settle the PUT/<a href="../../wiki/DELETE.html">DELETE</a> split for the wire: ref-removal is <a href="../../wiki/DELETE.html">DELETE</a>; this ticket is set/force/reset only (confirm scope before T1).</li>
+<li>Real https push auth deferred (as <a href="GIT-013.html">GIT-013</a>).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

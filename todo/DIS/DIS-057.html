@@ -23,6 +23,7 @@ Today <code>status</code> and <code>post</code> classify dirtiness through TWO s
 <li>ULOG is the natural common form: <code>shared/ulog.js</code> (<code>each</code>/<code>drain</code>/<code>write</code>/<code>append</code>) over the abc ULOG family; <code>wtlog.js</code> is a ULOG reader. A git tree, the wt scan, the put/delete list, and a patch's theirs tree are ALL path-keyed ulogs — the classifier is their merge.</li>
 <li><a href="../../wiki/Dirty.html">Dirty</a> deltas the merge must produce (from the prior audit): the <code>rmv</code>(source)+<code>mov</code>(dest) move PAIR; <code>pat</code>/<code>mrg</code>/<code>cnf</code> for patch-derived files; the conflict code spelled <code>cnf</code> (code currently <code>conf</code>, <code>get.js:634</code>, <code>patch.js:292</code>).</li>
 <li>Already correct, must not regress: content-confirmed clean (<a href="DIS-023.html">DIS-023</a> <code>wtEqBase</code>, re-hash not mtime), <code>ok</code> count-only + the <code>eq</code> listing row, <code>.gitignore</code>/meta/nested-repo + submodule-prefix pruning, and <code>post</code>'s byte-identical commits for non-patch cases.</li>
+<li>REOPENED 2026-06-29 (INCIDENT): the landed <code>pat</code>/<code>mrg</code>/<code>cnf</code> stamp axis is NON-FUNCTIONAL — after <code>be patch ?34574bce</code> cleanly takes-theirs <code>views/diff/diff.js</code>, <code>jab status</code> shows <code>mod views/diff/diff.js</code>, NOT <code>pat</code> (the headline DIS-057 deliverable). The patch verb stamps the wt mtime to <code>ts-2</code> (verbs/patch/patch.js:399-413, <code>io.setMtime(path, ts-2n)</code>) and shared/classify.js:155-165 patchStamps reads the band back at <code>ts-2</code> (consumed 348/374-380), yet the lookup MISSES → the file falls through to <code>mod</code> (classify.js:385). Suspects, repro-first: (1) <code>io.setMtime</code>↔<code>io.lstat</code> ron60 round-trip precision loss (the on-disk mtime read back as a clean <code>…719000000</code> ns, sub-ms truncated → <code>w.ts != ts-2</code>); (2) the PERSISTED patch-row ts drifting from the <code>ts</code> used to stamp (a re-<code>nowAfter(tail)</code> at append); (3) <code>patchFloor()</code> scoping the patch row OUT. Fix lands in <code>~/todo/DIS-057</code>, repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
@@ -62,6 +63,7 @@ Today <code>status</code> and <code>post</code> classify dirtiness through TWO s
 <li class="open"><input type="checkbox" disabled> Rename <code>conf</code>→<code>cnf</code> across <code>be/</code>.</li>
 <li class="open"><input type="checkbox" disabled> Repros: a rename shows <code>rmv</code>+<code>mov</code> AND commits consistently; a patched file shows <code>pat</code>/<code>mrg</code>/<code>cnf</code> AND commits; <code>status</code> and <code>post</code> agree on one tree.</li>
 <li class="open"><input type="checkbox" disabled> Green: <code>test/parity/status</code> + status/listing/post/delete-dirty corpora intact; <code>be ctest</code> green.</li>
+<li class="open"><input type="checkbox" disabled> BUG (REOPEN 2026-06-29): a clean take-theirs file reads <code>mod</code> not <code>pat</code> after <code>be patch</code> — the stamp round-trip/scoping misses (patch.js:399-413 stamp ⟷ classify.js:155-165 read). Repro-first in <code>~/todo/DIS-057</code>; the headline <code>pat</code> state is non-functional.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -72,6 +74,7 @@ Today <code>status</code> and <code>post</code> classify dirtiness through TWO s
 <h2>Outcome</h2>
 <ul>
 <li>OPEN — reworked 2026-06-28. Plan: ONE ULOG-merge classifier (base ⊕ put ⊕ wt ⊕ theirs ulogs → a classification ulog) shared by <code>status</code> (renderer) and <code>post</code> (consumer), folding in the <a href="../../wiki/Dirty.html">Dirty</a> <code>rmv</code>/<code>mov</code> pair, <code>pat</code>/<code>mrg</code>/<code>cnf</code>, and <code>conf</code>→<code>cnf</code>. Subsumes the POST-005 patch-row throw. Submodule axes deferred.</li>
+<li>REOPENED 2026-06-29 — the <code>pat</code>/<code>mrg</code>/<code>cnf</code> stamp axis does NOT fire: a clean take-theirs file shows <code>mod</code> not <code>pat</code> (<code>be patch ?34574bce</code> → <code>jab status</code> <code>mod views/diff/diff.js</code>). Stamp written patch.js:399-413 (ts-2), read classify.js:155-165 (ts-2), lookup misses (round-trip/scoping/floor). Worker dispatched to <code>~/todo/DIS-057</code>, repro-first; report before any land.</li>
 </ul>
 </body>
 </html>

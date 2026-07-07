@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-041</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-041: cap submodule nesting depth with a SIMPLE counter at checkout — bail when the get-side sub-mount recursion goes too deep</h1>
+<p>
+Submodule checkout recursion (<code>be get</code> mounting a gitlink, then recursing into the mounted sub's own gitlinks) has no depth limit, so a deep / cyclic gitlink chain fans out until it crashes. The fix is DELIBERATELY TRIVIAL: thread ONE depth counter through the checkout sub-mount recursion and stop once it passes a small constant cap. No shared module, no ancestry/visited set, no changes to read views (status/diff/log/patch) — just the checkout. A prior over-engineered attempt (a <code>subguard.js</code> module threaded through 8 files) was DISCARDED as bullshit. Scope: <code>be/verbs/get/get.js</code> ONLY. See <a href="../DIS/DIS-058.html">DIS-058</a>, <a href="../GET/GET-039.html">GET-039</a>; method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>be/verbs/get/get.js</code> <code>recurseSubMounts</code> descends a mounted sub's gitlinks with NO depth bound; a deep or cyclic <code>160000</code> chain recurses until OOM/crash.</li>
+<li>A TRUE content-addressed cycle isn't constructible (a commit sha depends on its content), so the real, buildable pathology is just a deep alternating pin-chain — a plain depth cap fully bounds it. That is sufficient (user ruling).</li>
+<li>The <code>be</code> self-locator is NOT in scope — <a href="../GET/GET-039.html">GET-039</a> makes it a symlink, not a sub. Add NO <code>be</code>-name special-case.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A small constant cap (e.g. <code>MAX_SUBMODULE_DEPTH = 8</code>) bounds the checkout sub-mount recursion: past it, stop descending — <code>log</code> a friendly skip, leave the mount point as-is, exit clean, no crash.</li>
+<li>Legitimate nested mounts WITHIN the cap still mount and recurse (no regression to <code>be-js-sub-cycle</code>).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> JS only, NO C. Touch ONLY <code>be/verbs/get/get.js</code> (the checkout sub-mount recursion). Do NOT add a new module; do NOT touch <code>submount.js</code>, <code>core/recurse.js</code>, <code>classify.js</code>, or any read view (status/diff/log/patch). KEEP IT MINIMAL — this is a few lines, one counter, one constant.</li>
+<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): ONE test — a chain deeper than the cap <code>be get</code>s bounded (anchors ≈ <code>cap</code>, not the chain length), no crash. Do not edit existing tests except to add that one case; do not regress <code>be-js-sub-cycle</code>.</li>
+<li>MAY edit the MAIN tree (user ruling): <code>/home/gritzko/journal/be</code>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Add a <code>depth</code> argument to the get-side sub-mount recursion (default 0 at the top-level mount); increment on each descent; when <code>depth &gt;= MAX_SUBMODULE_DEPTH</code>, <code>log</code> + return WITHOUT mounting/recursing the deeper sub.</li>
+<li>One module, one constant, one guard line. Nothing shared, nothing in the read path.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> RED: a <code>cap*N</code>-deep gitlink chain <code>be get</code> recurses unbounded / crashes.</li>
+<li class="open"><input type="checkbox" disabled> Add the depth counter + cap to <code>recurseSubMounts</code> (and its top-level seed in <code>mountGitlink</code>); bail past the cap.</li>
+<li class="open"><input type="checkbox" disabled> GREEN: the deep chain is bounded flat by the cap, exits clean; <code>be-js-sub-cycle</code> (within cap) intact.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Touches <code>be/verbs/get/get.js</code>, which <a href="../GET/GET-039.html">GET-039</a> also edits — small 3-way at land time; keep the change to a few lines to minimise it.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — re-scoped 2026-06-29 to a SIMPLE checkout depth cap after the first attempt over-engineered it (a <code>subguard.js</code> module threaded through get/submount/recurse/status/diff/log/patch + an ancestry stack) and was discarded. The <code>be</code> corner case is <a href="../GET/GET-039.html">GET-039</a>'s symlink-as-blob.</li>
+</ul>
+</body>
+</html>

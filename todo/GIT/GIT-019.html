@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIT-019</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GIT-019 <a href="./JS.html">JS</a>: reuse ONE receive-pack session for push — advert+verdict+pack, no hangup/reconnect</h1>
+<p>
+A <code>jab post //host</code> push opens the remote's <code>git-receive-pack</code> TWICE: first in <code>relate.relate</code>→<code>wire.advertRefs</code>, only to read the old tip for the FF gate, and closed with a BARE <code>io.close</code> (no flush) so git-receive-pack dies <code>fatal: the remote end hung up unexpectedly</code> on EVERY push, even a successful one; then AGAIN in <code>wire.push</code>, which RE-drains the identical advert before sending the pack. One push, two connections, one gratuitous scary line. Reuse ONE session: advertise once, keep the child alive, run the LOCAL FF verdict + build the pack from that advert's haves, send updates+pack on the SAME fds; on the advert-only / non-FF refusal path send a flush-pkt (<code>0000</code>) before close so receive-pack exits clean. Respect GIT-016's graph-only <code>relate</code> spine — make its advert INJECTABLE, do not fuse wire transfer into the verdict. JS only (<code>be/</code>, via <code>jab</code>). Method: <a href="../../meta/work.html">work</a>; siblings <a href="GIT-013.html">GIT-013</a>/<a href="GIT-016.html">GIT-016</a>; cuts <a href="../BE/BE-006.html">BE-006</a> stacked-error noise.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>verbs/post/post.js</code> <code>pushRemote</code> (~line 283) runs advert #1 + FF verdict (<code>relate.relate</code>, line 290) → <code>wire.buildPushPack</code> (local, line 309) → <code>wire.push</code> (advert #2 + send, line 310); the advert is drained twice against the same peer.</li>
+<li><code>shared/relate.js</code> <code>relate</code> (line 42) calls <code>wire.advertRefs(remoteUri, &quot;receive-pack&quot;)</code> internally (line 47) — it OWNS the advert; a caller holding one already cannot feed it in.</li>
+<li><code>shared/wire.js</code> <code>advertRefs</code> (line 567) spawns git-receive-pack, drains the advert, then <code>finally</code> does a bare <code>io.close(wfd)</code> (line 583) — NO flush-pkt — so git-receive-pack hits EOF where it expects a command and prints <code>fatal: the remote end hung up unexpectedly</code>; fires on the post FF-gate, the non-FF refusal, AND pull verbs (head/get).</li>
+<li><code>shared/wire.js</code> <code>push</code> (line 596) spawns a SECOND git-receive-pack, RE-drains the advert (line 604) via <code>drainRecvAdvert</code>, then <code>buildPushBody</code> (flush at line 552, clean close) writes the pack — the second advert is pure round-trip waste.</li>
+<li>Evidence: <code>jab post ssh://localhost/src/journal/beagle?main</code> prints <code>fatal: the remote end hung up unexpectedly</code> then <code>POSTNOFF …</code> — the hangup is advert-only session #1 closing without a flush, NOT a push failure.</li>
+<li>The FF verdict needs ONLY the advert's <code>old</code> sha + a LOCAL <code>dag.isAncestor</code> walk (GIT-016, no content) — so it can run on the push session's own advert before any pack is sent.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>ONE receive-pack session per push: advertise once, verdict off that advert, build the pack from its haves, send updates+pack on the SAME child fds. No second advert, no reconnect.</li>
+<li>No gratuitous hangup: <code>advertRefs</code> (and any advert-only close) sends a flush-pkt <code>0000</code> before closing so git-receive-pack exits cleanly — kills the <code>remote end hung up</code> line on the post FF-gate, the non-FF refusal, and pull verbs.</li>
+<li>Preserve GIT-016's graph-only spine: <code>relate</code> stays verdict-only; make its advert INJECTABLE so <code>pushRemote</code> feeds the session's already-drained advert instead of forcing a second <code>advertRefs</code>.</li>
+<li>Behaviour-preserving verdicts: same POSTNOFF/POSTNONE, same CAS (<code>old</code> sent + <code>parseReportStatus</code> non-FF guard), same remote-tracking-ref save — only the wire choreography changes.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>JS only, <code>be/</code>, run via <code>jab</code>. Do NOT run native <code>be</code>; do NOT open <code>beagle/</code>.</li>
+<li>Reuse before add: <code>wire.advertRefs</code>/<code>push</code>/<code>buildPushPack</code>/<code>buildPushBody</code>/<code>classify</code>, <code>pkt.flushPkt</code>, <code>relate.relate</code>/<code>resolveRef</code>, <code>dag.isAncestor</code>. No new deps, no new protocol code.</li>
+<li>Keep the peer CAS intact: still send <code>old</code> in the update command and keep <code>parseReportStatus</code>'s <code>non-fast-forward</code> throw — the client verdict AUGMENTS, never replaces, it.</li>
+<li>ABC/JS norms: ≤2-line <code>GIT-019</code> comments, greppable, ticket-coded ≤64-char commit.</li>
+<li>Don't regress <code>push-ssh</code> (FF), <code>push-nonff</code> (honest refusal), the http push path, or the pull verbs' advert (head/get).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>New session shape in <code>wire.js</code>: open receive-pack once, expose <code>{ adv, send(updates, pack), close() }</code>; <code>send</code> writes <code>buildPushBody</code> on the live <code>wfd</code>, <code>close</code> flush-closes. <code>advertRefs</code> becomes the &quot;open + drain + flush-close&quot; degenerate case sharing the same helpers.</li>
+<li><code>advertRefs</code> finally: write <code>pkt.flushPkt()</code> to <code>wfd</code> BEFORE <code>io.close(wfd)</code> — one line, kills the hangup, no behaviour change (git-receive-pack treats zero-command + flush as a clean no-op exit).</li>
+<li><code>relate</code> advert injection: add an optional <code>adv</code> param (skip the internal <code>advertRefs</code> when supplied) so <code>pushRemote</code> passes the session advert; pull verbs keep the internal advertise. Mirrors GIT-016's already-optional <code>remoteIx</code>.</li>
+<li><code>pushRemote</code> reflow: open the push session → verdict via <code>relate(…, adv)</code> → on non-FF, <code>session.close()</code> (flush) + throw POSTNOFF → on FF, <code>buildPushPack(serve, tip, haves-from-adv)</code> + <code>session.send(…)</code> on the SAME connection → <code>saveRemoteRef</code>.</li>
+<li>http push is stateless (GET-advert then POST-pack by protocol) — the single-session win is ssh/local (spawn) only; keep the http shape, just don't double-drain where cheap. Don't contort curl into a fake session.</li>
+<li>Land incrementally, each step green: flush-close first (kills the message), then the reuse session + <code>relate</code> injection.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> T1 — repro test: a <code>jab post ssh://…</code> (FF-success AND non-FF-refusal) opens receive-pack ONCE and emits NO <code>remote end hung up unexpectedly</code> on stderr (spy the spawns + scan stderr).</li>
+<li class="open"><input type="checkbox" disabled> T2 — <code>advertRefs</code> flush-close: send <code>pkt.flushPkt()</code> before <code>io.close(wfd)</code>; verify pull verbs (head/get advert) no longer print the hangup.</li>
+<li class="open"><input type="checkbox" disabled> T3 — <code>wire.js</code> push session: add the open-once <code>{adv, send, close}</code> (or <code>push(remoteUri, updates, pack, adv?, child?)</code>) reusing one spawned receive-pack for advert+send; share drain+body helpers with <code>advertRefs</code>/<code>push</code>.</li>
+<li class="open"><input type="checkbox" disabled> T4 — make <code>relate</code> advert-injectable; reflow <code>pushRemote</code> to advertise once, verdict off that advert, then send on the same session (FF) or flush-close+refuse (non-FF).</li>
+<li class="open"><input type="checkbox" disabled> T5 — regression: <code>push-ssh</code> FF, <code>push-nonff</code> honest refusal, <code>put</code> force-push twin (GIT-014), head/get advert; run the wire + post buckets.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>GIT-016 deliberately split graph-verdict from content transfer; single-session must NOT re-fuse them — keep <code>relate</code> verdict-only and INJECT the advert, do not move pack-building into the spine.</li>
+<li>The flush-close touches the shared <code>advertRefs</code> used by head/get/post/put — verify against ALL four, not just post.</li>
+<li>http push is stateless by nature; the single-connection win is ssh/local only — don't fake a session over curl.</li>
+<li>Worktree via <code>jab get file:/home/gritzko/.be?/beagle-ext</code>; NEVER <code>cp -a</code> (the <a href="../PUT/PUT-005.html">PUT-005</a> <code>.be</code>-redirect artifact).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

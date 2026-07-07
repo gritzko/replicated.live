@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ULOG-002</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ULOG-002 <a href="./MED.html">MED</a>: ULOG open must back-scan the zero pad, not forward-scan the whole log</h1>
+<p>
+<code>ULOGOpenBooked</code> (<code>dog/ULOG.c:494</code>) forward-scans the ENTIRE log on every open via <code>ulog_scan_log</code> (<code>:196</code>, called <code>:537</code>) only to position the buffer's DATA/IDLE division past the last complete row — an O(content) row-by-row walk paid on every <code>be</code>/jab command that touches <code>refs</code>/<code>wtlog</code>. The index that scan builds is then discarded (<code>ulog_idx_free_anon</code>, <code>:538</code>); the real idx is loaded/rebuilt separately by <code>ULOGOpenIdx</code> (<code>:555</code>) against a freshness-checked <code>.idx</code> sidecar. The tail only ever needs finding at the zero pad: a booked file is grown to a page boundary and abnormal termination leaves trailing NULs, so the last row's end is O(page) back from the mapped end. Replace the forward tail-scan with a BACKWARD scan over the zero pad. Surfaced while reviewing <a href="../JS/JS-073.html">JS-073</a> (JS <code>ingest.add</code> crash-safe refs append) and relates to the <a href="ULOG-001.html">ULOG-001</a> torn-log / initial-NUL work. Method: <a href="../../meta/work.html">work</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>ULOGOpenBooked</code> (<code>dog/ULOG.c:494</code>) always runs <code>ulog_scan_log</code> (<code>:537</code>) to set the byte size, then frees its scratch idx (<code>:538</code>) — the forward walk's only surviving outputs are the DATA/IDLE level and a strict-ts re-verify.</li>
+<li><code>ulog_scan_log</code> (<code>:196-244</code>) walks <code>[base, first-NUL)</code> row by row via <code>ULOGu8sDrain</code> — O(content), not O(zero-tail); it has no last-byte or backward fast path.</li>
+<li>RW open already grows the file to a page and maps MAP_SHARED (<code>FILEBookFD</code> <code>FILEResize</code>→<code>map_size</code>, <code>abc/FILE.c:877-879</code>); the trailing <code>[content_end, map_size)</code> is the page-aligned zero pad.</li>
+<li>Clean close trims via <code>FILETrimBook</code> (<code>abc/FILE.c:1045</code>) → <code>FILEResize(fd, u8bDataLen)</code> + <code>b[3]=b[2]</code>; abnormal exit skips it, leaving the zero pad the next open must re-level.</li>
+<li>The <code>.idx</code> sidecar already lets <code>ULOGOpenIdx</code> skip the idx rebuild when fresh (<code>pre_mtime</code>), so the forward tail-scan is redundant work even on the sidecar-hit path.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>ULOG open finds the DATA end by scanning BACKWARD over the trailing zero pad (make the NULs IDLE), not by a forward walk of the whole log — O(zero-tail) ≈ O(page), not O(content).</li>
+<li>RW open: file expanded to page len, mmapped MAP_SHARED, back-scanned so the zero pad is IDLE (writable append room) and DATA = the real rows.</li>
+<li>RO open: mmapped PROT_READ (NO expand — never grow the file behind a concurrent writer), back-scanned to set the DATA end; zeros beyond are ignored (no IDLE, no appends).</li>
+<li>Close trims the file to PAST+DATA length (drop IDLE) — the real content end, dropping the zero pad.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>A partial trailing row (interrupted append: the last non-zero byte is not a row terminator) SELF-HEALS: back up to the previous <code>\n</code>, drop the incomplete row, open with the complete rows (the original graceful <code>NODATA</code>-drop behavior) — do NOT <code>fail(ULOGTORN)</code> on it (that would brick a log on every crash-mid-append). Genuine mid-content corruption (a NUL with real bytes after it) stays caught by the stale-sidecar forward <code>ulog_scan_log</code> rebuild; do NOT add an O(content) embedded-NUL scan to the fast path — the goal is O(page) opens.</li>
+<li>Trim target is PAST+DATA (<code>b[2]-b[0]</code>), dropping only IDLE (<code>[b[2],b[3])</code>); current <code>FILETrimBook</code> uses DATA len (<code>b[2]-b[1]</code>), correct only while PAST is empty (ULOG maps with <code>b[0]==b[1]</code>) — keep that invariant or trim PAST+DATA explicitly.</li>
+<li>Reader-visible result must be identical to the forward scan on a well-formed log: DATA ends exactly after the last complete row's terminator.</li>
+<li>C / libdog only (<code>dog/ULOG.c</code>, <code>abc/FILE.c</code>); repro-first per <a href="../../meta/abc.html">abc</a>; keep the ULOG ctest suite green.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Back-scan: from the mapped end (<code>b[3]</code>/<code>map_size</code>) skip trailing NULs to the last non-zero byte; a <code>\n</code> there → DATA ends after it, IDLE = the skipped pad; a non-<code>\n</code> (partial trailing row) → continue back to the previous <code>\n</code> and drop the partial row (self-heal). No O(content) embedded-NUL scan — opens stay O(pad).</li>
+<li>A non-NUL last on-disk byte means a cleanly-trimmed file (no pad): DATA end is <code>content_end</code> with a zero-length back-scan — the common clean-close case, O(1).</li>
+<li>Keep the <code>.idx</code> sidecar freshness path as the index source; the back-scan only sets the buffer level, it need not rebuild the idx.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: a log with a page-aligned zero pad (simulated abnormal exit) opens with DATA = last complete row and IDLE = the pad, touching only O(pad) bytes; assert on a large log that the whole body is not walked.</li>
+<li class="open"><input type="checkbox" disabled> Repro: a partial trailing row (interrupted append) SELF-HEALS — opens with the complete rows, the incomplete last append dropped (NOT <code>ULOGTORN</code>); prior rows byte-intact; open touches O(pad+partial), not O(content).</li>
+<li class="open"><input type="checkbox" disabled> Replace the forward <code>ulog_scan_log</code> tail-find in <code>ULOGOpenBooked</code> with the backward zero-scan; keep the RW-grow / RO-no-grow open shapes.</li>
+<li class="open"><input type="checkbox" disabled> Ensure close trims to PAST+DATA (drop IDLE); confirm <code>FILETrimBook</code> covers PAST or that the ULOG <code>b[0]==b[1]</code> invariant holds.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The initial-NUL trigger (what writes a LEADING NUL) flagged in the <a href="README.html">ULOG</a> README is still unpinned — a leading NUL is the torn case, not a clean pad, so the back-scan must not mask it (ties to <a href="ULOG-001.html">ULOG-001</a>).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending) — landed hashlets recorded on close.</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-044</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-044: bare jab put/delete skip submodules — sub-interior mod/mis unstaged</h1>
+<p>
+Bare <code>jab put</code> (no path arg) stages every top-level <code>mod</code> file and bare <code>jab delete</code> sweeps every top-level <code>mis</code> (missing) file, but BOTH stop at a gitlink: <code>bareStage</code>'s baseline-tree walk returns at <code>leaf.kind===&quot;s&quot;</code> (&quot;gitlink: nothing to put&quot;, <code>be/verbs/put/put.js</code>) and <code>del_sweep_missing</code> does <code>if (leaf.kind===&quot;s&quot;) return // gitlink subtree, skip</code> (<code>be/verbs/delete/delete.js:78</code>). So a <code>mod</code> file inside a MOUNTED submodule is left unstaged by bare <code>jab put</code>, and a <code>mis</code> file inside a sub is never swept by bare <code>jab delete</code> — diverging from native <code>be</code>, which recurses pre-order (<a href="../../wiki/Submodules.html">Submodules</a> §Recursion: &quot;staging a submodule file delegates that to the submodule, then stages that submodule&quot;). Fix: at a mounted gitlink, descend via the <code>core/recurse.js</code> mount walk, run the sub's own bare put/delete over its <code>mod</code>/<code>mis</code>, then bump the sub gitlink in the parent. Parent <a href="../DIS/DIS-058.html">DIS-058</a>; sibling <a href="SUBS-039.html">SUBS-039</a> (the scoped <code>&lt;sub&gt;/&lt;path&gt;</code> case). Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Bare <code>jab put</code> → <code>bareStage</code> (<code>be/verbs/put/put.js</code>): walks the baseline tree, <code>mod→put</code> row, auto-pairs <code>mis↔unk</code> moves; at a gitlink it <code>return</code>s, never descending into the mounted sub.</li>
+<li>Bare <code>jab delete</code> → <code>del_sweep_missing</code> (<code>be/verbs/delete/delete.js:78</code>): a tracked leaf gone from disk gets a <code>delete</code> row, but <code>if (leaf.kind===&quot;s&quot;) return // gitlink subtree, skip</code> drops sub-interior missing files.</li>
+<li><code>core/recurse.js</code> already enumerates every MOUNTED sub (depth-first, <code>.gitmodules</code> order) for READ recursion (status/diff/ls) — read-only today per <a href="../DIS/DIS-058.html">DIS-058</a>; the staging verbs don't use it.</li>
+<li>Native <code>be</code> recurses pre-order for put/delete (<a href="../../wiki/Submodules.html">Submodules</a>): a sub-interior dirty/missing file is staged inside the sub, then the sub's gitlink is staged in the parent.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Bare <code>jab put</code> stages every <code>mod</code> file, INCLUDING those inside mounted submodules (recursively), then bumps each touched sub's gitlink in the parent.</li>
+<li>Bare <code>jab delete</code> stages every <code>mis</code> (missing) file, INCLUDING inside mounted subs, then bumps the sub.</li>
+<li>Match native pre-order recursion and the resulting row set / banner for a repo with a dirty / missing-file sub.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Reuse <code>core/recurse.js</code> (the mounted-sub walk) — no second sub-enumerator; mounts only (<code>recurse.isMount</code>), never an unmounted gitlink or a symlink (see <a href="SUBS-043.html">SUBS-043</a>).</li>
+<li>Scope to BARE put (<code>mod</code>) and BARE delete (<code>mis</code>) ONLY — the scoped <code>&lt;sub&gt;/&lt;path&gt;</code> arg is <a href="SUBS-039.html">SUBS-039</a>; named single-file put/delete unchanged.</li>
+<li><code>be/</code> JS only; ABC/JS norms, ≤2-line comments, reuse before adding; don't regress top-level bare put/delete or the read-recursion (status/diff/ls).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>At a mounted gitlink in the bare walk, open the sub's repo (the recurse.js mount gate) and run the sub's OWN bare stage/sweep over its baseline⊕wt, prefixing rows with <code>&lt;sub&gt;/</code>; then emit the parent gitlink-bump — pre-order (sub first, then parent), matching native + <a href="../../wiki/Submodules.html">Submodules</a>.</li>
+<li>Prefer routing the per-sub descent through <a href="SUBS-039.html">SUBS-039</a>'s delegation primitive if it lands first; else add a focused mount-descent in bareStage / del_sweep that invokes the same bare handler on the sub repo.</li>
+<li>Nesting: rely on recurse.js's existing sub-of-sub handling; honor any <a href="SUBS-041.html">SUBS-041</a> depth cap.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: a hermetic parent + mounted-sub repo with a <code>mod</code> file AND a <code>mis</code> file inside the sub; assert native <code>be put</code> / <code>be delete</code> (bare) stage them + bump the sub, while <code>jab</code> (today) leaves them unstaged.</li>
+<li class="open"><input type="checkbox" disabled> bare <code>jab put</code>: descend into each mounted sub at the gitlink, stage the sub's <code>mod</code> via its bareStage, then bump the sub gitlink in the parent.</li>
+<li class="open"><input type="checkbox" disabled> bare <code>jab delete</code>: same for <code>mis</code> (replace the <code>leaf.kind===&quot;s&quot;</code> skip with a mount descent).</li>
+<li class="open"><input type="checkbox" disabled> Tests: registered cases — bare put stages sub <code>mod</code>, bare delete sweeps sub <code>mis</code>, sub gitlink bumped; a nested sub; an UNMOUNTED gitlink still skipped.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Overlaps <a href="SUBS-039.html">SUBS-039</a> (shared sub-descent primitive) and <a href="../DIS/DIS-058.html">DIS-058</a> (read-only-recursion umbrella) — coordinate so the descent routine isn't duplicated; if SUBS-039's primitive isn't ready, add the focused descent and refactor later.</li>
+<li>A sub's own staging writes the sub's wtlog/store, so the parent gitlink-bump must read the sub's NEW (post-stage) tip — enforce the pre-order.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

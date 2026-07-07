@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-060</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-060: be/ JS jab conflates VERB with URI SCHEME — every mutation verb mints a phantom <code>&lt;verb&gt;:</code> scheme in its hunk/banner URIs (<code>post post:</code>, <code>put put:</code>, <code>head head:</code>…), and the entry/pager round-trips such a scheme back as a verb; root cause is ONE namespace test (<code>_isVerb</code> stats BOTH <code>verbs/</code> and <code>views/</code>), so a projector scheme and a mutation verb are indistinguishable.</h1>
+<p>
+<code>be/</code> JS jab treats the HTTP-shaped VERBS (GET/HEAD/POST/PUT/DELETE/PATCH — see <a href="../../wiki/Verbs.html">Verbs</a>) as if they were URI SCHEMES (transports/projectors — see <a href="../../wiki/URI.html">URI</a>). The six mutation verbs each emit a hunk or banner URI whose scheme is literally the verb name (<code>post:</code>, <code>put:</code>, <code>head:</code>, <code>patch:</code>, <code>delete:</code>, <code>get:</code>), which the columnar renderer draws next to the 3-char verb column — hence the doubled <code>post post:</code> / <code>put put:</code> the user sees. But NO such scheme exists: the authoritative scheme table (<code>views/help/help.js</code> SCHEMES + <code>view/bro.js</code> BRO_KEEP_SCHEME) lists only the projector views (commit/diff/log/tree/blob/cat/status/ls/lsr/refs/grep/regex/spot/sha1/size/type) and the transports (ssh/https/http/git/be/file/keeper) — the six mutation verbs are absent. Worse, the mint round-trips: <code>core/loop.js</code> shape-(2) gate dispatches any <code>&lt;scheme&gt;:uri</code> whose scheme <code>_isVerb(...)</code> to that verb, and <code>_isVerb</code> stats BOTH <code>verbs/&lt;w&gt;</code> and <code>views/&lt;w&gt;</code>, so a phantom <code>post:</code> banner URI clicked in the pager re-runs the POST verb — verb and scheme share ONE namespace. The RULING is now <a href="../../wiki/Nav.html">Nav</a>: every invocation is <code>module(args)</code>, the scheme slot narrows to ADDRESSING-only (transport + <code>sha1:</code>), and views are verbs — so <code>&lt;verb&gt;:</code> is a category error; a mutation banner carries a ref-only/addressing URI and a click-target is a <code>verb args</code> SPELL, never a schemed round-trip. This ticket keeps the A–D catalog and fixes the SIX mutation verbs' mint + the entry/pager round-trip; the wider projector-scheme retirement (<code>diff:</code>→<code>diff x</code>) is <a href="../JAB/JAB-004.html">JAB-004</a>'s program. <code>be/</code> only, trace-level. See <a href="../../wiki/Nav.html">Nav</a>, <a href="../../wiki/Verbs.html">Verbs</a>, <a href="../../wiki/URI.html">URI</a>, <a href="DIS-058.html">DIS-058</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Every case where the verb and the URI scheme get conflated, grouped A–D (file:line as of this study, 2026-07-03):
+</p>
+<ul>
+<li>A. OUTPUT mints a phantom <code>&lt;verb&gt;:</code> scheme (renders <code>&lt;verb&gt; &lt;verb&gt;:…</code>):<p>
+- <code>verbs/post/post.js:270</code> <code>post:?&lt;target&gt;#&lt;hashlet&gt;</code>, <code>:322</code> <code>post:&lt;remote&gt;?&lt;br&gt;#&lt;tip&gt;</code>, <code>:650</code> <code>post:?&lt;branch&gt;#&lt;subject&gt;</code> — three <code>hunkrows(ctx.sink, &quot;post:&quot;…)</code> banners. - <code>verbs/put/put.js:59</code> <code>hunkrows(ctx.sink, null, &quot;put:&quot;)</code>; <code>out.raw(&quot;put:&quot;)</code> at <code>:272 :307 :489 :518 :633</code>, and the sub-relay <code>out.raw(&quot;put:&quot;+subPrefix)</code> at <code>:441</code>. - <code>verbs/head/head.js:223</code> <code>hunkrows(sink, &quot;head:&quot;+target)</code>. - <code>verbs/patch/patch.js:537</code> <code>hunkrows(ctx.sink, &quot;patch:&quot;+patchRowUri(…))</code>. - <code>verbs/delete/delete.js:297</code> <code>out.row(&quot;delete:&quot;, &quot;delete&quot;, …)</code> (URI == <code>&quot;delete:&quot;</code>, verb == <code>&quot;delete&quot;</code>), and <code>:372</code> <code>hunkrows(sink, &quot;delete:&quot;)</code>. - <code>verbs/get/get.js:901</code> <code>hunkrows(ctx.sink, &quot;get:&quot;+g.head.uri)</code> (get's <code>:387</code>/<code>:541</code> banner uses a REAL ref URI <code>?&lt;branch&gt;#&lt;sha&gt;</code> — the only mutation verb that does — but this op-summary path still mints <code>get:</code>).
+</p>
+</li>
+<li>B. THE GENERIC ENGINE — <code>core/loop.js:259</code> wraps any columnar view's pager hunk as <code>{ uri: verb + &quot;:&quot; }</code>; for a mutation verb (get/put) this is a phantom <code>get:</code>/<code>put:</code>, for a view verb (ls/status/refs) it is a REAL scheme — one code path, two meanings.</li>
+<li>C. ENTRY / ROUND-TRIP dispatches a <code>&lt;verb&gt;:</code> scheme AS a verb:<p>
+- <code>core/loop.js:184-193</code> shape-(2) gate: a <code>scheme:uri</code> token with <code>_isVerb(scheme)</code> sets <code>verb = scheme</code> and runs it — so a phantom <code>post:</code> URI is a POST invocation. - <code>core/loop.js:96 _isVerb(w)</code> stats BOTH <code>verbs/&lt;w&gt;/&lt;w&gt;.js</code> AND <code>views/&lt;w&gt;/&lt;w&gt;.js</code> — the SINGLE root cause: no test tells a mutation verb apart from a projector scheme. - <code>verbs/head/head.js:66</code> strips a leading <code>head:</code> and <code>verbs/patch/patch.js:369</code> strips <code>patch:</code> off their own arg — dead giveaway that the loop hands them a self-schemed token from the round-trip.
+</p>
+</li>
+<li>D. THE PAGER re-mints and re-dispatches:<p>
+- <code>views/bro/pager.js:195</code> <code>_resolveSpell</code>: a bare word typed at <code>:</code> becomes <code>word + &quot;:&quot;</code> — for a mutation verb, <code>post</code> → phantom <code>post:</code> (comment only anticipates the view verbs <code>status</code>/<code>ls</code>). - <code>views/bro/pager.js:402</code> records a <code>verb …</code>/<code>verb(…)</code> CALL's tracked <code>view.uri</code> as <code>call[1] + &quot;:&quot;</code> → <code>post:</code>/<code>get:</code>. - <code>views/bro/pager.js</code> <code>_followRow</code> runs a hunk's banner URI as a spell, so following an A-minted <code>post:</code>/<code>put:</code> row re-executes the mutation verb (the round-trip closes).
+</p>
+</li>
+<li>NON-cases (real <code>u.scheme</code>, correct): <code>shared/submount.js:91</code>, <code>core/recurse.js:54</code>, <code>view/bro.js:508</code>, <code>views/ls/ls.js:146</code> (<code>ls:</code> IS a projector), <code>views/spot/search.js:49</code> (<code>spot:</code>/<code>grep:</code>/<code>regex:</code> ARE projectors).</li>
+<li>Symptom mechanics: <code>shared/hunkrows.js:71 row()</code> and <code>core/emit.js</code> render <code>&lt;date&gt; &lt;verbCol&gt; &lt;text&gt;</code>; when <code>text</code> is the <code>&lt;verb&gt;:</code> URI, the verb prints TWICE (<code>post post:</code>).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Catalog every verb↔scheme conflation site (done above, A–D); fixes spawn per-verb sub-tickets under the <a href="../../wiki/Nav.html">Nav</a> ruling.</li>
+<li>RULED per <a href="../../wiki/Nav.html">Nav</a>: a mutation verb's hunk/banner carries a ref-only/addressing URI (<code>?&lt;branch&gt;#&lt;sha&gt;</code>, as get's <code>:387</code> already does), NEVER <code>&lt;verb&gt;:</code>; the click-target is a <code>verb args</code> SPELL, not a schemed URI.</li>
+<li>Split the ONE namespace: keep <code>_isVerb</code> as the runnable-module resolver (<code>verbs/</code>+<code>views/</code>), but gate the entry shape-(2) <code>scheme:</code> dispatch on the projector+transport scheme allowlist (which already EXCLUDES the six mutation verbs) so a <code>&lt;verb&gt;:</code> can never route to a verb; mutation verbs stop MINTING <code>&lt;verb&gt;:</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> (JS ext / JABC) ONLY — do not touch <code>beagle/</code>; the native <code>be</code> may share the conflation (BRO-008/POST-018 heritage) and its own ticket.</li>
+<li>Repro-first per <a href="../../beagle/CLAUDE.md">CLAUDE</a> §17: a <code>jab post</code>/<code>jab put</code> run asserting the hunk banner is NOT <code>&lt;verb&gt; &lt;verb&gt;:</code> before any fix; keep the emit/hunkrows byte-parity harnesses green.</li>
+<li>Coordinate with <a href="../POST/POST-019.html">POST-019</a> (internal gitlink-bump <code>put:</code> banner leaks mid-post) — same <code>put:</code> mint, adjacent symptom.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>DISTINGUISH the two concepts at the source: a VERB is the imperative (what to do), a SCHEME names/reads a resource. A mutation has no read-projection, so <code>post:</code>/<code>put:</code>/… are category errors — confirmed by <a href="../../wiki/Nav.html">Nav</a> (every invocation is <code>module(args)</code>; the scheme slot addresses, it never carries a verb).</li>
+<li><a href="../../wiki/Nav.html">Nav</a> end-state vs DIS-060 scope: <a href="../../wiki/Nav.html">Nav</a> narrows the scheme slot to ADDRESSING-only (transport + <code>sha1:</code>) and moves projectors to verb head (<code>diff x</code>, not <code>diff:x</code>) — that wider retirement is <a href="../JAB/JAB-004.html">JAB-004</a>'s program. DIS-060 fixes ONLY the six mutation verbs' <code>&lt;verb&gt;:</code> mint + the entry/pager round-trip that dispatches it.</li>
+<li>The generic <code>core/loop.js:259</code> wrap is where the abstraction leaked: it assumes verb==scheme so ONE line serves ls (correct) and put (phantom). Fix: each verb SUPPLIES its banner URI — a ref-only/addressing URI (<code>?&lt;branch&gt;#&lt;sha&gt;</code>) — not <code>verb + &quot;:&quot;</code>.</li>
+<li>A click-target is a SPELL, not a schemed URI (<a href="../../wiki/Nav.html">Nav</a>): the pager's <code>_resolveSpell</code> stops minting <code>word + &quot;:&quot;</code> for a mutation verb and <code>_followRow</code> runs a <code>verb args</code> spell, so following a banner row never re-dispatches via a fake scheme.</li>
+<li>Promote the EXISTING scheme allowlist (help.js SCHEMES + bro.js BRO_KEEP_SCHEME = projector+transport, which already EXCLUDES the six mutation verbs) to the single source the entry shape-(2) gate consults — so <code>&lt;verb&gt;:</code> can't route, while real projector schemes still do (until <a href="../JAB/JAB-004.html">JAB-004</a> retires them into verb head).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Ruling: MADE per <a href="../../wiki/Nav.html">Nav</a> — a mutation banner carries a ref-only/addressing URI (<code>?&lt;branch&gt;#&lt;sha&gt;</code>), never <code>&lt;verb&gt;:</code>; a click-target is a <code>verb args</code> SPELL; <code>&lt;verb&gt;:</code> is never typeable/dispatchable.</li>
+<li class="open"><input type="checkbox" disabled> Per-verb fix sub-tickets: post (A <code>:270/:322/:650</code>), put (A <code>:59</code> + 6 <code>out.raw</code>), head (A <code>:223</code> + B <code>:66</code> strip), patch (A <code>:537</code> + B <code>:369</code> strip), delete (A <code>:297/:372</code>), get (A <code>:901</code>) — each swaps its <code>&lt;verb&gt;:</code> mint for a ref-only/addressing URI.</li>
+<li class="open"><input type="checkbox" disabled> <code>core/loop.js</code> shape-(2) <code>:184-193</code>: gate on the projector+transport scheme allowlist (not <code>_isVerb</code>) so a <code>&lt;verb&gt;:</code> token no longer routes to a verb; keep <code>_isVerb</code> as the runnable-module resolver.</li>
+<li class="open"><input type="checkbox" disabled> <code>core/loop.js:259</code> + <code>views/bro/pager.js:195/:402</code>: stop defaulting a mutation verb's wrapped/tracked URI to <code>verb + &quot;:&quot;</code>; a bare word typed at <code>:</code> is a <code>module(args)</code> call (<a href="../../wiki/Nav.html">Nav</a>), not a <code>word:</code> scheme.</li>
+<li class="open"><input type="checkbox" disabled> <code>views/bro/pager.js</code> <code>_followRow</code>: follow a banner row as a <code>verb args</code> SPELL, never a schemed URI, so following a post/put row can't re-run the mutation (<a href="../../wiki/Nav.html">Nav</a> click-targets).</li>
+<li class="open"><input type="checkbox" disabled> Repro test in <code>be/test/</code>: assert no rendered hunk/banner header is <code>&lt;verb&gt; &lt;verb&gt;:</code> for any of the six mutation verbs.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Byte-parity risk: the <code>put:</code>/<code>post:</code>/<code>delete:</code> banners may be asserted verbatim in <code>be/test/</code> corpora and possibly matched against native <code>be</code> — a fix changes those bytes, so the parity oracle must move WITH the ruling (or the native side gets its own ticket).</li>
+<li><code>post.js</code>/<code>get.js</code> are already touched by <a href="./DIS-054.html">DIS-054</a> <a href="./DIS-055.html">DIS-055</a> <a href="DIS-058.html">DIS-058</a> <a href="./DIS-059.html">DIS-059</a> — land-time reconcile needed; keep this audit change surgical (URI strings only).</li>
+<li>RESOLVED by <a href="../../wiki/Nav.html">Nav</a>: no per-verb &quot;real scheme&quot; is minted — a banner carries a ref-only/addressing URI and the click-target is a <code>verb args</code> spell, so a clicked banner opens/re-lenses the resource, never re-runs the mutation.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FILED 2026-07-03 (audit only, nothing fixed): catalogs every be/ JS verb↔scheme conflation — A phantom <code>&lt;verb&gt;:</code> mints (post/put/head/patch/delete/get), B the <code>core/loop.js:259</code> verb==scheme wrap, C the <code>_isVerb</code> one-namespace entry round-trip, D the pager re-mint/re-dispatch. Root cause: <code>core/loop.js:96 _isVerb</code> stats both <code>verbs/</code> and <code>views/</code>, so a mutation verb and a projector scheme are one namespace. OPEN: the ruling + per-verb fix sub-tickets + the no-<code>&lt;verb&gt; &lt;verb&gt;:</code> repro test.</li>
+<li>RULED 2026-07-03 via <a href="../../wiki/Nav.html">Nav</a>: scheme slot = addressing-only, views are verbs, <code>&lt;verb&gt;:</code> is a category error; mutation banners → ref-only/addressing URIs, click-targets → <code>verb args</code> spells. Fix scope = the six mutation verbs' mint + entry/pager round-trip; projector-scheme retirement is <a href="../JAB/JAB-004.html">JAB-004</a>.</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PUT-005</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PUT-005 <a href="./JS.html">JS</a>: jab status shows 16 files <code>put</code> after <code>jab get</code> when only 1 changed</h1>
+<p>
+After <code>jab get</code> updates a stale worktree from trunk, <code>jab status</code> reports every get-touched file as <code>put</code> (16 <code>put</code>, <code>49 ok</code>) even though only <code>verbs/post/post.js</code> was actually modified locally — the other 15 were brought to trunk BY the get and match it, so they should read <code>ok</code>. Symptom is a false-positive staged (<code>put</code>) classification: the get updates the working files but the baseline/cur is not advanced to the checked-out trunk (or the update is left staged in the <code>.be/wtlog</code>), so clean files diff as staged. The trigger here was a non-standard <code>cp -a</code> checkout (stale + mis-anchored) followed by <code>jab get</code>, so this MUST be reproduced on a clean <code>be get</code> worktree first — it is likely the same baseline-anchor family as <a href="../GET/GET-038.html">GET-038</a> / <a href="../JGET/JGET-003.html">JGET-003</a>, and the root cause may be get-side despite the <code>put</code>-state symptom. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Evidence (<code>jab status</code> in a <code>be/</code> worktree): 16 rows <code>07:32 put &lt;file&gt;</code> — <code>CMakeLists.txt</code>, <code>be</code>, <code>core/loop.js</code>, <code>core/resolve.js</code>, <code>shared/hunkrows.js</code>, <code>verbs/{delete,get,patch,post,put}/*.js</code>, <code>views/{bro,bro/pager,refs,sha1,size,type}/*.js</code> — footer <code>? 49 ok, 16 put</code>.</li>
+<li>Only <code>verbs/post/post.js</code> was a real local change (<a href="../GIT/GIT-015.html">GIT-015</a> fix, still present after the get); the other 15 files were updated to trunk by <code>jab get</code> and are byte-equal to trunk, yet still shown <code>put</code>.</li>
+<li>Confound: this worktree was made by a raw <code>cp -a</code> of <code>~/journal/be</code> (an orchestration shortcut), NOT <code>be get</code>, so it was pinned to a stale commit and improperly anchored; the user then ran <code>jab get</code> to catch up to trunk, which is when the 15 files moved.</li>
+<li>Related baseline-anchor bugs: <a href="../GET/GET-038.html">GET-038</a> (jab get from a worktree source records the wt path as store anchor → status all-<code>unk</code>), <a href="../JGET/JGET-003.html">JGET-003</a> (get <code>?</code> trunk-switch records the WRONG branch). PUT-005 may be a sibling / duplicate of these once root-caused.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>After <code>jab get</code> brings a worktree to trunk, files equal to trunk read <code>ok</code>; only genuinely locally-modified files (here <code>post.js</code>) show as <code>put</code>/<code>mod</code>.</li>
+<li>A clean-checkout repro exists before any fix (per <a href="../../rule/Issues.html">Issues</a>); no-repro work is not permitted.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fix in the <code>be/</code> JS get/status path (baseline/cur recording + the <code>ok</code>/<code>put</code> classifier), not native C.</li>
+<li>ABC/JS norms: reuse before adding, ≤2-line <code>PUT-005</code> comments, greppable, ticket-coded ≤64-char commit; touch no unrelated verb.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Hypothesis: <code>jab get</code> rewrites the working files to trunk but does not advance cur/baseline to the trunk tip (or writes the update into <code>.be/wtlog</code> as puts), so <code>jab status</code> diffs the new files against a stale baseline and classifies them <code>put</code>.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> T1 — CLEAN repro attempted (getcase harness: get@A → advance to B → <code>jab get</code> A→B → edit 1 → status): NO REPRO. status = <code>1 mod, 3 ok</code>; a bare <code>jab put</code> on trunk-matching files staged NOTHING (<code>4 ok</code>); an edited file staged as exactly <code>1 put</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> T2 — mechanism found: get is CORRECT — the non-fresh update path appends the new tip row (<code>verbs/get/get.js:188 appendWtlog</code>, <code>seedRemote:219</code>), so the baseline advances. The 16 <code>put</code> are GENUINE staged <code>put</code> rows (one atomic bare-<code>be put</code> batch) against a mis-anchored baseline; <code>classify.js</code> fired correctly on real rows.</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>T3 — moot: no get/classifier bug to fix.</del></li>
+<li class="done"><input type="checkbox" checked disabled> T4 — CLOSED as a <code>cp -a</code> artifact: the copied <code>.be</code> is a worktree-redirect FILE pointing at <code>file:/home/gritzko/.be//?/beagle-ext</code> (the ORIGINAL store), so the copy is not self-contained; its baseline tip diverges from the copied bytes and a bare <code>be put</code> correctly stages the 16 divergent files.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Entangled with <a href="../GET/GET-038.html">GET-038</a> / <a href="../JGET/JGET-003.html">JGET-003</a>; if the root cause is purely get-side baseline recording, PUT-005 should be merged into / reassigned to that ticket (the user filed it under PUT for the visible symptom).</li>
+<li>The <code>cp -a</code> worktree is non-standard (not a <code>be get</code> store-backed worktree); it must not be mistaken for the defect — hence the clean-repro gate at T1.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>CLOSED (moot) — NOT a Beagle bug. A <code>cp -a</code> of a <code>be</code> worktree copies the <code>.be</code> redirect FILE verbatim, so the copy reads its baseline from the ORIGINAL store (<code>~/.be/beagle-ext</code>) whose tip diverges from the copied bytes; a bare <code>be put</code> then correctly stages the divergent files. Verified independently: <code>verbs/get/get.js:187-188</code> + <code>seedRemote:216-220</code> advance the wtlog tip on update, and <code>shared/classify.js</code> fires <code>put</code> only on genuine wtlog <code>put</code> rows. No code changed, no test added (would gold-plate already-correct behavior).</li>
+<li>Lesson: create worktrees via <code>be get</code> (store-backed, self-contained <code>.be</code>), never <code>cp -a</code> — recorded in <a href="../GIT/GIT-015.html">GIT-015</a>.</li>
+</ul>
+</body>
+</html>

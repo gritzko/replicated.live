@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-039</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-039: store symlinks as git blobs and NEVER follow them — adopt git's model so the <code>be</code> self-locator is just a 120000 leaf, dropping ALL self-locator special-casing</h1>
+<p>
+The JS extension special-cases the <code>be</code> self-locator everywhere it meets the submodule graph (a <code>path==&quot;be&quot;</code> branch in <code>get.js</code> mountGitlink/recurseSubMounts, a refusal in <code>submount.mount</code>, a <code>be -&gt; .</code> materialiser — <a href="GET-036.html">GET-036</a>/<a href="GET-037.html">GET-037</a>). All of it papers over ONE root mistake: a symlink (<code>be -&gt; .</code>) stored/treated as a <code>160000</code> gitlink instead of a <code>120000</code> blob. Adopt git's model — a symlink IS a blob whose bytes are the link target verbatim, tree mode <code>120000</code>, hashed via lstat+readlink, NEVER followed during a walk and never a submodule — and <code>be -&gt; .</code> becomes an ordinary leaf so every special-case dissolves. Scope: <code>be/</code> JS (classify/post/get/checkout). See <a href="GET-036.html">GET-036</a>, <a href="GET-037.html">GET-037</a>, <a href="../SUBS/SUBS-041.html">SUBS-041</a>; method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>git: a symlink is a <code>120000</code> blob (target bytes, no trailing newline); hashed via <code>lstat</code>+<code>readlink</code> (never followed); checked out with <code>symlink()</code>; it is a LEAF, never recursed; git refuses to follow links when resolving tracked paths.</li>
+<li>Beagle today: <code>be</code> is committed as a <code>160000</code> gitlink (<a href="GET-037.html">GET-037</a>), so checkout tries to MOUNT it; <code>get.js</code>/<code>submount.js</code> carry <code>be</code>-name special-cases to paper over the crash.</li>
+<li>Three generic disciplines must hold for ALL symlinks: (1) wt walk no-follow (<code>lstat</code>, <code>lnk</code>=leaf) — INCLUDING the underlying recursive <code>readdir</code>, else <code>be -&gt; .</code> blows up <code>be/be/be/…</code>; (2) a symlink is never a submodule mount; (3) unlink-before-write on checkout.</li>
+<li>Migration: <code>be</code> is currently the gitlink form; once classify records the on-disk <code>be -&gt; .</code> as a <code>120000</code> symlink, post commits it as a blob — the locator must be re-committed.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A <code>120000</code> symlink round-trips as a blob (target == bytes) through classify → post → checkout, byte-identical to git, on the JS path.</li>
+<li>ALL <code>be</code> self-locator special-casing removed (<code>get.js</code> isSelfLocator + mountGitlink branch + recurseSubMounts self-case, <code>submount.mount</code> refusal); <code>be -&gt; .</code> works via the generic symlink leaf path.</li>
+<li>The recursive wt walk NEVER follows a symlink (no <code>be/be/be</code>); a symlink is never classified as a mount; checkout unlinks before <code>symlink()</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> JS only, NO C this session. ABC/JS house style; keep the friendly-string throws.</li>
+<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): a symlink commit→checkout round-trip test + a <code>be -&gt; .</code> self-link no-recurse test (mirror <code>be-js-sub-selflink</code>); do not regress <code>be-js-sub-cycle</code>.</li>
+<li>OWN worktree (work.mkd): set up under <code>$HOME/todo/GET-039</code> via <code>be get</code> of beagle-ext; do NOT edit the main tree.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Treat <code>120000</code> strictly as a blob everywhere; symlink kind <code>l</code> is a leaf in classify/checkout/post; no path-name ever knows about <code>be</code>.</li>
+<li>Delete <code>isSelfLocator</code> and its call sites; the generic <code>120000</code>-leaf path replaces them.</li>
+<li>Verify the recursive directory enumerator (<code>classify.wtScan</code> / <code>io.readdir</code> recursive) does NOT descend a symlink — fix if it does.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> RED: symlink round-trip (commit <code>x -&gt; y</code>, checkout, assert <code>readlink==y</code>, mode <code>120000</code>) + <code>be -&gt; .</code> no-recurse.</li>
+<li class="open"><input type="checkbox" disabled> Drop the <code>be</code> special-casing in <code>get.js</code> (isSelfLocator, mountGitlink branch, recurseSubMounts) and the <code>submount.mount</code> refusal.</li>
+<li class="open"><input type="checkbox" disabled> Verify/fix the no-follow recursive wt walk; a symlink is never a mount; unlink-before-<code>symlink()</code> on checkout.</li>
+<li class="open"><input type="checkbox" disabled> Re-commit the <code>be</code> locator as a <code>120000</code> symlink (or document the migration step).</li>
+<li class="open"><input type="checkbox" disabled> GREEN: new repros pass; <code>be-js-sub-cycle</code> + the get/status suite intact.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Pairs with <a href="../SUBS/SUBS-041.html">SUBS-041</a>: symlink-as-blob fixes the <code>be</code> corner case ONLY; real <code>160000</code> gitlink cycles are SUBS-041's job — do not duplicate the guard.</li>
+<li>Legacy trees still carrying <code>be</code> as a <code>160000</code> gitlink hit the mount path until the locator is re-committed.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-06-29. Supersedes the <code>be</code> self-locator special-casing of <a href="GET-036.html">GET-036</a>/<a href="GET-037.html">GET-037</a> with git's symlink-as-blob model (a symlink is a leaf, never a sub).</li>
+</ul>
+</body>
+</html>

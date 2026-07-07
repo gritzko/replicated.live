@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JGET-013</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JGET-013 <a href="./MED.html">MED</a>: <code>jab get --force</code> leaves a tracked-but-out-of-tree orphan on disk (no orphan sweep)</h1>
+<p>
+<code>jab get --force ?feat</code> does not delete a tracked file that is absent from BOTH the baseline and the target trees but still present on disk (a leftover from a prior aborted unlink). When baseline==target the reconcile walks only the empty delta and has no orphan sweep, so the stale file survives; native unlinks it (the <a href="../GET/GET-016.html">GET-016</a> force-full-reset invariant). Not destructive — the surviving file is stale clutter and the in-tree bytes are correct — but the case-49 invariant fails. Part of <a href="JGET-001.html">JGET-001</a>; method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Native <code>beagle/test/get/49-force-full-reset</code> (GET-016 Part 2, the deletion side).</li>
+<li>Repro: baseline==target==feat with a tracked-but-out-of-tree <code>sub/b.txt</code> on disk;<p>
+<code>jab get --force ?feat</code> → <code>sub/b.txt</code> survives; native unlinks it. Evidence <code>/tmp/claude-1000/jabprobe/c49-jab</code>.
+</p>
+</li>
+<li>Root: the <code>--force</code> reconcile only diffs baseline↔target; no pass that removes<p>
+tracked paths present on disk yet in neither tree.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>jab get --force</code> drives the wt to EXACTLY the target tree, including removing<p>
+tracked on-disk paths absent from the target (matching native GET-016); untracked files are governed by <code>--prune</code>, not this sweep.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Distinguish tracked-orphan (sweep) from untracked clutter (leave unless --prune).<p>
+Repro-first.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Add a force-mode orphan sweep: enumerate tracked paths (from the wtlog/baseline<p>
+stamp-set) and unlink any not present in the target tree. Gate on <code>--force</code>.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro test: tracked orphan on disk + <code>--force ?feat</code> → orphan removed.</li>
+<li class="open"><input type="checkbox" disabled> Add the tracked-orphan sweep to the force reconcile.</li>
+<li class="open"><input type="checkbox" disabled> Parity-port case 49 to <code>be/test/get</code>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open) Filed 2026-06-29.</li>
+</ul>
+</body>
+</html>

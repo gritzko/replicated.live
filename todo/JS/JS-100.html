@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-100</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-100 <a href="./HIGH.html">HIGH</a>: be/ JS wire push-session leaks the receive-pack child (fds + pid) on a post-FF-gate throw; + an uncertain ulog reader map</h1>
+<p>
+A 2026-07-04 13-agent quality/correctness review of be/ (this <code>beagle-ext</code> branch @ <code>5ab7f838</code>) found resource leaks in the git-wire PUSH path added by the landed <a href="../GIT/GIT-019.html">GIT-019</a> receive-pack-session rework: after the FF gate, a throw in <code>buildPushPack</code>/<code>send</code> (or in <code>pushSession</code>'s advert drain) never closes/reaps the receive-pack child (stdin+stdout fds, pid), so a persistent <a href="../JSQUE/README.html">JSQUE</a> jab loop accumulates fds and zombies. Two sites (<code>post.js</code> <code>pushRemote</code>, <code>wire.js</code> <code>pushSession</code>) plus one uncertain <code>ulog.js</code> reader-map item. JS-only (native wire is <code>keeper/WIRECLI.c</code>); method <a href="../../meta/work.html">work</a>. The same review re-found the still-OPEN <a href="JS-076.html">JS-076</a>/<a href="JS-085.html">JS-085</a> leaks this branch also carries — tracked there, not here (see Blockers).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>post.js:334-339</code> <code>pushRemote</code>: after the FF gate, <code>wire.buildPushPack(...)</code> (:334) then <code>session.send(...)</code> (:338) run with NO try/catch; every earlier exit closes the session (<code>relate</code> throw :311, eq refusal :318, non-FF :324 all <code>session.close()</code>), so a throw in buildPushPack/send skips cleanup — and the reap lives inside <code>send</code>/<code>close</code>, which never run → the child leaks.</li>
+<li><code>wire.js:571-599</code> <code>pushSession</code>: spawns git-receive-pack (:574), holds <code>wfd/rfd/pid</code> (:575), then <code>drainRecvAdvert(reader,false)</code> (:577) OUTSIDE any try — a pkt/advert parse throw there leaks <code>wfd</code>+<code>rfd</code>+<code>pid</code> (the returned <code>send</code>/<code>close</code>/<code>reap</code> never come into being); contrast <code>advertRefs</code> (:552-562) which drains inside try/finally that flush-closes <code>wfd</code>, closes <code>rfd</code>, reaps <code>pid</code>.</li>
+<li>Resident-loop amplifier: jab is a persistent dispatch loop (<a href="../JSQUE/JSQUE-020.html">JSQUE-020</a>), so a leaked fd/pid is never reclaimed by process exit; N failed pushes exhaust fds / spawn zombies, and reaping with the child's stdin still open can block the peer.</li>
+<li><code>ulog.js:42-48</code> <code>each()</code> (and the <code>_withRO</code>/<code>_book</code> readers): <code>abc.mmap(&quot;ULOG&quot;, path, &quot;r&quot;)</code> is never <code>abc.close</code>'d; on the resident sweep path a leak would accumulate — UNCERTAIN: it hinges on whether <code>abc.mmap</code> read-maps auto-reclaim (<code>io.mmap</code>'s finalizer is a proven no-op; <code>abc.mmap</code>'s could not be read), and other in-tree read-maps (<code>store.js</code> <code>packAt</code>, <code>ingest</code> <code>buildIndex</code>) are left open by design.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>pushRemote</code> and <code>pushSession</code> close+reap the receive-pack child on EVERY exit path (success + each throw), before propagating — no leaked fd, no zombie, no peer block.</li>
+<li>Resolve the <code>ulog.js</code> reader-map question: if <code>abc.mmap</code> read-maps leak, wrap the readers in try/finally + <code>abc.close</code>; if they auto-reclaim, record that fact and drop the item.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>be/ JS only (beagle-ext); drive via jab, never native <code>be</code>; never touch beagle/ C.</li>
+<li>Behavior-preserving; keep the ctest suite green; repro-first (<a href="../../meta/abc.html">abc</a> policy) — force a post-gate throw and assert no fd/pid leak, not a code-read-only fix.</li>
+<li>Close order matches native <code>WIRECLI.c</code>: close <code>wfd</code>, close <code>rfd</code>, then <code>reap(pid)</code>; every close/reap guarded so a happy-path double-close is a no-op.</li>
+<li>Comments ≤2 lines, ticket-prefixed; no unrelated churn.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>pushSession</code>: wrap spawn+<code>drainRecvAdvert</code> in try/catch that flush-closes <code>wfd</code>, closes <code>rfd</code>, reaps <code>pid</code> before rethrow — mirror <code>advertRefs</code> :555-562.</li>
+<li><code>pushRemote</code>: wrap the post-FF-gate <code>buildPushPack</code>→<code>send</code> tail in <code>try{…}catch(e){ if(session) session.close(); throw e }</code> (<code>session.close</code> is the idempotent <code>done</code>-guarded reaper).</li>
+<li><code>ulog.js</code>: fold the readers onto one <code>_withRO(path, fn)</code> that try/finally-closes, once <code>abc.mmap</code> reclamation is confirmed to need it.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first: force <code>wire.buildPushPack</code> (or <code>session.send</code>) to throw after the FF gate; assert the receive-pack child fds+pid are closed/reaped (no leaked fd, no zombie).</li>
+<li class="open"><input type="checkbox" disabled> <code>pushRemote</code> (<code>post.js:290-343</code>): guard the <code>buildPushPack</code>→<code>send</code> tail with <code>session.close()</code> on throw.</li>
+<li class="open"><input type="checkbox" disabled> <code>pushSession</code> (<code>wire.js:571-599</code>): wrap spawn+<code>drainRecvAdvert</code> in try/catch → close <code>wfd</code>/<code>rfd</code> + reap <code>pid</code> before rethrow.</li>
+<li class="open"><input type="checkbox" disabled> Investigate <code>abc.mmap</code> read-map reclamation; if it leaks, wrap <code>ulog.js</code> <code>each</code>/<code>_withRO</code>/<code>_book</code> readers in try/finally + <code>abc.close</code> (else record the finding and drop this item).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Same-branch OPEN leaks NOT in this ticket (rediscovered by the same review, own tickets): <a href="JS-076.html">JS-076</a> <code>wire.fetch</code> leaks <code>wfd</code> (still live at <code>wire.js:339-341</code> — <code>finally</code> closes <code>rfd</code>+<code>pid</code> only), and <a href="JS-085.html">JS-085</a> <code>log.js</code> hand-rolled <code>_packs()</code>+<code>pack.mmap</code> loop never releases the maps (its rewrite to the public <code>resolveHexAny</code> API removes the leak). Neither is in <code>jab log</code> on <code>5ab7f838</code>, so both are OPEN here.</li>
+<li>This branch predates the 2026-06-25 <a href="README.html">JS</a> 065..090 batch: only JS-065/071/082/093/094 are in <code>jab log</code>, so 066/072/073/075/076/084/085 are all still live — a broader reconcile tracked under <a href="README.html">JS</a>, not this ticket.</li>
+<li><a href="../GIT/GIT-019.html">GIT-019</a> (landed) introduced <code>pushSession</code>/<code>pushRemote</code>; its hangup fix (flush-close on the advert-only path) is correct — this ticket is only the error-path cleanup it did not add.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending) — landed hashlets recorded on close (<code>jab log | grep JS-100</code>).</li>
+</ul>
+</body>
+</html>

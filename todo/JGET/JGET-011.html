@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JGET-011</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JGET-011 <a href="./MED.html">MED</a>: <code>parseRemote</code> misderives the store root for a bare <code>file:&lt;store&gt;</code> path and won't follow a <code>.be</code>-FILE worktree mount</h1>
+<p>
+<code>parseRemote</code> mis-resolves two <code>file:</code> GET forms, so <code>jab get</code> throws <code>cannot resolve trunk</code> where native attaches a worktree: (1) a bare <code>file:&lt;store&gt;</code> path with no <code>.be</code> suffix and no <code>?proj</code> query → it sets <code>srcRoot = dirname(&lt;store&gt;)</code> (the PARENT dir) and opens the wrong store; (2) a <code>file:&lt;secondary-wt-mount&gt;</code> whose source <code>.be</code> is a FILE redirect → it treats the mount as a raw store path and never reads the <code>.be</code>-FILE redirect row that names the real store + project. Part of <a href="JGET-001.html">JGET-001</a>; method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Native <code>beagle/test/get/{29-file-worktree, 55-file-secondary-wt-source}</code><p>
+(DIS-049/GET-029 sibling-wt forms).
+</p>
+</li>
+<li>Root: <code>parseRemote</code> (<code>get.js:96-101</code>): when the path has no <code>.be</code> suffix and<p>
+<code>srcRoot===srcBe</code>, it does <code>srcRoot=dirname(srcBe)</code> → parent; <code>seedLocal</code> (<code>get.js:126</code>) then <code>store.open(parent, &quot;&quot;)</code> and <code>resolveRef(&quot;&quot;)</code> finds no tip. The <code>.be</code>-FILE redirect (secondary-wt mount) is never followed.
+</p>
+</li>
+<li>Repro (29): store at <code>$W/prim</code> (own <code>.be/</code> dir); fresh dir; <code>jab get &quot;file:$W/prim&quot;</code><p>
+→ rc=1 <code>cannot resolve trunk in $W/prim</code>. Native: rc=0, <code>.be</code> FILE anchor + checkout. Evidence <code>/tmp/jab-f29.*</code>, <code>/tmp/jab-f55.*</code>.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>file:&lt;store&gt;</code> (no query) worktree-attaches at the store's default project tip;<p>
+<code>file:&lt;secondary-wt-mount&gt;</code> follows the <code>.be</code>-FILE redirect to the real store/project — both matching native.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>No hand-rolled parsing; resolve via the URI binding + the <code>.be</code> redirect reader.<p>
+Repro-first. (Distinct from <a href="./JGET-006.html">JGET-006</a>'s pre-made-empty-<code>.be</code> crash.)
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Fix the store-root derivation: a <code>file:&lt;dir&gt;</code> whose <code>&lt;dir&gt;/.be</code> is a store DIR →<p>
+<code>srcRoot=&lt;dir&gt;</code>; whose <code>.be</code> is a FILE → read the redirect row for the real store + project; only strip <code>/.be</code> when the path literally ends in <code>.be</code>.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro tests: bare <code>file:&lt;store&gt;</code> and <code>file:&lt;secondary-wt-mount&gt;</code> both attach.</li>
+<li class="open"><input type="checkbox" disabled> Fix parseRemote/seedLocal store-root + <code>.be</code>-FILE redirect handling.</li>
+<li class="open"><input type="checkbox" disabled> Parity-port cases 29/55 to <code>be/test/get</code>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Inverse divergence to log: <code>file:&lt;store&gt;/.be</code> (no <code>?proj</code>) — native REFUSES<p>
+(SNIFFFAIL), jab SUCCEEDS writing a malformed empty-project anchor; fix here too.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open) Filed 2026-06-29.</li>
+</ul>
+</body>
+</html>

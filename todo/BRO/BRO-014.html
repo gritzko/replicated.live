@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-014</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-014: pager <code>w</code>/<code>W</code> soft-wrap toggle + per-view default preference</h1>
+<p>
+The jab bro pager ALWAYS soft-wraps long lines to the viewport width (indexRows / rowEndPass at <code>cols</code>). Add a wrap MODE the user toggles: <code>w</code> flips soft-wrap ↔ no-wrap for the CURRENT view; <code>W</code> sets the DEFAULT wrap preference for that view TYPE, so future views of the same kind open in the chosen mode. No-wrap truncates each logical line to the viewport (a horizontal pan is a possible follow-up, not this slice). Producers are unchanged — wrap is pure presentation. jab + JS only. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>views/bro/pager.js</code> <code>rows()</code> → <code>indexAll</code> → <code>bro.indexRows(h, cols)</code> soft-wraps<p>
+every hunk into display rows at the live width; there is NO no-wrap path and no wrap key today (<code>pager.js:289</code>, <code>view/bro.js</code> indexRows / rowEndPass).
+</p>
+</li>
+<li>The help SHORTCUTS list (<code>pager.js:26</code>, single-sourced to views/help/help.js per<p>
+<a href="BRO-007.html">BRO-007</a>) enumerates the keys — a new key MUST be added there too or it drifts.
+</p>
+</li>
+<li>No per-view / per-session preference store exists in JS beyond env <code>$BRO_THEME</code><p>
+(<code>theme.js:152</code>, io.getenv); a wrap default needs a small pref mechanism.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>w</code> (current view): flip the CURRENT view soft-wrap ↔ no-wrap, re-index +<p>
+repaint in place, keeping the scroll position where possible.
+</p>
+</li>
+<li><code>W</code> (preference): set the DEFAULT wrap mode for the current view's TYPE<p>
+(ls/log/diff/cat/…); views of that type opened later inherit it.
+</p>
+</li>
+<li>Each view MAY declare its own default wrap preference (e.g. cat/blob/diff →<p>
+no-wrap, log/status → soft-wrap) — a per-type default table <code>W</code> overrides.
+</p>
+</li>
+<li>No-wrap = truncate each logical line to <code>cols</code> visible cells (the tail hidden);<p>
+soft-wrap = today's behavior. Reflect both keys in SHORTCUTS (<a href="BRO-007.html">BRO-007</a>).
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Presentation ONLY: no producer/hunk change; the toggle lives in the pager + the<p>
+indexRows wrap path.
+</p>
+</li>
+<li>Preference SCOPE: a session-scoped per-type default map is the minimal target;<p>
+cross-session persistence (a config/rc) is a follow-up — do NOT invent a config format here (only $BRO_THEME env exists today).
+</p>
+</li>
+<li>Reuse the existing indexRows/rowEndPass width logic; add a no-wrap BRANCH (row =<p>
+whole logical line clamped to cols), not a parallel renderer.
+</p>
+</li>
+<li>jab + JS only; comments ≤2 lines; keep the key table single-sourced.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>State: <code>view.wrap</code> ('soft'|'nowrap') on the Pager view; <code>rows(cols)</code> keys its<p>
+cache on (cols, wrap) so a toggle re-indexes but a scroll does not.
+</p>
+</li>
+<li>Default: a <code>WRAP_DEFAULT[type]</code> table (soft unless declared); <code>W</code> writes the<p>
+user override into a session map keyed by view type; new views read override→table.
+</p>
+</li>
+<li>View type = the view's verb/scheme (ls/log/diff/cat…), already tracked as<p>
+<code>view.verb</code> (<code>pager.js</code> _verbUri).
+</p>
+</li>
+<li>No-wrap index: <code>indexRows</code> gains a mode flag — nowrap emits ONE display row per<p>
+logical line, end = the rowEndPass clamp, remainder skipped to the 'n'.
+</p>
+</li>
+<li>Horizontal pan (see the truncated tail) is OUT of scope — note as a BRO follow-up.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro/test: drive a hunk with a line wider than cols → assert soft-wrap yields<p>
+ &gt;1 display row, no-wrap yields exactly 1 (clamped); <code>w</code> flips them; <code>W</code> makes a  NEW same-type view open in the chosen mode.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> indexRows/indexAll: add a <code>wrap</code> mode; no-wrap = one row per logical line<p>
+ clamped to cols (reuse rowEndPass for the clamp, then skip to 'n').
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> pager: <code>view.wrap</code> + rows() cache key (cols,wrap); <code>w</code> toggles + re-index in<p>
+ place; <code>W</code> sets the per-type default; resolution override→table→'soft'.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> SHORTCUTS: add <code>w</code>/<code>W</code> rows (<code>pager.js</code>) → the help view mirrors (<a href="BRO-007.html">BRO-007</a>).</li>
+<li class="open"><input type="checkbox" disabled> optional: declare a couple of sensible per-view defaults (cat/blob/diff no-wrap?<p>
+ — settle in the repro).
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Cross-session persistence needs a config store that does not exist yet (only the<p>
+$BRO_THEME env); a session-scoped default is the honest first cut — flag if the user wants it to stick across runs.
+</p>
+</li>
+<li>No-wrap without a horizontal pan hides the tail; acceptable first cut, pan later.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending — not yet started)</li>
+</ul>
+</body>
+</html>

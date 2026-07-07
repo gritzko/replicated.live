@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOG-013</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG-013 <a href="./MED.html">MED</a>: dog/ reuse — dup decoders/walks, hand-rolled maps, boilerplate</h1>
+<p>
+The review found repeated hand-rolled machinery across <code>dog/</code> that abc already provides or that should be factored once. This is behaviour-preserving cleanup; it also de-risks the security tickets, since <a href="DOG-008.html">DOG-008</a>'s index-validation fix has to land in the three duplicate WEAVE decoders unless they are consolidated first. Distinct from <a href="../PTR/PTR-002.html">PTR-002</a> (which is the pointer-arithmetic/buffer-poke style pass) — this is structural duplication and missed abc reuse (CLAUDE.md #13). Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>WEAVE: three near-identical &quot;materialize columns via <code>WEAVEStep</code> walk&quot;<p>
+decoders — <code>wmerge_decode</code> (<code>WEAVE.c:526-581</code>), <code>weave_emit_decode</code> (<code>:936-966</code>), inline pass-1 in <code>wnext_diff</code> (<code>:350-364</code>); <code>wmerge_decode</code> is a superset. Consolidate into one validated decoder.
+</p>
+</li>
+<li>WEAVE: hand-rolled open-addressing <code>u64map</code> (<code>WEAVE.c:610-631</code>) duplicates<p>
+<a href="../../beagle/abc/HASHx.h">HASHx</a>; <code>u64map_cap</code> (<code>:627-631</code>) has a latent <code>u32</code> overflow (<code>c&lt;&lt;=1</code> past 2^31 → mask 0 / infinite loop).
+</p>
+</li>
+<li>ULOG: <code>ULOGCompactLatest</code> pass 1 (<code>ULOG.c:868-887</code>) re-implements<p>
+<code>ulog_each_latest</code> (<code>:806-837</code>) line-for-line (already drifted once); extend the latter with an index-aware callback.
+</p>
+</li>
+<li>ULOG: <code>seen_contains</code> (<code>:795-800</code>) is an O(K²) linear scan where <a href="../../beagle/abc/HASHx.h">HASHx</a> fits<p>
+(the comment concedes it); <code>ULOG.md:119</code> misdescribes it as &quot;linear-probe Bu64&quot;.
+</p>
+</li>
+<li>ULOG: <code>ULOGOpenRO</code> (<code>:596-630</code>) duplicates <code>ULOGOpenBooked</code> (<code>:538-589</code>) bar the<p>
+booking call; the two unwind blocks already differ subtly. <code>ULOGu8csZbyTs</code>/ <code>ZbyUri</code> (<code>:995-1022</code>) + <code>ulog_path_eq</code> (<code>:1047-1054</code>) triplicate dup/peek/key.
+</p>
+</li>
+<li>HUNK: <code>hunk_ron60_to_time</code> (<code>:44-51</code>) == <code>htbl_ron60_to_secs</code> (<code>:1661-1668</code>);<p>
+empty-text/non-diff blocks copied <code>:1319-1333</code> from <code>:596-610</code>; the &quot;prefix+line+<code>\n</code> into dels/adds&quot; motif appears 6× (<code>:1376-1467</code>) though <code>hk_emit_line</code> (<code>:1153-1159</code>) exists.
+</p>
+</li>
+<li>BRAM: libc <code>qsort</code> (<code>:203</code>) where <code>abc/SORT.h</code> exists. HUNK hand-rolls an<p>
+uppercase hex table (<code>:77</code>) because <code>abc/HEX</code> ships lowercase only — contribute an uppercase variant to <code>abc/HEX.h</code> instead.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>One validated WEAVE column decoder; <code>u64map</code> → <a href="../../beagle/abc/HASHx.h">HASHx</a> (fixes the overflow);<p>
+ULOG walks/opens/key-helpers de-duplicated; HUNK ron60 + render blocks folded; BRAM <code>qsort</code> → <code>abc/SORT.h</code>; uppercase hex upstreamed to <code>abc/HEX.h</code>.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>dog/</code> + <code>dog/git</code> libdog, ABC style; strictly behaviour-preserving (all<p>
+existing tests stay green); no wire-format change.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> T1 consolidate the three WEAVE decoders (coordinate with <a href="DOG-008.html">DOG-008</a> T4).</li>
+<li class="open"><input type="checkbox" disabled> T2 <code>u64map</code>/<code>seen_contains</code> → <a href="../../beagle/abc/HASHx.h">HASHx</a>.</li>
+<li class="open"><input type="checkbox" disabled> T3 ULOG walk/open/key de-dup + doc fix.</li>
+<li class="open"><input type="checkbox" disabled> T4 HUNK ron60 + render-block folding.</li>
+<li class="open"><input type="checkbox" disabled> T5 BRAM <code>qsort</code> → SORT; uppercase hex → <code>abc/HEX.h</code>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Pairs with <a href="../PTR/PTR-002.html">PTR-002</a> (same files, style axis) and <a href="DOG-008.html">DOG-008</a> (decoder merge).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-07-06, the libdog code-quality review session.</li>
+</ul>
+</body>
+</html>

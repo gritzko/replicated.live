@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-002</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-002: implement a standard <code>console</code> object in beagle/js/ — console.log/info/debug → stdout, warn/error → stderr, Node-style multi-arg + %s/%d/%o formatting</h1>
+<p>
+The <code>jab</code> JS runtime has NO <code>console</code> global: scripts hand-roll <code>utf8.Encode → io.buf → io.write(fd)</code> for every line, and <code>io.log</code> only writes raw strings/typed arrays to stderr (no formatting, no stdout). Surfaced by <a href="../SUBS/SUBS-041.html">SUBS-041</a>, whose worker needed a diagnostic line and found &quot;no console/log global.&quot; Add a standard <code>console</code> object as a focused new <code>beagle/js/</code> binding module (<code>console.cpp</code> + a <code>JABCConsoleInstall()</code> hook), layering over the existing utf8/io write leaves: <code>log</code>/<code>info</code>/<code>debug</code> → stdout (fd 1), <code>warn</code>/<code>error</code> → stderr (fd 2), with Node-like behaviour (multi-arg space-join, <code>%s</code>/<code>%d</code>/<code>%i</code>/<code>%f</code>/<code>%j</code>/<code>%o</code>/<code>%%</code> specifiers, non-string args stringified). Scope: beagle C++ (<code>beagle/js/</code>). See <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>The jab runtime installs its globals (<code>utf8</code>/<code>io</code>/<code>buf</code>/<code>abc</code>/<code>uri</code>/…) via per-module <code>JABC*Install()</code> hooks in <code>main.cpp::JABCInstallModules()</code>; there is NO <code>console</code>.</li>
+<li><code>io.log</code> writes only strings / typed arrays to stderr — no stdout, no multi-arg, no format specifiers; extension + test scripts hand-roll <code>utf8.Encode → io.buf → io.write(fd)</code>.</li>
+<li>Binding pattern (<code>JABC.hpp</code>, <code>INDEX.md</code>): <code>JABC_API_OBJECT</code> registers a fresh global object, <code>JABC_API_FN</code> attaches a native method; each module ships a <code>JABC*Install</code>/<code>Uninstall</code> hook that <code>main</code> calls.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A global <code>console</code> with at least <code>log</code>, <code>info</code>, <code>debug</code>, <code>warn</code>, <code>error</code> (add <code>trace</code>/<code>assert</code>/<code>dir</code> only if cheap). <code>log</code>/<code>info</code>/<code>debug</code> → stdout (fd 1); <code>warn</code>/<code>error</code> → stderr (fd 2).</li>
+<li>Node-style args: multiple args space-joined; printf-ish specifiers <code>%s %d %i %f %j %o %%</code>; non-string args stringified (JSON-ish for objects, sane fallback for cycles/functions).</li>
+<li>Installed via a <code>JABCConsoleInstall()</code> hook in <code>JABCInstallModules()</code>; documented in <code>beagle/js/INDEX.md</code> + <code>API.md</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>beagle C++ (<code>beagle/js/</code>), ABC / JSC house style; REUSE the utf8/io write leaves — do NOT reimplement encoding or raw IO. Keep it ONE focused module; no broad refactor.</li>
+<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): a <code>beagle/js/test/console.js</code> (mirror <code>test/stat.js</code>) asserting each method hits the right fd + the formatting rules, wired into ctest. Don't regress the js test suite.</li>
+<li>OWN worktree (work.mkd): clone beagle under <code>$HOME/todo/JAB-002</code>; do NOT edit the main beagle tree.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>console.cpp</code> is PURE JS (string literal + <code>JABCExecute</code>, like <code>ansi.cpp</code>/<code>buf.cpp</code>), NOT native <code>JABC_API_FN</code> methods: the format/inspect/specifier logic is far cleaner in JS, and it REUSES the <code>utf8.Encode</code> + <code>io.writeAll</code> leaves verbatim — exactly the &quot;do NOT reimplement encoding or raw IO&quot; constraint. A literal native module would either re-encode (forbidden) or call back into JS awkwardly.</li>
+<li><code>JABCConsoleInstall()</code> runs AFTER <code>JABCbufInstall()</code> in <code>main.cpp</code> — console depends on <code>utf8.Encode</code>/<code>io.writeAll</code>/<code>io.stdout</code>/<code>io.stderr</code>, all defined by buf.cpp.</li>
+<li>One shared <code>format(args)</code> (multi-arg space-join + <code>%s %d %i %f %j %o %O %c %%</code>) + <code>inspect(v)</code> (JSON-ish, <code>[Circular]</code> cycle guard) → <code>utf8.Encode</code> → <code>io.writeAll(fd)</code>.</li>
+<li>fd routing: log/info/debug → io.stdout(1), warn/error/trace/assert → io.stderr(2) (match Node).</li>
+<li>Test routes through the JS <code>io.writeAll</code> leaf so <code>test/console.js</code> can intercept it and assert BOTH the fd and the exact bytes in-process — no child-process/binary-path plumbing.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> RED: <code>js/test/console.js</code> — intercepts <code>io.writeAll</code>, asserts log/info/debug→1, warn/error→2, <code>%s %d %i %f %j %o %%</code> + multi-arg join + inspect/cycle; wired to ctest (<code>JABCconsole</code>). Verified RED-sensitive (flipping a route fails it).</li>
+<li class="done"><input type="checkbox" checked disabled> Implement <code>console.cpp</code> (format/inspect + methods) + <code>JABCConsoleInstall</code>; registered in <code>main.cpp</code>; added to <code>CMakeLists</code> (<code>JABC_SRC</code> + add_test + LSAN group).</li>
+<li class="done"><input type="checkbox" checked disabled> Updated <code>js/INDEX.md</code> (console.cpp section + install-order line) + <code>js/API.md</code> (console section).</li>
+<li class="done"><input type="checkbox" checked disabled> GREEN: <code>JABCconsole</code> passes; full <code>JABC*</code> ctest suite 29/29, LSan-clean; OS-level fd split confirmed via <code>jab --eval ... 1&gt;/2&gt;</code>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Pre-existing (NOT introduced here): <code>js/CMakeLists.txt:118</code> lists <code>JABCulogLib JABCstore</code> in <code>set_tests_properties</code> unconditionally, but their <code>add_test</code> is guarded by <code>if(EXISTS .../../be/test/...)</code>. This store-backed worktree has no sibling <code>be/</code>, so configure errors (&quot;Can not find test to add properties to&quot;). Worked around by temporarily dropping the two names to build/verify, then restored line 118 verbatim (only <code>JABCconsole</code> inserted). Worth its OWN ticket (guard the property names too) — flagged for the user, not filed.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Implemented, not yet landed (awaiting inspect/merge). Touched: NEW <code>js/console.cpp</code> + <code>js/test/console.js</code>; <code>js/JABC.hpp</code> (decl), <code>js/main.cpp</code> (install after buf), <code>js/CMakeLists.txt</code> (src+test+lsan), <code>js/INDEX.md</code>, <code>js/API.md</code>.</li>
+<li>OPEN — filed 2026-06-29, surfaced by <a href="../SUBS/SUBS-041.html">SUBS-041</a> finding no <code>console</code>/<code>log</code> global in the jab runtime. Reopens the JAB topic.</li>
+</ul>
+</body>
+</html>

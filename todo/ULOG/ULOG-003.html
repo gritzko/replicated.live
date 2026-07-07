@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ULOG-003</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ULOG-003 <a href="./HIGH.html">HIGH</a>: RW ULOG open fails once a wtlog reaches 256 rows — booked idx sidecar won't grow past its 4096-byte init</h1>
+<p>
+Any RW/append ULOG open (<code>ULOGOpen</code>→<code>ULOGOpenIdx</code>, via <code>abc._ulog_open</code>) FAILS with <code>Error: ulog._open failed</code> once the log holds ≥256 rows.  <code>ULOGOpenIdx</code> books the on-disk index sidecar at <code>ULOG_IDX_INIT_DEFAULT</code> (4096 B) and <code>ulog_idx_rebuild</code> writes one <code>wh128</code> per row PLUS a tail sentinel, so <strong>n</strong> rows → <strong>n</strong>+1 entries; 4096/<code>sizeof(wh128)</code>(16) = 256, so the 256th row (257th entry) needs the booked sidecar to grow past its init and the &quot;grow on demand via FILEBookEnsure&quot; (<code>dog/ULOG.c:148</code>) does not.  mmap READS stay lenient (watermark=byteLength) so <code>status</code>/reads work — only the RW open dies.  Wedges <code>be post</code> on any long-lived worktree.  Native <code>dog/</code>, shared by <code>be</code> + <code>jab</code>.  Sibling of <a href="../STATUS/STATUS-003.html">STATUS-003</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro: <code>jab post 'the state of tickets'</code> in <code>~/journal</code> (wtlog = 314 rows) →<p>
+<code>Error: ulog._open failed</code> at <code>_ulog_open</code> ← <code>append</code> ← <code>postSubs</code> ← <code>postTree</code> (the gitlink-bump <code>ulog.append</code>, <code>be/verbs/post/post.js:513</code>).
+</p>
+</li>
+<li>Bisected on the SAME 314 rows, freshly written+trimmed (no zero pad): 255 rows<p>
+<code>_ulog_open</code> OK, 256 rows FAIL.  Boundary = <code>ULOG_IDX_INIT_DEFAULT</code>/16 = 256.
+</p>
+</li>
+<li>Control: <code>be/.be</code> (155 rows) opens fine; journal prefixes 50/100/150/200/250<p>
+OK, 300/314 FAIL.  A <code>repo</code> row-0 anchor + ordinary <code>put todo/...mkd</code> rows — content-independent, purely the entry COUNT.
+</p>
+</li>
+<li><code>ULOGOpenIdx</code> RW path: <code>FILEBook</code>/`FILEBookCreate(book=ULOG_IDX_BOOK_DEFAULT<p>
+16MiB, init=ULOG_IDX_INIT_DEFAULT 4096)<code> then </code>ulog_idx_rebuild<code> → </code>ulog_scan_log<code> pushes N row entries + </code>ulog_idx_push_sentinel<code> (</code>dog/ULOG.c:457,439`).
+</p>
+</li>
+<li>RO / anon-fallback path is UNAFFECTED: <code>ulog_idx_scan_cap</code> grows with the log<p>
+(<code>log_size/16 + 1024</code>, <a href="../STATUS/STATUS-003.html">STATUS-003</a>) — that fix covered the ANON cap, not the BOOKED-sidecar init grow, which is this ticket.
+</p>
+</li>
+<li>Separate symptom (not the blocker): the live <code>journal/.be</code> was also zero-padded<p>
+to 16384 B; the <a href="ULOG-002.html">ULOG-002</a> back-scan tolerates that.  The 256 cap is the blocker.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A booked RW index sidecar must grow on demand up to <code>ULOG_IDX_BOOK_DEFAULT</code><p>
+(16MiB / ~1M entries) as <code>wh128bPush</code> fills it — a wtlog of any realistic size (10³–10⁵ rows) opens RW and appends.
+</p>
+</li>
+<li><code>be post</code> / <code>be put</code> / <code>ingest</code> append succeed on a 256+‑row worktree wtlog.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Native <code>dog/</code> fix (<code>ULOG.c</code> + the <code>FILEBookEnsure</code>/booked-buffer grow it relies<p>
+on); no JS workaround masks it (both <code>be</code> and <code>jab</code> call <code>ULOGOpen</code>).
+</p>
+</li>
+<li>Repro-first (<a href="../../meta/work.html">Issues</a>, CLAUDE.md §17): add a <code>dog/test/ULOG.c</code> table case that<p>
+opens RW a ≥257-entry log.  Don't regress <a href="ULOG-002.html">ULOG-002</a> back-scan / close-trim.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Suspect <code>FILEBookEnsure</code> (or <code>wh128bPush</code>'s grow trigger) not extending the<p>
+booked mapping past the init page toward <code>book_size</code>.  Verify a booked file grows past its 4096 init up to the 16MiB book; fix the grow, not the init size.
+</p>
+</li>
+<li>Alternative/belt-and-suspenders: size the booked-sidecar create to the log's<p>
+row count (mirror <code>ulog_idx_scan_cap</code>) so the common path never needs a grow.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro test: <code>dog/test/ULOG.c</code> — RW-open a 257+-entry ULOG, expect OK.</li>
+<li class="open"><input type="checkbox" disabled> Fix the booked-sidecar grow (FILEBookEnsure / wh128bPush path); RW open scales.</li>
+<li class="open"><input type="checkbox" disabled> Verify <code>be post</code> on the 314-row journal wtlog; keep <code>dog</code>/<code>be</code> suites green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Interim (NOT applied — user declined touching the live wtlog): compacting a wtlog<p>
+to <code>row0 + last get/post + uncommitted put/del</code> opens fine and resolves the IDENTICAL tip (validated: journal 314→126 rows, <code>_ulog_open</code> OK, curTip <code>68e68954648f</code> unchanged, all 124 staged rows preserved) — a temporary unblock that re-hits 256 as the log regrows; the real fix is the booked grow.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Open.  Found during the <a href="../PUT/PUT-007.html">PUT-007</a> session (a separate <code>be/</code> put perf fix); this<p>
+is a distinct NATIVE <code>dog/ULOG.c</code> bug on the RW open path, not a JS issue.
+</p>
+</li>
+</ul>
+</body>
+</html>

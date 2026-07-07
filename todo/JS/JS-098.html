@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-098</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-098: host-less <code>be:</code> local clone never worked — wire.js <code>classify</code> routed an authority-less <code>be:</code> to ssh (fixed with DIS-058)</h1>
+<p>
+A <code>be:</code> URI with NO authority (an absolute local-store path, e.g. <code>be:/home/gritzko/.be?/proj</code>) was mis-classified by <code>shared/wire.js classify</code> as a REMOTE and routed to an ssh keeper exec, so a purely local <code>be:</code> clone never worked in the <code>be/</code> JS port (<code>be://localhost</code> / <code>be://host</code>, WITH an authority, correctly route to ssh). Found and fixed while building <a href="../DIS/DIS-058.html">DIS-058</a>'s local sub-cycle repro (which needs a no-network local <code>be:</code> get to drive a clone→edit→commit cycle). Fix: <code>classify</code> treats a host-less <code>be:</code> (absolute local store path, empty authority) as a LOCAL keeper exec, matching native <code>be</code> and the spec; the <code>be://host</code> ssh path is unchanged (<code>be-js-get-be</code> ssh parity verified intact). The fix lives in the <code>~/todo/DIS-058</code> changeset and lands with it. Scope: <code>be/</code> JS. See <a href="../DIS/DIS-058.html">DIS-058</a>; method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>shared/wire.js classify</code> keyed &quot;remote vs local&quot; on the scheme alone, so <code>be:</code> always took the ssh keeper-exec path — an authority-less <code>be:/abs/store?/proj</code> (local) had no way to run.</li>
+<li>Native <code>be</code> runs a host-less <code>be:</code> as a local keeper exec; the JS diverged (latent — no JS test exercised a local <code>be:</code> clone until DIS-058 needed one).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A host-less <code>be:</code> (empty authority, absolute local store path) runs as a LOCAL keeper exec — local <code>be:</code> clone/get works, no ssh.</li>
+<li><code>be://host…</code> (authority present) still routes to ssh — no regression to <code>be-js-get-be</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> JS only; repro-first; keep the friendly string throws.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>classify</code> branches on AUTHORITY presence for <code>be:</code> — empty authority → local keeper exec; non-empty → ssh. (Already implemented in the DIS-058 worktree.)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Fix <code>wire.js classify</code>: host-less <code>be:</code> → local keeper exec. DONE (in <code>~/todo/DIS-058</code>).</li>
+<li class="done"><input type="checkbox" checked disabled> Verify <code>be://host</code> ssh path intact (<code>be-js-get-be</code>). DONE.</li>
+<li class="done"><input type="checkbox" checked disabled> Exercised by <code>be-js-sub-cycle</code> (a local <code>be:</code> clone→edit→commit cycle). DONE.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>DONE, pending merge — fixed in the <code>~/todo/DIS-058</code> changeset (lands with <a href="../DIS/DIS-058.html">DIS-058</a>). A latent be/ divergence: local <code>be:</code> clone never worked; now it does, unblocking the local sub-cycle test.</li>
+</ul>
+</body>
+</html>

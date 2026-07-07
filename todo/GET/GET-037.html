@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-037</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-037: jab get crashes on the <code>be</code> self-gitlink — DIS-058 mount-recursion sub-mounts the self-locator (no <code>.gitmodules</code> entry) → SUBFETCH/ENOTDIR + partial checkout</h1>
+<p>
+<code>jab get</code> of beagle-ext aborts mid-checkout because DIS-058's get mount-recursion treats the <code>be</code> SELF-locator gitlink as a submodule. The beagle-ext tree carries <code>be</code> as a <code>160000</code> gitlink that pins the project's OWN commit (the self-locator, see <a href="GET-036.html">GET-036</a>) with NO <code>.gitmodules</code> entry (only <code>test</code> is declared). <code>verbs/get/get.js:621</code> routes every <code>160000</code> leaf to <code>mountGitlink</code> → <code>shared/submount.js mount</code>, which for <code>be</code> finds no url, derives title <code>basename(&quot;be&quot;)=&quot;be&quot;</code>, and tries to fetch a non-existent <code>?/be</code> child — then aborts, leaving a PARTIAL checkout (<code>.be</code>, <code>.gitmodules</code>, <code>CMakeLists.txt</code>, nothing else). Two error shapes, one root: a canonical-store source throws the friendly <code>be get: SUBFETCH cannot fetch sub be (be) … child unreachable</code>; a WORKTREE source (<code>file:/home/gritzko/journal?/beagle-ext</code>, where <code>&lt;src&gt;/.be</code> is a wtlog FILE not a store dir) throws a RAW uncaught <code>Error: Not a directory</code> (ENOTDIR). <a href="GET-036.html">GET-036</a> fixes this exact self-gitlink in the C get (materialise <code>be -&gt; .</code>); the DIS-058 JS mount path has no such case — so DIS-058 crashes on a real <code>be get</code> of beagle-ext (its cycle test used a synthetic sub WITH a <code>.gitmodules</code> url, missing this). Scope: <code>be/</code> JS. See <a href="GET-036.html">GET-036</a>, <a href="../DIS/DIS-058.html">DIS-058</a>; method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro A (worktree source): <code>jab get file:/home/gritzko/journal?/beagle-ext</code> → <code>get ?#f0269b27</code>, <code>new .gitmodules</code>, <code>new CMakeLists.txt</code>, then <code>JS exception: Error: Not a directory</code>; only those files land.</li>
+<li>Repro B (canonical store): <code>jab get file:/home/gritzko/.be/?/beagle-ext</code> → same partial checkout, friendlier <code>SUBFETCH … sub be (be) … child unreachable</code>.</li>
+<li>Root: <code>be</code> is a <code>160000</code> SELF-gitlink (pins beagle-ext's own commit), NOT in <code>.gitmodules</code>. <code>mountGitlink</code> (<code>get.js:621,670</code>) → <code>submount.mount</code> (<code>shared/submount.js</code>): <code>gitmodulesUrl</code> returns &quot;&quot; → <code>titleFromUrl(&quot;&quot;)||basename(&quot;be&quot;)</code> = &quot;be&quot; → it sub-mounts instead of refusing → fetch <code>?/be</code> fails.</li>
+<li>The ENOTDIR (worktree source) is an UNCAUGHT io error: <code>&lt;src&gt;/.be</code> is the wtlog FILE, and the sub-source resolution <code>readdir</code>s it as a store dir. The partial checkout is a data hazard either way (no cleanup, no atomicity — cf. <a href="GET-018.html">GET-018</a>).</li>
+<li><a href="GET-036.html">GET-036</a> already defines the right behaviour for this self-gitlink in C: materialise the relative <code>be -&gt; .</code> locator and DO NOT sub-mount it. The JS mount path must match.</li>
+<li>CORROBORATION (2026-06-30): two independent workers (<a href="../SUBS/SUBS-042.html">SUBS-042</a>, <a href="../SUBS/SUBS-043.html">SUBS-043</a>) hit this EXACT crash cloning beagle-ext via <code>jab get</code> — deterministic <code>SUBFETCH … sub be (be) … child unreachable</code>, ~60 <code>mis</code>, no key files — and both had to fall back to <code>be get --nosub</code>; it blocks EVERY <code>jab get</code> clone of beagle-ext. <a href="../SUBS/SUBS-043.html">SUBS-043</a> confirmed <code>be</code> is committed <code>160000</code> (a self-gitlink), on disk a <code>120000</code> <code>be -&gt; .</code> symlink, and fixed the TWIN status bug by gating sub-classification on the <code>.gitmodules</code> DECLARATION — the get mount should gate the same way (<a href="GET-039.html">GET-039</a> is the deeper &quot;symlinks are 120000 blobs, never a sub&quot; fix).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>jab get</code> of beagle-ext (or any project carrying a <code>be</code> self-locator gitlink) materialises <code>be -&gt; .</code> and COMPLETES the checkout — no SUBFETCH, no ENOTDIR, no partial wt.</li>
+<li>A genuinely-unreachable REAL sub fails with a friendly string AND leaves no partial checkout (clean up, or make the wt write atomic).</li>
+<li>No raw uncaught io exceptions surface to the user from <code>get</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> JS only; ABC/JS house style; keep the friendly string throws.</li>
+<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): both repros above as tests (canonical-store form is CI-friendly; the worktree-source ENOTDIR can be a focused case).</li>
+<li>Coordinate semantics with <a href="GET-036.html">GET-036</a> (the C self-gitlink → <code>be -&gt; .</code>) and <a href="../DIS/DIS-058.html">DIS-058</a> (the mount-recursion this lives in). Do not regress the DIS-058 <code>be-js-sub-cycle</code> (a real sub WITH a <code>.gitmodules</code> url must still mount).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Detect the self-locator gitlink in <code>mountGitlink</code>/<code>submount.mount</code>: a <code>160000</code> leaf with NO <code>.gitmodules</code> entry AND/OR named <code>be</code> pinning the project's own commit → write the relative <code>be -&gt; .</code> symlink (the <a href="GET-036.html">GET-036</a> behaviour) and SKIP sub-mount + recursion.</li>
+<li>For a real sub whose mount fails: throw the friendly SUBFETCH string but FIRST ensure no half-written wt remains (cleanup, or stage the checkout atomically — link <a href="GET-018.html">GET-018</a>).</li>
+<li>Worktree-source (<code>file:&lt;wt&gt;?/proj</code>): follow <code>&lt;wt&gt;/.be</code>'s row-0 <code>repo</code> redirect to the real store instead of <code>readdir</code>-ing the wtlog file (ENOTDIR), or refuse cleanly — secondary to the self-gitlink fix.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro A + B as tests (RED): a <code>jab get</code> of beagle-ext aborts with a partial checkout.</li>
+<li class="open"><input type="checkbox" disabled> Special-case the <code>be</code> self-gitlink → <code>be -&gt; .</code>, skip sub-mount/recursion; full checkout completes.</li>
+<li class="open"><input type="checkbox" disabled> Unreachable REAL sub → friendly error, NO partial wt (cleanup/atomicity).</li>
+<li class="open"><input type="checkbox" disabled> (stretch) worktree-source <code>.be</code>-redirect instead of ENOTDIR.</li>
+<li class="open"><input type="checkbox" disabled> Green: new repros pass; <code>be-js-sub-cycle</code> (real-sub mount) + get suite intact.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Tightly coupled to <a href="../DIS/DIS-058.html">DIS-058</a> (the mount path) and <a href="GET-036.html">GET-036</a> (the self-gitlink semantics) — fix lives in the DIS-058 mount-recursion so DIS-058 doesn't land with this crash.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-06-29 from a user <code>jab get file:/home/gritzko/journal?/beagle-ext</code> crash. Primary: the <code>be</code> self-gitlink must materialise <code>be -&gt; .</code> in the JS mount path, not sub-mount; secondary: no partial checkout / raw ENOTDIR on any sub-mount failure.</li>
+</ul>
+</body>
+</html>

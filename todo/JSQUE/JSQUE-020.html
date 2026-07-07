@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JSQUE-020</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JSQUE-020 — drop the job queue, dispatch by plain recursion</h1>
+<p>
+Retire the <code>.be/queue</code> ULOG dispatch (core/job.js + core/loop.js + core/barrier.js) in favour of the in-process recursion the read views already use (core/recurse.js). The queue was JSQUE-001/002/003/006; this reverses that where recursion is strictly simpler.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Read views (status, diff, ls, …) already dispatch WITHOUT the queue via <a href="../../be/core/recurse.js">core/recurse.js</a> — a synchronous depth-first walk (JAB-004/014). Only get + post touch the queue's barrier.</li>
+<li>Only two verbs <code>require(&quot;core/barrier.js&quot;)</code>: <a href="../../be/verbs/post/post.js">verbs/post/post.js</a> and <a href="../../be/verbs/get/get.js">verbs/get/get.js</a>. Every other &quot;barrier&quot; mention (delete preflight, status &quot;no barrier&quot;) is unrelated; the <code>.fold(</code> in get/patch/weave is <code>weave.fold</code>, a different primitive.</li>
+<li>post's barrier is a SINGLE-PASS ceremony, no fan-out: it already holds the whole decision set in memory (<code>dres.decisions</code>) and builds the tree from it (<code>commitM.buildTree(dres.decisions)</code>); the <code>barrier.fold</code> callback is just <code>acc.count++</code> and its ONLY consumer is a cross-check (<code>POSTFOLD: range mismatch</code>) — tautological once in memory (post.js:569-600).</li>
+<li>get's <code>delSweep</code> fold is REPORT-ONLY: it back-scans the queue to tally delete leaves into <code>ctx._get.delSwept</code>, and the code notes JS has no rmdir leaf so the empty-dir collapse is a no-op; the per-path <code>del</code> rows are already the durable effect (get.js:867-888).</li>
+<li>What the queue genuinely earns elsewhere: breadth-first order, durable back-scan fold, crash-resume via the <code>.done</code> offset. None of the three is load-bearing for the two folds above.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Delete <a href="../../be/core/barrier.js">core/barrier.js</a> and both call sites: post's commit fold → an in-memory <code>count</code> assert (or drop, since <code>leaves</code> derives from <code>dres.decisions</code>); get's <code>delSweep</code> → an in-memory tally over the fan-out descriptors (or drop if <code>delSwept</code> is never rendered).</li>
+<li>Prove FULL parity: the existing test/ golden-snapshot suite stays green with no test edits.</li>
+<li>End-goal (LATER phases, not this worker): replace the loop.js queue dispatch itself with recursion, then retire core/job.js.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>No test edits (meta/work.mkd §4). Start with a characterization run of the current suite as the repro baseline.</li>
+<li>Never touch the C <code>beagle/</code>; JS <code>be/</code> only. Run via <code>jab</code>, never native <code>be</code>.</li>
+<li>test/ is a submodule — stage new/changed source with <code>jab put</code> so a <code>jab get</code> recursion cannot sweep it.</li>
+<li>Scope THIS worker to the barrier removal only (get + post + core/barrier.js). Queue/loop dispatch removal is a follow-up.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Barrier folds carry no data the handler lacks in memory, so removal is a substitution, not a re-architecture: replace durable re-read with the already-held array.</li>
+<li>Phase the work so each phase lands green independently: (1) barrier, (2) loop dispatch → recursion, (3) delete core/job.js.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> Baseline: full suite = 122/122; the parity floor held at every phase.</li>
+<li><a href="./v.html">v</a> post.js: barrier emit+fold → in-memory count assert over <code>dres.decisions</code>; dropped <code>barrierPath</code>/<code>cleanupBarrier</code>/<code>lastFoldOffset</code>.</li>
+<li><a href="./v.html">v</a> get.js: <code>ctx._get.delSwept</code> written but read NOWHERE (flush is <code>ctx._finalize=flushGet</code>), so <code>delSweep</code> dropped to a no-op.</li>
+<li><a href="./v.html">v</a> Deleted core/barrier.js; dropped the orphan <code>seekBack</code> wrapper in shared/ulog.js (barrier was its sole caller).</li>
+<li><a href="./v.html">v</a> Phase 2: loop.js queue → in-memory FIFO <code>_memQueue</code> (same BFS consume-while-append); removed <code>/tmp</code>/PID/resume/<code>.done</code>/<code>subQueuePath</code>; bro re-entry → <code>reentry</code> marker.</li>
+<li><a href="./v.html">v</a> Phase 3: deleted core/job.js; removed orphan <code>feedRows</code>/<code>appendInPlace</code> from ulog.js; one approved fixture edit (pager.py cat sample → core/loop.js).</li>
+<li><a href="./v.html">v</a> Final suite 122/122, orchestrator-verified; only one approved test edit.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Phase 3 was gated by a registered test: <code>test/bro/universal/pager.py</code> cats <code>core/job.js</code> as sample pager content. Retiring the file needed the (user-approved) repoint to <code>cat:core/loop.js</code>.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Job queue dropped: core/barrier.js + core/job.js deleted; dispatch is now an in-memory FIFO in core/loop.js over the recursion the read views already use.</li>
+<li>Landed in worktree JSQUE-020, staged (<code>jab put</code>/<code>mis</code>), NOT committed — awaiting explicit merge. No commit hashlet yet.</li>
+</ul>
+</body>
+</html>

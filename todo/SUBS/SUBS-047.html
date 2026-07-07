@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-047</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-047 <a href="./HIGH.html">HIGH</a>: same-source sub fetch broken (<code>ssh:////</code>), worktree sources unserved, nested fallback empty</h1>
+<p>
+<code>jab get ssh://localhost/src/beagle</code> died <code>SUBFETCH cannot fetch sub dog/abc (abc) from ssh:////localhost/src/beagle?/abc — child unreachable</code>. Three compounding defects in the be/ JS GET sub-mount path: (A) <code>submount.sameSourceUri</code> hand-concatenated <code>&quot;//&quot; + u.authority</code> where the URI binding's <code>u.authority</code> already carries the <code>//</code> (the known URI-013 latent bug), so every authority-bearing same-source URI was <code>ssh:////host/…</code> and never reached the peer; (B) a git source WITH a worktree (path not ending <code>.git</code>) serves each sub's own checkout at <code>&lt;path&gt;/&lt;subpath&gt;</code>, but no such same-source form existed — only the beagle <code>?/&lt;proj&gt;</code> swap; (C) a NESTED sub (<code>dog/abc</code>) is declared in <code>dog/.gitmodules</code> as <code>abc</code>, yet <code>mount</code> read only the ROOT <code>.gitmodules</code> with the full subpath, so the official-url fallback (and the <a href="./Title.html">Title</a>) came up empty and the whole mount threw. Spec: same source first, official <code>.gitmodules</code> url only as fallback (<a href="./Submodules.html">Submodules</a> §1, <a href="./Title.html">Title</a> retrieval preference).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>User repro: <code>jab get ssh://localhost/src/beagle</code> (a git repo WITH a worktree; subs <code>dog</code> → libdog, nested <code>dog/abc</code> → libabc all checked out at the source) — parent fetched, sub mount threw SUBFETCH; error showed the <code>ssh:////</code> URI and NO <code>or &lt;url&gt;</code> fallback part (the nested url lookup returned &quot;&quot;).</li>
+<li>The update path surfaced three more GET defects, fixed under this ticket: a dir→gitlink type change mounted the sub FIRST and the queued delete leaves then clobbered the fresh checkout (FIFO order); a removed MOUNTED sub was never unmounted (<code>io.unlink</code> on a dir is EISDIR, swallowed); deletes left empty dirs behind (<code>del-sweep</code> was a no-op — and the DELSWEEP fold row dispatches BEFORE the fan-out's delete leaves, so a queue-time sweep sees nothing).</li>
+<li>Goal set by the user: iterate till <code>jab get ssh://localhost/src/beagle</code> works smoothly and updates the beagle wt to HEAD (removal of <code>js/</code>, <code>dog/</code> becoming a submodule, nested <code>dog/abc</code> cloned).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Same-source first: beagle store source → <code>?/&lt;title&gt;</code> project swap; git worktree source → <code>&lt;path&gt;/&lt;subpath&gt;</code>; bare <code>.git</code> → no same-source; official <code>.gitmodules</code> url only as fallback.</li>
+<li>URIs composed via <code>URI.make</code> ONLY — no string concatenation (house rule).</li>
+<li>Nested subs resolve their official url + <a href="./Title.html">Title</a> via the NEAREST enclosing <code>.gitmodules</code>.</li>
+<li>The old-state→HEAD update transitions land clean: dir→gitlink, gitlink→absent (unmount), tracked-file deletes collapse emptied dirs.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>be/ JS only (<code>shared/submount.js</code>, <code>verbs/get/get.js</code>); no native edits, no other tests edited.</li>
+<li>An unmounted stale gitlink dir may hold user files — never <code>rm -rf</code> it; only a REAL mount (<code>.be</code> anchor present) is swept on gitlink→absent.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>sameSourceUri(source, title)</code> → <code>sameSourceUris(source, title, subpath)</code> returning an ordered candidate list, built with <code>URI.make</code>; consumed by BOTH the local-reuse branch and the wire branch of <code>mount</code>.</li>
+<li><code>declaredUrl(wt, subpath)</code> walks the subpath segments to the nearest enclosing <code>.gitmodules</code>; feeds both the fallback fetch and <code>titleFromUrl</code> (nested <code>dog/abc</code> titles <code>libabc</code>, not <code>abc</code>).</li>
+<li>dir→gitlink: reconcile tags the mount leaf with <code>oldDirTree</code>; the leaf sweeps the old dir's TRACKED files synchronously (<code>sweepOldTree</code>) BEFORE mounting — queued delete leaves would fire after the mount.</li>
+<li>gitlink→absent: delete leaf of kind <code>s</code> unmounts via <code>io.rmdir(full, true)</code> (io.rmdir exists since GET-039; the &quot;JS has no rmdir&quot; notes were stale) — gated on the <code>.be</code> anchor existing.</li>
+<li>del-sweep: delete leaves mark parent dirs (<code>markDelDir</code>); <code>finalizeGet</code> (after the queue drains) rmdirs them deepest-first and walks each chain up; plain rmdir so untracked content keeps a dir alive.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./v.html">v</a> repro unit test <code>be/test/submount.js</code> (table-driven: source×sub candidates, <code>:////</code> guard, declaredUrl walk), registered as <code>be-js-unit-submount</code>.  -<a href="./v.html">v</a> fix <code>sameSourceUris</code> + <code>declaredUrl</code> + mount call sites.  -<a href="./v.html">v</a> fix the three update-path defects in <code>verbs/get/get.js</code>.  -<a href="./v.html">v</a> end-to-end: fresh clone (3 ssh fetches, 0 curl), old→HEAD update byte-identical to <code>git archive</code> (parent + both sub pins), idempotent re-get (2 re-mount rows only).  -<a href="./v.html">v</a> heal the live <code>~/src/journal/beagle</code> wt (stranded tip from the crashed run): re-pin <code>?#e5071f32</code>, then get → HEAD; byte-verified, 0 conflicts.  -<a href="./ .html"> </a> <code>be-js-bro-view</code> golden flake (dir hunk in raw readdir order, <code>view/bro.js buildDirHunk</code>) — pre-existing, unrelated; own ticket if confirmed wanted.
+</p>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>GET is non-atomic: the wtlog tip row is appended BEFORE the checkout fan-out, so a mid-checkout crash strands cur at the new tip over old files (that is exactly the state the live wt was found in). Own-ticket candidate.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Fixed in the main be/ tree (staged, not committed): <code>shared/submount.js</code>, <code>verbs/get/get.js</code>, <code>test/submount.js</code> (new), <code>test/CMakeLists.txt</code>.</li>
+<li>Suite green: 145/145 (<code>-E bro-view</code>, the pre-existing flake); <code>be-js-unit-submount</code> added.</li>
+</ul>
+</body>
+</html>

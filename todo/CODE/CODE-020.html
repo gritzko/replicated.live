@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-020</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>CODE-020: be/ JS duplication — extract shared primitives</h1>
+<p>
+An 8-agent quality review of be/ (JS jab; 61 files, ~15kloc; 2026-07-03) found pervasive duplication: ~a dozen low-level primitives re-implemented per file, several with SILENT divergence (hex-length gates in hashlet resolution, three <code>isMeta</code> rule-sets) — a latent-bug surface, not mere untidiness. Tracks behavior-preserving extraction into <code>be/shared/</code> (and <code>be/view/</code>) via the <a href="../../meta/work.html">work</a> loop, one worktree per group, repro-first where reconciling a divergent copy could shift behavior. JS-only; C twin <a href="CODE-017.html">CODE-017</a>/<a href="CODE-010.html">CODE-010</a>, modularity <a href="../JS/JS-090.html">JS-090</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>8 agents partitioned be/ by subsystem (core/shared/verbs/views/view), quality-only (reuse/readability/duplication/patterns); each returned file:line dup-candidates this ticket synthesizes.</li>
+<li>Silent-divergence evidence A: hashlet→sha resolution uses 5 different hex gates (≥4 / ≥6 / ≤39 / ≤40 / 6–40) across diff.js:373 commit.js:110 log.js:110 blob.js:68 tree.js:118 sha1.js:96 size.js:59 type.js:63.</li>
+<li>Silent-divergence evidence B: three <code>isMeta</code> with different rules AND different empty-input returns at classify.js:435, stage.js:51, util/ignore.js:143.</li>
+<li>Load-order trap: ambient globals (hex/git/io/sha1/utf8/ron/URI) are injected not imported; store.js:52 derefs <code>hex</code> at module load.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Extract each duplicated primitive to ONE shared home; unify divergent copies onto a single reconciled implementation; keep behavior identical.</li>
+<li>Reconcile the bug-risk divergences (hashlet gates, <code>isMeta</code>) FIRST — dedup there changes behavior and needs a repro test.</li>
+<li>Let new verbs/views compose helpers (fs probes, tok32 codec, hunk-span accumulator) instead of copy-paste.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>be/ JS only; never touch beagle/ (C twin); drive via jab, never native be.</li>
+<li>Behavior-preserving; keep the full ctest suite green; add a repro only where behavior could shift (<a href="../../meta/abc.html">abc</a> refactor policy, repro-first).</li>
+<li>Comments ≤2 lines; resist churn — skip-and-note any marginal swap (the CODE-001..015 bullshit-quality lesson).</li>
+<li>One worktree per TODO group; groups are independent and parallelize.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Target homes: <code>shared/util/fs.js</code> (stat/kind/exists), <code>shared/util/wtblob.js</code> (readWtBytes/hashWtBytes), <code>shared/store.js</code> (treeWalk/descendPath/loadTreeLeaves + blobBytes), <code>shared/util/path.js</code> (join/normRel/isMount/extOf/pathExt/trimSlash).</li>
+<li>Target homes: <code>shared/uriarg.js</code> (parseVerbArg), <code>shared/resolve.js</code> (one hashlet resolver), <code>view/theme.js</code> (tok32 codec + TAG_* + palette), <code>view/hunkbuild.js</code> (span accumulator + concatBytes/writeFd).</li>
+<li>resolveHashlet: one resolver with an explicit length-policy param; document why any gate must differ, else make them equal.</li>
+<li>Palette: <code>view/theme.js</code> is the single source (its header already claims to supersede <code>view/bro.js</code> THEME16); derive bro.js ansi64 from it, drop THEME16/cellSGR.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> reconcile hashlet→sha resolution into shared/resolve.js (one hex-gate policy); fold diff.js:373 commit.js:110 log.js:110 blob.js:68 tree.js:118 sha1.js:96 size.js:59 type.js:63 — repro-gated.</li>
+<li><a href="./ .html"> </a> unify <code>isMeta</code> onto one predicate (fix divergent empty-input return); fold classify.js:435 stage.js:51 util/ignore.js:143 — repro-gated.</li>
+<li><a href="./ .html"> </a> shared/util/fs.js stat/kind/exists probes; fold discover.js:30 recurse.js:35 classify.js:104 checkout.js:24 subs.js:41 stage.js:321 submount.js:39 store.js:61 delete.js:52 get.js:111.</li>
+<li><a href="./ .html"> </a> shared/util/wtblob.js readWtBytes/hashWtBytes (symlink-aware, no mmap); fold classify.js:109 stage.js:61 checkout.js:47 get.js:832 fold-commit.js:132 fold-decide.js:55.</li>
+<li><a href="./ .html"> </a> tok32 codec + TAG_* letters → view/theme.js; drop copies diff.js:41 log.js:40 commit.js:64 status.js:137 cat.js:20 tree.js:45 ls.js:36 view/bro.js:20 pager.js:85.</li>
+<li><a href="./ .html"> </a> view/hunkbuild.js span accumulator (textParts+spans→row) + concatBytes/writeFd; fold log.js:350 commit.js:181 status.js:140 tree.js:51 ls.js:43 view/render.js:25.</li>
+<li><a href="./ .html"> </a> tree walk / descend-by-path → shared/store.js (treeWalk/descendPath/loadTreeLeaves); fold store.js:500 changedpaths.js:97 classify.js:214 get.js:260 patch.js:59 diff.js:552 log.js:312 cat.js:99.</li>
+<li><a href="./ .html"> </a> shared/uriarg.js parseVerbArg (strip <code>verb:</code> → URI → path/query/frag); fold cat.js:122 blob.js:105 tree.js:167 sha1.js:123 size.js:127 type.js:83.</li>
+<li><a href="./ .html"> </a> path helpers → shared/util/path.js (join/normRel/isMount/extOf/pathExt/trailing-slash-strip); fold put.js:214 delete.js:51 get.js:859 patch.js:82 diff.js:295 view/bro.js:631 ext.js:53 discover.js:39.</li>
+<li><a href="./ .html"> </a> palette single-source: view/theme.js supersedes view/bro.js THEME16/cellSGR; derive ansi64, drop the dead map.</li>
+<li><a href="./ .html"> </a> wire.js internal triples: one drainAdvert (295/228/371), share pkt decode with memReader (189↔pkt.js:82), curlPost tmpfile (254/526).</li>
+<li><a href="./ .html"> </a> ingest.js refs-ULOG write helper (83/108/134) + origin-normalize; share ron60 pack/unpack+epoch (ulog.js:70/85, post.js:83, dag.js).</li>
+<li><a href="./ .html"> </a> weave-merge + conflict-fence render: one helper for get.js:812 vs patch.js:278 (two whole algorithms) — behavior-sensitive, repro-gated.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>CODE-001..015 produced bullshit-quality &quot;improvements&quot; (see <a href="README.html">CODE</a> board); keep every change behavior-preserving and gate the diff before landing.</li>
+<li>Divergent copies (resolveHashlet, isMeta, weave-merge) cannot be blind-deduped — reconciling semantics may change behavior, so those are repro-first, not mechanical.</li>
+<li>Ambient-global injection means moving code between files can hit load-order traps; preserve the binding contract when relocating.</li>
+<li>Spin-off (NOT this ticket, file separately per <a href="../../meta/todo.html">todo</a> own-ticket rule): put.js:336 dead ternary (both arms return <code>hexish</code>); <code>eval()</code> on address-bar input at views/bro/bro.js:76; dead code fold-decide.js:232 <code>libDir</code> and loop.js <code>_nullSink</code> (stale, drops flush); stale comment post.js:457.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>none yet — landed hashlets and any cancelled parts recorded on close.</li>
+</ul>
+</body>
+</html>

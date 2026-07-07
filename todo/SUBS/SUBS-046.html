@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-046</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-046 <a href="./HIGH.html">HIGH</a>: a LOCAL submodule mount fetches the child via the keeper wire instead of reusing the on-disk source store + making a worktree</h1>
+<p>
+<code>submount.mount</code> has only two child-acquire paths: the <code>havePin</code> fast-path (reuse an ALREADY-present sibling shard, checkout only) and, for a fresh mount, <code>fetchChild → wire.fetch</code>. <code>wire.js::classify</code> routes a <code>file:</code>/scheme-less local URI to a LOCAL <code>keeper</code> exec (<code>{bin: keeperBin, …}</code>), so a LOCAL submodule mount spawns <code>keeper</code> — which is absent in the jab-only bin — even though the child's objects already live on local disk in the source store. Per design a LOCAL clone must NEVER touch the wire: reuse the store and create a (store-backed) worktree, exactly like top-level <code>jab get file://…</code> (get.js's localish direct path). Only <code>be://</code> should reach keeper / the future <code>jab upload-pack</code> (<a href="../GIT/GIT-020.html">GIT-020</a>).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Blocks 9 <a href="../TEST/TEST-003.html">TEST-003</a> cases: `sub/{baredel,baredel-nested,bareput,bareput-nested,<p>
+cycle,patch,selective,untracked}<code> + </code>spot/submount` — the last non-green tests (94% → these). Full suite otherwise 132/141 jab-only, native-binary-free.
+</p>
+</li>
+<li>Path: <code>submount.mount</code> (fresh mount) → <code>tryFetch</code> (submount.js:127) →<p>
+<code>wire.fetch(uri)</code>; <code>uri</code> is the parent source with project swapped, a local <code>file:</code>/scheme-less store. <code>wire.js::classify</code> (~L54-60): <code>localish</code> (file/&quot;&quot;/ keeper-local/be-noauth) → <code>{bin: keeperBin, argv:[keeper, verb, servePath]}</code>. keeper absent → <code>wire.fetch</code> throws → <code>tryFetch</code> catch (submount.js:130) returns null → <code>SUBFETCH … child unreachable</code> → GET-037 drops the anchor → &quot;sub not mounted/checked out&quot; (the raw keeper error is swallowed by the catch).
+</p>
+</li>
+<li>Contrast: top-level <code>jab get file://&lt;store&gt;/.be</code> reads the local store DIRECTLY<p>
+(get.js localish, ~L91-98: <code>store.open</code>, NO wire) — verified keeper-free. The submodule mount lacks that same local fast path.
+</p>
+</li>
+<li>The <code>havePin</code> reuse (submount.js:177-179) only triggers when `store.open(beDir,<p>
+title).getObject(pin)` already resolves — a NAMED-shard assumption that misses a jab project-less/unnamed source shard, so fresh local mounts fall through to the wire.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A LOCAL (<code>file:</code>/scheme-less) submodule child is mounted by REUSING the on-disk<p>
+source store (its objects/pin already there) and making a store-backed worktree (anchor <code>.be</code> redirect + checkout of the pin's tree) — NO <code>wire.fetch</code>, NO keeper.
+</p>
+</li>
+<li>The 9 cases above pass jab-only; <code>be://</code> sub sources still route to keeper /<p>
+<a href="../GIT/GIT-020.html">GIT-020</a>; git transport (<code>//host</code>) still uses git-upload-pack.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> JS (<code>shared/submount.js</code>, reuse <code>store.js</code>/<code>ingest.js</code>/get.js's localish<p>
+logic). Do NOT change the <code>be://</code>/git dispatch. Repro-first (CLAUDE.md §17).
+</p>
+</li>
+<li>Must handle jab's project-less/unnamed source shards (the <code>havePin</code> NAMED-shard<p>
+lookup miss is part of THIS bug) — resolve the sub shard whatever its title.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Add a LOCAL-source branch to <code>mount</code>/<code>fetchChild</code>: when the child URI is<p>
+<code>file:</code>/scheme-less, resolve the source sub shard on disk and either (a) make a store-backed worktree pointing at it (redirect <code>.be</code> + checkout), or (b) local-clone its pack via <code>ingest.clone</code> (no wire) — (a) matches &quot;reuse the store, create a worktree&quot; and avoids copying objects.
+</p>
+</li>
+<li>Fix <code>havePin</code> to find an unnamed/project-less source shard so an already-local<p>
+pin reuses without any fetch attempt.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: local parent store + local sub store + a gitlink; <code>jab get</code>/mount the<p>
+ parent → assert the sub mounts with NO keeper exec — RED before the fix.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> <code>submount.mount</code>: local-source reuse path (store-backed worktree / local clone).</li>
+<li class="open"><input type="checkbox" disabled> Verify the 9 <a href="../TEST/TEST-003.html">TEST-003</a> cases green jab-only; keep sub recursion + get suites green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Store-backed vs copied-shard sub layout must agree with what <code>be.find</code>/recursion<p>
+expect downstream (a redirect <code>.be</code> vs a self-contained <code>.be/&lt;title&gt;</code> shard).
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>PRODUCT FIX DONE (worktree <code>$HOME/TEST-003</code>, staged, pending land): `shared/<p>
+submount.js<code> — </code>localSourceUri<code>/</code>resolveLocalStore<code> + a </code>mount()<code> LOCAL-SOURCE branch (store-backed redirect + checkout, NO wire) + a project-less </code>havePin<code> probe. Repro RED→GREEN, no keeper spawn; suite 132/141→134/141 (</code>spot/submount<code>, </code>sub/untracked` green; no regression). Verified independently.
+</p>
+</li>
+<li>RESIDUAL (7 cases, a DISTINCT test-harness gap, NOT this product fix): a <code>file://</code><p>
+local <code>jab get</code> yields a STORE-BACKED worktree (shared store, <code>.be</code> is a FILE), but <code>subcase.sh</code> assumes a self-contained FULL clone — <code>sub/{baredel,bareput, selective}</code> grep <code>$JS/.be/wtlog</code> (a dir, now a file); <code>sub/{cycle,patch}</code> need clone isolation (share the source store, so cur pin moves); <code>sub/*-nested</code> seed a gitlink with <code>jab put</code> (PUTNONE, no CLI spelling). Harness edits, own pass.
+</p>
+</li>
+<li>Surfaced by the <a href="../TEST/TEST-003.html">TEST-003</a> jab-only conversion; a full <code>subcase.sh</code> file://<p>
+rewrite landed the fixtures but the child MOUNT still hit keeper — this was the gap.
+</p>
+</li>
+</ul>
+</body>
+</html>

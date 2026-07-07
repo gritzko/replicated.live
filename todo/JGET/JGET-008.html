@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JGET-008</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JGET-008 <a href="./HIGH.html">HIGH</a>: <code>sameSourceUri</code> builds a malformed <code>ssh:////host</code> authority — same-source sub candidate always unreachable</h1>
+<p>
+For an <code>ssh://</code> or <code>be://</code> parent, the &quot;fetch the sub from the SAME source we are talking to&quot; candidate is always unreachable because <code>sameSourceUri</code> double-prefixes the authority: the URI binding already returns <code>u.authority === &quot;//localhost&quot;</code>, and the builder prepends another <code>//</code>, yielding <code>ssh:////localhost/…?/sub</code>. So the primary (live-source) sub candidate is dead and recursion falls back to the <code>.gitmodules</code> URL (which then hits <a href="JGET-007.html">JGET-007</a>). Part of <a href="JGET-001.html">JGET-001</a>; method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Surfaced in <code>beagle/test/get/{05,11,18,53}</code> (ssh parent + same-source sub).</li>
+<li>Root: <code>be/shared/submount.js:121</code><p>
+<code>const auth = u.authority ? &quot;//&quot; + u.authority : &quot;&quot;;</code> — but <code>u.authority</code> is already slash-prefixed (<code>//localhost</code>), so the result is <code>ssh:</code> + <code>//</code> + <code>//localhost</code> = <code>ssh:////localhost</code>. Verified via a direct unit probe of <code>sameSourceUri</code>.
+</p>
+</li>
+<li>Native composes the same-source locator correctly and mounts.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>sameSourceUri</code> produces a well-formed <code>ssh://host/path?/sub</code> (single <code>//</code>),<p>
+so the live-source candidate is the working primary for ssh/be parents.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>No hand-rolled URI string surgery beyond the binding's parts. Repro-first<p>
+(a <code>sameSourceUri</code> unit assertion + a sub-mount parity case).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Use the bare host (<code>u.host</code>) for the authority segment, not <code>u.authority</code>:<p>
+<code>const auth = u.host ? &quot;//&quot; + u.host : &quot;&quot;;</code> (carry userinfo/port only if the binding splits them out separately). Re-verify against be:// and ssh:// parents.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Unit repro: <code>sameSourceUri(ssh://localhost/p/parent.git ...) === ssh://localhost/...</code>.</li>
+<li class="open"><input type="checkbox" disabled> Fix the authority double-slash; re-check be:// host form.</li>
+<li class="open"><input type="checkbox" disabled> Parity-port an ssh same-source sub case once <a href="./JGET-006.html">JGET-006</a>/<a href="JGET-007.html">JGET-007</a> unblock it.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Pairs with <a href="JGET-007.html">JGET-007</a>; both gate the ssh/be submodule cases.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open) Filed 2026-06-29.</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-042</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-042 <a href="./HIGH.html">HIGH</a>: jab post commits an unstaged submodule in selective mode (recurses + commits the sub in commit-all)</h1>
+<p>
+In the parent worktree in EXPLICIT-STAGE (selective) mode — at least one <code>be put</code>/ <code>be delete</code> since the last get/post — <code>jab post</code> commits a mounted submodule that had NOTHING staged: it recurses a post into the sub, the sub (no staged rows of its own) runs in COMMIT-ALL mode and rewrites its dirty files, and the parent gitlink is bumped to the new sub commit. Selective mode must commit only what is explicitly staged, so a sub with nothing staged must be left untouched (pin unchanged). The parent's selective intent does not propagate into <code>postSubs</code>'s recursion. <code>be/</code> JS (reported by user, 2026-06-30). JS-side twin of the native <a href="SUBS-029.html">SUBS-029</a> phantom-sub-put fix; parent <a href="../DIS/DIS-058.html">DIS-058</a>; spec <a href="../../wiki/Submodules.html">Submodules</a> / <a href="../../wiki/Dirty.html">Dirty</a>; method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>User repro (shape): parent in selective mode (<code>be put &lt;parentfile&gt;</code>), a mounted<p>
+sub with a dirty-but-UNSTAGED file, then <code>jab post</code> — the sub is committed and the parent gitlink advanced, despite nothing staged in the sub.
+</p>
+</li>
+<li><code>post.js::postTree</code> (post.js:280) calls <code>postSubs</code> (post.js:282, unless <code>--nosub</code>)<p>
+BEFORE <code>postOne</code>; <code>postSubs</code> (post.js:290) enumerates mounted gitlinks (<code>subs.enumerate</code>) and recurses <code>postTree(subInfo, ctx, {uri: subWt})</code> into EVERY mounted sub (post.js:314) — no selective-mode gate, no &quot;does the sub have staged changes?&quot; check.
+</p>
+</li>
+<li>The recursive sub post computes the SUB's OWN selective/commit-all from the SUB's<p>
+wtlog: <code>decideM.decide</code> → <code>m.anyPd</code> (fold-decide.js:109). With no in-scope sub put/delete <code>anyPd</code> is false → COMMIT-ALL → a modified sub file is rewritten (fold-decide.js:160 <code>if (anyPd) keep; else rewrite</code>), so an unstaged-dirty sub is committed.
+</p>
+</li>
+<li>The parent gitlink is then bumped for any sub whose tip moved (post.js:328-335,<p>
+the synthesised <code>put &lt;subpath&gt;#&lt;newtip&gt;</code>), recording the spurious sub commit.
+</p>
+</li>
+<li>Spec: <a href="../../wiki/Dirty.html">Dirty</a> selective = ≥1 explicit put/delete since the last post → commit ONLY<p>
+staged paths; <a href="../../wiki/Submodules.html">Submodules</a> POST recursion is post-order but must respect the staging intent. Native <a href="SUBS-029.html">SUBS-029</a> added a tip-vs-pin + PUTNONE-tolerant gate to avoid phantom no-op sub commits; the <code>be/</code> JS port lacks the selective gate.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>In selective (explicit-stage) mode, <code>be post</code> must NOT commit or advance a<p>
+submodule that has nothing explicitly staged (no in-scope sub put/delete, no staged parent gitlink bump for it) — the sub's pin stays unchanged.
+</p>
+</li>
+<li>In commit-all (implicit) mode, keep descending into + committing dirty subs as<p>
+today (recursion is the default per <a href="../../wiki/Submodules.html">Submodules</a>).
+</p>
+</li>
+<li>A sub ALREADY advanced out-of-band (pin ⊏ sub tip) still bumps (<a href="SUBS-026.html">SUBS-026</a>), but a<p>
+clean/unstaged sub is never spuriously committed.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> JS only. REUSE <code>decide</code>'s <code>anyPd</code>, <code>subs.enumerate</code>, and the existing<p>
+gitlink-bump primitive; do not re-roll the recursion.
+</p>
+</li>
+<li>Do NOT regress: post-order sub recursion, the advanced-sub bump (<a href="SUBS-026.html">SUBS-026</a>),<p>
+detached/attached sub commit (<a href="SUBS-035.html">SUBS-035</a>/<a href="SUBS-036.html">SUBS-036</a>), or <code>--nosub</code>.
+</p>
+</li>
+<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): a parent in selective mode + a mounted sub with a<p>
+dirty-but-unstaged file → assert <code>be post</code> leaves the sub tip AND the parent gitlink UNCHANGED; a commit-all parent still commits the dirty sub.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Gate <code>postSubs</code> on the parent's mode: in selective mode recurse into a sub ONLY<p>
+when it has in-scope staged changes (its own <code>anyPd</code>) OR an explicit parent gitlink-bump targets it; skip clean/unstaged subs. In commit-all mode descend into every dirty sub as now.
+</p>
+</li>
+<li>Equivalently / additionally, propagate the parent's selective intent into the<p>
+recursive sub post so the sub does not silently commit-all when the parent is selective — pick the cleaner of the two, do not double-gate.
+</p>
+</li>
+<li>Mirror the intent of native <a href="SUBS-029.html">SUBS-029</a> (tip-vs-pin + PUTNONE-tolerant bump) so a<p>
+no-op sub neither commits nor bumps.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: parent selective + dirty-unstaged mounted sub → <code>jab post</code> wrongly commits<p>
+ the sub + bumps the gitlink. RED.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Gate the <code>postSubs</code> recursion on selective vs commit-all; skip clean/unstaged subs<p>
+ in selective mode.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Preserve commit-all descent, advanced-sub bump (<a href="SUBS-026.html">SUBS-026</a>), detached/attached sub<p>
+ commit (<a href="SUBS-035.html">SUBS-035</a>/<a href="SUBS-036.html">SUBS-036</a>), <code>--nosub</code>.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Green: the new repro + the existing sub post cycle (be-js-sub-cycle / parity sub<p>
+ cases) stay passing.
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Overlaps <a href="../DIS/DIS-058.html">DIS-058</a> (be/ JS sub recursion) and the <a href="SUBS-029.html">SUBS-029</a>/<a href="SUBS-036.html">SUBS-036</a> semantics —<p>
+keep the change minimal and reconcile on land.
+</p>
+</li>
+<li>Define &quot;staged in the sub&quot; precisely: an explicit <code>be put</code>/<code>be delete</code> inside the<p>
+sub wt vs a parent staged gitlink bump (<code>be put &lt;sub&gt;#&lt;sha&gt;</code>).
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-06-30 (reported by user). Deliverable: selective-mode gate on<p>
+<code>postSubs</code> so an unstaged sub is never committed/bumped; repro + cycle green.
+</p>
+</li>
+</ul>
+</body>
+</html>

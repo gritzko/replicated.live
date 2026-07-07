@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOG-009</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG-009 <a href="./HIGH.html">HIGH</a>: HOME adopts untrusted <code>.be</code> anchors — store-root redirect, TOML injection</h1>
+<p>
+<code>dog/HOME.c</code>'s cwd-walk discovery is the git CVE-2022-24765 class: it probes every ancestor for <code>.be</code> and adopts the first hit with ZERO trust validation. For a secondary-worktree anchor (a <code>.be</code> regular file), <code>home_anchor_resolve</code> (<code>HOME.c:637-682</code>) takes row-0's URI path VERBATIM and makes it <code>h-&gt;root</code> — the store root — with no ownership check, no symlink rejection (<code>FILEStat</code> follows symlinks; <code>FILELStat</code> exists and is unused), and no containment/absolute-path requirement. Running any dog inside a hostile cloned/untarred directory then routes rw opens (<code>home_ensure_markers</code>, <code>DOGPupCreate</code>) to an attacker-chosen path. Separately <code>home_bootstrap_config</code> (<code>HOME.c:110-125</code>) writes <code>git config</code> <code>user.name</code>/<code>email</code> into <code>.be/config</code> as <code>name = &quot;&lt;value&gt;&quot;</code> with NO escaping, so a value containing <code>&quot;</code> or <code>\n</code> injects arbitrary TOML (e.g. forging the <code>HOMEHost</code> ref-authority). Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Anchor adopted untrusted: <code>home_walk_up</code> (<code>HOME.c:922-983</code>) →<p>
+<code>home_anchor_resolve</code> (<code>:637-682</code>) → <code>DOGRepoFromBe</code> sets <code>h-&gt;root</code> from row-0 (<code>home_peek_repo_uri</code> <code>:562-587</code>); nothing bounds it to the worktree.
+</p>
+</li>
+<li>Symlink follow: <code>FILEStat</code> (<code>HOME.c:650</code>, <code>:997</code> <code>home_is_exe</code>) resolves<p>
+symlinks; a planted <code>.be</code> symlink or a symlinked sibling exe is followed, then the caller <code>execvp</code>s it (TOCTOU between stat and exec).
+</p>
+</li>
+<li><code>getenv(&quot;PATH&quot;)</code> scan (<code>HOME.c:1056</code>) picks the sibling binary to exec — an<p>
+attacker-controlled PATH chooses the code that runs.
+</p>
+</li>
+<li>TOML injection: <code>HOME.c:110-125</code>, value slice <code>{name_start,name[0]}</code> fed raw;<p>
+also silent truncation (256-byte <code>emailbuf</code>, <code>FILEEnsureSoft</code> fills what fits).
+</p>
+</li>
+<li><code>DOGPupThinTail</code> (<code>DOG.c:714-733</code>) <code>unlink</code>s a recomposed path decoupled from<p>
+the mmap it released — check/unlink race in a shared <code>.be</code> dir.
+</p>
+</li>
+<li><code>..</code> NOT rejected in project/branch segments: <code>PATHu8sVerifySegment</code> rejects<p>
+<code>/</code>/NUL/CR/LF/TAB but not <code>.</code>/<code>..</code>; <code>DOGProjectFromBe</code> (<code>DOG.h:227-251</code>) rejects only <code>.be</code>; <code>DPATHBranchNormFeed</code> (<code>DPATH.h:57-78</code>) never rejects <code>..</code>. A row-0 path or ref containing <code>..</code> composes <code>&lt;root&gt;/.be/..</code> (= <code>&lt;root&gt;</code>) so shard <code>mkdir -p</code>/refs reads+writes ESCAPE the <code>.be</code> store. (DPATH already ships the correct rejecter <code>DPATHu8sDrainSeg</code>/<code>DPATHVerify</code> — applied to git tree names, not to these segments; reuse it here.)
+</p>
+</li>
+<li><code>FILECreate</code> (<code>abc/FILE.c</code>) opens <code>O_CREAT|O_RDWR|O_TRUNC</code> with NO <code>O_NOFOLLOW</code><p>
+(and no <code>O_EXCL</code> on the pup tmp): callers <code>HOME.c:128</code> (<code>.be/config</code>), <code>:154</code> (<code>wtlog</code>), <code>DOG.c:674</code> (pup tmp). A planted symlink at <code>&lt;repo&gt;/.be/config</code> or the <code>&lt;seqno&gt;.&lt;ext&gt;.tmp</code> redirects create+truncate to an arbitrary victim-writable file — classic repo-dir symlink TOCTOU.
+</p>
+</li>
+<li><code>home_be_subdirs</code> returns <code>fail(OK)</code> on the <code>subdirs&gt;1</code> break BEFORE setting<p>
+<code>*out_count</code> (<code>HOME.c:786-796</code>), so it stays 0; <code>home_dir_shieldlike</code> (<code>:963</code>) then misclassifies a populated MULTI-project store as shieldlike and adopts the wrong anchor instead of walking past it.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Refuse anchors not owned by the caller (<code>geteuid</code> vs <code>FILELStat</code> owner) and<p>
+reject symlinked <code>.be</code>; make row-0 store roots resolve inside the discovered worktree (absolute + realpath containment) or fail.
+</p>
+</li>
+<li>Escape (or reject) <code>&quot;</code>, <code>\</code>, and control bytes in config values before<p>
+emitting TOML; never silently truncate a value.
+</p>
+</li>
+<li>Reject <code>..</code>/<code>.</code> in project + branch segments (reuse <code>DPATHVerify</code>) so no<p>
+composed store path escapes <code>.be</code>; re-normalize before filesystem use.
+</p>
+</li>
+<li><code>O_NOFOLLOW</code> on <code>.be/config</code>/<code>wtlog</code> creates and <code>O_EXCL</code> on the pup tmp.</li>
+<li>Fix <code>home_be_subdirs</code> to set <code>*out_count</code> before the multi-shard break.</li>
+<li>Document the PATH/exec trust assumption; prefer fd-based ops over path re-derive.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>dog/</code> libdog, ABC style; keep the ordinary single-user primary-worktree flow<p>
+(own <code>.be/</code>) working unchanged — the guard only bites foreign/planted anchors.
+</p>
+</li>
+<li>Note the threat model: TOML value comes from the user's OWN global git config,<p>
+so that half is robustness-grade; the anchor adoption is the real remote vector (hostile repo on disk), rate it HIGH.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Mirror git's <code>safe.directory</code> intent: an anchor is trusted only if owned by<p>
+the invoking uid (or explicitly allow-listed); no ambient adoption.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> T1 repro: a test dir containing a planted <code>.be</code> file whose row-0 points the<p>
+ store root outside the tree; assert <code>be</code> refuses instead of writing there.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> T2 ownership + <code>FILELStat</code> symlink checks on the discovered anchor.</li>
+<li class="open"><input type="checkbox" disabled> T3 containment check on the row-0 store root; reject <code>../</code>/relative/outside;<p>
+ reject <code>..</code>/<code>.</code> project+branch segments (reuse <code>DPATHVerify</code>).
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> T4 escape config values in <code>home_bootstrap_config</code>; reject NUL/newline;<p>
+ <code>O_NOFOLLOW</code>/<code>O_EXCL</code> on the marker + pup creates.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> T5 fix <code>home_be_subdirs</code> <code>*out_count</code> on the multi-shard break.</li>
+<li class="open"><input type="checkbox" disabled> T6 fuzz <code>DOGParseURI</code>/<code>DOGRepoFromBe</code>/<code>home_peek_repo_uri</code> (attacker URIs).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Pointer-arith in <code>DOGRepoFromBe</code>/<code>DOGParseURI</code> (<code>DOG.h:186-280</code>, <code>DOG.c:238-284</code>)<p>
+is bounds-safe today but fragile; cleanup tracked under <a href="../PTR/PTR-002.html">PTR-002</a>.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-07-06, the libdog code-quality review session.</li>
+</ul>
+</body>
+</html>

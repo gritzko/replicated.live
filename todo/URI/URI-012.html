@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>URI-012</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>URI-012 <a href="./HIGH.html">HIGH</a>: a view's relative click-target must resolve against the context URI (pager follow/click drives it verbatim, drops the //authority scope)</h1>
+<p>
+A <a href="../../wiki/Projector.html">view</a>'s emitted click-target may be RELATIVE — scheme present but <code>//authority</code> and/or path omitted (<code>diff:shared/patchscope.js</code>) — and MUST resolve against the CONTEXT URI before it is driven: the address bar's context is the current view URI, the CLI's is cwd-derived, and ONE shared resolver serves both (<a href="../../wiki/Nav.html">Nav</a>). Relativity is PER-COMPONENT — <code>diff:foo</code> fixes only the scheme and INHERITS the context authority (+ base path) — and the invariant is <code>resolve(relative, context) == the absolute the view would bake</code>. Today the <a href="../../wiki/Bro.html">Bro</a> pager follow/click (<code>_runSpell</code>→<code>_resolveSpell</code>, <code>views/bro/pager.js:447,235</code>) drives the target VERBATIM (never runs the nav-context resolver), so a click in a <code>//JS-072</code>-scoped <a href="../../wiki/Sniff.html">status</a> view follows a scope-LESS <code>diff:shared/patchscope.js</code>, resolves against the launch/cwd tree, and yields <code>no hunks</code>. <code>shared/nav.js:navAuthorize</code> exists for exactly this (inject the omitted authority) but is wired ONLY into the diff view (<code>views/diff/diff.js:396</code>), not the pager and not <code>status</code> (which bakes bare <code>&quot;diff:&quot;+navPath</code> at <code>status.js:322</code> though its BANNER is scoped via <code>navUri</code> at <code>status.js:288</code>). Discovered mid-<a href="URI-011.html">URI-011</a>. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro: scope the pager to <code>//JS-072</code> (a worktree), open the <code>status</code> view, left-click <code>shared/patchscope.js</code> → the status bar reads <code>no hunks: diff:shared/patchscope.js  status //JS-072</code>.</li>
+<li>The trailing <code>  status //JS-072</code> is NOT part of the spell: it is the status-bar's live scope indicator joined to the message by the double-space at <code>views/bro/pager.js:346</code> (<code>message + &quot;  &quot; + verb + &quot; &quot; + uri</code>). The REAL error is <code>no hunks: diff:shared/patchscope.js</code>.</li>
+<li>Root cause: the click-target <code>diff:shared/patchscope.js</code> carries NO authority; driven against the launch/cwd tree (not <code>//JS-072</code>) it finds no such diff → empty. The file DOES have a diff in the scoped tree.</li>
+<li>status bakes per-file <code>U</code>-targets BARE (<code>(&quot;diff:&quot;|&quot;cat:&quot;) + navPath</code>, <code>status.js:322</code>) while its banner IS authority-scoped (<code>navUri(&quot;status&quot;, prefix)</code>, <code>status.js:288</code>) — the two are inconsistent within one view.</li>
+<li><code>navAuthorize</code> (inject the current authority into a baked <code>scheme:path</code>) is called ONLY by the diff VIEW (<code>views/diff/diff.js:396</code>); the pager follow/click path (<code>_runSpell</code>) and <code>status</code> never call it.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A relative click-target / typed spell / CLI arg resolves against the CONTEXT URI, inheriting OMITTED components (esp. <code>//authority</code>), through the ONE shared resolver (<a href="../../wiki/Nav.html">Nav</a>, <a href="../../wiki/URI.html">URI-spec</a>).</li>
+<li>A click on a file in ANY <code>//WT</code>-scoped view opens its diff/cat in the SAME scope: the <code>//JS-072</code> status click drives <code>diff://JS-072/shared/patchscope.js</code>, not bare <code>diff:shared/patchscope.js</code>.</li>
+<li>Honor the invariant <code>resolve(relative, context) == the-absolute-the-view-would-bake</code>; EITHER side is acceptable (a view emits absolute when it HOLDS the context, or the resolver fills from context) as long as they AGREE.</li>
+<li>A <code>status</code>-click repro test — RED today, GREEN after.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>ONE resolver shared by the CLI entry and the pager address-bar/click — do NOT fork a pager-only path (<a href="../../wiki/Nav.html">Nav</a>: &quot;one tokenizer, one resolve test&quot;).</li>
+<li>The resolver must be IDEMPOTENT: fill only OMITTED slots, never override present ones (an already-<code>//</code>-scoped target passes through unchanged — <code>navAuthorize</code> already does this).</li>
+<li>Context lives in the be/ layer (<code>be.authority</code> / cwd-derived), NOT in the pure URI grammar — the parser stays context-agnostic (<a href="../../beagle/CLAUDE.md">CLAUDE</a>).</li>
+<li>No hand-rolled URI surgery — go through the URI lexer + <code>shared/nav.js</code> (<a href="../../beagle/CLAUDE.md">CLAUDE</a>: never manual-parse in JS/C).</li>
+<li>Repro-first; touch no unrelated tests.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Two invariant-preserving options: (a) RESOLVE-ON-FOLLOW — run the shared context resolver (navAuthorize/successor) at the pager choke point <code>_runSpell</code>/<code>_resolveSpell</code>, fixing every projector's bare targets uniformly; (b) BAKE-ABSOLUTE — <code>status</code> (and peers) emit <code>navUri(&quot;diff&quot;|&quot;cat&quot;, navPath)</code> since they hold the context. Prefer (a) as the general fix, (b) as the local consistency patch; not mutually exclusive (a stays idempotent over b's output).</li>
+<li>Supersedes <a href="URI-010.html">URI-010</a>'s &quot;resolve against the WT ROOT via cwd&quot; wording: the GENERAL rule is &quot;resolve against the CONTEXT URI&quot;; cwd-derived context is the CLI special case, the current-view URI is the pager case.</li>
+<li>Builds on <a href="URI-011.html">URI-011</a> scoped full-URI hunks: the click-target scope regression is a URI-011 surface (found mid-work) — link both ways.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: a scoped <code>//WT</code> status click on a changed file asserts the DRIVEN target is <code>diff://WT/&lt;path&gt;</code> (RED today: bare <code>diff:&lt;path&gt;</code> → no hunks).</li>
+<li class="open"><input type="checkbox" disabled> Wire the shared context resolver into the pager follow/click (<code>_runSpell</code>) + address bar; fill the omitted authority (+ base path) from the context URI; keep idempotent.</li>
+<li class="open"><input type="checkbox" disabled> Decide/land (a) resolve-on-follow vs (b) <code>status</code> bakes <code>navUri</code> — pick per the invariant; guard against double-authorize.</li>
+<li class="open"><input type="checkbox" disabled> Audit other projectors baking bare <code>U</code>-targets (<code>grep</code>/<code>ls</code>/<code>log</code>/<code>spot</code>/<code>refs</code>) for the same scope drop; fold in or split tickets.</li>
+<li class="open"><input type="checkbox" disabled> Wiki: <a href="../../wiki/URI.html">URI-spec</a> §Relative-URIs (name the CONTEXT URI + per-component + the &quot;relative enough&quot; test: no scheme, no authority, path not <code>/</code>), <a href="../../wiki/Nav.html">Nav</a> (shared CLI+bar resolver; correct the wt-root line), <a href="../../wiki/Projector.html">Projector</a> (a view may emit a relative OR an absolute URI, absolute only if it holds the context).</li>
+<li class="open"><input type="checkbox" disabled> Green: repro + existing bro/pager + status suites pass.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Overlaps <a href="../SUBS/SUBS-045.html">SUBS-045</a> (descended read views emit unprefixed nav URIs → wrong-store click-through) — same class (scope lost in baked targets); coordinate so both use ONE resolver rule.</li>
+<li><a href="URI-010.html">URI-010</a> is landed-pending with the narrower &quot;wt root via cwd&quot; wording — reconcile to &quot;context URI&quot; so the two rules don't diverge.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-07-04, discovered mid-<a href="URI-011.html">URI-011</a> from a <code>//JS-072</code> status-click yielding <code>no hunks: diff:shared/patchscope.js</code>. Pins the &quot;views emit relative URIs, resolved against the context URI by one shared CLI+bar resolver&quot; rule and the <code>resolve(relative, context) == absolute</code> invariant.</li>
+</ul>
+</body>
+</html>

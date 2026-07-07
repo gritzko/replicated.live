@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JGET-001</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JGET-001 <a href="./UMBRELLA.html">UMBRELLA</a>: <code>jab get</code> differential-vs-native bug batch (13 defects)</h1>
+<p>
+A differential probe of <code>jab get</code> (the JS <code>be get</code>, <code>be/verbs/get/get.js</code> + <code>be/shared/*.js</code>) against native <code>be get</code> as oracle, retrofitting all ~54 untouched <code>beagle/test/get</code> cases (the <a href="../JS/JS-096.html">JS-096</a> test-port follow-on), surfaced 13 NEW defects — 3 of them SILENT loss/corruption of committed or uncommitted user work (verified from evidence). The current <code>get.js</code> DOES implement in-worktree forms (<code>inRepoSeed</code>) and recursive submodule mounting (<code>submount.js</code>), so these are real-code bugs, not no-ops — which also makes <a href="../DIS/DIS-058.html">DIS-058</a>'s &quot;JS get never descends a sub&quot; and parts of <a href="../JS/JS-096.html">JS-096</a>'s triage stale. Method <a href="../../meta/work.html">Issues</a>; one child ticket per defect, grouped by disjoint file ownership.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Found 2026-06-28/29 by 4 parallel probe workers (native <code>be</code> oracle vs `jab<p>
+get<code> on the same form); evidence under </code>~/todo/JS096-probe{1,4}<code>, </code>~/todo/JSGET-cases<code>, </code>/tmp/claude-1000/jabprobe`.
+</p>
+</li>
+<li>Dedup'd against the known set: <a href="../JS/JS-097.html">JS-097</a>, <a href="../GET/GET-035.html">GET-035</a> (WONTFIX — atomic, not a<p>
+bug), <a href="../GET/GET-036.html">GET-036</a>, <a href="./GET-037.html">GET-037</a>, <a href="./GET-038.html">GET-038</a>, <a href="../DIS/DIS-058.html">DIS-058</a>, JS-075/079. All 13 are NEW.
+</p>
+</li>
+<li>3 CRITICAL repros re-verified from the left-behind worktrees: case 28 jab wt<p>
+regressed to the old tip; case 58 jab wt = peer's sibling; case 09 jab wrote <code>&lt;&lt;&lt;&lt;dirty||||-feat&gt;&gt;&gt;&gt;</code> into an uncommitted file.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Each defect gets a child ticket with a repro-first failing test, a root-cause<p>
+file:line, and the native oracle behavior it must match.
+</p>
+</li>
+<li>CRITICAL data-loss defects (JGET-002/003/004) land FIRST.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-FIRST (<code>CLAUDE.md</code> §17). No hand-rolled URI parsing — fix via the URI<p>
+binding / <code>parseRemote</code>. Keep changesets file-disjoint where possible.
+</p>
+</li>
+<li>Port the matching <code>beagle/test/get</code> assertion into <code>be/test/get</code> as the<p>
+regression gate (parity vs native, the <a href="../JS/JS-096.html">JS-096</a> harness model).
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Severity-ranked children (file:line in each):<p>
+-  <a href="./JGET-002.html">JGET-002</a> <a href="./CRIT.html">CRIT</a> no fast-forward/ancestry gate → clobbers committed local    commits (cases 27/28/58); <code>get.js</code> seed*/fanoutWholeTree, no <code>dag.aheadBehind</code>. -  <a href="./JGET-003.html">JGET-003</a> <a href="./CRIT.html">CRIT</a> <code>be get ?</code> (trunk switch) records the WRONG branch → next    <code>be post</code> rewrites that branch's history; <code>get.js:423-429</code>. -  <a href="./JGET-004.html">JGET-004</a> <a href="./CRIT.html">CRIT</a> dirty cross-branch switch writes conflict markers into the    uncommitted file + grows wtlog (case 09); <code>dirtyOverlapCheck</code> <code>get.js:328</code>. -  <a href="./JGET-005.html">JGET-005</a> <a href="./HIGH.html">HIGH</a> wrong branch fetched for any non-main/master name (case 24);    <code>pickWant</code> <code>wire.js:107</code> builds <code>refs/&lt;b&gt;</code> not <code>refs/heads/&lt;b&gt;</code>. -  <a href="./JGET-006.html">JGET-006</a> <a href="./HIGH.html">HIGH</a> a pre-existing empty <code>.be/</code> dir crashes <code>jab get</code> (the    hermetic-shield shape); <code>discover.js find()</code> + <code>get.js:128-134</code> + <code>seedRemote</code>. -  <a href="./JGET-007.html">JGET-007</a> <a href="./HIGH.html">HIGH</a> sub fetch by EXACT PIN fails when pin≠advertised tip;    <code>submount.js:128-138</code> (no branch-fetch+history-resolve fallback). -  <a href="./JGET-008.html">JGET-008</a> <a href="./HIGH.html">HIGH</a> <code>sameSourceUri</code> emits malformed <code>ssh:////host</code>;    <code>submount.js:121</code> uses <code>u.authority</code> (already <code>//</code>-prefixed) not <code>u.host</code>. -  <a href="./JGET-009.html">JGET-009</a> <a href="./HIGH.html">HIGH</a> grandchild sub title from the WRONG <code>.gitmodules</code> → HOMENOPROJ    (cases 31/45); depth-2 reads the parent top-level <code>.gitmodules</code>. -  <a href="./JGET-010.html">JGET-010</a> <a href="./MED.html">MED</a> path-vs-branch misroute (cases 34/33/04); <code>restorePath</code>    <code>get.js:390</code> runs before the branch/detach branches (see <a href="../DIS/DIS-017.html">DIS-017</a>). -  <a href="./JGET-011.html">JGET-011</a> <a href="./MED.html">MED</a> <code>parseRemote</code> srcRoot misderive (cases 29/55); <code>get.js:96-101</code>. -  <a href="./JGET-012.html">JGET-012</a> <a href="./MED.html">MED</a> relative sub url <code>../sub</code> not resolved vs parent source    (case 50, <a href="../SUBS/README.html">SUBS-020</a>). -  <a href="./JGET-013.html">JGET-013</a> <a href="./MED.html">MED</a> <code>--force</code> leaves a tracked orphan (case 49, <a href="../GET/GET-016.html">GET-016</a>). -  <a href="./JGET-014.html">JGET-014</a> <a href="./LOW.html">LOW</a> same-line weave: jab <code>cnf</code>/rc=1 vs native <code>mrg</code>/rc=0, and    ours/theirs SWAPPED (case 66).
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Land JGET-002/003/004 (CRITICAL) first, each repro-first + parity test.</li>
+<li class="open"><input type="checkbox" disabled> Then HIGH (005-009), then MED (010-013), then LOW (014).</li>
+<li class="open"><input type="checkbox" disabled> Reconcile <a href="../DIS/DIS-058.html">DIS-058</a> (recursion is NOT read-only in the code under test).</li>
+<li class="open"><input type="checkbox" disabled> Cleanup: native <code>be</code> leaked a <code>.be/srcgit</code> shard into <code>~/.be</code> during a<p>
+ git-source oracle clone — prune it.
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>JGET-006 (empty-<code>.be</code> crash) masks many submodule/clone cases (the native<p>
+harness pre-creates <code>wt/.be</code>), so it gates clean repros for several children.
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open) Filed 2026-06-29 from the <a href="../JS/JS-096.html">JS-096</a> differential investigation.</li>
+</ul>
+</body>
+</html>

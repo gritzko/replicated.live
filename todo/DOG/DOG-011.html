@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOG-011</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG-011 <a href="./HIGH.html">HIGH</a>: HUNK BASS arena-lifetime + region-cap defects</h1>
+<p>
+<code>dog/HUNK.c</code> violates the codebase's own <code>call()</code>-rewinds-BASS rule. <code>HUNKu8sRelay</code> invokes <code>call(hunk_rebase_body, &amp;hk, prefix)</code> (<code>HUNK.c:386</code>), but <code>hunk_rebase_body</code> carves <code>nt</code>(8 MiB)/<code>nk</code>(1 MiB) on BASS and points <code>hk-&gt;text</code>/<code>hk-&gt;toks</code> into them — and <code>call()</code> UNCONDITIONALLY rewinds the BASS data+idle heads on return (<code>abc/PRO.h:75-90</code>), so those slices dangle the instant line 386 returns. The next <code>call(HUNKu8sFeedOut, into, &amp;hk)</code> (<code>:388</code>) hands the dangling slices to renderers whose own carves land on the same bytes: Color mode <code>bro_walk_hunk</code> carves ~192 KB over the rebased text (<code>:769</code>) → garbage output. Plain/HTML/TLV survive only by not carving before reading — one refactor from breaking. The in-function comment &quot;caller's call() frame owns them&quot; (<code>:293-296</code>) is wrong; <code>hunk_drain_toks</code> is deliberately called DIRECTLY at <code>:216</code> for exactly this reason. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Use-after-rewind: <code>HUNK.c:386</code> (call) → slices from <code>:297-366</code> used at <code>:388</code>.</li>
+<li>Unified-diff region cap silently drops data: <code>hunk_flush_region</code> take-loops<p>
+stop at <code>HK_REGION_MAX</code>=4096 (<code>:1139,1219-1228</code>), but <code>old_count</code>/<code>new_count</code> already counted the dropped lines → <code>@@ -l,c +l,c @@</code> header (<code>:1484-1505</code>) is internally inconsistent; <code>git apply</code>/<code>patch</code> rejects or misapplies.
+</p>
+</li>
+<li>Non-reentrant statics: <code>static u8cs dl[4096], al[4096]; static i32 pair_*</code><p>
+(~200 KB, <code>:1219,1230-1231</code>); greedy pairing <code>:1238-1257</code> is O(nd·na) → ~4096² comparisons on adversarial input (CPU DoS).
+</p>
+</li>
+<li>Table render headroom too small: <code>HUNK.c:1779</code> carves <code>TEXT_CAP+64KiB</code> but<p>
+Color/Html emit ~10-25 B markup per token (tok cap 256 K) → <code>SNOROOM</code>, hunk silently skipped (<code>:1781</code>), error only at <code>HUNKTableClose</code> (routinely ignored).
+</p>
+</li>
+<li>Table double-open: <code>HUNKTableOpen</code> (<code>:1815-1831</code>) has no open-guard → leaks<p>
+the prior 4 MiB <code>u8bMap</code>+toks and discards buffered rows.
+</p>
+</li>
+<li><code>HUNKu8sDrain</code> toks lifetime underdocumented: header says &quot;zero-copy into<p>
+original data&quot; (<code>HUNK.h:105-107</code>) but <code>hk-&gt;toks</code> points into BASS scratch (<code>:150-171,211-217</code>) that dies at the caller's next <code>call()</code> — shorter than <code>uri</code>/<code>text</code>; a caller stashing a drained hunk gets dangling toks.
+</p>
+</li>
+<li>No forward-progress guard: <code>bro_row_end_pass</code>/<code>hunk_color_emit</code> (<code>:860-874</code>)<p>
+loop forever if a caller passes <code>cols==0</code>.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Relay renders from LIVE memory: call <code>hunk_rebase_body</code> directly (propagate<p>
+<code>__</code> by hand) with an explicit <code>u8aMark</code>/<code>u8aRewind</code> per hunk so 9 MiB/hunk does not accumulate across a stream.
+</p>
+</li>
+<li>A produced unified diff is always internally consistent: fail (or chunk) when a<p>
+region exceeds the cap instead of dropping lines; move <code>dl</code>/<code>al</code> to BASS.
+</p>
+</li>
+<li>Table render headroom sized by tok count (or incremental); double-open fails<p>
+loudly; <code>HUNKu8sDrain</code> toks lifetime documented in the header.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>dog/</code> libdog, ABC style; renderer output byte-identical for in-cap inputs.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> T1 repro: a relayed Color diff hunk asserting correct output (currently<p>
+ garbage); a &gt;4096-line region asserting a consistent-or-failing patch.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> T2 fix the relay lifetime (direct call + mark/rewind).</li>
+<li class="open"><input type="checkbox" disabled> T3 region-cap: fail/chunk + BASS-back the pairing arrays.</li>
+<li class="open"><input type="checkbox" disabled> T4 table headroom + double-open guard; document <code>HUNKu8sDrain</code> toks lifetime.</li>
+<li class="open"><input type="checkbox" disabled> T5 <code>cols==0</code> forward-progress guard.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>HUNK.c is 1932 lines mixing wire codec + four renderers + diff post-processor +<p>
+global-state table engine; a structural split would help but is out of scope here (note for a future DOG umbrella).
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-07-06, the libdog code-quality review session.</li>
+</ul>
+</body>
+</html>

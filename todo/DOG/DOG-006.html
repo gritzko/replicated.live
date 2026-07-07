@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOG-006</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG-006: StrictMark inline markup inside code comments</h1>
+<p>
+Run the StrictMark inline grammar over comment BODIES in every language at the one shared seam — <code>FREEu8sFeed('D', …)</code>, which each <code>*onComment</code> already calls — so `<code> </code>code<code> </code><code>, </code><strong>strong</strong><code>, </code><em>emph</em><code>, </code><del>del</del><code>, </code><a href="./link.html">link</a><code> light up uniformly with no per-grammar edits. First split the comment DELIMITER (</code>//<code>, </code>/* <strong>/<code>, </code>#<code>, </code>--<code>, </code>(</strong> *)<code>, </code>%<code>, </code>;<code>) into its own token, kept as plain comment and NEVER fed to the inline parser. Inline spans only (block markup is line-anchored); mirrors the existing sticky-</code>F` issue-key overlay.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Every lang's <code>onComment</code> funnels the WHOLE comment (delimiter included)<p>
+through <code>FREEu8sFeed('D', tok, cb, ctx)</code> → S/L/P/W split under a <code>D</code> overlay, with only the <code>F</code> issue-key (<code>ABC-123</code>) staying sticky (<code>dog/tok/FREE.c</code>, <code>dog/tok/CPPT.c:CPPTonComment</code>).
+</p>
+</li>
+<li>StrictMark's inline layer is a regular language of regex-matched brackets —<p>
+stateless, line-local, total (<code>any8</code> catch-all) — so it is safe run on an isolated comment span (<code>wiki/StrictMark.mkd</code>; <code>MKDTInlineLexer</code> in <code>dog/tok/MKDT.c.rl</code>, same <code>TOKcb</code> protocol FREE already uses).
+</p>
+</li>
+<li>Feeding delimiters in mis-fires: C's <code>/*strong*/</code> parses <code>/</code> + <code>*strong*</code><p>
+as a strong span (the ragel <code>*</code> opener has no whitespace lookbehind) — the concrete reason the delimiter must be split off before the inline parse.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>One seam lights up all ~40 langs: <code>FREEu8sFeed</code> gains a StrictMark mode (or<p>
+a sibling <code>MKDTu8sFeed</code>) that runs <code>MKDTInlineLexer</code> over the comment body.
+</p>
+</li>
+<li>The comment delimiter is a SEPARATE token (kept <code>D</code>), passed straight<p>
+through, never entering the inline parse — the explicit ask of this ticket.
+</p>
+</li>
+<li>Inline spans only: `<code> </code>code<code> </code><code>/</code><strong>strong</strong><code>/</code><em>emph</em><code>/</code><del>del</del><code>/</code><a href="./link.html">link</a>`; block<p>
+shapes (<code>##</code>, <code> -  </code>, fences) stay out of scope — a comment is a fragment, the block layer is line-anchored (<code>MKDTBlock</code>/<code>MKDTLexer</code>).
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Ragel only, no hand-scanning (<a href="../../meta/abc.html">ABC</a> §&quot;never manual parse&quot;); reuse<p>
+<code>MKDTInlineLexer</code>, do not re-derive the grammar.
+</p>
+</li>
+<li>No per-language grammar edits — the value is the single FREE seam; the<p>
+delimiter split must be centralized too (see design), not smeared over 40 <code>onComment</code> sites.
+</p>
+</li>
+<li>Table-driven: extend <code>dog/test/TOK01.c</code> (<code>{&quot;// *x*\n&quot;, …}</code>-style expected<p>
+tag strings), keep the existing plain-comment cases (<code>&quot;// comment\n&quot;</code> → <code>DDDDW</code>) green.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Chosen seam: EXTEND <code>FREE</code> (its ragel machine) with StrictMark inline<p>
+bracket rules, not a separate <code>MKDT</code> pass — FREE is the sole comment-body scanner (all 55 langs) and already detects issue keys, so one machine keeps <code>F</code> AND adds markup in a single pass. Code span → <code>H</code>, emphasis/strike/link → <code>G</code>. No backslash-escape rule (comments must not eat <code>\n</code>/<code>\t</code>).
+</p>
+</li>
+<li>Tag policy RULED: markup pops. <code>FREE_overlay_cb</code> keeps <code>F</code>, <code>G</code>, <code>H</code> sticky<p>
+through the <code>D</code> overlay (mirrors the existing sticky-<code>F</code> precedent).
+</p>
+</li>
+<li>Delimiter split lives in each grammar (ragel), not a central C classifier<p>
+(would be manual parsing in C — forbidden). Spine helper <code>FREECommentFeedN(tok, olen, clen)</code> carves delimiter+body with <code>a_head</code>/ <code>a_tail</code>/<code>a_part</code> and feeds only the body; <code>FREECommentFeed(open,body,close)</code> for variable-width delimiters. Single-form langs = one-line <code>.c</code> change; multi-form = split grammar actions by width + regen (CPPT is the exemplar).
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Spine: FREE inline rules + <code>F</code>/<code>G</code>/<code>H</code> sticky overlay + <code>FREECommentFeed</code>/<p>
+ <code>FREECommentFeedN</code> + <code>FREEInlineMarkupTest</code>/<code>FREECommentSplitTest</code> (green).
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> CPPT exemplar: <code>//</code>(2,0) / <code>/* */</code>(2,2) split, handler takes olen/clen,<p>
+ regen, comment+markup test cases (green).
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Fan out all 54 remaining langs (10 parallel workers, disjoint source<p>
+ files): single-form = one-line <code>.c</code>; multi-form = grammar split + regen.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Reconcile <code>dog/test/TOK01.c</code> comment expectations (delimiter now one <code>D</code><p>
+ token) + CPPT markup cases; full build (358 targets) + <code>ctest</code> green.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Update <code>dog/INDEX.md</code> FREE entry (new tags + <code>FREECommentFeed[N]</code>).</li>
+<li class="open"><input type="checkbox" disabled> Follow-up: dedicated comment-markup theme palette (currently reuses<p>
+ <code>G</code>/<code>H</code> string/preproc colors); block markup (<code>##</code>, lists) still out.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Follow-up: RBT <code>=begin</code>/PRLT POD blocks use (0,0) (no delimiter split);<p>
+ a proper split needs ragel body-capture — deferred.
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>RBT <code>=begin</code>/<code>=end</code> and PRLT POD blocks convert only the <code>#</code> form; the<p>
+exotic block passes (0,0) to FREECommentFeedN (whole token as body, still markup-parsed — matches old behavior, delimiter not separately split).
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Spine + all 55 tokenizers converted in worktree <code>~/todo/DOG-006</code><p>
+(uncommitted, off d3743c0e). <code>ctest</code>: 358/359 (the 1 fail is the pre-existing <code>be-bin-status-parity</code> skip-artifact — no <code>be/</code> submodule).
+</p>
+</li>
+</ul>
+</body>
+</html>

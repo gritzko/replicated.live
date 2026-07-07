@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIT-012</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GIT-012 <a href="./JS.html">JS</a>: smart-fetch transports — keep SSH, add HTTPS via curl spawn</h1>
+<p>
+The JS wire (<code>be/shared/wire.js</code>) speaks git's smart protocol but only over a spawned <code>ssh</code>/local <code>keeper</code>; <code>classify()</code> has no HTTP(S) branch, so an <code>https://</code> (or <code>git://</code>) URL wrongly routes to <code>ssh host git-upload-pack</code> (wire.js:28,76). jab has no TLS and we will NOT add one, so HTTPS rides a spawned <code>curl</code>; the pkt-line negotiation (advert → want/have/done → NAK → pack) is transport-independent and reused as-is. Transport I/O moves to the non-blocking <code>pol</code> loop. SSH stays exactly as it is; <code>git://</code> (daemon, TCP 9418) is OPTIONAL — <code>net.connect</code> already yields the socket and the core is shared. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>be/shared/wire.js</code> <code>fetch()</code> runs ALL transports through <code>io.spawn</code> + blocking <code>io._read</code>/<code>io.writeAll</code>; the negotiation core is transport-agnostic (wire.js:142-201).</li>
+<li><code>classify()</code> has NO http(s) branch: <code>//host</code>, <code>git://</code>, <code>ssh://</code> all map to <code>ssh host git-upload-pack</code>, so an HTTPS remote silently mis-routes to ssh (wire.js:24-78).</li>
+<li>The C keeper has no smart-HTTP either (<code>keeper/WIRECLI.c</code> only local-exec or ssh), so smart-HTTP is net-new and lives in JS — no C reference to mirror.</li>
+<li>jab exposes non-blocking TCP (<code>net.connect</code> over <code>pol</code>, <code>js/net.cpp:55-64,323-331</code>) but NO TLS/HTTP/curl binding; <code>pol</code> is the loop the runtime drains after the script (<code>js/main.cpp:159,319</code>).</li>
+<li>Motivating case: a real fetch of Beagle's own <code>//origin</code> (replicated.live) and <code>jab get https://…</code> need an actual HTTPS path, not an ssh misfire.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Add an HTTPS smart-fetch transport to the JS wire (fetch first; push a follow-up), keeping the ssh:// and local-keeper paths behaviour-identical.</li>
+<li>Drive all transport I/O non-blocking over the <code>pol</code> loop, replacing the synchronous <code>io._read</code> loops with <code>pol</code>-fed incremental reads.</li>
+<li>Reuse the shared pkt negotiation (<code>pkt.js</code>, <code>parseAdvLine</code>, <code>pickWant</code>) verbatim across ssh / https / (optional) git://.</li>
+<li>OPTIONAL: a <code>git://</code> daemon adapter (<code>net.connect</code> :9418 + one request pkt-line), included only because the core is shared and it needs no new binding.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>HTTPS = spawned <code>curl</code> (curl owns TLS+HTTP); NO native HTTPS/TLS — jab has none and we will not add one.</li>
+<li>No new JABC bindings: git:// rides existing <code>net.connect</code>, HTTPS rides <code>io.spawn(curl)</code>, ssh/local unchanged.</li>
+<li>Non-blocking only: every transport fd is a <code>pol.watch</code> registration; the wire awaits via the loop, never a blocking read.</li>
+<li>ABC/wiki norms: reuse before adding, ≤2-line comments, greppable no-wrap lines, ticket-coded commits.</li>
+<li>Do not vandalize the working ssh/local path — parity must hold (meta/work.mkd).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Split <code>wire.js</code> into a transport-agnostic negotiation core + per-transport adapters: <code>local</code>/<code>ssh</code> (spawn, have), <code>https</code> (curl spawn, new), <code>git</code> (net.connect, optional).</li>
+<li>Make the core async: feed <code>pkt.Reader</code> from <code>pol</code>-driven 'data' chunks (net socket or watched spawn fd), resolving on advert-flush and on pack-EOF — no synchronous <code>io._read</code>.</li>
+<li>Smart-HTTP is two stateless requests: <code>GET &lt;base&gt;/info/refs?service=git-upload-pack</code> then <code>POST &lt;base&gt;/git-upload-pack</code>, types <code>application/x-git-upload-pack-{advertisement,request,result}</code>.</li>
+<li>The HTTP advert carries a <code># service=git-upload-pack\n</code> + flush preamble before the refs; the advert drainer skips it, while ssh/git go straight to the ref lines.</li>
+<li>Keep the demux-free path: request <code>want &lt;sha&gt; ofs-delta</code> WITHOUT side-band-64k, so the server streams the raw pack after NAK — exactly what wire.js already assumes (wire.js:174-193).</li>
+<li>curl shape: GET advert <code>curl -sSf --get &lt;base&gt;/info/refs --data-urlencode service=git-upload-pack</code>; POST <code>curl -sSf -H 'Content-Type: …request' --data-binary @- &lt;base&gt;/git-upload-pack</code>; stdout is the pkt stream.</li>
+<li><code>git://</code> (optional): one request pkt-line <code>git-upload-pack &lt;path&gt;\0host=&lt;host&gt;\0</code> (v0, port 9418), then the identical core; the daemon serves upload-pack only.</li>
+<li>Push is OUT of scope here: receive-pack will be ssh + smart-HTTP POST <code>git-receive-pack</code> (own ticket); the git:// daemon refuses receive-pack by default (anonymous-push unsafe).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> T1 — extract the negotiation core from <code>wire.js</code> behind a byte-stream/async interface; keep ssh + local adapters green (the seam).</li>
+<li class="open"><input type="checkbox" disabled> T2 — port the core to non-blocking <code>pol</code>: incremental <code>pkt.Reader</code> feed from watched fds / net 'data', resolve on advert-flush + pack-EOF.</li>
+<li class="open"><input type="checkbox" disabled> T3 — HTTPS fetch adapter: spawn curl GET info/refs (skip the <code># service</code> preamble) + POST git-upload-pack; return the pack bytes. (needs T1)</li>
+<li class="open"><input type="checkbox" disabled> T4 — <code>classify()</code>: add an http/https branch and split <code>git://</code> off the ssh case; route each scheme to its adapter. (small, independent)</li>
+<li class="open"><input type="checkbox" disabled> T5 — OPTIONAL git:// adapter: <code>net.connect</code> :9418, send the daemon request pkt-line, run the core. (needs T1/T2)</li>
+<li class="open"><input type="checkbox" disabled> T6 — wire the new adapters into <code>get.js</code>/<code>patch.js</code> fetch sites; confirm <code>jab get https://…</code> end-to-end.</li>
+<li class="open"><input type="checkbox" disabled> T7 — tests: hermetic per-transport — local <code>git http-backend</code> (driven by curl) or recorded fixtures for https, a local git daemon for git://; table-driven.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Decision needed: migrate the ssh/local path to async-<code>pol</code> too (one uniform core), or keep it blocking and run only the new transports async? Affects T1/T2 scope.</li>
+<li>Real servers (e.g. github) may need ACK/<code>multi_ack_detailed</code> handling once <code>have</code>s are sent; the no-side-band assumption must be checked live before HTTPS relies on it.</li>
+<li>Private HTTPS auth (tokens / credential helper) is deferred — anonymous/public fetch first; curl header/<code>-n</code> injection a follow-up.</li>
+<li>curl presence/version is an external dependency; surface a clear error when <code>curl</code> is absent.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

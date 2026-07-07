@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-021</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>CODE-021: be/ JS dedup — net ≥1000 LoC reduction target + accounting</h1>
+<p>
+A 7-agent re-scan of be/ (JS jab; ~65 files, 15,711 LoC; 2026-07-03) quantified the <a href="CODE-020.html">CODE-020</a> duplication as ~900–1,050 net-removable LoC (~6–7% of the tree), dominated by ~12 recurring micro-helpers. This ticket sets an explicit ≥1000-LoC net-deletion GOAL for the be/ dedup and tallies landed savings against it, so <a href="CODE-020.html">CODE-020</a>'s extraction TODOs are measured, not vibes. It also captures extraction opportunities the CODE-020 list omitted (verb-entry factory, beCtx shim, intra-file twins in spot/bro/store/argline). Accounting-only: the mechanical work lands under <a href="CODE-020.html">CODE-020</a>; this page holds the budget and the running tally. JS-only, behavior-preserving; net LoC = lines deleted minus lines added for the shared homes.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>7 agents partitioned be/ by subsystem (verbs/core/shared/view/views), each returning file:line dup-candidates WITH per-finding LoC; this ticket sums them into a budget.</li>
+<li>The 12 dominant helpers (removable LoC): wt-blob-hash ~90, object-URI resolver ~90, concatBytes ~90, verb-entry <code>.jab=&quot;args&quot;</code> factory ~90, pooled-fd blob read ~70, tok32 codec ~55, beCtx shim ~50, scheme-parse ~45, hunkrows banner ~45, tree-walk/descend ~55, fs-stat trio ~25, isFullSha guard ~20.</li>
+<li><a href="CODE-020.html">CODE-020</a> lists the extraction homes + fold sites; its TODO set OMITS four opportunities this ticket adds (verb-entry factory, beCtx shim, intra-file twins, store scanners).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Land ≥1000 LoC NET deletion across the be/ JS tree via the <a href="CODE-020.html">CODE-020</a> extractions, measured per group with <code>wc -l</code> before/after.</li>
+<li>Add the missed extractions to the plan: verb-entry factory, <code>beCtx(ctx)</code> shim, and intra-file twins (spot block-bind, bro cell/row walk, store val-decode + eachRef, cat/blob CAP feed, argline quote scanner).</li>
+<li>Keep a running landed-savings tally in Outcome so the goal is auditable, not asserted.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>be/ JS only; never touch beagle/ (C twin); drive via jab, never native be.</li>
+<li>Behavior-preserving; full ctest suite green; net LoC counts shared-home lines ADDED against the lines deleted.</li>
+<li>Comments ≤2 lines; skip-and-note marginal swaps (the CODE-001..015 bullshit-quality lesson); one worktree per group.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Budget by <a href="CODE-020.html">CODE-020</a> group (est. net LoC removed): resolveHashlet ~80, wtblob ~90, hunkbuild (concat+span+writeFd) ~150, tok32+palette ~85, tree-walk/descend ~55, uriarg ~45, fs probes ~25, path ~30, wire internals ~55, ingest refs+ron60 ~65, isMeta ~15, weave-merge ~30 = ~725.</li>
+<li>Added opportunities (this ticket, fold under CODE-020): verb-entry factory ~90, beCtx shim ~50, spot block-bind ~60, bro cell/row walk ~70, store val-decode + eachRef ~35, cat/blob CAP feed ~20, argline scanner ~18 = ~343.</li>
+<li>Sum ~1,070 gross; expect ~1000 net after the shared-home code is added back — the goal is reachable, not padded.</li>
+<li>Accounting rule: count net LoC per LANDED group only; a helper surfacing in many slices (concatBytes, tok32) is counted ONCE at its home, never per call site.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> verb-entry factory <code>makeArgsVerb(default, one)</code>: fold the <code>.jab=&quot;args&quot;</code> fan-over-<code>arguments</code> + synthetic-ctx boilerplate across ~15 verbs/views (get/put/delete/diff/log/status/commit/tree/cat/blob/sha1/type/size/regex).</li>
+<li><a href="./ .html"> </a> <code>beCtx(ctx)</code> → {repo,sink,out,mode,flags}: fold <code>_be = typeof be!==&quot;undefined&quot;?be:null</code> + sink/out fallback at diff.js:440 log.js:412 commit.js:332 tree.js:156 spot.js:24 view/bro.js:137 (+verbs).</li>
+<li><a href="./ .html"> </a> spot block-bind: extract <code>tryBlockBind(b,flat,from,htoks,src,brace)</code> from the twin branches match.js:194 vs match.js:297 (~60).</li>
+<li><a href="./ .html"> </a> bro row/cell walk: one <code>walkRow(text,toks,off,end,onCell)</code> for bro.js rowEnd/rowEndPass/paintDiffRow{,Str} + pager paintRow/_screenToByte (~70).</li>
+<li><a href="./ .html"> </a> store scanners: <code>decodeVal(onDisk,key,val)</code> (store.js:274↔326) + <code>eachRef(wantLocal,cb)</code> (eachTip↔eachRemote 432↔450) (~35).</li>
+<li><a href="./ .html"> </a> cat/blob CAP feed: <code>feedFileHunks(sink,key,verb,bytes,mode,ext)</code> cat.js:141↔blob.js:171 (~20).</li>
+<li><a href="./ .html"> </a> argline: single quote-state pass emitting <a href="./token,wasQuoted.html">token,wasQuoted</a>; fold shellSplit↔markQuoted argline.js:36↔60 (~18).</li>
+<li><a href="./ .html"> </a> roll each landed <a href="CODE-020.html">CODE-020</a> group delta into the Outcome tally; stop counting once net ≥1000.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Overlap trap: concatBytes/tok32/span surface in many slices but land ONCE at their home — do not re-credit them per call site or the tally inflates past reality.</li>
+<li>The reconcile groups (resolveHashlet, isMeta, weave-merge) are behavior-sensitive → repro-first under <a href="CODE-020.html">CODE-020</a>; their LoC may land last or shrink.</li>
+<li>Net, not gross: adding shared-home files costs LoC; only the DELTA counts toward the ≥1000 goal.</li>
+<li>Spin-offs stay separate per <a href="../../meta/todo.html">todo</a> own-ticket rule (dead code, <code>eval()</code> address-bar) — already itemized in <a href="CODE-020.html">CODE-020</a>, not re-tracked here.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>none yet — per-group net-LoC deltas recorded here as they land; goal is ≥1000 net.</li>
+</ul>
+</body>
+</html>

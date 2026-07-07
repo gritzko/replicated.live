@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIT-013</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GIT-013 <a href="./JS.html">JS</a>: POST push over the wire (ssh:/http: receive-pack)</h1>
+<p>
+<a href="GIT-012.html">GIT-012</a> gave the JS wire a FETCH client (upload-pack) over ssh: and http:, but <code>be/shared/wire.js</code> exports <code>fetch</code> only — there is NO push, so <code>be post //host</code> / <code>post ssh://host?br</code> / <code>post https://host?br</code> (FF-advance a remote branch with cur's commits) is unimplemented in <code>jab</code>. This ticket adds the send-pack write direction: a shared <code>wire.push()</code> that advertises <code>git-receive-pack</code>, sends <code>&lt;old&gt; &lt;new&gt; &lt;ref&gt;</code> update commands plus a packfile of the objects the remote lacks, and parses report-status — over ssh: (spawn) and http: (curl POST), non-blocking over <code>pol</code>. POST stays FF-only; the unconstrained ref-write/force is its sibling <a href="GIT-014.html">GIT-014</a>, reusing this core. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><a href="GIT-012.html">GIT-012</a> landed the upload-pack FETCH client; <code>be/shared/wire.js</code> exports <code>fetch</code> only — no <code>receive-pack</code>/send-pack (grep finds no push path), so <code>jab</code> cannot push.</li>
+<li><code>be post //host</code> / <code>post ssh://host?br</code> / <code>post https://host?br</code> (FF-push cur's tip to a remote) therefore no-ops or errors in <code>jab</code>; native C <code>be</code> pushes via <code>keeper/WIRECLI.c</code> send-pack.</li>
+<li>The smart-protocol PUSH service is <code>git-receive-pack</code>: same pkt-line frame as fetch, opposite direction — client sends update commands + a pack, then reads report-status.</li>
+<li>Motivating case: <code>jab post //origin</code> to publish Beagle's own beagle-ext changes (the task that opened <a href="GIT-012.html">GIT-012</a>) needs a working push.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Add a shared <code>wire.push(remoteUri, updates, pack)</code> receive-pack client used by <code>jab post</code>, over ssh: (spawn) and http: (curl), mirroring <a href="GIT-012.html">GIT-012</a>'s transports.</li>
+<li>FF-only: POST refuses a non-fast-forward advance (the remote tip must be an ancestor of the new sha) per <a href="../../wiki/Invariants.html">Invariants</a>; force is <a href="../../wiki/PUT.html">PUT</a>/<a href="GIT-014.html">GIT-014</a>'s job.</li>
+<li>Reuse <a href="GIT-012.html">GIT-012</a> verbatim: <code>pkt.js</code>, the curl adapter + <code>pol</code> pump, <code>classify()</code> (add a <code>receive-pack</code> verb route), <code>parseAdvLine</code>.</li>
+<li>Build the push pack from the local store (objects the remote lacks) by delegating to keeper's pack builder — do not reimplement a pack writer in JS.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>receive-pack over ssh (spawn <code>git-receive-pack</code>) + http (curl POST <code>…/git-receive-pack</code>); non-blocking over <code>pol</code>; no new TLS binding (curl owns https), all as <a href="GIT-012.html">GIT-012</a>.</li>
+<li>No git:// push: the daemon refuses receive-pack by default (anonymous push unsafe) — out of scope, as in <a href="GIT-012.html">GIT-012</a>.</li>
+<li>FF-only gate enforced BEFORE any wire write; a non-FF target errors without sending a pack.</li>
+<li>ABC/JS norms: reuse before adding, ≤2-line <code>GIT-013</code> comments, greppable, ticket-coded commits; do not regress the fetch path or ssh/local.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>wire.push(remoteUri, updates, packBytes)</code>: advertise receive-pack, send <code>&lt;old&gt; &lt;new&gt; &lt;ref&gt;\0&lt;caps&gt;</code> pkt-lines + flush + the pack, then parse <code>unpack ok</code> / <code>ok &lt;ref&gt;</code> / <code>ng &lt;ref&gt; &lt;reason&gt;</code>.</li>
+<li>http: <code>GET &lt;U&gt;/info/refs?service=git-receive-pack</code> (skip the <code># service…</code> preamble), then <code>POST &lt;U&gt;/git-receive-pack</code>, types <code>application/x-git-receive-pack-{request,result}</code>; ssh: spawn <code>git-receive-pack &lt;path&gt;</code>.</li>
+<li>Caps minimal: <code>report-status ofs-delta</code>, no side-band — so the response is plain report-status pkt-lines, the same demux-free choice as <a href="GIT-012.html">GIT-012</a> fetch.</li>
+<li>Pack building: compute the not-yet-present object closure (advertised-remote-tip..cur) and emit a packfile via keeper (<code>keeper pack</code>/serve builder); the JS never writes a pack itself.</li>
+<li>FF check: read the advertised tip for the target ref and require it be an ancestor of cur via the local DAG (or empty for a new ref) — else refuse before any write.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> T1 — shared <code>wire.push()</code> receive-pack core (advert → updates+pack → report-status) behind the <a href="GIT-012.html">GIT-012</a> transports; ssh first.</li>
+<li class="open"><input type="checkbox" disabled> T2 — http: receive-pack adapter (curl GET advert + POST request) reusing the <a href="GIT-012.html">GIT-012</a> curl/<code>pol</code> path.</li>
+<li class="open"><input type="checkbox" disabled> T3 — pack builder hookup: closure of objects the remote lacks → keeper pack bytes (no JS pack writer).</li>
+<li class="open"><input type="checkbox" disabled> T4 — FF-only gate + <code>classify()</code> receive-pack route; wire into <code>verbs/post/post.js</code> <code>//host</code> push forms.</li>
+<li class="open"><input type="checkbox" disabled> T5 — report-status parse → per-ref ok/ng surfaced as the verb result; clear error on <code>ng</code>/<code>unpack</code> failure.</li>
+<li class="open"><input type="checkbox" disabled> T6 — tests: hermetic ssh: + http: push to a local <code>git-receive-pack</code>/http-backend; assert the remote ref advanced (mirror <a href="GIT-012.html">GIT-012</a>'s <code>test/wire/</code>).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Pack-builder interface: confirm keeper exposes a CLI/serve path emitting a thin/full pack for an arbitrary have/want set the JS can shell to — needed before T3.</li>
+<li>report-status may ride side-band on some servers; the no-side-band cap must be honoured by the peer, else add minimal demux.</li>
+<li>Real https push auth (tokens / credential helper) is deferred — local/anonymous push first.</li>
+<li>Submodule push recursion (post-order, <a href="../../wiki/Submodules.html">Submodules</a>) is out of scope here — tracked under DIS-058/SUBS.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

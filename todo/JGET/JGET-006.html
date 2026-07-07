@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JGET-006</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JGET-006 <a href="./HIGH.html">HIGH</a>: a pre-existing empty <code>.be/</code> directory crashes <code>jab get</code></h1>
+<p>
+Cloning into a directory that already holds an empty <code>.be/</code> dir — the standard hermetic-shield shape the native harness creates (<code>mkdir wt wt/.be</code>) — crashes <code>jab get</code> with an uncaught error and an empty worktree, where native treats the empty <code>.be/</code> as a fresh shield anchor and clones cleanly. One conceptual defect (empty <code>.be/</code> mis-detected as an existing store instead of a fresh shield) with three transport-specific faces. It masks/blocks most submodule + clone repros, so it gates several <a href="JGET-001.html">JGET-001</a> children. Method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Hit on <code>beagle/test/get/{29, 62}</code> and ALL submodule cases (each does <code>mkdir wt/.be</code>).</li>
+<li>Faces (all uncaught, rc=1, empty wt):<p>
+-  ssh/general: <code>core/discover.js::find()</code> treats empty <code>.be/</code> as <code>shieldLike</code>    → returns a non-null stale repo (<code>bePath=&lt;wt&gt;/.be/wtlog</code> absent, project=&quot;&quot;);    <code>core/loop.js::cli</code> (~267-305) only runs the repo-less GET seed when <code>find()</code>    THROWS, so the stale repo takes the wrong branch → downstream throw. -  file: local: <code>get.js:128-134</code> <code>seedLocal→ulog.append→io.rename</code> → <code>Error: Is    a directory</code> (renames a temp over the <code>.be</code> DIR). -  be: local (case 62): <code>seedRemote</code> <code>fresh=!exists(.be)</code> is false for an empty    dir → first clone routed to the incremental <code>else</code> → <code>ingest.add</code>    (<code>ingest.js:117</code>) <code>writeBytes</code> into a non-existent shard → ENOENT.
+</p>
+</li>
+<li>Evidence <code>~/todo/JS096-probe1/predot</code>, <code>~/todo/JSGET-cases/nosub-emptybe</code>,<p>
+<code>/tmp/jab-f62.*</code>.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>jab get</code> into a dir whose only <code>.be</code> is an EMPTY dir (or the empty-<code>.be</code> FILE<p>
+shield) clones cleanly across file:/be:/ssh:, identical to native; a real populated <code>.be</code> store is still detected as existing.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>One fix at the detection layer (treat empty <code>.be/</code> as &quot;no local store yet,<p>
+fresh clone&quot;) rather than three band-aids, if feasible. Repro-first.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Make <code>discover.js::find()</code> (and the <code>fresh</code> test in seedLocal/seedRemote) treat<p>
+an EMPTY <code>.be/</code> dir (and the empty-<code>.be</code> shield FILE) as no-store-yet → the repo-less fresh-clone path; only a populated <code>.be</code> (a wtlog row / shard) counts.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro test: <code>mkdir d/.be; cd d; jab get &lt;file:|be:|ssh: remote&gt;</code> → clean clone.</li>
+<li class="open"><input type="checkbox" disabled> Unify the empty-<code>.be</code> detection in discover.js + seed fresh-check.</li>
+<li class="open"><input type="checkbox" disabled> Parity-port (the empty-<code>.be</code> shield is the harness norm — fold into existing cases).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Blocks clean repros for JGET-007/008/009 (submodule cases all pre-make <code>wt/.be</code>).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open) Filed 2026-06-29.</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIT-016</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GIT-016 <a href="./JS.html">JS</a>: one graph-only relative-history routine for get/head/post/put</h1>
+<p>
+The four remote verbs (<code>get</code>/<code>head</code>/<code>post</code>/<code>put</code>) all turn on ONE question — the relative history of local cur vs a remote/branch tip (ahead/behind/diverged) — yet each answers it ad hoc, <code>head</code> is unimplemented, and <code>post</code>'s non-FF refusal collapses every divergent/unrelated case into one misleading &quot;use native be put to force&quot; hint. The verdict is a GRAPH question, answerable WITHOUT downloading content packs: the push-side FF decision is a LOCAL parent-walk from cur against the advertised remote tip sha (<code>dag.isAncestor</code> over local objects — ALREADY correct in <code>pushRemote</code>); only the pull side (<code>head</code>/<code>get</code>) needs remote commits. Factor a shared advertise→resolve→verdict routine over <code>dag.aheadBehind</code>/ <code>isAncestor</code>, add <code>head</code> (report-only), route all four through it, make the non-FF path honest with no force hint on <code>post</code>. JS only (<code>be/</code>, via <code>jab</code>). Supersedes the discarded content-fetch spine. Method: <a href="../../meta/work.html">work</a>; siblings <a href="GIT-013.html">GIT-013</a>/<a href="GIT-014.html">GIT-014</a>/<a href="GIT-015.html">GIT-015</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>The FF SAFETY decision is ALREADY correct in <code>verbs/post/post.js</code> <code>pushRemote</code> (~line 308): <code>dag.isAncestor(reader, old, tip)</code> is a LOCAL parent-walk from cur (<code>tip</code>) seeking the advertised remote tip (<code>old</code>) — cur's ancestry is local, so it needs NO remote objects and never calls <code>commitParents(old)</code>.</li>
+<li>The defect is only the MESSAGE: any non-FF throws <code>POSTNOFF … use native be put to force</code>, a destructive force hint even for a divergent/unrelated push it cannot (and does not) classify.</li>
+<li>Graph primitives exist: <code>shared/dag.js</code> <code>aheadBehind(keeper, cur, tip) → {ahead, behind}</code> (commit rows, NO content) and <code>isAncestor(keeper, anc, desc)</code>. There is NO <code>dag.relate</code> (the discarded spine invented it).</li>
+<li><code>shared/wire.js</code> exports <code>advertRefs</code>/<code>fetch</code>/<code>push</code>/<code>buildPushPack</code>/<code>classify</code>; <code>advertRefs(uri, verb)</code> reads remote ref TIPS only, <code>fetch</code> pulls a content pack.</li>
+<li>Each verb answers the question separately: <code>post</code> <code>pushRemote</code> (advert + isAncestor), <code>get.js</code> (<code>wire.fetch</code> then <code>dag.aheadBehind</code>, ~line 388), <code>put</code> its own path; <code>head</code> is NOT implemented (no <code>verbs/head</code>).</li>
+<li>DISCARDED prior GIT-016: eagerly fetch <code>old</code>'s connecting history as a CONTENT pack into <code>.be/refs</code> on EVERY push, then relate locally — conflated graph-negotiation with content-transfer and self-inflicted a cache-growth prune story. Dropped: content is never needed for the push verdict.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>ONE shared routine: advertise (<code>advertRefs</code>) → resolve target ref (the GIT-015 branch→<code>refs/heads/X</code> resolution) → verdict (<code>dag.aheadBehind</code>/<code>isAncestor</code>), consumed by all four verbs, computed once over objects actually present.</li>
+<li>Push side (<code>post</code>/<code>put</code>): FF/ahead decision is a LOCAL walk from cur vs the advertised remote tip; NO content download. Send only the ahead commits (all local). <code>post</code> is FF-only STRICTLY (a non-FF advance ALWAYS refuses, no force path); <code>put</code> is the force-allowed twin (set/reset any ref).</li>
+<li>Pull side: <code>head</code> reports the ahead/behind commit LISTS + changed paths; <code>get</code> receives the behind commits' content.</li>
+<li>Per-verb writes stay separate &amp; minimal: GET writes the pack log; HEAD updates remote-tracking refs only (reflog), NO pack-log write; POST/PUT write objects+refs to the REMOTE and SAVE the updated remote reference(s) locally (remote-tracking refs, esp. the just-advanced tip).</li>
+<li>Honest non-FF: <code>post</code> refuses without guessing diverged/unrelated (that needs remote objects <code>post</code> will not fetch) and WITHOUT a force hint; <code>put</code> allows force.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>JS only, <code>be/</code>, run via <code>jab</code>. Do NOT run native <code>be</code>; do NOT open <code>beagle/</code>.</li>
+<li>Reuse before add: <code>dag.aheadBehind</code>/<code>isAncestor</code>/<code>ancestors</code>, <code>wire.advertRefs</code>/<code>fetch</code>/<code>buildPushPack</code>/<code>push</code>/<code>classify</code>, the <code>abc.index(&quot;wh128&quot;)</code>/<code>WHIFFKeyPack</code> index bindings, the <code>pushRemote</code> ref-resolution. No new deps.</li>
+<li>ABC/JS norms: ≤2-line <code>GIT-016</code> comments, greppable, ticket-coded ≤64-char commit.</li>
+<li>Keep the peer CAS intact: <code>wire.push</code> sends <code>old</code> and <code>parseReportStatus</code> throws on <code>non-fast-forward</code> — the client verdict AUGMENTS, never replaces, that safety.</li>
+<li>Do not regress <code>push-ssh</code> (FF), <code>push-nonff</code> (now an honest refusal), or <code>get</code>/fetch.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>The shared routine is GRAPH-ONLY: advertise → resolve → verdict over LOCAL objects; content transfer is a per-verb step AFTER the verdict, never inside it.</li>
+<li>The verdict is direction-aware: the push side gets <code>{eq, ff(ahead), non-ff}</code> from a local walk (cur's ancestry is local, the remote tip's is not — so behind is UNKNOWN and NOT guessed); the pull side, with remote commits present, gets full <code>{eq, ahead, behind, diverged, unrelated}</code>.</li>
+<li>RESOLVES the pull-side object question: the fetched remote commits live in an IN-MEMORY <code>wh128</code> DAG index (commit→parent edges), NEVER the pack log — enough for the verdict + ahead/behind lists. Mirrors graf's <code>wh128</code> edge index (<a href="../../beagle/graf/INDEX.md">graf DAG.h</a>).</li>
+<li>REUSE the existing bindings, do NOT hand-roll a map: model the remote DAG as an in-memory <code>abc.index(&quot;wh128&quot;,{mem})</code> — a stack of sorted runs + memtable with newest-wins <code>get</code>/<code>range</code>/<code>seek</code>, GC'd at exit (<a href="../../beagle/js/API.md">js API.md</a>) — keyed by <code>WHIFFKeyPack(type, hashlet60)</code>; <code>put(key,val)</code> each fetched commit's parent edge. Same pattern as <code>shared/store.js</code>/<code>ingest.js</code>.</li>
+<li><code>dag.aheadBehind</code>/<code>isAncestor</code> gain an OPTIONAL remote-index arg: resolve parents from local <code>keeper.commitParents</code> first, then the remote <code>wh128</code> index (its run-stack already does newest-wins). Only <code>head</code>'s changed-path diff needs remote trees/blobs (fetched transiently, unpersisted).</li>
+<li><code>get</code> keeps <code>wire.fetch</code> + <code>dag.aheadBehind</code> for the behind list and persists to the pack log — it is the ONLY pack-log writer.</li>
+<li>Land incrementally, each step green: shared routine + honest <code>post</code> message first, then <code>head</code>, then reroute <code>get</code>/<code>put</code>.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> T1 — repro test: a non-FF <code>post</code> refuses with an HONEST message (non-FF, no &quot;be put to force&quot; hint); an FF <code>post</code> still advances — over local objects, no content fetch.</li>
+<li class="open"><input type="checkbox" disabled> T2 — extract the shared advertise→resolve→verdict routine (advertRefs + ref-resolution + <code>dag.aheadBehind</code>/<code>isAncestor</code>) into one module; extend the dag fns to accept an optional remote <code>abc.index(&quot;wh128&quot;,{mem})</code> (run-stack, in-memory) alongside <code>keeper.commitParents</code> — no hand-rolled map.</li>
+<li class="open"><input type="checkbox" disabled> T3 — reroute <code>post</code>/<code>put</code> through it: <code>post</code> FF-or-refuse STRICTLY (honest, no force hint), <code>put</code> set/force; send only local ahead commits (no content download), then SAVE the updated remote-tracking ref(s).</li>
+<li class="open"><input type="checkbox" disabled> T4 — add the <code>head</code> verb (<code>verbs/head</code>): fetch the connecting commits into the IN-MEMORY remote DAG (no pack-log write), report ahead/behind commit lists + changed paths, update remote-tracking refs only.</li>
+<li class="open"><input type="checkbox" disabled> T5 — reroute <code>get</code> through the shared routine for the behind list; <code>get</code> remains the sole pack-log writer (<code>wire.fetch</code> persist + checkout).</li>
+<li class="open"><input type="checkbox" disabled> T6 — regression: <code>push-ssh</code> FF, <code>push-nonff</code> (honest path), <code>get</code>/fetch; run the wire + post buckets.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>RESOLVED (was the T4 blocker): <code>head</code>'s fetched connecting commits live in an IN-MEMORY commit→parent DAG, never the pack log; changed-path trees/blobs are fetched transiently for the report and likewise unpersisted.</li>
+<li>By design the push side cannot classify diverged vs unrelated (no remote objects) and <code>post</code> will not fetch to do so — the honest message says only &quot;non-FF&quot;. Richer classification, if ever wanted, is a separate pull-side call.</li>
+<li>Worktree via <code>jab get file:/home/gritzko/.be?/beagle-ext</code>; NEVER <code>cp -a</code> (the <a href="../PUT/PUT-005.html">PUT-005</a> <code>.be</code>-redirect artifact).</li>
+<li>Reuse the sibling wire pieces — <a href="GIT-013.html">GIT-013</a> (post push), <a href="GIT-014.html">GIT-014</a> (put push), <a href="GIT-015.html">GIT-015</a> (ref-target resolution); do not duplicate them.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

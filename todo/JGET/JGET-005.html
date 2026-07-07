@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JGET-005</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JGET-005 <a href="./HIGH.html">HIGH</a>: <code>jab get ?&lt;branch&gt;</code> fetches the WRONG branch (trunk) for any non-main/master name</h1>
+<p>
+<code>jab get ?feat</code> (or <code>?/proj/feat</code>) over the wire silently checks out TRUNK instead of <code>feat</code>: the want-ref builder prefixes the bare branch with <code>refs/</code> (→ <code>refs/feat</code>) instead of <code>refs/heads/</code>, so it never matches the peer's advertised <code>refs/heads/feat</code> and falls through to the HEAD/main/master fallback, returning the trunk tip. <code>?master</code>/<code>?main</code> only work by the coincidence of those fallback lines. No error — the user gets the wrong content. Part of <a href="JGET-001.html">JGET-001</a>; method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Native <code>beagle/test/get/{24-uri-refs, 38-remote-main-branch}</code> (ref-shape<p>
+resolution).
+</p>
+</li>
+<li>Repro: seed a <code>be</code> peer with trunk+<code>feat</code>; <code>jab get &quot;be://localhost/&lt;U&gt;?/proj/feat&quot;</code><p>
+→ jab checks out <code>hello.c=TRUNK</code>; native checks out <code>FEAT</code>. Evidence <code>~/todo/JS096-probe1/c24/{j2,n2,j3}</code>.
+</p>
+</li>
+<li>Root: <code>pickWant</code> (<code>be/shared/wire.js:107</code>):<p>
+<code>const full = wantRef.indexOf(&quot;refs/&quot;)===0 ? wantRef : (&quot;refs/&quot;+wantRef);</code> builds <code>refs/feat</code>, never matching the advertised <code>refs/heads/feat</code>.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A bare <code>?&lt;branch&gt;</code> resolves the peer's literal <code>refs/heads/&lt;branch&gt;</code>, exactly<p>
+like native; full <code>refs/...</code> refs pass through unchanged; trunk/empty still resolves HEAD/default.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Match the native ref-resolution funnel (also test <code>?main</code> per <a href="../DIS/README.html">DIS-028</a>, which<p>
+case 38 pins). Repro-first.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>In <code>pickWant</code>, complete a bare branch to <code>refs/heads/&lt;branch&gt;</code> (not <code>refs/&lt;b&gt;</code>);<p>
+keep the already-<code>refs/</code>-qualified and HEAD/default arms. Confirm the advert parser exposes <code>refs/heads/*</code> for the match.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro test: <code>?feat</code> checks out FEAT (not trunk); <code>?master</code>/<code>?main</code> still OK.</li>
+<li class="open"><input type="checkbox" disabled> Fix the <code>refs/</code> vs <code>refs/heads/</code> completion in pickWant.</li>
+<li class="open"><input type="checkbox" disabled> Parity-port cases 24/38 to <code>be/test/get</code>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Silent wrong-content; masquerades as a successful clone/switch.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open) Filed 2026-06-29.</li>
+</ul>
+</body>
+</html>

@@ -13,16 +13,17 @@
 </a>
 <h1>Worktree: a checked-out tree with its state in one wtlog</h1>
 <p>
-A worktree is a checked-out tree on disk, with its per-call state in one append-only <code>&lt;wt&gt;/.be/wtlog</code>. The goal is cheap, disposable worktrees over one hard-to-break <a href="Store.html">Store</a> — a machine needs only one store per upstream repo, and every extra worktree is just a dir pointing back. The method: row 0 anchors the store, later <code>get</code>/<code>post</code> rows track the branch and tip, <a href="Sniff.html">Sniff</a> stamps each file it touches with the row's timestamp, and <a href="POST.html">POST</a> reads those stamps back to classify files at commit time.
+A worktree is a checked-out tree on disk, with its per-call state in one append-only <code>&lt;wt&gt;/.be/wtlog</code>. The goal is cheap, disposable worktrees over one hard-to-break <a href="Store.html">Store</a> — a machine needs only one store per upstream repo, and every extra worktree is just a dir pointing back. The method: row 0's base <code>get</code> anchors the store, later <code>get</code>/<code>post</code> rows track the branch and tip, <a href="Sniff.html">Sniff</a> stamps each file it touches with the row's timestamp, and <a href="POST.html">POST</a> reads those stamps back to classify files at commit time.
 </p>
 <h2>The wtlog and the anchor</h2>
 <p>
-Per-wt state — base branch, base tip, and pending <a href="PATCH.html">PATCH</a> parents — lives in <code>&lt;wt&gt;/.be/wtlog</code>; the current branch is the latest <code>get</code>/<code>post</code> row's <code>?branch</code>, never a fixed field, so switching just appends a row.
+Per-wt state — base branch, base tip, and pending <a href="PATCH.html">PATCH</a> parents — lives in <code>&lt;wt&gt;/.be/wtlog</code>; the current branch is the latest <code>get</code> row's <code>?branch</code>, never a fixed field, so switching just appends a <code>get</code> row.
 </p>
 <ul>
-<li>Colocated: <code>&lt;wt&gt;/.be/</code> is the store dir itself, beside the wt files; wtlog row 0's <code>repo</code> is <code>file:&lt;wt&gt;/.be/&lt;project&gt;</code>.</li>
-<li>Secondary: <code>&lt;wt&gt;/.be</code> is a FILE whose first row <code>repo</code>-points at the primary store; <a href="Sniff.html">Sniff</a> follows it and shares the pool.</li>
+<li>Colocated: <code>&lt;wt&gt;/.be/</code> is the store dir itself, beside the wt files; wtlog row 0 is a <code>get</code> rooted at <code>file:&lt;wt&gt;/.be/&lt;project&gt;</code>.</li>
+<li>Secondary: <code>&lt;wt&gt;/.be</code> is a FILE whose first <code>get</code> row points at the primary store; <a href="Sniff.html">Sniff</a> follows it and shares the pool.</li>
 <li>One branch has at most one active worktree, tracked in the branch reflog; extra worktrees are dirs whose wtlog points back.</li>
+<li>Branch is GET-owned: only <code>get</code> sets cur's branch — a checkout/clone, or an explicit <code>be get ?branch</code>; <code>post</code>/<code>put</code>/<code>delete</code> advance the tip but never switch branch, and a bare <code>be get</code> FFs the tip yet keeps the branch.</li>
 </ul>
 <h2>The --at coordinate</h2>
 <p>
