@@ -29,6 +29,27 @@ declared <code>pk.size</code> and grows on NOROOM (a <code>_grow</code> wrapper)
 </p>
 </li>
 </ul>
+<h2>Open — jab runtime code-review batch (<a href="./JS-101.html">JS-101</a>..<a href="./JS-115.html">JS-115</a>, 2026-07-07)</h2>
+<p>
+A 4-dimension multi-agent review of the jab repo (C++ bindings + embedded JS bundles, ~6.8k lines) with 2-skeptic adversarial verification per finding: 24 raw findings, 15 confirmed (9 refuted). Tickets are proposals awaiting user triage; each carries file:line evidence.
+</p>
+<ul>
+<li><a href="./JS-101.html">JS-101</a> <a href="./HIGH.html">HIGH</a>: HEAP/HASH/sort leaves read args[] past argc (heap.hpp/hash.hpp/hit.hpp) — OOB read of the JSC arg array from plain JS; only binding families lacking the argc guard.</li>
+<li><a href="./JS-102.html">JS-102</a> <a href="./HIGH.html">HIGH</a>: ulog handle is a raw heap pointer in a JS number (ulog.hpp) — double-close double-frees, use-after-close UAF, forged number dereferenced.</li>
+<li><a href="./JS-103.html">JS-103</a> <a href="./HIGH.html">HIGH</a>: ULOG writers drop URILexer's ok64 + bypass DOGCanonURI (ulog.hpp) — malformed URI silently written truncated into the append-only log (live repro).</li>
+<li><a href="./JS-104.html">JS-104</a> <a href="./HIGH.html">HIGH</a>: Socket.write FIFO grows linearly (net.cpp+buf.cpp) — O(n^2) memcpy under backpressure.</li>
+<li><a href="./JS-105.html">JS-105</a> <a href="./HIGH.html">HIGH</a>: abc.index re-sorts the memtable via native qsort on every get/range/prefix/seek (cont.cpp).</li>
+<li><a href="./JS-106.html">JS-106</a> <a href="./MED.html">MED</a>: index bulk-load crosses the JS/C boundary per element; needs a bulk feed leaf (cont.cpp/heap.hpp).</li>
+<li><a href="./JS-107.html">JS-107</a> <a href="./MED.html">MED</a>: uri.make/escape silently truncate at 2047 bytes (uri.cpp JABCSliceStr clamp) → corrupt URI, no throw.</li>
+<li><a href="./JS-108.html">JS-108</a> <a href="./MED.html">MED</a>: five divergent u8-slice→JSString helper copies (uri/io/pack/ulog/codec) — hoist one loud, length-explicit helper; fixes <a href="./JS-107.html">JS-107</a>.</li>
+<li><a href="./JS-109.html">JS-109</a> <a href="./MED.html">MED</a>: gitParseCommit leaks a JSStringRef on empty-tree/default-body paths (pack.hpp), masked by the blanket JSC LSan suppression.</li>
+<li><a href="./JS-110.html">JS-110</a> <a href="./MED.html">MED</a>: net bundle composes URIs by string concat (&quot;tcp://&quot;+host+&quot;:&quot;+port) — forbidden by norms, breaks IPv6 literals.</li>
+<li><a href="./JS-111.html">JS-111</a> <a href="./MED.html">MED</a>: net._accept swallows real errors as &quot;nothing pending&quot; — EMFILE becomes a silent 100% CPU accept spin.</li>
+<li><a href="./JS-112.html">JS-112</a> <a href="./MED.html">MED</a>: require() keeps a module cached after its evaluation throws — retry returns partial exports (Node deletes the entry).</li>
+<li><a href="./JS-113.html">JS-113</a> <a href="./LOW.html">LOW</a>: a throwing timer callback permanently desyncs the JS timer wheel from the native pol timer — later setTimeout never fires.</li>
+<li><a href="./JS-114.html">JS-114</a> <a href="./LOW.html">LOW</a>: dgram._send does getaddrinfo per datagram, even for literal addresses.</li>
+<li><a href="./JS-115.html">JS-115</a> <a href="./LOW.html">LOW</a>: io.<em>ram writes through an unchecked malloc(sizeof(size</em>t)).</li>
+</ul>
 <h2>Open — keeper index completeness (<a href="JS-099.html">JS-099</a>, 2026-06-30)</h2>
 <ul>
 <li><a href="JS-099.html">JS-099</a> <a href="./HIGH.html">HIGH</a>: be/ JS must index EVERY keeper pack it writes incrementally.<p>
