@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABC-013</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ABC-013: <a href="./HIGH.html">HIGH</a> FILE/FSW: short-write data loss, uninit fd book, dead watches</h1>
+<p>
+FILE.c streaming/booking layer (2026-07-07 review). <code>FILEFlushThreshold</code> marks ALL buffered data consumed regardless of how much <code>write()</code> accepted — silent, permanent data loss on any partial write. The fd-book grows over uninitialized malloc memory whose garbage then passes NULL-sentinel checks. FSW watches can never be removed and kqueue leaks an fd per watch.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>FILE.c:610-613</code> <code>FILEFlushThreshold</code> — <code>write()</code> then unconditional<p>
+<code>Bate(buf)</code> (B.h:228: DATA := consumed). Partial write (pipe, RLIMIT, near-full disk) loses the tail. <code>FILEFlush</code> (:585) does it right with <code>u8bUsed(buf, r)</code>. Exported streaming primitive, no in-repo caller yet.
+</p>
+</li>
+<li><code>FILE.c:676-684</code> <code>FILETrimMap</code> — truncates to <code>u8bDataLen</code> (b<a href="./2.html">2</a>-b<a href="./1.html">1</a>),<p>
+ignoring PAST: any consumed bytes shorten the file; still-mapped pages past EOF then SIGBUS. <code>FILETrimBook</code> (:1052) correctly uses b<a href="./2.html">2</a>-b<a href="./0.html">0</a>.
+</p>
+</li>
+<li><code>FILE.c:924-926</code> — FILE_BOOK gap entries are uninitialized malloc bytes<p>
+(u8pbAllocate → Balloc, no zeroing) but NULL is the &quot;not booked&quot; sentinel: <code>FILEUnBook</code>'s shrink loop reads garbage; <code>FILEBookExtend</code>'s <code>test(booked_end != NULL, FILENOBOOK)</code> (:1017) accepts garbage and can mmap(MAP_FIXED) over unrelated VA from a garbage-derived book_size.
+</p>
+</li>
+<li><code>FILE.c:851-855</code> — RO probe: <code>pread != 1 → ro_empty = YES</code>; a transient<p>
+EINTR exposes a non-empty log as an empty buffer, no error.
+</p>
+</li>
+<li>EINTR retried in FILEFeed/FILEDrain/FILEFeedv/FILEReap but NOT in<p>
+FILEFlush (:579), FILEFlushAll (:597, also truncates write() into int), FILEFlushThreshold, FILEEnsureSoft/Hard (:623/:645), PAGEStreamFd (PAGE.c:233/251), PACK I/O (PACK.c:70,187,210,252).
+</p>
+</li>
+<li>No O_CLOEXEC: FILECreate/CreateAt/Open/OpenAt (FILE.c:354-386),<p>
+PACKCreate/Open (PACK.c:48,173), kqueue FSWDir (FSW.c:108) — fds leak into FILESpawn children; Linux FSWInit already sets IN_CLOEXEC.
+</p>
+</li>
+<li>FSW: <code>FSWUndir</code> is <code>(void)path; done;</code> on BOTH platforms (FSW.c:44,123)<p>
+— documented &quot;remove a watch&quot;, silently OK; inotify wd discarded (:36-40) so removal is unimplementable as-is; kqueue keeps one dir fd per watch open forever, FSWClose only closes the kqueue fd (:108-119).
+</p>
+</li>
+<li><code>FILE.c:123</code> — <code>call(PATHu8bTerm, work)</code> inside FILERmDir's readdir<p>
+loop early-returns without closedir. <code>FILE.c:1123</code> FILEScanRecurse: ≥1 KiB a_pad frame per dir level, no depth cap (FILErmrf caps at 64).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Repro-first: FlushThreshold into a pipe with a small pipe buffer;<p>
+TrimMap after u8bUsed; book fd N on a fresh book, then UnBook.
+</p>
+</li>
+<li>Consume <code>written</code> bytes only; trim to b<a href="./2.html">2</a>-b<a href="./0.html">0</a>; zero the book gap<p>
+(or a zeroing allocator); EINTR + O_CLOEXEC sweeps; real FSW removal (record wd/fd per watch) or delete the fake API.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Review-gated abc/. ULOG/keeper durability depends on the flush paths —<p>
+coordinate with <a href="../ULOG/ULOG-002.html">ULOG-002</a>/<a href="../ULOG/ULOG-003.html">ULOG-003</a> owners before touching semantics.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repros: partial-write flush, TrimMap-with-PAST, book-gap garbage</li>
+<li class="open"><input type="checkbox" disabled> FlushThreshold/Flush* short-write + EINTR handling</li>
+<li class="open"><input type="checkbox" disabled> FILETrimMap full-length resize; FILE_BOOK zeroing</li>
+<li class="open"><input type="checkbox" disabled> O_CLOEXEC sweep; FSW watch bookkeeping or API removal</li>
+<li class="open"><input type="checkbox" disabled> closedir on the PATHu8bTerm path; recursion depth cap</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+</body>
+</html>

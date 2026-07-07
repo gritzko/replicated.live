@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABC-016</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ABC-016: <a href="./MED.html">MED</a> bedrock scalar/crypto hygiene: popc64, unaligned sha256, SAN.h</h1>
+<p>
+01.h/SHA.h/NACL.h/OK.h/PRO.h grab-bag (2026-07-07 review): advertised-but- wrong bit helpers, an unaligned u64 read of a 1-aligned record, and support headers that don't do what they claim.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>01.h:172</code> — <code>#define popc64(x) __builtin_popcount(x)</code>: 32-bit builtin,<p>
+top 32 bits never counted. Caller-less (BIT.h calls popcountll directly) but advertised in INDEX.md. <code>popcountll</code> it.
+</p>
+</li>
+<li><code>01.h:240</code> — <code>u64is2power(0)</code> returns YES; <code>01.h:248</code> <code>upper_log_2(0)</code><p>
+hits <code>clz64(0)</code> (UB for the builtin). Guard zero.
+</p>
+</li>
+<li><code>01.h:154-155</code> — <code>max</code>/<code>min</code> double-evaluate in the most-included<p>
+header (the roundup2 comment at :259 shows the codebase cares); same for <code>$off</code>/<code>$cut</code> (S.h:31,89). Statement-expression or typed forms.
+</p>
+</li>
+<li><code>01.h:289</code> — <code>Ocopy</code> uses assert without including &lt;assert.h&gt;; works<p>
+only via S.h include order.
+</p>
+</li>
+<li><code>SHA.h:11-14</code> <code>sha256empty</code> — reads <code>u8 data[32]</code> (alignof 1, lives at<p>
+arbitrary offsets in mmapped streams by design) through <code>u64c*</code>: unaligned-load UB, UBSan/strict-alignment trap. Same class as PTR-001's TLV casts, distinct site. memcmp/memcpy form.
+</p>
+</li>
+<li><code>NACL.h:35-41</code> — sign: <code>slen</code> possibly uninit when the NDEBUG-skipped<p>
+assert reads it; <code>NACLFAIL0 + ret</code> with negative ret mints undocumented codes. Blake wrappers (:52-66) discard libsodium returns, always OK.
+</p>
+</li>
+<li><code>PRO.h:379</code> / <code>TEST.h:29,35</code> — MAIN/TEST return ok64 from int main:<p>
+exit status truncates to the low byte; codes with low byte 0 report shell SUCCESS. Map non-OK to a fixed nonzero exit.
+</p>
+</li>
+<li><code>SAN.h:10-20</code> — &quot;sanitize the namespace&quot; undefs 7 macros but leaves the<p>
+high-collision ones (<code>is</code>, <code>on</code>, <code>test</code>, <code>scan</code>, <code>trace</code>, <code>must</code>, <code>want</code>, <code>min</code>, <code>max</code>, <code>zero</code>, …; <code>trace()</code> expanding to <code>;</code> silently swallows a third-party call) AND <code>#undef NULL</code> breaks the standard macro for the rest of the TU.
+</p>
+</li>
+<li><code>OK.h:24-25</code> — <code>static char _ok64_tmp[4][16]; static int _ok64_idx;</code><p>
+rotating static buffers in a header: per-TU state, non-thread-safe, 4-call lifetime — the pattern the canon bans (cf. PTR-001 Buf<a href="./4096.html">4096</a>).
+</p>
+</li>
+<li><code>RAP.h:26-36</code> — <code>RAPMicroSeed</code>/<code>RAPNano</code>/<code>RAPNanoSeed</code> take consumable<p>
+<code>u8cs</code> for read-only input where their siblings correctly take <code>u8csc</code>.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Per-item fixes with table tests where observable (popc64, is2power,<p>
+exit codes); SAN.h completed or re-scoped; ok64str made caller-buffer or thread-local-documented.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>01.h/S.h are included everywhere — zero-risk mechanical fixes only,<p>
+review-gated; anything with API impact (ok64str) needs a ruling.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> popc64/u64is2power/upper_log_2 + tests</li>
+<li class="open"><input type="checkbox" disabled> sha256empty memcmp form; NACL return handling</li>
+<li class="open"><input type="checkbox" disabled> MAIN/TEST exit mapping; SAN.h scope ruling</li>
+<li class="open"><input type="checkbox" disabled> OK.h buffer strategy ruling; RAP.h signatures; min/max single-eval</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABC-006</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ABC-006: <a href="./HIGH.html">HIGH</a> Bx.h buffer template: bSplice units, bReMap shrink, bAcquire math</h1>
+<p>
+Three defects in the typed-buffer template (2026-07-07 review). All are latent-but-armed: the template instantiates for <code>kv32</code>, <code>kv64</code>, <code>sha256</code>, <code>range32</code>, <code>u8cs</code>, … and the only current <code>bSplice</code> caller happens to be u8.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>Bx.h:435-438</code> <code>bSplice</code> mixes units: <code>off</code>, <code>cut</code>, <code>$len(paste)</code>,<p>
+<code>bDataLen</code> are ELEMENT counts but applied to <code>u8 *b</code> as BYTE offsets and memmove sizes. Correct only for <code>sizeof(T)==1</code>; any non-u8 instantiation splices garbage while still advancing <code>buf[2]</code> in elements. Sole caller today: <code>TLV.h:70</code> (u8) — works by accident.
+</p>
+</li>
+<li><code>Bx.h:388-393</code> <code>bReMap</code> non-mremap fallback memmoves <code>old_size</code> bytes<p>
+into a <code>new_size</code> mapping — OOB write on any shrink; this is the path macOS CI takes. Also <code>MAP_SHARED</code> vs the mremap path's private mapping. (Distinct from MEM-021's MMAP.c items.)
+</p>
+</li>
+<li><code>Bx.h:506-510</code> <code>bAcquire</code>: (1) aligns with <code>sizeof(T)</code> mask instead of<p>
+<code>alignof(T)</code> — garbage for non-power-of-2 T, and inconsistent with <code>bAlign</code>/<code>bAren</code> (Bx.h:451,483) which use alignof; (2) <code>cap * sizeof(T)</code> unchecked overflow → tiny sz passes the room check, child claims cap elements over a few bytes; (3) <code>base + sz &gt; arena[3]</code> pointer-overflow UB. Same <code>len * sizeof(T)</code> overflow in <code>bAllocate</code> (:202), <code>bMap</code> (:369).
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Repro: instantiate <code>bSplice</code> for a 4/8-byte T and splice mid-buffer;<p>
+a shrink <code>bReMap</code> under <code>#undef MREMAP</code> build; bAcquire with huge cap.
+</p>
+</li>
+<li>Fix units (scale by sizeof(T) or keep T* arithmetic), clamp the remap<p>
+copy to min(old,new), alignof + overflow-checked size math.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>abc/ core — review-gated; behavior-preserving for u8 instantiations.</li>
+<li>Coordinate with <a href="../MEM/MEM-021.html">MEM-021</a> (adjacent MMAP fixes), disjoint lines.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro tests (non-u8 splice, shrink remap, overflow cap)</li>
+<li class="open"><input type="checkbox" disabled> bSplice element-scaled moves</li>
+<li class="open"><input type="checkbox" disabled> bReMap copy clamp + mapping flags</li>
+<li class="open"><input type="checkbox" disabled> bAcquire/bAllocate/bMap alignment + size-overflow guards</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+</body>
+</html>

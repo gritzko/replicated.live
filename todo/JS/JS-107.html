@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-107</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-107: uri.make/escape/unescape silently truncate results at 2047 bytes</h1>
+<p>
+Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers. The URI leaves compose into 4096-byte buffers but return through a 2048-byte scratch clamp, handing the caller a corrupt URI instead of a NOROOM throw. Root cause is one of the divergent helpers tracked by <a href="./JS-108.html">JS-108</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>JABCuriMake/JABCuriEsc/JABCuriUnesc compose into <code>u8 out[4096]</code> and succeed up to 4096 bytes, then JABCSliceStr clamps: <code>char tmp[2048]; if (n &gt;= sizeof(tmp)) n = sizeof(tmp)-1;</code> (jab uri.cpp:12-17).</li>
+<li>Escaping can triple length (2048-byte input -&gt; up to 4096 escaped in JABCuriEsc's in<a href="./2048.html">2048</a>/out<a href="./4096.html">4096</a>), so 2048-4095-byte results are returned truncated with no error.</li>
+<li>This is the copy-into-fixed-scratch anti-pattern the norms flag (meta/abc.mkd &quot;Don't copy if you can pass the slice&quot;).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Repro first: a &gt;2047-byte URI through uri.make/escape round-trips intact or throws NOROOM — never truncates silently.</li>
+<li>Fix via the shared length-aware helper of <a href="./JS-108.html">JS-108</a> (or size dynamically here if that lands later).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Coordinate with <a href="./JS-108.html">JS-108</a> to avoid fixing the clamp twice.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro: long-URI round-trip in test/uri.js</li>
+<li class="open"><input type="checkbox" disabled> replace the clamped JABCSliceStr path</li>
+</ul>
+</body>
+</html>

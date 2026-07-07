@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-115</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-115: io.<em>ram writes through an unchecked malloc(sizeof(size</em>t))</h1>
+<p>
+Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers. The mmap right above is checked; the tiny length-box malloc is not — a NULL write on allocation failure.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>JABCioRam: <code>size_t* len = (size_t*)malloc(sizeof(size_t)); *len = n;</code> with no NULL check (jab io.cpp:568); the <code>n</code>-byte mmap above IS checked against MAP_FAILED.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>if (!len) { munmap(map, n); JABC_THROW(...); }</code> before the write.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Two-line fix; no repro test required for an OOM branch (ruling per work.mkd item 3), but the error path must free the mmap.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> null-check + munmap on the error path</li>
+</ul>
+</body>
+</html>

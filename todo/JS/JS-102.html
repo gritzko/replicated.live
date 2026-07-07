@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-102</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-102: ulog handle is a raw pointer in a JS number — double free / UAF / forgeable</h1>
+<p>
+Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers. The ULOG binding is the only one that hands a raw heap pointer across the JS boundary, so script-level misuse becomes native memory corruption.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>JABCulogOpen returns <code>(double)(size_t)h</code> (jab ulog.hpp:258); JABCulogHandle casts any positive JS number straight back to <code>jabc_ulog*</code> with no validation (ulog.hpp:261-266).</li>
+<li>JABCulogClose does <code>ULOGClose(...); free(h);</code> (ulog.hpp:337-338) but nothing is nulled JS-side: <code>ulog._close(h)</code> twice is a double free; <code>_append/_count</code> after close is a UAF.</li>
+<li>Any script can crash the runtime with <code>abc._ulog_count(12345)</code> — a forged number is dereferenced.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Repro first: double-close and forged-handle tests expecting a clean JS throw.</li>
+<li>A validated handle table (small index -&gt; jabc_ulog*, tombstoned on close) in the binding; no raw pointers cross the boundary.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Keep the JS API shape (numeric handle) so be/ lib callers don't change.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro: double-close, use-after-close, forged handle (expect throw)</li>
+<li class="open"><input type="checkbox" disabled> handle table in ulog.hpp; audit no other binding leaks pointers</li>
+</ul>
+</body>
+</html>

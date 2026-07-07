@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABC-018</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ABC-018: <a href="./GATED.html">GATED</a> style sweep: manual parsers, slice-from-arith, naming drift</h1>
+<p>
+Behavior-preserving style audit (2026-07-07 review), the <a href="../PTR/PTR-001.html">PTR-001</a> pattern: surfaced for human review, never autolanded. Two hand-written parsers remain in direct violation of the canon's loudest rule, plus a cluster of slice-from-pointer-arithmetic sites and naming/error-code drift.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>DNS.h:154-237,296</code> — the whole name codec is a manual byte scanner<p>
+(<code>while (dot &lt; src[1] &amp;&amp; *dot != '.') ++dot;</code>, <code>p += 1 + len;</code>, <code>rr-&gt;rdata[0] = *from; *from += rdlen;</code>). Bounds were probed and are CORRECT (compression-pointer chase incl.) — style/maintainability only. Also: 255-byte total-name cap unenforced (DNS_NAME_MAX only caps hops), and a wire name without the 0 terminator drains OK.
+</p>
+</li>
+<li><code>NFA.h:92-365</code> — the regex compiler is recursive-descent manual parsing<p>
+with raw <code>*p++</code> cursors (class parser, counted-repeat re-parse via saved raw pointers). Big job; ragel-vs-slice-movers needs a ruling. (ABC-004 owns only the class-bitmap storage migration.)
+</p>
+</li>
+<li>Slice-from-pointer-arithmetic cluster (abc.mkd: &quot;very very bad …<p>
+Never ever do that!&quot;): SORT.c:26-28 (<code>chunk[0]=(u8c*)p; p+=clen</code>), SLOG.c:128/146/159/167/177 (<code>{stream[0]+off, stream[1]}</code>), FILE.h:210-211, FILE.c:1301-1302 (<code>name[1][-1]</code>), PATH.c:292-297, URI.c:501-509 (<code>*esc[0]++</code>, <code>esc[0] += 2</code>). a_rest/a_head/a_part/$eat exist for all of these.
+</p>
+</li>
+<li><code>UDP.h:7-14</code> <code>a$c</code> — the copy-truncate-NUL anti-pattern verbatim<p>
+(canon's named refactor candidate), UDP-namespaced in name only, zero users: delete.
+</p>
+</li>
+<li>memset-vs-zero(): PACK.c:23,169; MMAP.h:14 (also drops munmap return).<p>
+a_pad-vs-a_path: FILE.c:64,80. PATH.h:193 expands FILE_PATH_MAX_LEN which FILE.h defines — PATH.h alone doesn't compile.
+</p>
+</li>
+<li>Error-code drift: slice ops returning buffer codes (<code>put32</code> BNOROOM<p>
+INT.h:128; <code>u8sFeed1xN</code> BUF.h:236; <code>$drainn</code> Sx.h:735 vs <code>sFeedN</code>); FILE.c mixing FILEFAIL/FILEERROR instead of its own FILEErr errno map (FILE.h:74); FSWFAIL discards errno.
+</p>
+</li>
+<li>Naming drift vs <code>MOD typ8 VerbStuff</code>: <code>u64hexfeed</code>/<code>u64hexdrain</code>/<p>
+<code>HEXPut</code> (HEX.h:100-122), <code>sSup</code>/<code>scSup</code> (Sx.h:444), snake_case <code>s_purge</code>/<code>cs_len</code>/<code>s_len</code> (Sx.h), <code>FILEdrain</code> vs <code>FILEDrain</code> twin with SWAPPED arg order (FILE.h:408/421), <code>FILECreateAt</code> undeclared in FILE.h. HEX.h:11 <code>static $u8 BASE16</code> — writable slice over a string literal in a header (one stray write = segfault); UTF8.h:47 mutable per-TU <code>UTF8_LEN</code>.
+</p>
+</li>
+<li>Misc LOWs parked here: TTY.c:18 5-byte reserve vs 6-byte worst case;<p>
+PATH.c:201 predictable AddTmp names + no O_EXCL creator (tests-only today); NUM.h:115 NUMLen ignores feed status + raw C-string param; POL.c:83 TrackEvents ignores its fd param; PACK.c:240 <code>u64 pg</code> shadows param <code>pagep pg</code>; BSD.h:46 doc-vs-code on negative sizes; FSW.c:71 nameless events (Q_OVERFLOW) never delivered on Linux, contra FSW.md.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>DNS name codec → ragel or typed-mover rewrite (bounds already sound:<p>
+differential-test old vs new on a corpus). NFA: ruling first.
+</p>
+</li>
+<li>Mechanical sweeps per cluster, one commit each, fuzz/tests green,<p>
+byte-identical outputs where a corpus exists.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>GATED like <a href="../PTR/PTR-001.html">PTR-001</a>: surface diffs for review, do NOT land<p>
+autonomously. Behavior-preserving; repro/differential tests first.
+</p>
+</li>
+<li>Renames (s_purge et al.) ripple into ABC-005/007 — land those fixes<p>
+first, sweep names after.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) NFA compiler: ragel rewrite vs slice-cursor cleanup — user<p>
+ruling required before anyone burns tokens on it.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> DNS codec rewrite + differential corpus test + name-length caps</li>
+<li class="open"><input type="checkbox" disabled> slice-arith cluster sweep (SORT/SLOG/FILE/PATH/URI)</li>
+<li class="open"><input type="checkbox" disabled> error-code + naming sweeps (after ABC-005/007 land)</li>
+<li class="open"><input type="checkbox" disabled> delete a$c; BASE16/UTF8_LEN const-ify; misc LOW list above</li>
+<li class="open"><input type="checkbox" disabled> NFA ruling, then its own plan</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Waits on ABC-005/ABC-007 for the touched symbols.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+</body>
+</html>

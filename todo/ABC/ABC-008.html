@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABC-008</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ABC-008: <a href="./HIGH.html">HIGH</a> HEX/OK/RON/ZINT codec bugs: bad hex accepted, &quot;OK&quot; scans wrong</h1>
+<p>
+Small-codec batch from the 2026-07-07 review. The hex drain never validates the low nibble, <code>OKscan</code> recognizes &quot;KO&quot; (not &quot;OK&quot;) as success, and the RON/ZINT feeds break the all-or-nothing Feed contract. All verified against the source; the OK/KO encoding was re-derived independently (OK=0x614, KO=0x518).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>HEX.h:73-86</code> <code>HEXu8sDrainSome</code> — checks <code>u == 0xff</code> TWICE, never<p>
+<code>l == 0xff</code>: input &quot;0g&quot; decodes to 0xff and returns OK. Every odd-position non-hex char is accepted silently; hashlet/SHA parsing funnels through here.
+</p>
+</li>
+<li><code>OK.h:44-48</code> <code>OKscan</code> — <code>if (oo == OK &amp;&amp; *o == 0x518) *o = 0;</code> but<p>
+RON(&quot;OK&quot;) == 0x614; 0x518 is &quot;KO&quot;. Print→scan round-trip of success yields 0x614 ≠ 0 (consumers: OK.cli.c, NEST.c:91).
+</p>
+</li>
+<li><code>RON.c:135-144</code> <code>RONu8sFeedPad</code> — writes via a local cursor, never<p>
+advances <code>*into</code> (chained feeds overwrite each other), and writes all <code>width</code> bytes BEFORE the <code>val != 0</code> validity check → partial garbage on SBADARG. Tests read the pad directly, masking both.
+</p>
+</li>
+<li><code>RON.c:48-57</code> <code>RONutf8sDrain</code> — no length cap: 11+ valid chars silently<p>
+shift high bits out (feed side caps at 11). Asymmetric, silently wrong.
+</p>
+</li>
+<li><code>RON.c:146-159</code> <code>RONSpliceBase</code> — <code>need = 2*prob*n</code> can wrap; <code>avail</code><p>
+can reach 0 → division by zero at <code>rand % avail</code>.
+</p>
+</li>
+<li><code>ZINT.c:89-122</code> <code>ZINTu8sFeed128</code> — public API ignores every <code>u8sFeed*</code><p>
+return; &lt;16 bytes idle → some fields written, some skipped, returns OK with a corrupt encoding. abc.mkd: potentially-short feeds must be checked.
+</p>
+</li>
+<li><code>ZINT.c:79-87</code> <code>ZINTu64sUndelta</code> — <code>*i + c</code> wrap undetected while the<p>
+inverse <code>Delta</code> validates monotonicity; corrupt input decodes silently.
+</p>
+</li>
+<li><code>ZINT.h:45</code> <code>ZINTu64feed</code> demands 8 idle bytes even for a 1-byte<p>
+encoding — spurious NOROOM near buffer end.
+</p>
+</li>
+<li><code>ZINT.h:121-127</code> — <code>*(u64*)&amp;val</code> type-punning (strict-aliasing UB);<p>
+neighbors already use the memcpy-backed <code>u8sFeed64</code>.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Repro-first: &quot;0g&quot; hex drain, OKscan(&quot;OK&quot;) == 0, chained RONu8sFeedPad,<p>
+short-slice ZINTu8sFeed128, undelta wrap.
+</p>
+</li>
+<li>Fix nibble check, the 0x614 constant (derive it, don't hardcode), Feed<p>
+contract compliance, length caps, checked feeds, memcpy punning.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>OKscan</code> fix changes observable behavior of <code>ok64</code> parsing — grep<p>
+downstream (beagle) for reliance on the broken value first.
+</p>
+</li>
+<li>Review-gated abc/; no unrelated test edits.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro tests per item (test/HEX.c, test/OK.c, test/RON.c, test/ZINT.c)</li>
+<li class="open"><input type="checkbox" disabled> HEX low-nibble check; OKscan constant</li>
+<li class="open"><input type="checkbox" disabled> RONu8sFeedPad advance+validate-first; RON drain cap; SpliceBase guards</li>
+<li class="open"><input type="checkbox" disabled> ZINT Feed128 checked feeds; Undelta wrap; u64feed exact-room; punning</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+</body>
+</html>

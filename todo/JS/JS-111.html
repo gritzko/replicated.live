@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-111</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-111: net._accept swallows real accept errors — EMFILE becomes a silent busy-spin</h1>
+<p>
+Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers. All accept failures collapse into &quot;nothing pending&quot;, so fd exhaustion turns the level-triggered poll loop into a 100% CPU spin with no error event.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>if (TCPAccept(&amp;cfd, caddr, sfd) != OK || cfd &lt; 0) return JSValueMakeNumber(ctx, -1); // no connection ready</code> (jab net.cpp:74-77) — no errno inspection, unlike net.<em>recv/</em>send.</li>
+<li>Server.listen's accept loop treats -1 as backlog-drained and returns pol.IN (net.cpp:309-316); with EMFILE and a pending connection, poll keeps reporting readable, accept keeps failing: spin, no 'error' event, no log.</li>
+<li>Node emits 'error' on the server for non-transient accept failures.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>errno triage after TCPAccept: -1 only for EAGAIN/EWOULDBLOCK/ECONNABORTED; throw or return a distinct code otherwise, surfaced as a server 'error' event in the bundle.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>EMFILE is hard to repro portably in ctest — a unit-level fake or ulimit-based repro is acceptable; ruling needed if neither is workable.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> errno triage in net._accept; 'error' event in Server.listen</li>
+<li class="open"><input type="checkbox" disabled> repro or explicit no-repro ruling per work.mkd item 3</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-103</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-103: ULOG write paths drop URILexer's ok64 and bypass the DOGCanonURI chokepoint</h1>
+<p>
+Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers, including a live repro: a malformed URI is silently written truncated into the append-only log.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>JABCulogFeed (jab ulog.hpp:62-64) and JABCulogAppend (ulog.hpp:285-287) call <code>URILexer(&amp;rec.uri)</code> and drop the ok64 result; uri.cpp:68 throws on the same failure.</li>
+<li>Live repro: <code>abc._ulog_append(h, 100n, &quot;post&quot;, &quot;http://ho st/path&quot;)</code> throws nothing and writes row <code>1_\tpost\thttp:</code> — <code>_ulog_rowUri</code> later returns &quot;http:&quot;, a silent round-trip corruption in an append-only log.</li>
+<li>dog/INDEX.md names DOGCanonURI/DOGCanonURIFeed (dog/DOG.h:387,396) the chokepoint every ULOG/REFS writer uses; jab's writers skip it, so JS-written rows are not canonicalised like C-written rows.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Repro first: malformed and non-canonical URIs through _ulog_feed/_ulog_append.</li>
+<li>Throw on URILexer non-OK; route both writers through DOGCanonURI/DOGCanonURIFeed so JS and C rows canonicalise identically.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Append-only log: the fix must not reinterpret rows already written by the buggy path.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro: malformed URI append expects throw; canonical row equals C-written row</li>
+<li class="open"><input type="checkbox" disabled> check ok64, route through DOGCanonURIFeed in both writers</li>
+</ul>
+</body>
+</html>

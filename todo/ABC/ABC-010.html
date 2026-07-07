@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABC-010</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ABC-010: <a href="./MED.html">MED</a> numeric/unicode parsing: overlong UTF-8, surrogates, wrap</h1>
+<p>
+Number- and unicode-parsing batch (2026-07-07 review): a non-shortest-form UTF-8 acceptance gap, JSON unescape emitting CESU-8 the library itself rejects, and decimal drains that wrap u64 and return OK with a wrong value.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>UTF8.c:64</code> <code>_utf8sDrain32</code> — 4-byte overlong bound `code_point &lt;<p>
+0xffff<code> should be </code>&lt; 0x10000`: overlong U+FFFF (F0 8F BF BF) is accepted. Classic filter-bypass vector. (Distinct from landed ABC-003.)
+</p>
+</li>
+<li><code>JSON.c:261-271</code> <code>JSONUnEscape</code> — no surrogate-pair handling:<p>
+<code>😀</code> becomes two 3-byte CESU-8 sequences that the module's own <code>utf8sValid</code>/<code>_utf8sDrain32</code> reject as UTFBAD. Any astral char in standard JSON produces output failing the library's own validation.
+</p>
+</li>
+<li><code>01.h:394-406</code> <code>u64decdrain</code> — unchecked <code>a = a*10 + digit</code>;<p>
+&quot;18446744073709551617&quot; wraps to 1 and <code>i64decdrain</code> (INT.c:5-22) / <code>utf8sDrainInt</code> (UTF8.c:97-114) return OK with value 1. The I64_MAX range tests only catch wraps that land high. (Feed-side INT64_MIN item is MEM-021; this is the drain-side wrap.)
+</p>
+</li>
+<li><code>UTF8.c:74-86</code> <code>utf8sDrainFloat</code> — truncates the numeral at 31 bytes:<p>
+wrong value AND cursor stops mid-number, poisoning the next token. The copy-to-NUL-pad + strtod dance is also the abc.mkd anti-pattern.
+</p>
+</li>
+<li><code>JSON.c:122-153</code> formatter — <code>JSONFmt(&quot;}&quot;)</code> decrements <code>u8 depth</code> 0→255<p>
+(lexer accepts a bare &quot;}&quot;), feeding 255 indents; clamp or fail. Also <code>JSON.c:189</code> <code>sane()</code> omits the <code>indent</code> arg — NULL crashes.
+</p>
+</li>
+<li><code>01.h:438</code> <code>i64Zig</code> — <code>i * 2</code> is signed-overflow UB for |i| ≥ 2^62,<p>
+reachable via <code>ZINTu8sFeedInt</code> (ZINT.h:112). Fix: <code>((u64)i &lt;&lt; 1)</code>.
+</p>
+</li>
+<li><code>JSON.c:257</code> — accepts non-JSON escape <code>\0</code> (asymmetric with<p>
+JSONEscape); at least comment the leniency.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Repro-first: overlong drain, astral-pair unescape→utf8sValid, 21-digit<p>
+decimal, 40-char float, &quot;}&quot; format, ZINT-encode of I64_MIN/2^62.
+</p>
+</li>
+<li>Reject overlongs, combine surrogate pairs (reject lone ones), overflow-<p>
+check the decimal accumulator, unbounded float parse (ragel or ryu-side length check), clamp depth, unsigned Zig.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Review-gated abc/. Decimal/float fixes touch hot parse paths — keep the<p>
+fast path branch-light.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro tests per item</li>
+<li class="open"><input type="checkbox" disabled> UTF8 overlong bound; JSON surrogate pairs</li>
+<li class="open"><input type="checkbox" disabled> u64decdrain overflow check + drain callers; float length handling</li>
+<li class="open"><input type="checkbox" disabled> JSON depth clamp + indent sane; i64Zig unsigned form</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-104</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-104: Socket.write FIFO grows linearly — O(n^2) memcpy under backpressure</h1>
+<p>
+Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers. Buf.grow allocates exactly the requested size, and the socket write path requests size+len+64K, so a slow peer makes roughly every other write recopy the whole FIFO.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>JABC_NET_JS Socket.write: <code>this._wb.grow(this._wb.size + u.length + (64 &lt;&lt; 10))</code> (jab net.cpp:285); Buf.grow (buf.cpp:100-108) allocates the exact size and copies all live bytes — no geometric doubling.</li>
+<li>Buffering 100 MB in 64 KB writes to a stalled peer does ~800 grows copying ~40 GB total, one whole-buffer GC allocation each.</li>
+<li>The 256K backpressure return (net.cpp:289) is only a Node-style hint; no caller in the repo checks it and zero 'drain' listeners exist.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Geometric growth: <code>grow(Math.max(cap * 2, size + u.length))</code> (in the bundle or in Buf.grow itself); a microbench or test showing linear total copy cost.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Keep the Node write()/drain contract; Buf.grow is shared — check other Buf users before changing its policy globally.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> decide: fix in Socket.write only, or make Buf.grow geometric for all</li>
+<li class="open"><input type="checkbox" disabled> measure before/after with a stalled-reader TCP test</li>
+</ul>
+</body>
+</html>

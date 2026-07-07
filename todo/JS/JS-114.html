@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-114</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-114: dgram._send resolves the address via getaddrinfo on every datagram</h1>
+<p>
+Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers. Every UDP packet pays a getaddrinfo/freeaddrinfo round-trip (potentially NSS/DNS) even for literal addresses — the JS default is &quot;127.0.0.1&quot;.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>getaddrinfo(host, port, &amp;hints, &amp;res)</code> per <em>send call, no AI</em>NUMERICHOST hint, no cache (jab net.cpp:196).</li>
+<li>A high-rate UDP sender (telemetry/heartbeat) turns one sendto into getaddrinfo+sendto+freeaddrinfo per packet.</li>
+<li>Node has the same shape for unconnected sockets — this is an improvement, not a regression.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Try AI_NUMERICHOST first; cache the last (host,port)-&gt;sockaddr in the binding.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Low priority; behavior for hostnames (re-resolution) should not silently pin a stale address forever — cache literals only, or bound the cache.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> AI_NUMERICHOST fast path + literal cache in dgram._send</li>
+</ul>
+</body>
+</html>

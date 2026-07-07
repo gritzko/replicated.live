@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-109</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-109: gitParseCommit leaks a JSStringRef on empty-tree and default-body paths</h1>
+<p>
+Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers. Two call sites create a JSStringRef and never release it — masked only because the LSan suppression covers all of libjavascriptcoregtk.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>JABCSet(ctx, o, &quot;tree&quot;, JSValueMakeString(ctx, JSStringCreateWithUTF8CString(&quot;&quot;)))</code> (jab pack.hpp:370) and the default-body <code>JSValueRef body = JSValueMakeString(ctx, JSStringCreateWithUTF8CString(&quot;&quot;))</code> (pack.hpp:378) never JSStringRelease the +1 ref; JSValueMakeString retains its own.</li>
+<li>Every parsed commit leaks one OpaqueJSString (two without a tree header); every other call site in the repo releases.</li>
+<li>The leak hides behind main.cpp's blanket <code>leak:libjavascriptcoregtk</code> suppression (JS-064) — exactly the class that suppression was not meant to cover.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Create-once + JSStringRelease after JSValueMakeString (or a shared JSOfCString(&quot;&quot;)); git.js parse test stays green.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Two-line fix; do not touch the LSan suppression setup.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> release the two refs; eyeball pack.hpp for further unreleased creates</li>
+</ul>
+</body>
+</html>

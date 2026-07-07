@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>URI-015</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>URI-015 <a href="./MED.html">MED</a>: git scp-form remotes violate the URI grammar — rewrite to ssh:// at remote intake</h1>
+<p>
+The github remote shape <code>git@github.com:gritzko/jab.git</code> (git's scp form) is NOT a URI — the native URI class refuses it (<code>uri.parse: malformed</code>, verified on jab), and per <a href="URI-013.html">URI-013</a> the URI class is the ONLY parser/composer, so no code may hand-lex it. Yet it is the wild's dominant remote spelling: this journal's own <code>.gitmodules</code> carries <code>git@github.com:gritzko/beagle-ext.git</code>. Every be/ remote intake lexes via <code>new URI()</code> (<code>wire.classify</code> wire.js:33, <code>get parseRemote</code> get.js:69, head.js:68), so a scp remote throws or degrades to prose. Fix: a <code>fromGit(s)</code> heuristic in <code>shared/uri.js</code> — DETECT the git scp grammar (colon before any slash, <code>user@</code> head, no scheme) with plain index checks on the non-URI string, then COMPOSE strictly via <code>URI.make(&quot;ssh&quot;, &quot;//user@host&quot;, &quot;/path&quot;)</code> and relex-guard the result; non-matches and make-rejects fall through verbatim. Applied at remote intake only, never inside the total <code>uri.parse</code> arg classifier (prose like <code>me@10:30</code> must stay prose). Scope: be/ JS (<a href="../../be/">beagle-ext</a>); the C <code>WIRECLI.c wcli_spawn</code> shares the gap — own linked ticket. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>LIVE repro (gritzko, 2026-07-07): <code>jab post git@github.com:gritzko/beagle-ext.git</code> → <code>POSTNONE: no changes since base</code> while the github repo is EMPTY — parseSlots (post.js:118) got the scp arg back as a STRING from the total classifier, treated it as free-form MESSAGE text, saw no Host slot, attempted a local commit and never touched the wire.</li>
+<li><code>new URI(&quot;git@github.com:gritzko/jab.git&quot;)</code> throws <code>uri.parse: malformed</code> (jab probe, 2026-07-07); <code>ssh://git@github.com/gritzko/jab.git</code> lexes to user=git host=github.com path=/gritzko/jab.git.</li>
+<li>git's own rule (git-fetch(1) GIT URLS): scp syntax <code>[user@]host:path</code> is recognized by a <code>:</code> before the first <code>/</code>; it rides ssh with <code>path</code> $HOME-relative — matching wire.js:73's existing leading-<code>/</code> strip for ssh spawns.</li>
+<li>Intake sites that <code>new URI()</code> the raw remote: <code>shared/wire.js:33</code> classify (ALL wire traffic: get/head fetch, post/put push, http detect), <code>verbs/get/get.js:69</code> parseRemote (also records <code>rem.raw</code> into the wtlog anchor), <code>verbs/head/head.js:68</code>.</li>
+<li><code>.gitmodules</code> scp urls (<code>shared/gitmodules.js</code> → <code>submount.js</code>) flow into get/classify, so intake-side rewrite covers submodules with no gitmodules.js change.</li>
+<li><code>URI.make</code> composes but does NOT validate (<code>URI.make(&quot;ssh&quot;,&quot;//git@git hub&quot;,&quot;/x&quot;)</code> emits junk) — the heuristic must relex its output via <code>new URI()</code> and fall back to the original string if that throws.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>be get git@github.com:gritzko/jab.git</code> routes as <code>ssh://git@github.com/gritzko/jab.git</code> → spawn <code>ssh git@github.com git-upload-pack 'gritzko/jab.git'</code> (byte-identical to git's scp handling).</li>
+<li><code>jab post git@github.com:gritzko/beagle-ext.git</code> classifies as a Host-slot PUSH (post.js parseSlots), never as message prose; <code>put</code> wire forms likewise; the stored remote (get's wtlog anchor) records the recomposed ssh:// URI, never the raw scp string.</li>
+<li>A beagle branch selector rides the scp tail: <code>git@host:o/r.git?br#sha</code> — the tail after the git-colon relexes as a RELATIVE URI (path+query+fragment via the URI class), so <code>?br</code>/<code>#sha</code> land in their slots.</li>
+<li>Non-remote args are untouched: <code>be:/store</code>, <code>keeper:local</code>, <code>host:port</code>, <code>//host</code>, prose messages with <code>@</code>+<code>:</code> never rewrite.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>URI class is the only URI parser/composer (<a href="URI-013.html">URI-013</a>): detection = index checks on the non-URI scp string (git grammar, not URI grammar); composition = <code>URI.make</code> + relex guard. No regex, no string-concat URIs.</li>
+<li>Repro test FIRST: new unit <code>test/uri.js</code> (registered <code>be-js-unit-uri</code> in test/CMakeLists.txt foreach) — hermetic, classify is pure, no network. No other tests edited.</li>
+<li>Heuristic lives in <code>shared/uri.js</code> (the JAB-005 module) as exported <code>fromGit</code>; call sites are the three intake lexes only.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Require the <code>@</code> in the head (and no whitespace): bare <code>host:path</code> is ambiguous with <code>scheme:path</code> (<code>be:/store</code>, DIS-058) — github/gitlab scp remotes always carry <code>user@</code>; whitespace anywhere = prose, never a remote.</li>
+<li>Tail handling stays in the URI class: split ONLY at the git-grammar colon, lex the tail as a relative URI (<code>new URI(tail)</code> — path/query/fragment), compose <code>URI.make(&quot;ssh&quot;, &quot;//&quot;+head, &quot;/&quot;+path, query, frag)</code>, relex-guard the result; any lex/make refusal falls back to the original string.</li>
+<li>Rewrite at INTAKE — wire.classify, get parseRemote, head lex, and post parseSlots' per-arg loop (before its <code>uri.parse</code>) — never inside the total <code>uri.parse</code> itself: it serves prose args (messages) too.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="wontfix"><input type="checkbox" disabled> <del>Worktree <code>$SRC_ROOT/URI-015</code> — moot: gritzko ordered the work IN <code>journal/be</code> (clone crashed on the be self-gitlink, GET-036/037).</del></li>
+<li class="done"><input type="checkbox" checked disabled> Repro <code>test/uri.js</code> (registered <code>be-js-unit-uri</code>): scp→ssh:// + tail <code>?br</code>/<code>#sha</code>, verbatim guards (ssh/be/keeper/https///host/path/port/prose), classify ssh spawn; ran RED first.</li>
+<li class="done"><input type="checkbox" checked disabled> <code>shared/uri.js</code> <code>fromGit(s)</code> + intake calls: wire.js classify, get.js parseRemote, head.js headOne, post.js parseSlots + isSlotArg (message path), put.js putRun argv map; 8/8 unit + be-js suite green (be-js-bro-view golden drift pre-existing, unrelated).</li>
+<li class="open"><input type="checkbox" disabled> File the C-side twin ticket (<code>WIRECLI.c wcli_spawn</code>), link both ways.</li>
+<li class="open"><input type="checkbox" disabled> Merge (pending human gate).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Implemented in the <code>journal/be</code> main tree (by explicit order — the worktree path is <a href="../GET/GET-041.html">GET-041</a>); verified E2E by gritzko 2026-07-07: scp-form <code>jab post</code> from the wt root pushed to the (previously empty) github remote. Pending: commit (human gate), C-side twin ticket.</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABC-007</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ABC-007: <a href="./HIGH.html">HIGH</a> LSM/Y merge stack: overflow, silent data loss, comparator UB</h1>
+<p>
+The run-merge stack (LSM.h/LSM.c/Y.h/Yx.h) has a room-check bypassed by a raw memcpy, a sort that can return OK having moved the data OUT of the caller's slice, and a qsort driven by a <code>b8</code> less-than through an <code>int</code> comparator cast (UB + inconsistent order). Found 2026-07-07, all verified by inspection against the quoted lines.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>LSM.h:20-27</code> <code>LSMMore</code>: the checked <code>u8cssFeed1</code> is commented out,<p>
+replaced by <code>memcpy(lsm[2], x, sizeof(u8cs))</code> with NO idle check — a full run stack takes a 16-byte OOB write. And <code>u8cssUpZ(lsm, z)</code> passes the BUFFER (PAST cells) where a slice is expected: the sift-up is a permanent no-op; only <code>LSMMerge</code>'s from-scratch heapify masks it. <code>HEAPu8csPushZ</code> (used by test/LSM.c:54) is the correct helper.
+</p>
+</li>
+<li><code>LSM.c:83-84</code> <code>LSMSort</code>: <code>LSMSort1</code>'s single-sorted-run early return<p>
+(LSM.c:58) writes nothing to <code>into</code>; the FIRST call handles <code>runs==0</code> (data already sorted in place) but the SECOND call does not — <code>data[1] = out2[0]</code> then EMPTIES the caller's slice while the sorted content is stranded in <code>tmp</code>. &quot;Roughly ordered input&quot; (the module's stated target case) triggers it. Silent loss with OK status.
+</p>
+</li>
+<li><code>Yx.h:38</code> <code>_X(sort)</code>: <code>$sort(lsm, _X(z))</code> casts a <code>b8(*)(a,b)</code><p>
+less-than to qsort's <code>int(*)(void*,void*)</code> — call through wrong type is UB (callee sets only AL), and 1/0 less-than is an inconsistent qsort order → arbitrary run order into <code>_X(merge)</code>. <code>LSMMerge</code> does it right via <code>u8cssHeapZ</code>.
+</p>
+</li>
+<li><code>Yx.h:17</code> — <code>u8cssFeedP(inidle, &amp;next)</code> return dropped; &gt;64 tied runs<p>
+(Y_MAX_INPUTS pad) silently lose the 65th record, OK returned.
+</p>
+</li>
+<li><code>LSM.h:5</code> <code>#include &quot;PRO.h&quot;</code> — PRO.h must never be included by a header<p>
+(INDEX.md §OK.h; abc.mkd §PRO.h flow); pollutes every including TU.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Repro tests: full-stack LSMMore; two-pass LSMSort on roughly-sorted<p>
+input asserting content survives in <code>data</code>; Y merge with &gt;64 tied runs.
+</p>
+</li>
+<li>Restore checked feed + real sift-up (or heapify), fix the second-pass<p>
+copy-back, heap-order instead of qsort in Yx, check the FeedP, move the PRO.h include into the .c files.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Depends on the <code>s_purge</code> fix in <a href="ABC-005.html">ABC-005</a> (same consumers) — schedule<p>
+after or in one tree.
+</p>
+</li>
+<li>Review-gated abc/ change; no other tests edited without permission.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repros: LSMMore overflow (ASan), LSMSort two-pass loss, Y 65-run drop</li>
+<li class="open"><input type="checkbox" disabled> LSMMore: checked feed + HEAP push; LSMSort second-pass copy-back</li>
+<li class="open"><input type="checkbox" disabled> Yx sort → heap order; check u8cssFeedP</li>
+<li class="open"><input type="checkbox" disabled> evict PRO.h from LSM.h</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+</body>
+</html>

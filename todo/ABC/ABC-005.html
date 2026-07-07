@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABC-005</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ABC-005: <a href="./CRIT.html">CRIT</a> S.h/Sx.h/BUF.h slice-edit primitives are broken</h1>
+<p>
+The 2026-07-07 five-agent review of libabc found the core slice layer's edit/remove/pop primitives wrong at the memmove/index level. One bug is LIVE (<code>s_purge</code> feeds surviving empty runs into LSM/Y merges); the rest are armed bedrock: any new caller silently corrupts data. Repro-first per <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>Sx.h:794</code> <code>s_purge</code> — after <code>Swap(p, $last(s)); --$term(s);</code> the loop<p>
+<code>++i</code>s past the swapped-in element, so a matching tail element survives. Live consumers: <code>LSM.h:34</code> (<code>LSMMerge</code>) and <code>Yx.h:37</code> purge empty runs; a surviving empty run reaches the slicer. Also <code>int i</code> vs <code>size_t $len</code>.
+</p>
+</li>
+<li><code>S.h:243</code> <code>$rm</code> — memmoves <code>(len)</code> elements instead of the whole tail<p>
+(<code>$len(s)-off-len</code>); corrupts tail and reads OOB when <code>off+2*len&gt;$len</code>. <code>S.h:249</code> <code>$rm1</code> moves 1 element instead of the tail. <code>$rm1p</code> is correct. Note <code>$tailshift</code> (S.h:222) contains exactly the right memmove.
+</p>
+</li>
+<li><code>S.h:222</code> <code>$tailshift</code> calls <code>must(cond)</code> — PRO.h:215 <code>must(cond,msg)</code><p>
+takes two args; the macro is a compile error at any use site. Dead.
+</p>
+</li>
+<li><code>BUF.h:249</code> <code>u8sPop</code> — memcpys from <code>*s</code> (head) but sheds <code>s[1] -= len</code><p>
+(tail); returns the wrong bytes AND destroys the tail. Siblings <code>u8sPop1</code>/<code>u8sPop32</code> correctly read from the decremented term.
+</p>
+</li>
+<li><code>Sx.h:524</code> <code>sDrain</code> — all-or-nothing Feed semantics, never advances<p>
+<code>from</code>, contradicting abc.mkd (&quot;sDrain: write what fits, advance both sides&quot;); <code>sDrain1</code>/<code>$drain</code> obey the convention. A drain-until-empty loop over it never terminates.
+</p>
+</li>
+<li><code>S.h:176</code> <code>$feedf</code> + <code>BUF.h:164</code> <code>$$feedf</code> — a failed feed of the LAST<p>
+template byte/substitution still advances the cursor; the exhausted template then returns OK on truncated output. Live: LEX.c:263/295, FILE.h:716. Also <code>$printf</code> (S.h:147) counts the NUL as payload on snprintf truncation.
+</p>
+</li>
+<li><code>Sx.h:107</code> <code>gFed</code> bound <code>g[1] + len &gt; g[2]</code> is pointer-overflow UB for<p>
+huge len; <code>sFed</code> (Sx.h:682) shows the safe subtraction form.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Table-driven repro test per bug FIRST (purge-with-matching-tail,<p>
+$rm mid-slice, u8sPop round-trip, drain loop, feedf exact-fit).
+</p>
+</li>
+<li>Fix: no-advance-after-swap purge; tail-length memmoves; pop from term;<p>
+sDrain per contract (or rename to Feed — needs a ruling); feedf checks the last feed; safe bound forms.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>abc/ core headers — review-gated, land nothing autonomously.</li>
+<li><code>s_purge</code> fix must keep LSM/Y tests green (see <a href="ABC-007.html">ABC-007</a>).</li>
+<li>No other tests may be edited without explicit permission.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) <code>sDrain</code>: fix semantics vs rename; caller impact is zero today<p>
+(no users), so contract-fix is the cheap moment — request a ruling.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro tests for all seven items (test/S.c, test/B.c)</li>
+<li class="open"><input type="checkbox" disabled> fix s_purge (+size_t index), $rm/$rm1, $tailshift arity</li>
+<li class="open"><input type="checkbox" disabled> fix u8sPop tail copy; fix/rename sDrain (after ruling)</li>
+<li class="open"><input type="checkbox" disabled> $feedf/$$feedf/$printf truncation status; gFed bound form</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+</body>
+</html>

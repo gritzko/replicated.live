@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABC-015</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ABC-015: <a href="./MED.html">MED</a> container templates: SSTx bit-rot, stale-hash converge, traps</h1>
+<p>
+Template-family batch (2026-07-07 review). SSTx.h contains literal non-C (<code>FILEmaok64 sst(path);</code> — a botched mass-rename) and its test target is commented out; the convergent HASH insert compares against a stale hash; several templates have instantiation traps that only the current one-type- per-TU usage hides.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>SSTx.h:34</code> <code>ok64 o = FILEmaok64 sst(path);</code> — not C; also calls<p>
+nonexistent <code>FILEmapnew</code>/<code>TLVFeedkv</code>/<code>FILEresize</code>/<code>FILEclose</code>/ <code>FILEunmap</code>; test/CMakeLists.txt:258 has SSTtest commented out. If revived, note: <code>metalen + datalen</code> u64 wrap bypasses the bound check (:37); <code>SSTmeta</code> accepts metalen &lt; header → inverted slice (:13); <code>hasindex</code> returns a boolean as ok64 (:46). NEEDS A RULING: revive or delete.
+</p>
+</li>
+<li><code>HASHx.h:88-89</code> — convergent insert: after <code>Swap(&amp;r, slot)</code> the carried<p>
+record's hash is <code>hash2</code>, but <code>hash</code> is never updated; later <code>hash2 &gt; hash</code> comparisons use the stale value → final layout depends on op order, defeating ABC_HASH_CONVERGE's bit-state guarantee (HASH.md). Lookups unaffected. Also <code>hashEq</code> arg order flips between scan (:37) and Get/Del (:56-84).
+</p>
+</li>
+<li><code>MSETx.h:170</code> <code>MSETSeekZ</code> — binary-search via <code>sFindGE</code> (hardwired<p>
+default <code>Z</code>, Sx.h:239) inside a custom-<code>z</code> seek: garbage positions for any non-default order. Add <code>sFindGEZ</code> or document z==Z.
+</p>
+</li>
+<li><code>MSETx.h:269</code> <code>MSETGet</code> — <code>if (n &gt; MSET_MAX_LEVELS) n = 24;</code> silently<p>
+excludes newest runs → MSETNONE for existing keys; error instead.
+</p>
+</li>
+<li><code>HEAPx.h:115-133</code> <code>sTopsZ</code> — no empty-heap guard, fabricates a<p>
+1-element slice over nothing (OOB for consumers); twin <code>MSETTopZ</code> guards. <code>HEAPx.h:149</code> <code>sHeap(heap, z)</code> ignores <code>z</code>, calls default-Z. Both currently caller-less; fix or drop.
+</p>
+</li>
+<li><code>SKIPx.h:38</code> — <code>(1 &lt;&lt; hi) - 1</code> int-shift UB/garbage for hi ≥ 31,<p>
+legitimately reached past 512 GiB logs; <code>((size_t)1 &lt;&lt; hi)</code>. Also <code>SKIP_BLK_MASK</code> <code>1UL &lt;&lt; 64</code> UB for a u64 instantiation, and <code>SKIPfinish</code>/<code>SKIPload</code> byte-vs-element mismatch for sizeof(T) &gt; 1 (u8-only today). (MEM-021 owns the :45 off-by-one.)
+</p>
+</li>
+<li><code>DIFFx.h:153-187</code> — degenerate FindMiddle result (x==0, y==0, len<p>
+revalidated to 0) recurses on the IDENTICAL subproblem → stack overflow; the code already distrusts FindMiddle (revalidation pass), so add the one-line progress guard. Also i32 truncation for ≥2^30 inputs (DIFF.h:22 masks run lengths, no error).
+</p>
+</li>
+<li>Instantiation traps: NFAx.h:13 includes NFA.h which redefines/undefs<p>
+<code>X</code> (non-u8 instantiation breaks unless NFA.h came first); HEAPx.h:3 + LISTx.h:3 never <code>#undef T</code> (leaks into every TU via DIJK.h/LSM.h); HASHx.h:133 undefs ABC_HASH_LINE but not ABC_HASH_CONVERGE; SKIPx.h undefs never-defined <code>aSKIP</code>, leaves T/SKIP_* defined; SSTx.h leaks a bare <code>Key</code> typedef.
+</p>
+</li>
+<li><code>LIST.h:21-23</code> — dead macros referencing <code>_</code> (PRO's carrier is <code>__</code>)<p>
+and <code>Batp(...).next</code> (type error); zero users; delete or fix.
+</p>
+</li>
+<li><code>COMB.h:14</code> — <code>const char* COMBmagic = ...</code> non-static DEFINITION in a<p>
+header (duplicate symbol for multi-TU includers); <code>COMBload</code> (:25-31) restores b<a href="./1.html">1</a>/b<a href="./2.html">2</a> from stored offsets with NO magic check and no range validation vs Blen — COMB.md advertises cross-process sharing, so the offsets are untrusted. <code>COMBsize</code> breaks on 32-bit (16 B header vs 32 B written). Bodies not do-while-wrapped.
+</p>
+</li>
+<li><code>HITx.h:121+</code> — drain family writes through a bare unbounded <code>X(,p)*</code><p>
+cursor (Merge/Intersect too) where twin MSETMerge takes a slice + NOROOM; HITx.h:323 HITIsCompact/Compact near-duplicate MSETx.h:224 with different NOROOM codes — one home for the LSM-ladder logic.
+</p>
+</li>
+<li><code>ROCKMERGE.h:43</code> — <code>int i</code> counter can overflow (total can exceed<p>
+INT_MAX; the header exists to be overflow-paranoid, MEM-012). ROCK.c LOWs: ROCKerr frees the message unread; Init test() paths leak opt/topt/cache; Iter Key/Val skip NULL checks; SetMerge twice leaks.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Ruling on SSTx (revive vs delete), then per-item fixes with table<p>
+tests; a non-u8 instantiation test TU to pin the template hygiene.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Pure-template fixes must not change u8-instantiation behavior except<p>
+where a repro proves it wrong. Review-gated abc/.
+</p>
+</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) SSTx: delete is the cheap option; SST.h/SSTx split suggests the<p>
+fixed-key variant never shipped.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> SSTx ruling; then delete or revive+validate</li>
+<li class="open"><input type="checkbox" disabled> HASHx stale hash + hashEq order; MSET seek/levels</li>
+<li class="open"><input type="checkbox" disabled> HEAPx guards; SKIPx shifts; DIFFx progress guard</li>
+<li class="open"><input type="checkbox" disabled> template hygiene TU (undef T, X-clobber, leaked typedefs)</li>
+<li class="open"><input type="checkbox" disabled> LIST.h dead macros; COMB magic/validation; HITx slice-ify + dedup</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-105</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-105: abc.index re-sorts the memtable via native qsort on every read</h1>
+<p>
+Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers. Every get/range/prefix/seek pays a full O(m log m) introsort on a warm memtable where one O(log m) binary search is expected.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>JABC_CONT_JS <code>querySources()</code> runs <code>idx.mem.sort()</code> unconditionally whenever mem.size &gt; 0 (jab cont.cpp:711); called by idx.get, idx.range/prefix, idx.seek.</li>
+<li>mem.sort is the native <code>_sort_&lt;lane&gt;</code> leaf (hit.hpp:91-103) -&gt; sSort introsort (dog/abc/QSORTx.h:130) with no already-sorted early exit; no dirty/sorted flag exists anywhere in the path.</li>
+<li>Default memtable is 4096 slots (cont.cpp:586) and puts never auto-flush, so q point reads cost O(q*m log m) — the keeper/spot registry lookups this index serves (cf. <a href="./JS-056.html">JS-056</a>).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A memDirty flag: set in idx.put, sort only when dirty, clear on sort/flush; q reads on a warm memtable sort once.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Flag lives in the JS bundle; no native API change needed.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> memDirty in idx.put/querySources/flush</li>
+<li class="open"><input type="checkbox" disabled> index.js test: interleaved put/get stays correct; optional timing check</li>
+</ul>
+</body>
+</html>

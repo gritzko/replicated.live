@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-106</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-106: index bulk-load crosses the JS/C boundary once per element</h1>
+<p>
+Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers. Indexing a pack marshals each entry JS-&gt;C individually although P.scan already emitted them contiguously in native memory.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>idx.put = function (k, v) { this.mem.push(BigInt(k), BigInt(v)); ... }</code> (jab cont.cpp:629) — one native call per entry; jheap_wh128_push (heap.hpp:56) redoes JABCBytesOf (~4 JSC API calls) plus two JSValueToUInt64 each time.</li>
+<li>P.scan (cont.cpp:219-227) already emits n contiguous wh128 entries zero-copy into a Buf; the documented flow then loops idx.put per entry — BigInts read out of a BigUint64Array only to be marshalled back one at a time.</li>
+<li>A 10^5-10^6 object pack pays ~10 JSC calls + a heap sift per entry where one memcpy-shaped bulk feed would do.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A bulk leaf <code>_heap_&lt;lane&gt;_feed(arr, size, entries) -&gt; newsize</code> + <code>mem.feed(view)</code> sugar; the pack-index flow uses it.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Bindings hold no memory (JS owns the buffers); the leaf validates argc per <a href="./JS-101.html">JS-101</a>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> bulk feed leaf + sugar; wire into the pack-index flow</li>
+<li class="open"><input type="checkbox" disabled> index/packidx tests cover the bulk path</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-113</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-113: a throwing timer callback permanently desyncs the JS timer wheel</h1>
+<p>
+Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers. After one callback throw, the native POL timer self-removes while the JS wheel still believes it is armed — every later setTimeout/setInterval never fires.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>A throw inside twTick (jab net.cpp:374-387) escapes pol._timer, so JABCPolCall returns -1 and JABCPolTimer returns 3600000 (pol.cpp:67-70), self-removing the native timer; JS-side <code>twOn</code> stays true and <code>timer</code> stays set.</li>
+<li>Subsequent g.setTimeout -&gt; twArm (net.cpp:388) sees twOn===true and only calls pol.sooner() — a no-op with no native timer armed (&quot;POLNONE fine&quot;, pol.cpp:120) — so no timer ever fires again.</li>
+<li>Scenario: <code>try { pol.run() } catch(e) {}; setTimeout(fn, 10); pol.run()</code> hangs forever.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Repro first: the hang scenario as a (timeout-guarded) test.</li>
+<li>Re-arm robustly: twArm always re-registers via pol.timer (or twTick catches, reports, and keeps the wheel consistent).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Callback exceptions must still surface (Node reports uncaught timer throws); the wheel just must survive them.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro: throwing setTimeout callback, later timers still fire</li>
+<li class="open"><input type="checkbox" disabled> re-arm / exception-containment in twTick+twArm</li>
+</ul>
+</body>
+</html>

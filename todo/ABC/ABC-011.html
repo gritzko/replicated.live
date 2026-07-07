@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABC-011</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ABC-011: <a href="./HIGH.html">HIGH</a> HTTP serializer emits zero headers, always</h1>
+<p>
+<code>HTTPutf8Feed</code> builds its header slice from the same pointer twice — <code>{http-&gt;headers[0], *http-&gt;headers}</code> where <code>headers</code> is <code>u8cssp</code>, and <code>a[0] == *a</code> in C — so the header loop is dead code and every serialized message loses all headers (no Host, no Content-Length). Verified empirically by the 2026-07-07 reviewer: a parsed 2-header request re-serialized as &quot;GET / HTTP/1.1rnrn&quot;. No test covers the Feed direction.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>HTTP.c:76-77</code> — <code>u8css hdrs = {http-&gt;headers[0], *http-&gt;headers};</code><p>
+yields <code>{p, p}</code>, <code>$len == 0</code>, loop never entered. Intended: <code>{http-&gt;headers[0], http-&gt;headers[1]}</code>.
+</p>
+</li>
+<li><code>HTTP.lex:41</code> — <code>ReasonPhrase = text</code> requires ≥1 char; RFC 7230 allows<p>
+an empty reason-phrase (&quot;HTTP/1.1 200 rn&quot;, common from proxies) → HTTPBAD on legal responses.
+</p>
+</li>
+<li><code>HTTP.c:93</code> <code>HTTPfind(u8cs *value, u8cs key, ...)</code> — immutable needle<p>
+typed as consumable <code>u8cs</code>, should be <code>u8csc</code> (abc.mkd: consumption is signalled by type).
+</p>
+</li>
+<li><code>HTTP.c:86</code> — <code>hdrs[0] += 2;</code> raw slice-pointer arithmetic; use the<p>
+typed movers. <code>HTTPutf8Drain</code> (HTTP.c:39) is named Drain but never advances the caller's slice — naming/contract drift.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Repro FIRST: parse→serialize round-trip test asserting headers survive;<p>
+an empty-reason response parse.
+</p>
+</li>
+<li>Fix the slice construction, relax the grammar (regen from HTTP.lex —<p>
+mind the LEX template drift, <a href="ABC-017.html">ABC-017</a>), tighten the signatures.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Grammar change means regenerating HTTP.rl.c — the current LEX.c<p>
+template emits <code>fbreak</code> where the committed generated file has <code>goto _out</code> (<a href="ABC-017.html">ABC-017</a>); regen must not silently change semantics.
+</p>
+</li>
+<li>Review-gated abc/.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> round-trip repro (parse 2 headers → Feed → assert bytes)</li>
+<li class="open"><input type="checkbox" disabled> fix hdrs slice; typed border movers</li>
+<li class="open"><input type="checkbox" disabled> empty ReasonPhrase in HTTP.lex + regen</li>
+<li class="open"><input type="checkbox" disabled> HTTPfind/HTTPutf8Drain signature+naming pass</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Regen entangled with the LEX template drift (<a href="ABC-017.html">ABC-017</a>).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+</body>
+</html>

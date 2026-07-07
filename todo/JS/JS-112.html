@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-112</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-112: require() keeps a module cached after its evaluation throws</h1>
+<p>
+Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers. Node's CommonJS contract removes a module from the cache when its evaluation throws, so a retry re-evaluates; jab instead returns the half-initialized exports silently.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>cache[abs] = module; // before eval: cycle-safe</code> (jab require.cpp:76) then <code>fn(module, ...)</code> (require.cpp:78-80) with no try/catch removing the entry on failure.</li>
+<li><code>try { require('./a.js') } catch (e) {} ... require('./a.js')</code> — the second call hits the cache (require.cpp:73) and returns partial exports, hiding the original failure.</li>
+<li>test/require.js does not cover a throwing module.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Repro first: throwing module, second require re-evaluates (Node semantics).</li>
+<li>try/catch around the eval; <code>delete cache[abs]</code> before rethrowing; cycle-safety preserved.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Keep the before-eval cache insert (cycles); only the failure path changes.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro in test/require.js</li>
+<li class="open"><input type="checkbox" disabled> delete-on-throw in the require machine</li>
+</ul>
+</body>
+</html>

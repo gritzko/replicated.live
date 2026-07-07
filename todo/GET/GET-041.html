@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-041</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-041 <a href="./HIGH.html">HIGH</a>: be/ worktree bring-up is broken end-to-end — fix the stack FIRST</h1>
+<p>
+The <a href="../../rule/Issues.html">Issues</a> work loop starts with &quot;stand up a beagle-ext worktree from the store&quot; — and that first step fails every way it is tried (evidence 2026-07-07, the URI-015 worker had to run in the main tree by explicit order). Umbrella over the self-locator/self-gitlink cluster <a href="GET-036.html">GET-036</a>/<a href="GET-037.html">GET-037</a>/<a href="GET-038.html">GET-038</a>/<a href="GET-039.html">GET-039</a>: <code>jab get</code> of beagle-ext loops module resolution through the checked-out <code>be -&gt; .</code> link, a retry SELF-HOSTS jab from the partial checkout it is itself writing, and the native ASan <code>be get</code> aborts on a stack-buffer-overflow after a sniff miss. Until this lands, every be/-stack ticket worker is forced into the main tree — the loop's isolation guarantee (<code>rm -rf</code> a suspect worktree, zero side-effects) is gone. Priority: fix FIRST, before further be/ feature tickets. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>mkdir ~/src/URI-015; cd; ln -s ~/src/journal/be be; jab get 'file:/home/gritzko/.be?/beagle-ext'</code> → <code>require: cannot find './gitmodules.js' from '/home/gritzko/src/URI-015/be/be/be/shared'</code> — checkout replaced the planted locator with the repo's own <code>be -&gt; .</code> mid-clone, the upward be/-scan looped, checkout left partial (top files only).</li>
+<li>Retry <code>jab get</code> in the partial tree → <code>require: cannot find '&lt;wt&gt;/be/core/discover.js'</code> — jab SELF-HOSTED from the partial checkout (its <code>be -&gt; .</code> wins the scan): the tool being fetched became the tool running the fetch; the retry also dropped <code>.be</code>/<code>.gitmodules</code> from the dir.</li>
+<li>Native <code>be get 'file:/home/gritzko/.be?/beagle-ext'</code> → <code>sniff: object not found: hex=830e16da… hexlen=15 hashlet=0830e16da9b90cb1 project=beagle-ext packs=61</code> then AddressSanitizer stack-buffer-overflow ABORT — a missing sub object must refuse cleanly, and <code>hexlen=15</code> + the <code>0</code>-shifted hashlet smell like a slice/offset bug in the sniff diag path itself.</li>
+<li>WORKS (gritzko): the worktree-source clone <code>jab get file:/home/gritzko/src/journal/be</code> from an empty dir — the interim bring-up path (via the <a href="GET-038.html">GET-038</a> redirect shape).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>One command stands up a working beagle-ext worktree from the central store (<code>jab get 'file:/…/.be?/beagle-ext'</code>) — checkout complete, <code>jab status</code>/<code>ctest</code> runnable, <a href="../../rule/Issues.html">Issues</a> loop step 1 restored.</li>
+<li>jab pins its extension dir for the WHOLE run (never re-scans into the tree it is writing); a partial checkout must never capture the running tool.</li>
+<li>Native sniff refuses a missing object cleanly (no ASan abort); the <code>hexlen=15</code> diag anomaly triaged — its own C-side ticket if real.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Consolidate, don't duplicate: <a href="GET-039.html">GET-039</a> (symlinks as plain git blobs) dissolves the self-locator special-casing of <a href="GET-036.html">GET-036</a>/<a href="GET-037.html">GET-037</a> — land that design here or under it, one ruling.</li>
+<li>Repro-first per <a href="../../rule/Issues.html">Issues</a>; the store-selector clone crash needs a hermetic repro (a toy project with a <code>link -&gt; .</code> gitlink/symlink, not beagle-ext itself).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending ruling — likely <a href="GET-039.html">GET-039</a>'s &quot;symlink is a leaf blob, never mount/recurse/follow&quot; + a run-pinned extension root in jab)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Hermetic repro: store-backed clone of a project carrying a <code>be -&gt; .</code>-style self-link; assert complete checkout, no resolution loop.</li>
+<li class="open"><input type="checkbox" disabled> jab: resolve+pin the extension dir once at startup (before any checkout writes).</li>
+<li class="open"><input type="checkbox" disabled> Native: sniff missing-object → clean refusal; triage the <code>hexlen=15</code> diag (own ticket if a real slice bug).</li>
+<li class="open"><input type="checkbox" disabled> Fold in / cross-rule <a href="GET-036.html">GET-036</a><a href="GET-037.html">GET-037</a><a href="GET-038.html">GET-038</a><a href="GET-039.html">GET-039</a>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Workers needing a be/ worktree meanwhile: clone from the WORKTREE source (<code>jab get file:/home/gritzko/src/journal/be</code>), not the store selector.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

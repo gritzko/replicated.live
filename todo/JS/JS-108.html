@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-108</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-108: five divergent copies of the u8-slice-to-JS-string helper</h1>
+<p>
+Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers. The same slice-&gt;JSString conversion is reimplemented five ways with different truncation caps and OOM behavior; the divergence already bit as <a href="./JS-107.html">JS-107</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Copies: uri.cpp:12 JABCSliceStr (2048 stack, silent truncate), io.cpp:615 JABCSliceStr (PAGESIZE stack, silent truncate; io.cpp:24 fwd-decl notes it &quot;mirrors uri.cpp's&quot;), pack.hpp:31 JABCStrOf (malloc, undefined on OOM), ulog.hpp:109-137 inline memcpy dance, codec.cpp:104-181 inline memcpy dance.</li>
+<li>Every copy double-copies (slice -&gt; NUL scratch -&gt; JSC internal copy) where a length-explicit constructor needs one.</li>
+<li>Owner norms flag duplicated helpers; the caps/OOM behavior have already diverged.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>One length-explicit <code>JABCStrOfSlice(ctx, u8cs)</code> in JABC.hpp/utf8.cpp that fails loudly (throw, never truncate); delete the five copies.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fixes <a href="./JS-107.html">JS-107</a> by construction; behavior change is truncate-&gt;throw — audit callers that relied on clamping (none should).</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> hoist the helper; migrate uri/io/pack/ulog/codec call sites</li>
+<li class="open"><input type="checkbox" disabled> suite green; long-string cases added where missing</li>
+</ul>
+</body>
+</html>

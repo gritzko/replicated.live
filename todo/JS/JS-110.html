@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-110</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-110: net bundle composes URIs by string concatenation, breaking IPv6</h1>
+<p>
+Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers. Manual URI composition is explicitly forbidden by the norms, and the concat form cannot frame IPv6 literals.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Server.listen: <code>net._listen(&quot;tcp://&quot; + host + &quot;:&quot; + port)</code> (jab net.cpp:307); net.connect: same concat (net.cpp:326); Dgram.bind: <code>&quot;udp://&quot; + addr + &quot;:&quot; + port</code> (net.cpp:339).</li>
+<li>An IPv6 literal (&quot;::1&quot;) yields &quot;tcp://::1:8080&quot;, which the abc URI/NET parser cannot split into host/port (needs bracket framing) — net.connect(port, &quot;::1&quot;) fails or mis-parses.</li>
+<li>uri._make/URI.make (uri.cpp) exists precisely for composition; meta/abc.mkd: never compose URIs manually.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Repro first: connect/listen/bind with an IPv6 literal host.</li>
+<li>Compose via URI.make with proper bracketing/escaping in the bundle.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Keep Node argument shapes (port, host); loopback-default behavior unchanged.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro: IPv6 literal through net/dgram in test/net.js</li>
+<li class="open"><input type="checkbox" disabled> URI.make composition in the three bundle sites</li>
+</ul>
+</body>
+</html>

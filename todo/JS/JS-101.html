@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-101</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-101: HEAP/HASH/sort leaves read args[] past argc — OOB read from plain JS</h1>
+<p>
+Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers. The container leaves are the only bindings in the tree that skip the argc guard, so a short-armed call reads past the JSC argument array — undefined behavior reachable from any script.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>jheap_&lt;lane&gt;_push</code> reads args<a href="./1.html">1</a> and (via RDV) args<a href="./2.html">2</a>/args<a href="./3.html">3</a> with no argc check (jab heap.hpp:56-68); same in <code>jheap_*_pop</code> (heap.hpp:70-82), every <code>jhash_*_put/get/del</code> (hash.hpp:76-111), and <code>jsort_&lt;lane&gt;</code> (hit.hpp:92-103).</li>
+<li>All are installed on the global <code>abc</code> object, so <code>jab --eval &quot;abc._heap_u64_push(new BigUint64Array(4))&quot;</code> (argc=1) feeds a garbage JSValueRef to JSValueToNumber.</li>
+<li>Every other binding guards argc (cf. pack.hpp:74, ulog.hpp:45, hit.hpp:111) — only the HEAP_DEF/HASH_DEF/SORT_LEAF macro families lack the prologue.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Repro first: a test that calls each leaf with too few args and expects a JS throw, not a crash.</li>
+<li><code>if (argc &lt; N) JABC_THROW(...)</code> in the HEAP_DEF/HASH_DEF/SORT_LEAF prologues; suite stays green.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fix in the macro prologues, not per-leaf; no unrelated test edits.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro: short-arg calls for heap/hash/sort leaves in test/ (expect throw)</li>
+<li class="open"><input type="checkbox" disabled> argc guard in the three macro families</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABC-009</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ABC-009: <a href="./HIGH.html">HIGH</a> TLV drain misparses its own huge records; wire-input UB</h1>
+<p>
+<code>TLVu8sDrain</code>'s fast path classifies records by bit 0x20 alone, so huge-type bytes ('!'..':' = 0x21..0x3A, produced by the module's own <code>TLVu8sEndHuge</code>) parse as SHORT records — wrong boundary, stream desync. Plus signed-shift UB and leftover unaligned casts on wire data. Found 2026-07-07; the bit overlap is verified against TLV.h/TLV.c. Complements <a href="../PTR/PTR-001.html">PTR-001</a> (TLV.c:169-238 sites already fixed there, pending review).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>TLV.h:34-45</code> <code>TLVu8sDrain</code> — <code>if ($len &lt; 2 || !(**from &amp; TLVaA))</code> falls<p>
+through to the short-record parse for ANY byte with bit 0x20: huge types 0x21-0x3A take <code>len</code> = low byte of the u64 length; garbage bytes (0x20, 0xFF) that <code>TLVprobe</code> rejects (TLVBADREC) are accepted. Feed/Drain asymmetry: the module emits records its primary drain cannot parse.
+</p>
+</li>
+<li><code>TLV.c:17-18</code> <code>TLVprobe</code> — <code>$at(data,4) &lt;&lt; 24</code> on promoted int: length<p>
+byte ≥ 0x80 is signed-overflow UB on untrusted wire data (bound check at :31 hides it in practice). Cast to u64 before shifting.
+</p>
+</li>
+<li>Unaligned casts OUTSIDE the PTR-001 range: <code>TLV.c:23</code> <code>*(u64*)(*data+1)</code><p>
+read in the huge branch; <code>TLV.h:64-67</code> <code>(u32p)*hdr</code> write in <code>TLVu8bOuto</code> (a header!); <code>TLV.c:65/78</code> deprecated <code>TLVOpen</code>/<code>TLVClose</code> pair.
+</p>
+</li>
+<li>32-bit length fields written from <code>size_t</code> without a u32max guard in<p>
+<code>TLVu8bOuto</code>, <code>_TLVu8sFeed</code> (TLV.c:52), <code>TLVEndAny</code>, <code>TLVu8sEnd</code> — <code>TLVu8bInto</code> shows the intended <code>TLVTOOLONG</code> guard.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Repro: TLVu8sEndHuge a &gt;255-byte record, TLVu8sDrain it back — assert<p>
+desync today, round-trip after the fix. Fuzz drain with high-bit bytes.
+</p>
+</li>
+<li>One classifier (share <code>TLVprobe</code>'s type-range logic), u64-cast shifts,<p>
+memcpy-backed field access, u32max guards.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Wire format is live (logs/stores) — decoder must stay byte-compatible<p>
+with existing valid streams; only invalid/huge handling changes.
+</p>
+</li>
+<li>Coordinate with <a href="../PTR/PTR-001.html">PTR-001</a>'s pending TLV diff (same file).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro: huge-record round-trip through TLVu8sDrain; garbage-type fuzz</li>
+<li class="open"><input type="checkbox" disabled> fast path defers to _TLVu8sDrain/TLVprobe for non-short types</li>
+<li class="open"><input type="checkbox" disabled> TLVprobe u64 shifts; remaining unaligned sites → u8sFeed32/64 class</li>
+<li class="open"><input type="checkbox" disabled> u32max guards on all length writes</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>PTR-001's TLV diff is unlanded; rebase order matters.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+</body>
+</html>

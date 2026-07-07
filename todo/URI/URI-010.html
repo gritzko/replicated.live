@@ -22,6 +22,9 @@ A URI with a RELATIVE path — path-rooted (no scheme/authority: <code>.?</code>
 <li>Confirmed cwd is never consulted for the path: no <code>io.cwd()</code> in the post→narrow flow; <code>makeNarrow</code> (<code>fold-decide.js:90</code>) <code>n.slice(2)</code> then <code>underNarrow</code> matches root-relative leaves; cwd serves only <code>core/discover.js:find()</code> (walk UP to the <code>.be</code> shard anchor).</li>
 <li>Same root-relative-not-cwd assumption in the sibling verbs: <code>verbs/put/put.js:46</code>, <code>verbs/delete/delete.js:55</code>, <code>views/log/log.js</code> all <code>./</code>-strip without rebasing on cwd.</li>
 <li>Diverges from git: <code>git commit -- ./foo</code> is cwd-relative; Beagle's <code>be post ./foo</code> is silently wt-root-relative. POST.mkd's Path slot (&quot;narrow to that path/submodule&quot;) never pins cwd semantics — this ticket pins it.</li>
+<li>LIVE repro (gritzko, 2026-07-07): <code>cd &lt;wt&gt;/blog &amp;&amp; jab put escher.mkd</code> → <code>be put: no eligible paths</code> + <code>PUTNONE</code> (the bare arg matched wt-root-relative <code>escher.mkd</code>, absent); <code>cd &lt;wt&gt; &amp;&amp; jab put blog/escher.mkd</code> staged fine.</li>
+<li>Pager twin (2026-07-07): in a <code>//journal/be</code> status view, <code>put shared/wire.js</code> composes to <code>//journal/shared/wire.js</code> — spell.js mergeUri (URI-011b) rebases a BARE path to the WT ROOT, dropping the view-context <code>/be</code>; only <code>./</code>-led joins the context. Composer probe confirms; the view-context resolution must follow this ticket's cwd rule.</li>
+<li>SRC_ROOT SNAFU (2026-07-07 session): nav authorities resolve under <code>SRC_ROOT=/home/gritzko/src</code>, NOT <code>$HOME</code> — <a href="URI-011.html">URI-011</a>'s &quot;(=<code>$HOME</code>)&quot; is stale. The valid context for <code>~/src/journal/be</code> is <code>//journal/be</code> (SRC_ROOT-relative tree name + path), not <code>//be</code> (wt basename); a <code>//be</code>-assumed context mis-diagnosed the pager PUTNONE as a GIT-014 wire-form misroute until gritzko corrected the root. Resolver work here must pin names against SRC_ROOT.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
@@ -47,6 +50,7 @@ A URI with a RELATIVE path — path-rooted (no scheme/authority: <code>.?</code>
 <h3>TODOs</h3>
 <ul class="todo">
 <li class="open"><input type="checkbox" disabled> Repro: <code>cd &lt;wt&gt;/be/test &amp;&amp; jab post .?</code> resolves to <code>be/test?</code> (RED today — targets root); add a subdir case to be/test.</li>
+<li class="open"><input type="checkbox" disabled> Repro 2: <code>cd &lt;wt&gt;/blog &amp;&amp; jab put escher.mkd</code> stages <code>blog/escher.mkd</code> (bare-word file arg, cwd-rebased; RED today — PUTNONE).</li>
 <li class="open"><input type="checkbox" disabled> <code>resolveWtPath</code> in <code>shared/util/path.js</code>: join cwd, normalize, re-anchor to wt root, refuse climb-above-root.</li>
 <li class="open"><input type="checkbox" disabled> Route post/put/delete/log narrow paths through it; drop the ad-hoc <code>./</code>-strips (<code>fold-decide.js:90</code>, <code>put.js:46</code>, <code>delete.js:55</code>, <code>log.js</code>).</li>
 <li class="open"><input type="checkbox" disabled> Cross-check native <code>be</code> CLI; split a beagle/ ticket if it diverges.</li>

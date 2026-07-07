@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABC-017</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ABC-017: <a href="./MED.html">MED</a> build/CI: no warnings, net stack never tested, LEX drift</h1>
+<p>
+Toolchain batch (2026-07-07 review). The build sets no <code>-Wall -Wextra</code> (dead code and unused results the review found by hand would have been compiler-flagged); the entire network stack + fuzz targets are invisible to CI; and the LEX code generator has drifted from its own committed output, so regenerating any grammar silently changes error-path semantics.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>CMakeLists.txt</code> — only C23 + optional ASAN/fuzz flags; no warning<p>
+flags on any target. Hand-found consequences: unused <code>int s</code> (TCP.c:11,39), unused locals (UDP.c:42-43), dead <code>if (rc == 0) break;</code> (TCP.c:56).
+</p>
+</li>
+<li><code>test/CMakeLists.txt:193</code> gates HTTP/UDP/TCP/CURL/POL tests behind<p>
+WITH_INET, but no <code>option(WITH_INET)</code> is declared anywhere and neither CI job passes it → every network test (incl. MEM-009 leak regressions) is skipped; WITH_FUZZ/WITH_ASAN likewise never built in CI.
+</p>
+</li>
+<li>LEX generator drift: <code>LEX.c:27-29</code> template emits <code>fbreak;</code> in error<p>
+actions while committed JSON.c.rl/URI.c.rl/HTTP.c.rl use <code>goto _out;</code> — regen changes consumed-position semantics on callback failure. <code>LEX.c:78</code> <code>u64 mark0[64]</code> cap never validated vs rule count (silent OOB in generated code for big grammars). Blocks <a href="ABC-011.html">ABC-011</a>'s regen.
+</p>
+</li>
+<li><code>LEX.c:260-289</code> <code>lex2rl</code> — ~2.3 MB of a_pad stack scratch (256K+1M+1M);<p>
+abc.mkd prescribes a_carve/BASS. Overflows non-main threads.
+</p>
+</li>
+<li><code>LEX.cli.c:17-21</code> + <code>nfagrep.c:35-39</code> — <code>sane(argc...)</code> fires before<p>
+the usage message can print (debug), or is ignored (release): behavior differs by build, usage is dead code either way. nfagrep also: 256-byte snprintf path truncation (opens the wrong file), fp leak shape at :70-71.
+</p>
+</li>
+<li><code>INT.h:160-186</code> — the ABC_ALIGN branch does not compile (<code>u8sfrom</code><p>
+token, C++-cast, flipped args, missing Feed twins). Dead config rot: fix or delete.
+</p>
+</li>
+<li>Test hygiene: test/CURL.c:24 depends on live google.com; TCP/UDP tests<p>
+hardcode ports 12345/12399/3456/3499 (NETRandomPort exists); test/UDP.c leaks cfd.
+</p>
+</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>-Wall -Wextra</code> (+ <code>-Wshadow -Wconversion</code> audit list) with a clean<p>
+build; a CI lane with WITH_INET+WITH_ASAN and fuzz smoke (build + N iterations); LEX template reconciled with committed output (pick fbreak OR goto, regen all three grammars, diff-verify); dead branches fixed or deleted.
+</p>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>CI runtime budget: loopback-only net tests (no live-internet<p>
+dependencies) so the lane is deterministic.
+</p>
+</li>
+<li>Regen diffs must be inspected grammar-by-grammar, not bulk-landed.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) fbreak vs goto _out is a semantics ruling — decide before any<p>
+regen (<a href="ABC-011.html">ABC-011</a> waits on it).
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> warning flags + fix fallout</li>
+<li class="open"><input type="checkbox" disabled> option(WITH_INET) + CI lane (loopback tests, random ports)</li>
+<li class="open"><input type="checkbox" disabled> fuzz build in CI; ASAN lane</li>
+<li class="open"><input type="checkbox" disabled> LEX template reconcile + mark0 cap check; lex2rl → BASS</li>
+<li class="open"><input type="checkbox" disabled> LEX.cli/nfagrep usage paths; INT.h ABC_ALIGN branch ruling</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+</body>
+</html>
