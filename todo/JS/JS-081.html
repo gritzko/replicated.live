@@ -11,7 +11,7 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-081 <a href="">MED</a>: <code>views/bro/bro.js</code> fd-1 capture monkey-patch is re-entry-fragile</h1>
+<h1>JS-081 <a href="./MED.html">MED</a>: <code>views/bro/bro.js</code> fd-1 capture monkey-patch is re-entry-fragile</h1>
 <p>
 <code>driveSpell</code> captures the re-entrant <code>loop.cli</code>'s fd-1 'H'-record stream by swapping the GLOBAL <code>io.writeAll</code> for the duration of the call (restored in a <code>finally</code>). The loop EDGE is correctly gated (<code>core/loop.js:318</code> checks both <code>mode!==&quot;tlv&quot;</code> AND <code>!opts2.queuePath</code>), but the bro VERB handler's <code>wantPager</code> check (<code>bro.js:130</code>) is NOT gated on <code>mode===&quot;tlv&quot;</code>. So a <code>:bro:foo</code> spell re-enters the handler, which re-evaluates <code>wantPager</code> true, re-patches the already-patched <code>io.writeAll</code>, and tries to launch a NESTED pager; under a <code>/dev/tty</code>-open failure fallthrough (<code>:143-145</code> falls to fd 1) this can pollute the outer capture. Self-flagged interim (JAB-029). Method: <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -84,6 +84,12 @@ capture is a parameter, not a mutation of global <code>io.writeAll</code>.
 <ul class="todo">
 <li class="open"><input type="checkbox" disabled> The explicit-sink refactor is JAB-029-scoped; this ticket is the gate<p>
  only, keep it 1-2 LoC.
+</p>
+</li>
+</ul>
+<ul>
+<li>2026-07-07 audit: STILL OPEN (line refs shifted; partial mitigation added). <a href="./JSQUE-020.html">JSQUE-020</a><p>
+<code>928aaad5</code> added an <code>opts2.reentry</code> marker: <code>driveSpell</code> calls <code>loop.cli(argv,{reentry:true})</code> (<code>views/bro/bro.js:117</code>) and the LOOP edge gates its pager on <code>!opts2.reentry</code> (<code>core/loop.js:353</code>). BUT the bro VERB handler's own gate <code>broRun</code> <code>wantPager = io.isatty(1) &amp;&amp; flags.indexOf(&quot;--plain&quot;)&lt;0</code> (<code>bro.js:153</code>) is STILL not gated on reentry/<code>mode===&quot;tlv&quot;</code>, and the fd-1 <code>io.writeAll</code> global monkey-patch persists (<code>bro.js:106-118</code>). Re-target the fix to <code>bro.js:153</code> (add the reentry/tlv gate).
 </p>
 </li>
 </ul>

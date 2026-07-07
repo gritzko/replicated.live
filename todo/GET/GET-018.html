@@ -13,7 +13,7 @@
 </a>
 <h1>GET-018: make <code>be get</code>'s worktree update atomic — stage-to-temp + atomic swap (or journal+rollback) so a mid-write failure leaves ref/wtlog/tree all unchanged</h1>
 <p>
-Split from <a href="">GET-016</a> Part 1. <code>be get</code>'s COMMIT POINT (<code>sniff/GET.c:1338-1429</code>) advances the local branch ref + wtlog BEFORE the non-crash-safe worktree write (<code>WALKTreeLazy</code> + drains + sub loop), deliberately — the comment documents replay-via-<code>be get --force ?&lt;cur&gt;</code> as the recovery, and <code>test/get/09-refuse-no-commit</code> + <code>test/get/10-partial-recovery</code> pin that model (get/10 asserts the wtlog GROWS after a failing write and that <code>--force</code> replay is the fix). So the literal &quot;advance the ref only after the write succeeds&quot; reorder is rejected: it breaks that documented crash-safety model and both tests. True all-or-nothing atomicity needs a redesign — stage the wt mutation to a scratch area then atomically swap + advance the ref, or journal each mutation and roll back on failure. GET-016 Part 2 (the <code>--force</code> full-reset that makes the replay recovery actually work) landed separately. See <a href="../../wiki/GET.html">GET</a>, <a href="">GET-016</a>, <a href="../../../beagle/CLAUDE.md">CLAUDE</a>.
+Split from <a href="./GET-016.html">GET-016</a> Part 1. <code>be get</code>'s COMMIT POINT (<code>sniff/GET.c:1338-1429</code>) advances the local branch ref + wtlog BEFORE the non-crash-safe worktree write (<code>WALKTreeLazy</code> + drains + sub loop), deliberately — the comment documents replay-via-<code>be get --force ?&lt;cur&gt;</code> as the recovery, and <code>test/get/09-refuse-no-commit</code> + <code>test/get/10-partial-recovery</code> pin that model (get/10 asserts the wtlog GROWS after a failing write and that <code>--force</code> replay is the fix). So the literal &quot;advance the ref only after the write succeeds&quot; reorder is rejected: it breaks that documented crash-safety model and both tests. True all-or-nothing atomicity needs a redesign — stage the wt mutation to a scratch area then atomically swap + advance the ref, or journal each mutation and roll back on failure. GET-016 Part 2 (the <code>--force</code> full-reset that makes the replay recovery actually work) landed separately. See <a href="./GET.html">GET</a>, <a href="./GET-016.html">GET-016</a>, <a href="../../../beagle/CLAUDE.md">CLAUDE</a>.
 </p>
 <h2>Repro (target behaviour)</h2>
 <ul>
@@ -35,6 +35,13 @@ Must not regress the crash-safety property <code>test/get/09</code>/<code>10</co
 <li>Design pass first: choose swap-vs-journal, write it up here, then fork.</li>
 <li>Repro-first (<a href="../../../beagle/CLAUDE.md">CLAUDE</a> §17): a test that injects a mid-write failure and asserts ref + wtlog + tree all unchanged afterwards.</li>
 <li>Implement; reconcile <code>test/get/09</code> + <code>10</code> to the chosen model.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Design pass: choose stage-to-temp+swap vs journal+rollback; write the ruling here. Audit 2026-07-07: no GET-018 commit landed; commit-point-before-write model unchanged; the JS side now has its own atomicity notes (<code>shared/submount.js</code> GET-037 sub-anchor drop) — align the two.</li>
+<li class="open"><input type="checkbox" disabled> Repro: inject a mid-<code>WALKTreeLazy</code> failure; assert ref + wtlog + tree unchanged.</li>
+<li class="open"><input type="checkbox" disabled> Implement; reconcile <code>test/get/09</code>/<code>10</code> to the chosen model (do not silently break the replay-recovery property).</li>
 </ul>
 </body>
 </html>

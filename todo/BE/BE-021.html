@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-021</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-021 <a href="./MED.html">MED</a>: classify semantics — exec bit ignored, baseline mismatch, nested .be dir floods unk</h1>
+<p>
+Three <code>shared/classify.js</code> correctness gaps:
+</p>
+<ul>
+<li><code>classify.js:142</code> — wtEqBase ignores the EXEC bit: a chmod-only change (0644→0755) reads <code>ok</code>, so it can never be committed AND is silently reverted by a re-get (the mode never propagates).</li>
+<li><code>classify.js:470</code> — classifyDir baselines on <code>baselineTip()</code> while classifyMerge uses <code>curTip()</code>, so <code>ls:</code>/<code>lsr:</code> and <code>status</code> DISAGREE about a file's state after a patch.</li>
+<li><code>classify.js:77</code> — nested-repo pruning accepts an any-kind <code>.git</code> but only a REG-FILE <code>.be</code>, so a nested PRIMARY be worktree (whose <code>.be</code> is a DIR) is not pruned → status floods with <code>unk</code> rows for the whole nested tree.</li>
+</ul>
+<p>
+From the 2026-07-07 be/ review (<a href="REVIEW.html">BE/REVIEW</a>), CONFIRMED. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>git tracks the exec bit as the only mode distinction; wtEqBase comparing content-only drops it.</li>
+<li>The classifyDir/classifyMerge baseline split means two views of &quot;the same file now&quot; answer differently.</li>
+<li><code>.be</code> can be a redirect FILE (worktree) or a store DIR (primary) — the prune must accept both, as it does for <code>.git</code>.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A chmod-only change is a committable <code>mod</code> and survives re-get; <code>ls</code>/<code>lsr</code>/<code>status</code> share one baseline; a nested <code>.be</code>-DIR repo is pruned like a <code>.git</code> one.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first per defect (chmod-only mod; post-patch ls-vs-status agreement; nested primary wt not flooding unk).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending — single baseline source for dir/merge classify)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repros for the three; fix; suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Exec-bit tracking may need a wtlog/stage mode field — scope check.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

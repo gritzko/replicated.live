@@ -11,7 +11,7 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-067 <a href="">MED</a>: <code>shared/wire.js</code> ssh host argv injection + unquoted DOG_REMOTE_PATH</h1>
+<h1>JS-067 <a href="./MED.html">MED</a>: <code>shared/wire.js</code> ssh host argv injection + unquoted DOG_REMOTE_PATH</h1>
 <p>
 <code>shared/wire.js</code>'s <code>classify()</code> (the upload-pack CLIENT spawn) passes the remote URI host as <code>argv[1]</code> of <code>ssh</code> with no <code>--</code>/leading-dash guard, so a host like <code>-oProxyCommand=…</code> is read by ssh as an OPTION → local command exec (the CVE-2017-1000117 class). The command body is <code>shQuote</code>d but the host is not, and <code>$DOG_REMOTE_PATH</code> is interpolated UNQUOTED into the remote shell string. Native single-quotes it. Realistic vector: a user/script-supplied <code>be get &lt;uri&gt;</code>. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -86,6 +86,12 @@ keep the no-<code>DOG_REMOTE_PATH</code> branch byte-identical.
 <h3>Blockers and bummers</h3>
 <ul class="todo">
 <li class="open"><input type="checkbox" disabled> Confirm native's exact host-acceptance set so the guard keeps parity.</li>
+</ul>
+<ul>
+<li>2026-07-07 audit: STILL OPEN (line refs shifted; classify reworked by URI-015/DIS-058).<p>
+<code>shared/wire.js:37 host = u.host||u.authority||&quot;&quot;</code> unvalidated; ssh spawn <code>:88 argv:[sshBin, dest, cmd]</code> with <code>dest</code> (<code>:78 user@host|host</code>) unguarded for a leading <code>-</code>; <code>:84 remPath= getenv(&quot;DOG_REMOTE_PATH&quot;)</code> spliced RAW <code>:86 &quot;PATH=&quot;+remPath+&quot;:$PATH exec keeper &quot;+shq(sp)</code>.
+</p>
+</li>
 </ul>
 <h2>Outcome</h2>
 <ul>

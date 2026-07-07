@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-017</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-017 <a href="./HIGH.html">HIGH</a>: io.mmap-and-never-unmap leak class regresses across 4 sites (JS-031 redux)</h1>
+<p>
+Four read paths <code>io.mmap</code> a file and never unmap it — the exact leak class JS-031 purged from classify, reappearing in the resident loop where mappings accumulate until the process exits (region exhaustion on a big-tree diff or repeated blame):
+</p>
+<ul>
+<li><code>shared/util/ignore.js:155</code> — readFileText mmaps every <code>.gitignore</code> on the walk, never unmaps.</li>
+<li><code>views/diff/diff.js:313</code> — whole-tree diff mmaps EVERY wt file, never unmaps.</li>
+<li><code>shared/gitmodules.js:16</code> — <code>.gitmodules</code> read mmaps per call, never unmaps (also hand-concats the path instead of <code>pathlib.join</code>).</li>
+<li><code>views/why/why.js:25</code> — readWtFile mmaps per blame, leaks one mapping each in the resident loop.</li>
+</ul>
+<p>
+From the 2026-07-07 be/ review (<a href="REVIEW.html">BE/REVIEW</a>), all CONFIRMED. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>jab has no deterministic unmap primitive today (<a href="../JAB/README.html">JAB</a> <code>buf.cpp:124</code> — io.book/close/trim documented but unimplemented); the leak is that the mapping is held for the run with no release point even where one should exist. Reads that only need bytes should route through <code>shared/wtread.js</code> (the ONE reg-file read) which owns the lifecycle.</li>
+<li>JS-031 already established the fix pattern in classify — these sites missed the sweep or landed after.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Each site reads via a lifecycle-owning helper (wtread) or explicitly releases its mapping; no mapping outlives the read in the resident loop.</li>
+<li>gitmodules path built with <code>pathlib.join</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first where measurable: a resident-loop blame/diff loop asserting bounded mappings (or a mapping-count probe). May depend on a jab unmap primitive — coordinate with <a href="../JAB/README.html">JAB</a> (<code>buf.cpp:124</code>); if none, size/scope the reads to bound the leak.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending — route through wtread vs explicit unmap; gated on the jab unmap primitive)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Route the 4 sites through a lifecycle-owning read; gitmodules pathlib.join.</li>
+<li class="open"><input type="checkbox" disabled> Bounded-mapping check; suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Deterministic unmap may not exist in jab yet (<a href="../JAB/README.html">JAB</a> buf.cpp:124) — the real fix may need that primitive first.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

@@ -28,14 +28,17 @@ Per-level carve held across recursion; per-leaf scratch never rewound.
 <p>
 None.
 </p>
-<h2>Planned</h2>
+<h2>WIP</h2>
 <p>
-Bound depth; rewind per leaf.
+Re-verified 2026-07-07: <code>patch_walk</code> was split into a scratch-owning wrapper (sniff/PATCH.c:959-978) + <code>patch_walk_inner</code> (:450), but the recursion at :563 is still a plain C call into the wrapper, so each level re-carves 3×4MB trees + 16MB blob + 3× entry arrays (:969-975, PATCH_TREE_BUF/PATCH_BLOB_BUF at :51-52) held live for the whole subtree; still no depth cap. The :966 &quot;single allocation reused&quot; comment holds per level, not across levels.
 </p>
-<ul>
-<li>Repro FIRST (CLAUDE.md §17): drive <code>PATCHApply</code> against a deeply nested tree (and a wide many-file tree); assert no BNOROOM at sane depth.</li>
-<li>Add an explicit recursion-depth bound to <code>patch_walk</code> and surface a clear error past it.</li>
-<li>Wrap the per-leaf <code>fetch_blob</code>/<code>GRAFMerge*</code> in <code>call()</code>/<code>try()</code> or bracket the leaf-loop body with a BASS mark/rewind so each iteration's scratch is reclaimed.</li>
-</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./ .html"> </a> <code>sniff/PATCH.c:563</code> — recurse through <code>try()</code> (or an explicit bounded work-stack) so each subtree's ~28MB carve rewinds on child return, and add a recursion-depth bound with a clear error.  -<a href="./ .html"> </a> <code>sniff/PATCH.c:697,790,797,831,856,926</code> — leaf <code>(void)fetch_blob</code>/<code>(void)GRAFMerge3Bytes</code>/<code>(void)GRAFMergeWtFileTunable</code> are still plain calls; wrap in <code>call()</code>/<code>try()</code> or bracket the leaf-loop body with a BASS mark/rewind.  -<a href="./ .html"> </a> Repro FIRST (CLAUDE.md §17): drive <code>PATCHApply</code> against a deeply nested tree (and a wide many-file tree); assert no BNOROOM at sane depth.
+</p>
+<h3>Blockers and bummers</h3>
+<p>
+None.
+</p>
 </body>
 </html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MARK-001</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>MARK-001 <a href="./MED.html">MED</a>: a list entry's continuation line renders as a separate &lt;p&gt; inside the &lt;li&gt;</h1>
+<p>
+StrictMark list entries soft-wrap: a following line indented to the SAME depth continues the entry's text (<a href="../../wiki/StrictMark.html">StrictMark</a>; the wiki line budget — bullet 2 lines — makes such continuations normative across /wiki and /todo). <code>mark</code> instead flushes the continuation as a nested <code>&lt;p&gt;</code> inside the still-open <code>&lt;li&gt;</code>, so one logical entry renders as bare inline text PLUS a paragraph block (wrong structure, wrong spacing). Reported by gritzko 2026-07-07; reproduced with <code>~/bin/mark</code> same day. Scope: <code>beagle/mark</code> (C + ragel). Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro (2026-07-07): <code> -  first entry line</code> + next line <code>    continuation indented to the same depth</code> renders <code>&lt;li&gt;first entry line&lt;p&gt;\ncontinuation…\n&lt;/p&gt;\n&lt;/li&gt;</code> — entry text bare, continuation wrapped in <code>&lt;p&gt;</code>.</li>
+<li>Mechanism leads: <code>MARK.c:38</code> buffers soft-wrapped PARAGRAPH text (joined into one line at flush), but a list entry's own text is emitted bare while its <code>&lt;li&gt;</code> is held open for nesting (<code>MARK.c:396-405</code> frame model, <code>mark_para_flush</code> <code>MARK.c:412</code>); the continuation line then enters the paragraph buffer and flushes as <code>&lt;p&gt;</code> INSIDE the li.</li>
+<li>A deeper-indented paragraph inside an entry legitimately nests as <code>&lt;p&gt;</code> (the deferred-<code>&lt;/li&gt;</code> design) — only the SAME-depth continuation is misclassified.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A same-depth continuation joins the entry's inline text with a space (the same soft-wrap join the paragraph buffer does): <code>&lt;li&gt;first entry line continuation…&lt;/li&gt;</code>.</li>
+<li>Deeper-indented blocks inside an entry keep nesting as they do today; sibling and shallower lines still close the entry.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fix in <code>beagle/mark</code> (<code>MARK.c</code> / <code>MARKE.c.rl</code>) — line classification is ragel's job, no manual byte scanning (<a href="../../beagle/CLAUDE.md">CLAUDE</a> no manual parsing).</li>
+<li>Repro-first in <code>mark/test</code> (strict-dir harness); wiki/blog pages render via <code>make</code>, so re-render must stay byte-stable except the fixed lists.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Entry text rides the EXISTING paragraph buffer with a <code>para_li</code> mode (<code>para_del</code> for wontfix <code>&lt;del&gt;</code>): the para continuation path does the same-depth join, <code>mark_para_flush</code> emits li-text bare (no <code>&lt;p&gt;</code>), budget-checks the JOINED entry as &quot;bullet&quot;; sub-4-space leftover indent trimmed at the join (spec ruling StrictMark.mkd:65 &quot;a block continues on later lines via a 4-space indent&quot;).</li>
+<li>Bullet budget now checks the joined entry at flush (2×64 total), not per source line — truer to the 2-line budget; a maxed 64+64 join could newly breach <code>--strict</code> (none in the wiki today).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Repro cases in <code>mark/test/MARK.c</code>: 7 new (ul/ol/todo/del join, sibling, deeper-indent still nests, same-depth AFTER a nested block stays nested <code>&lt;p&gt;</code>) + 1 AMENDED existing case <code>nest-item-para</code> (it pinned the buggy nested-<code>&lt;p&gt;</code> render; unsatisfiable with a green suite — veto reverts it). RED evidenced via the pre-fix deployed binary.</li>
+<li class="done"><input type="checkbox" checked disabled> Fix in <code>MARK.c</code> (<code>para_li</code>/<code>para_del</code> + flush branch + leftover-indent trim); verified by orchestrator 2026-07-07: MARKtest+MARKstrictdir 3/3, probe render joins the li and the deeper-indent case is byte-identical old-vs-new; whole-wiki re-render diff = only POST.html + Submodules.html, both this fix; <code>--strict</code> breach lists byte-identical.</li>
+<li class="open"><input type="checkbox" disabled> Commit/land the fix (human gate; <code>be log</code> has no MARK-001 yet).</li>
+<li class="open"><input type="checkbox" disabled> Re-render the site (<code>make</code>) + redeploy <code>~/bin/mark</code> (still pre-fix, 06:14 build) — user's call.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Fix + tests are UNCOMMITTED in the main tree (<code>mark/MARK.c</code>, <code>mark/test/MARK.c</code>), by explicit no-worktree order.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

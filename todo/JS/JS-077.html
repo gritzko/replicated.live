@@ -11,9 +11,9 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-077 <a href="">MED</a>: orphan keeper pack on a lost ref CAS (permanent disk leak)</h1>
+<h1>JS-077 <a href="./MED.html">MED</a>: orphan keeper pack on a lost ref CAS (permanent disk leak)</h1>
 <p>
-<a href="">POST</a> writes the keeper pack-log + idx as the FIRST store mutation (<code>post.js:242-243</code>), THEN advances the ref with an expected-old CAS (<code>post.js:246</code> → <code>advanceRef</code>, <code>post.js:112-118</code>).  When the CAS loses — a concurrent advance, exactly the race the CAS defends — <code>advanceRef</code> throws POSTNOFF (<code>post.js:114-116</code>) AFTER the pack is on disk.  There is no rollback and no GC path anywhere, so each lost-CAS post leaves the just-written pack-log + idx orphaned: a permanent per-incident disk leak. Content is content-addressed, so it is a leak, not corruption.  Method: <a href="../../meta/work.html">Issues</a>.
+<a href="./POST.html">POST</a> writes the keeper pack-log + idx as the FIRST store mutation (<code>post.js:242-243</code>), THEN advances the ref with an expected-old CAS (<code>post.js:246</code> → <code>advanceRef</code>, <code>post.js:112-118</code>).  When the CAS loses — a concurrent advance, exactly the race the CAS defends — <code>advanceRef</code> throws POSTNOFF (<code>post.js:114-116</code>) AFTER the pack is on disk.  There is no rollback and no GC path anywhere, so each lost-CAS post leaves the just-written pack-log + idx orphaned: a permanent per-incident disk leak. Content is content-addressed, so it is a leak, not corruption.  Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -76,6 +76,10 @@ pack-log + idx before re-throwing POSTNOFF (record their paths from <code>writeP
 <ul>
 <li><code>writePack</code> must surface the exact file names it created so a catch can<p>
 unlink precisely (avoid clobbering a concurrent winner's pack).
+</p>
+</li>
+<li>2026-07-07 audit: STILL OPEN (line refs shifted) — <code>verbs/post/post.js:685</code><p>
+<code>commitM.writePack(reader.shard,…)</code> runs BEFORE <code>:692 advanceRef(…)</code>; no catch/unlink, no GC. A lost CAS (<code>advanceRef:222-225</code> POSTNOFF) leaves the pack-log+idx orphaned.
 </p>
 </li>
 </ul>

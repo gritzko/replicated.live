@@ -44,11 +44,11 @@ The JS extension special-cases the <code>be</code> self-locator everywhere it me
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> RED: symlink round-trip (commit <code>x -&gt; y</code>, checkout, assert <code>readlink==y</code>, mode <code>120000</code>) + <code>be -&gt; .</code> no-recurse.</li>
-<li class="open"><input type="checkbox" disabled> Drop the <code>be</code> special-casing in <code>get.js</code> (isSelfLocator, mountGitlink branch, recurseSubMounts) and the <code>submount.mount</code> refusal.</li>
-<li class="open"><input type="checkbox" disabled> Verify/fix the no-follow recursive wt walk; a symlink is never a mount; unlink-before-<code>symlink()</code> on checkout.</li>
-<li class="open"><input type="checkbox" disabled> Re-commit the <code>be</code> locator as a <code>120000</code> symlink (or document the migration step).</li>
-<li class="open"><input type="checkbox" disabled> GREEN: new repros pass; <code>be-js-sub-cycle</code> + the get/status suite intact.</li>
+<li class="done"><input type="checkbox" checked disabled> RED: symlink round-trip → <code>test/sub/symlink/run.sh</code> (120000 blob commit→checkout, readlink==target, never a mount); <code>be -&gt; .</code> no-recurse → <code>test/sub/selfloop/run.sh</code> (no <code>be/be/be</code> blowup, no <code>?/be</code> fetch).</li>
+<li class="done"><input type="checkbox" checked disabled> Drop the <code>be</code> special-casing: <code>isSelfLocator</code> is GONE from <code>be/</code> (grep clean, audit 2026-07-07); <code>submount.mount</code> refusal replaced by the symlink-is-a-120000-blob rule (<code>shared/submount.js:202</code>).</li>
+<li class="done"><input type="checkbox" checked disabled> Verify/fix the no-follow recursive wt walk; a symlink is never a mount; unlink-before-<code>symlink()</code> on checkout. → <code>classify.js</code> lstat kind <code>l</code> leaf; <code>core/recurse.js:31</code> symlink never a mount; <code>shared/checkout.js:56</code> clear-before-write; selfloop asserts readdir no-follow. Entry-type changes <code>3026a5fb</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Re-commit the <code>be</code> locator as a <code>120000</code> symlink → be <code>d31b52ea</code> &quot;commit be symlink&quot;.</li>
+<li class="open"><input type="checkbox" disabled> GREEN + FORMAL CLOSE: suite green per <code>d80bdb5c</code> &quot;js tests pass&quot; (audit did not re-run); only <code>3026a5fb</code> carries the GET-039 code — record the main landing hashlet(s) and close under the <a href="GET-041.html">GET-041</a> umbrella ruling (end-to-end beagle-ext bring-up still fails there 2026-07-07).</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -57,7 +57,8 @@ The JS extension special-cases the <code>be</code> self-locator everywhere it me
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>OPEN — filed 2026-06-29. Supersedes the <code>be</code> self-locator special-casing of <a href="GET-036.html">GET-036</a>/<a href="GET-037.html">GET-037</a> with git's symlink-as-blob model (a symlink is a leaf, never a sub).</li>
+<li>PARTIAL (core landed) — filed 2026-06-29. Supersedes the <code>be</code> self-locator special-casing of <a href="GET-036.html">GET-036</a>/<a href="GET-037.html">GET-037</a> with git's symlink-as-blob model (a symlink is a leaf, never a sub).</li>
+<li>Landed: <code>3026a5fb</code> &quot;GET-039: entry type changes (e.g. symlink-&gt;dir)&quot;, <code>d31b52ea</code> &quot;commit be symlink&quot;, JS-069 <code>d89eb236</code> symlink handling; tests <code>test/sub/symlink</code> + <code>test/sub/selfloop</code>; all <code>be</code>-name special-casing removed. Remaining: formal close pending the <a href="GET-041.html">GET-041</a> end-to-end bring-up (jab run-pin + native arms are out of this ticket's JS scope).</li>
 </ul>
 </body>
 </html>

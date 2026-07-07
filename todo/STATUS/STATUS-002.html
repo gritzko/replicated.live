@@ -80,17 +80,20 @@ consults it nearest-first with git precedence; built once per directory (cached)
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Roll back the prior fix: drop <code>igno_is_build*</code>/<code>Corpus</code> from <code>dog/git/IGNO.c</code>,<p>
-  revert the test that pinned it; <code>IGNOMatch</code> pattern-only again.
+<li class="done"><input type="checkbox" checked disabled> Roll back the prior fix: no <code>igno_is_build*</code>/<code>Corpus</code> anywhere in<p>
+  <code>dog/git/IGNO.c</code> or <code>dog/test/IGNO.c</code> (audit-verified); <code>IGNOMatch</code> pattern-only.
 </p>
 </li>
-<li class="open"><input type="checkbox" disabled> Implement the chain: load+stack <code>.gitignore</code> from the path's dir up to<p>
-  <code>$HOME</code>/<code>/</code>; compound with git precedence; cache per directory.
+<li class="done"><input type="checkbox" checked disabled> Implement the chain: <code>IGNOLoad</code> walks the anchor dir up to <code>$HOME</code>/<code>/</code><p>
+  (IGNO.c:239-276), stacks every <code>.gitignore</code>, git precedence incl. <code>!</code>   (nearest-first consult, IGNO.c:332+), built once per load — dog <code>623b5a9e</code>.
 </p>
 </li>
-<li class="open"><input type="checkbox" disabled> Wire into the status walk so sub subtrees inherit the parent chain.</li>
-<li class="open"><input type="checkbox" disabled> Repro-first test (hermetic): a sub subtree with a PARENT-ONLY <code>.gitignore</code><p>
-  → build artifacts ignored; plus a <code>!</code>-negation / precedence case. ctest green.
+<li class="done"><input type="checkbox" checked disabled> Wire into the status walk: <code>sniff/SNIFF.c:303 IGNOLoad(&amp;s-&gt;ignores, wt_for_ig)</code><p>
+  — the upward chain crosses sub boundaries, so a sub scan inherits parent rules.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Repro-first test: <code>dog/test/IGNO.c</code> STATUS-002 chain property cases<p>
+  (igno_chain_case: parent-only pattern + <code>!</code> negation/precedence). ctest green.
 </p>
 </li>
 </ul>
@@ -103,7 +106,14 @@ tmpfs symlink).  Watch disk on the rerun.
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(open; prior build/Corpus stop-gap rejected, to be rolled back.)</li>
+<li>LANDED dog <code>623b5a9e</code> / beagle pin <code>7d60c8ae</code> &quot;STATUS-002 hierarchical<p>
+.gitignore across submodules&quot;: the chosen <code>.gitignore</code> STACK (leaf dir → <code>$HOME</code>/<code>/</code>, git precedence, <code>!</code> negation) in <code>dog/git/IGNO.c</code>, consumed via <code>sniff/SNIFF.c IGNOLoad</code>; the build/Corpus stop-gap is gone (rolled back).
+</p>
+</li>
+<li>Audit 2026-07-07: code + tests verified in-tree (<code>dog/test/IGNO.c</code> chain<p>
+cases); no hardcoded dir names remain. CLOSED.
+</p>
+</li>
 </ul>
 </body>
 </html>

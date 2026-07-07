@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-006</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-006 <a href="./MED.html">MED</a>: buf.cpp violates the documented API.md buffer contract — silent truncation + missing unmap primitives</h1>
+<p>
+Two jab-runtime (<code>src/jab</code>) binding gaps surfaced by the 2026-07-07 be/ review (<a href="../BE/REVIEW.html">BE/REVIEW</a>), where <code>be/</code> JS relies on a contract <code>buf.cpp</code> does not honor:
+</p>
+<ul>
+<li><code>buf.cpp:48</code> — <code>Buf.feedStr</code> SILENTLY TRUNCATES when IDLE is full, violating API.md's NOROOM contract (callers assume all-or-nothing + a NOROOM signal). Silent short writes corrupt output with no error.</li>
+<li><code>buf.cpp:124</code> — API.md documents <code>io.book</code> / <code>b.close()</code> / <code>b.trim()</code> that <code>buf.cpp</code> does NOT implement — there is no deterministic unmap primitive, which is exactly what the mmap-leak class <a href="../BE/BE-017.html">BE-017</a> needs to release mappings in the resident loop.</li>
+</ul>
+<p>
+Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>be/ code trusts API.md: feedStr callers branch on a NOROOM return that never comes; the leak-fix in <a href="../BE/BE-017.html">BE-017</a> wants <code>io.book</code>/close to release a mapping deterministically, but the primitives are absent.</li>
+<li>These are jab-SIDE (binding) defects, split from the be/ review so the fix lands in the runtime, not the extension.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>Buf.feedStr</code> returns NOROOM (or throws) on insufficient IDLE, never a silent partial write — matching API.md.</li>
+<li>Either implement <code>io.book</code>/<code>b.close()</code>/<code>b.trim()</code> per API.md (deterministic unmap) OR correct API.md to what the runtime actually provides; <a href="../BE/BE-017.html">BE-017</a> depends on the ruling.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first: a feedStr into a too-small buffer asserts NOROOM; an unmap primitive (if implemented) releases a mapping observably.</li>
+<li>ABC buffer/NOROOM conventions.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending — implement the primitives vs amend API.md)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: feedStr overflow → NOROOM.</li>
+<li class="open"><input type="checkbox" disabled> Fix feedStr truncation; resolve io.book/close/trim (implement or de-document); unblock <a href="../BE/BE-017.html">BE-017</a>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="../BE/BE-017.html">BE-017</a> (be/ mmap leaks) is gated on the unmap-primitive ruling here.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

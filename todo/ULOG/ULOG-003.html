@@ -76,9 +76,9 @@ row count (mirror <code>ulog_idx_scan_cap</code>) so the common path never needs
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro test: <code>dog/test/ULOG.c</code> — RW-open a 257+-entry ULOG, expect OK.</li>
-<li class="open"><input type="checkbox" disabled> Fix the booked-sidecar grow (FILEBookEnsure / wh128bPush path); RW open scales.</li>
-<li class="open"><input type="checkbox" disabled> Verify <code>be post</code> on the 314-row journal wtlog; keep <code>dog</code>/<code>be</code> suites green.</li>
+<li class="done"><input type="checkbox" checked disabled> Repro test: <code>dog/test/ULOG.c:1476</code> — stale booked sidecar with &gt;256 rows rebuilds in place on the 4096-init map — landed <code>be89684d</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Fix: <code>ulog_idx_push_row</code>/rebuild path calls <code>FILEBookEnsure((u8bp)idx, sizeof(wh128))</code> before each push (<code>dog/ULOG.c:151</code>) — booked sidecar grows on demand toward the 16MiB book — landed <code>be89684d</code> (beagle pin <code>e5071f32</code>).</li>
+<li class="done"><input type="checkbox" checked disabled> <code>jab post</code> works on the journal/be wtlogs again (e.g. be <code>1b7c9934</code> &quot;staged and posted by jab&quot;, 2026-07-06); dog suite green with the new table cases.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -89,10 +89,8 @@ to <code>row0 + last get/post + uncommitted put/del</code> opens fine and resolv
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>Open.  Found during the <a href="../PUT/PUT-007.html">PUT-007</a> session (a separate <code>be/</code> put perf fix); this<p>
-is a distinct NATIVE <code>dog/ULOG.c</code> bug on the RW open path, not a JS issue.
-</p>
-</li>
+<li>LANDED dog <code>be89684d</code> + beagle pin <code>e5071f32</code> (&quot;ULOG-003: ensure ulog index has the capacity&quot;, 2026-07-06): grow-on-demand <code>FILEBookEnsure</code> before each idx push + in-place rebuild of a stale &gt;256-row booked sidecar; repro table case at <code>dog/test/ULOG.c:1476</code>.</li>
+<li>History: found during the <a href="../PUT/PUT-007.html">PUT-007</a> session; a distinct NATIVE <code>dog/ULOG.c</code> bug on the RW open path, not a JS issue.  The interim wtlog compaction was never applied.</li>
 </ul>
 </body>
 </html>

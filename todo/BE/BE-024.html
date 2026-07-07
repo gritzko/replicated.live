@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-024</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-024 <a href="./MED.html">MED</a>: robustness + error-doctrine — unguarded parse aborts walk, non-crash-safe book, wrong-target rollback</h1>
+<p>
+Seven correctness/robustness/doctrine gaps across shared/core/verbs:
+</p>
+<ul>
+<li><code>core/recurse.js:53</code> — joinPrefix calls <code>uri._parse</code> UNGUARDED; one malformed <code>.gitmodules</code> path (a space or control byte — git allows sub paths with spaces) throws <code>uri.parse: malformed</code> and ABORTS the whole status/diff/log/commit recursion (every other _parse site try/catches; status.js:~398 duplicates the hole).</li>
+<li><code>shared/submount.js:327</code> — mount() failure rollback unlinks a PRE-EXISTING healthy sub anchor → a transient re-get failure UNMOUNTS a live sub.</li>
+<li><code>shared/ulog.js:233</code> — _book truncates the live ULOG BEFORE restoring the RAM snapshot, yet is documented as a crash-safe primitive (a crash in the window loses the log).</li>
+<li><code>shared/serve.js:74</code> — uploadPack serves only wants<a href="./0.html">0</a>; additional want lines are collected then IGNORED.</li>
+<li><code>shared/argline.js:44</code> — shellSplit drops EVERY backslash inside double quotes, diverging from POSIX quoting.</li>
+<li><code>verbs/post/post.js:269</code> — advanceBranch: the 'target already contains cur' POSTNONE is UNREACHABLE — that case is reported as POSTNOFF (wrong code).</li>
+<li><code>core/loop.js:331</code> — lowercase throw prefixes <code>&quot;loop: ...&quot;</code> / <code>&quot;be.find: ...&quot;</code> (also loop.js:89, discover.js:142) violate the UPPERCASE-code error doctrine.</li>
+</ul>
+<p>
+From the 2026-07-07 be/ review (<a href="REVIEW.html">BE/REVIEW</a>), CONFIRMED (recurse.js probed). Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>recurse.js:53 probe: <code>recurse.joinPrefix(&quot;parent&quot;, &quot;my sub&quot;)</code> throws <code>uri.parse: malformed</code>; the only enclosing catch (loop.js:62) re-propagates → whole-run abort on one bad declared path.</li>
+<li>Doctrine (3): throws start with an UPPERCASE code word (NAVNONE/PUTNONE follow it); these are user-facing.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>joinPrefix (both sites) guards the parse and SKIPS a bad path, not the whole walk; mount() rollback only unlinks anchors IT created; _book restores snapshot before truncation (or is documented non-crash-safe); uploadPack serves all wants; shellSplit keeps POSIX backslash semantics; advanceBranch emits the reachable POSTNONE; the three throws get code words.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first for the behavioral ones (bad-path recursion survives; transient re-get keeps the live sub; multi-want fetch).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repros + fixes for the seven; suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

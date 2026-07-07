@@ -68,11 +68,14 @@ valid value (overflow→max, underflow→min); keep <code>RONOfTime</code> stric
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> (A) repro: abc RON test — <code>RONToTime(37748435520173032, &amp;tm, NULL)</code> is<p>
-  BADARG today; assert OK + tm 10:00:00 (ms clamped 999) after. RED→GREEN.
+<li class="done"><input type="checkbox" checked disabled> (A) repro: abc RON test — clamp cases in <code>dog/abc/test/RON.c</code> (ms 1000→999<p>
+  time unchanged, mon 14→12, hour 25→23, min/sec 60→59; all return OK).
 </p>
 </li>
-<li class="open"><input type="checkbox" disabled> (A) clamp patch in <code>RONToTime</code>; abc + round-trip suites green, ASan clean.</li>
+<li class="done"><input type="checkbox" checked disabled> (A) clamp patch in <code>RONToTime</code> (abc/RON.c:103 slot-by-slot clamp) — landed<p>
+  abc <code>ffc0624b</code> / beagle pin <code>a4094f7f</code> &quot;out-of-range timestamps do not throw&quot;.
+</p>
+</li>
 <li class="open"><input type="checkbox" disabled> (B) generator: carry same-second ms overflow into the next second<p>
   (<code>_ulog_now</code> / <code>keep_next_pup_key</code>); never emit ms≥1000; add a   &gt;1000-rows-in-one-second repro. <a href="./follow-up.html">follow-up</a>
 </p>
@@ -85,7 +88,14 @@ valid value (overflow→max, underflow→min); keep <code>RONOfTime</code> stric
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(pending)</li>
+<li>(A) LANDED: abc <code>ffc0624b</code> / beagle pin <code>a4094f7f</code> &quot;RON-001: out-of-range<p>
+timestamps do not throw&quot; — <code>RONToTime</code> clamps every slot (abc/RON.c:103), <code>RONOfTime</code> stays strict; clamp cases in <code>dog/abc/test/RON.c</code>.
+</p>
+</li>
+<li>(B) STILL OPEN (audit 2026-07-07): keeper <code>keep_next_pup_key</code><p>
+(keeper/KEEP.c:152) still bumps the PACKED ron60 (<code>max(now,last+1)</code>), and jab <code>_ulog_now</code> (ulog.hpp JABCulogNow) returns raw <code>RONNow()</code> — nothing prevents ms≥1000 when &gt;1000 stamps land in one second.
+</p>
+</li>
 </ul>
 </body>
 </html>

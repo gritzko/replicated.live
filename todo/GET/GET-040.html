@@ -44,10 +44,10 @@ A plain (non-force) <code>jab get</code> must MERGE dirty tracked files and LEAV
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> T1 — repro: an untracked file in a worktree (top-level AND a submodule); a non-force <code>jab get</code> (switch/update/re-get) must PRESERVE it — fails today (deleted).</li>
-<li class="open"><input type="checkbox" disabled> T2 — fix the del-sweep/prune: unlink only tracked deletions (present in <code>oldTree</code>, gone in <code>newTree</code>), never an untracked path; keep dirty-tracked merge.</li>
-<li class="open"><input type="checkbox" disabled> T3 — submodule path: a sub recursion must not wholesale clean-reset the sub (DIS-058 read-only); untracked sub files preserved.</li>
-<li class="open"><input type="checkbox" disabled> T4 — regression: get/dirty/restore/traversal buckets, wire ssh/http update+incremental, and <code>get!</code> still clean-resets.</li>
+<li class="done"><input type="checkbox" checked disabled> T1 — repro landed: <code>test/sub/untracked/run.sh</code> (sub + nested untracked + dirty tracked preserved non-force; force arm cleans). Top-level untracked is safe by construction: the tree-reconcile enumerates only tree entries and a delete leaf fires only with an <code>oldSha</code> (<code>get.js leaf</code>/<code>reconcileDir</code>).</li>
+<li class="done"><input type="checkbox" checked disabled> T2 — del-sweep/prune fixed: <code>shared/checkout.js apply</code> gates unlinks on the OLD baseline tree (<code>oldMap</code>) — non-force unlinks only tracked deletions, preserves dirty edits (<code>mrg</code>). <code>0092271c</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> T3 — submodule path fixed: <code>shared/submount.js</code> threads the sub's PRIOR pin as <code>oldTip</code> + the global <code>ambient</code> force flag into <code>checkout.apply</code>; recursion no longer clean-resets the sub. <code>0092271c</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> T4 — regression: <code>get!</code> clean-reset asserted by <code>test/sub/untracked</code> arm 2; suite green per <code>d80bdb5c</code> &quot;js tests pass, no native use&quot; (2026-07-06 audit: not re-run, read-only).</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -56,7 +56,9 @@ A plain (non-force) <code>jab get</code> must MERGE dirty tracked files and LEAV
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(pending)</li>
+<li>LANDED be <code>0092271c</code> &quot;GET-040: fix recursion bug (submodule reset)&quot;: FORCE (<code>get!</code>) is the sole clean-reset; NON-force (re)writes only missing/clean tracked files, preserves dirty edits, and unlinks ONLY a tracked deletion — an untracked path (in neither tree) is never touched (<code>shared/checkout.js apply</code> oldTip/oldMap model; <code>shared/submount.js</code> passes the sub's prior pin + the global force flag).</li>
+<li>Repro/regression <code>test/sub/untracked/run.sh</code> (two arms: non-force preserve, force clean-reset).</li>
+<li>Audit 2026-07-07: guards verified present in the current tree (checkout.js/submount.js as of <code>50e90012</code>); suite not re-run (read-only audit) — green per <code>d80bdb5c</code>.</li>
 </ul>
 </body>
 </html>

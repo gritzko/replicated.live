@@ -11,7 +11,7 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-076 <a href="">MED</a>: <code>wire.fetch</code> leaks the child stdin fd (wfd) on every error path</h1>
+<h1>JS-076 <a href="./MED.html">MED</a>: <code>wire.fetch</code> leaks the child stdin fd (wfd) on every error path</h1>
 <p>
 <code>wire.fetch</code> spawns <code>upload-pack</code>, holding <code>wfd=child.stdin</code> / <code>rfd=child.stdout</code> / <code>pid</code> (<code>wire.js:136-137</code>).  <code>wfd</code> is closed only at <code>wire.js:170</code>, INSIDE the <code>try</code> after the request is written; the <code>finally</code> (<code>wire.js:188-191</code>) closes <code>rfd</code> and reaps <code>pid</code> but NEVER <code>wfd</code>.  Any throw before :170 — peer advertised no usable ref (:160), a pkt parse error draining the advert, a mid-loop <code>io.writeAll</code> failure — leaks <code>wfd</code>, and reaping with the child's stdin still open can block the peer.  WIRECLI.c closes both fds before reaping.  Method: <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -76,6 +76,10 @@ or drop the inline :170 close (guarded re-close makes it idempotent).
 <ul>
 <li>Verify <code>io.close</code> on an already-closed fd is a harmless no-op (catch<p>
 EBADF) so the happy-path double-close is safe.
+</p>
+</li>
+<li>2026-07-07 audit: STILL OPEN (line refs shifted) — <code>shared/wire.js:42</code> owns<p>
+<code>wfd</code>; <code>:62</code> closes it inline INSIDE the try; the <code>:80-83</code> <code>finally</code> closes only <code>rfd</code> + reaps <code>pid</code>, never <code>wfd</code>. A pre-<code>:62</code> throw still leaks <code>wfd</code>.
 </p>
 </li>
 </ul>

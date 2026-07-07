@@ -11,15 +11,37 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>BE — dispatcher CLI tickets</h1>
+<h1>BE — the be/ JS project (dispatcher + kernel + verbs + views)</h1>
 <p>
-<code>be</code>'s front-end: verb/projector dispatch, bareword routing, and the error/UX surface a user actually sees. One topic dir, <a href="../../wiki/Plan.html">Plan</a>-shaped tickets cleared by the <a href="../../rule/Issues.html">Issues</a> fix-and-land loop.
+<code>be</code>'s front-end (verb/projector dispatch, bareword routing, the error/UX surface) plus the be/ JS kernel/verbs/views the 2026-07-07 review covered (<a href="REVIEW.html">BE/REVIEW</a>). One topic dir, <a href="../../wiki/Plan.html">Plan</a>-shaped tickets cleared by the <a href="../../rule/Issues.html">Issues</a> fix-and-land loop.
 </p>
-<h2>Active tickets</h2>
+<h2>Review 2026-07-07 (BE-010..025)</h2>
+<p>
+Parallelized 5-dimension review of be/ (54 confirmed, adversarially verified) — full record in <a href="REVIEW.html">BE/REVIEW</a>. Grouped by root cause:
+</p>
+<ul>
+<li><a href="BE-010.html">BE-010</a> <a href="./CRIT.html">CRIT</a> — PATCH weaves the COMMIT tree as &quot;ours&quot;, clobbering dirty wt edits (JS twin of native PATCH-002/JGET-004).</li>
+<li><a href="BE-011.html">BE-011</a> <a href="./HIGH.html">HIGH</a> — wtdir SRC_ROOT confinement is lexical; <code>//../name</code> escapes the root (JS twin of DOG-009).</li>
+<li><a href="BE-012.html">BE-012</a> <a href="./HIGH.html">HIGH</a> — emitPack 256B deflate slack overflows on &gt;4MB incompressible blobs → every such push aborts.</li>
+<li><a href="BE-013.html">BE-013</a> <a href="./HIGH.html">HIGH</a> — wire.js child/fd lifecycle: push() finally leaks stdin → reap HANGS; curlRun/curlPost leak.</li>
+<li><a href="BE-014.html">BE-014</a> <a href="./HIGH.html">HIGH</a> — DELETE ignores the Host slot: <code>be delete //origin?feat</code> tombstones the LOCAL branch.</li>
+<li><a href="BE-015.html">BE-015</a> <a href="./HIGH.html">HIGH</a> — POST <code>#</code>/<code>#!</code>/<code>#msg!</code> message forms unimplemented (reuse missing, forget-<code>!</code> dropped).</li>
+<li><a href="BE-016.html">BE-016</a> <a href="./HIGH.html">HIGH</a> — pager emits file-content control bytes to the tty (ANSI/OSC injection).</li>
+<li><a href="BE-017.html">BE-017</a> <a href="./HIGH.html">HIGH</a> — io.mmap-and-never-unmap leak class at 4 sites (ignore/diff/gitmodules/why); gated on <a href="../JAB/JAB-006.html">JAB-006</a>.</li>
+<li><a href="BE-018.html">BE-018</a> <a href="./MED.html">MED</a> — hunk-body tok32 end field wraps at 16 MiB (log/why) → large-file views corrupt.</li>
+<li><a href="BE-019.html">BE-019</a> <a href="./MED.html">MED</a> — thin-pack buffer sizing: silent object drop + &gt;1GB balloon on corrupt input (store.js).</li>
+<li><a href="BE-020.html">BE-020</a> <a href="./MED.html">MED</a> — verb URI-slot gaps: HEAD drops Path, pathless PUT force-pushes, host decoded 3 ways.</li>
+<li><a href="BE-021.html">BE-021</a> <a href="./MED.html">MED</a> — classify: exec bit ignored, dir/merge baseline mismatch, nested <code>.be</code> DIR floods unk.</li>
+<li><a href="BE-022.html">BE-022</a> <a href="./MED.html">MED</a> — helper duplication sweep (~9 sites: head/get tip-peek, ZERO_SHA×3, pager/spell, status isMount, …).</li>
+<li><a href="BE-023.html">BE-023</a> <a href="./MED.html">MED</a> — view semantics: multi-arg grep/spot drop args, theme bold sticks, pager escape-split leak.</li>
+<li><a href="BE-024.html">BE-024</a> <a href="./MED.html">MED</a> — robustness/doctrine: unguarded parse aborts walk, non-crash-safe _book, wrong-target rollback, +4.</li>
+<li><a href="BE-025.html">BE-025</a> <a href="./LOW.html">LOW</a> — perf/style: repeated full-wtlog scans, double hunk retention, redundant re-encode, whitespace.</li>
+</ul>
+<h2>Active tickets (dispatcher/UX)</h2>
 <ul>
 <li><a href="BE-003.html">BE-003</a> — every dog must print <strong>name + verb + URI + error code</strong> on an error exit (one uniform line, single-sourced) — today error exits are contextless (<code>Error: SNIFFFAIL</code>, <code>bro: cannot open …: FILENONE</code>); general form of BE-002.</li>
 <li><a href="BE-006.html">BE-006</a> — one unreachable-remote <code>be post</code> prints FIVE lines for one failure (raw <code>ssh:</code> leak + <code>be: remote unreachable</code> + <code>Error: WIREUNRCH</code> + <code>Error: BEDOGEXIT</code> ×2, one per spawned <code>be</code> level); collapse to a single uniform error line. Concrete instance of <a href="BE-003.html">BE-003</a>.</li>
-<li><a href="BE-008/README.html">BE-008</a> — <code>be put</code>/<code>be post</code> leak a sub's empty-put cascade (<code>sniff: put: no changes</code>/<code>no eligible paths</code> + empty <code>put put:</code> + <code>Error: PUTNONE</code> + <code>Error: NONE</code>) when recursing into an UNCHANGED submodule, on an otherwise-successful command; an unchanged sub must be a silent no-op. Evidence in the ticket dir; kin of <a href="../POST/POST-019.html">POST-019</a>.</li>
+<li><a href="BE-008/README.html">BE-008</a> — <code>be put</code>/<code>be post</code> leak a sub's empty-put cascade (<code>sniff: put: no changes</code> + empty <code>put put:</code> + <code>Error: PUTNONE</code> + <code>Error: NONE</code>) when recursing into an UNCHANGED submodule. PARTIAL: the <code>be post</code> arm landed (quiet captured gitlink bump); the bare <code>be put</code> arm (BEActSubsRelay, no <code>-q</code>) still sprays. Evidence in the ticket dir; kin of <a href="../POST/POST-019.html">POST-019</a> (closed).</li>
 </ul>
 <p>
 BE-007 (root out ROWS — deleted <code>dog/ROWS.{h,c}</code> + 4 types, 18 callers repointed to the typeless <code>HUNKu8sFeedRow</code> ULOG→HUNK serializer; fixed POST-022's wrecked output) landed <code>1a006d08</code>; retires <a href="BE-005.html">BE-005</a> (the ROWS-banner umbrella).

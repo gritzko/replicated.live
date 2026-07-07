@@ -44,10 +44,11 @@ beagle-ext is located by a self-symlink named <code>be</code> at the project roo
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro A in a scratch dir: <code>be get …?/beagle-ext</code> into <code>…/ZZZ</code> → assert <code>ZZZ/be</code> is the self-symlink, NOT an empty dir.</li>
-<li class="open"><input type="checkbox" disabled> Repro B in a scratch worktree: rm the basename link, run <code>be status</code>, assert no <code>&lt;basename&gt; -&gt; &lt;abs&gt;</code> link reappears and <code>be -&gt; .</code> is intact.</li>
-<li class="open"><input type="checkbox" disabled> Pin + fix both sites; the locator is always named <code>be</code>, relative target.</li>
-<li class="open"><input type="checkbox" disabled> Confirm <code>jab status</code> in a non-<code>be</code>-named worktree now loads the LOCAL scripts (not <code>/tmp/be</code>).</li>
+<li class="done"><input type="checkbox" checked disabled> Fix Bug A (get-time): <code>sniff/GET.c:223-252</code> now materialises a top-level <code>be</code> gitlink as the relative self-symlink <code>be -&gt; .</code> (FILEUnLink + FILESymLink &quot;.&quot;, WALKSKIP — no sub-mount, no empty dir). Landed beagle <code>b24446c0</code> (+ be JS <code>f0269b27</code>).</li>
+<li class="done"><input type="checkbox" checked disabled> Fix the mis-classification that COMMITTED <code>be</code> as a gitlink: <code>SNIFFSubIsMount</code> (<code>sniff/SUBS.c:1121</code>) NOFOLLOW-lstats the mount point — a symlink is never a mount, so PUT/POST no longer commit <code>be</code> as 160000. <code>b24446c0</code>.</li>
+<li class="open"><input type="checkbox" disabled> Repro A as a TEST: no <code>test/get/*</code> case asserts <code>be get …?/beagle-ext</code> into a non-<code>be</code>-named dir yields the <code>be -&gt; .</code> symlink (fix is code-only so far).</li>
+<li class="open"><input type="checkbox" disabled> Repro B (run-time <code>&lt;basename&gt; -&gt; &lt;abs-wt&gt;</code> link): audit 2026-07-07 found NO remaining runtime creator (<code>FILESymLink</code> sites are only GET.c:175/244 checkout + PATCH.c:209) — but the recreate-on-<code>be status</code> repro was never re-run/pinned; verify + close or repin.</li>
+<li class="open"><input type="checkbox" disabled> Confirm <code>jab status</code> in a non-<code>be</code>-named worktree loads the LOCAL scripts (not <code>/tmp/be</code>) — per <a href="GET-041.html">GET-041</a> (2026-07-07) jab still self-hosts/mis-resolves during clone, so this remains RED end-to-end.</li>
 <li class="open"><input type="checkbox" disabled> Green: beagle ctest; no regression to the main <code>be/</code> tree.</li>
 </ul>
 <h3>Blockers and bummers</h3>
@@ -56,7 +57,8 @@ beagle-ext is located by a self-symlink named <code>be</code> at the project roo
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>OPEN — filed 2026-06-29 from the DIS-057 colour-review thread (jab was running stale main-tree scripts because the worktree <code>be</code> locator was broken). Two faces (get-time empty dir + run-time basename link); same fix family (fixed <code>be</code> name, relative target).</li>
+<li>PARTIAL — filed 2026-06-29 from the DIS-057 colour-review thread (jab was running stale main-tree scripts because the worktree <code>be</code> locator was broken). Two faces (get-time empty dir + run-time basename link); same fix family (fixed <code>be</code> name, relative target).</li>
+<li>Landed: beagle <code>b24446c0</code> + be <code>f0269b27</code> &quot;GET-036: symlink handling&quot; — checkout materialises <code>be -&gt; .</code> (<code>sniff/GET.c:223</code>), <code>SNIFFSubIsMount</code> never treats a symlink as a mount (<code>sniff/SUBS.c:1121</code>). Open: repro tests, Bug-B verification, and the end-to-end jab local-script resolution (now under <a href="GET-041.html">GET-041</a>).</li>
 </ul>
 </body>
 </html>

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-010</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-010 <a href="./CRIT.html">CRIT</a>: JS PATCH weaves the COMMIT tree as &quot;ours&quot;, clobbering dirty wt edits</h1>
+<p>
+<code>be patch</code> (JS handler) classifies every path from the fork/ours/theirs COMMIT trees only and never reads on-disk bytes, directly against <a href="../../wiki/PATCH.html">PATCH</a> §Weave (&quot;the ours side is the wt's current bytes, including user edits and any prior output; dirty files never cause a refusal&quot;). A file clean on the commit side (<code>oEqF</code>) but dirty on disk takes the &quot;only theirs&quot; arm (<code>patch.js:81</code>) and is clean-overwritten with theirs bytes — uncommitted work lost, no refusal; the modify/delete arm (<code>patch.js:97</code>) unlinks a dirty file; PATCH-on-PATCH composition (prior output read as an edit) is broken too. Native C has the fix (PATCH-002 <code>2583217c</code>); the JS port does not; GET's identical flaw is JGET-004, PATCH's is unticketed. From the 2026-07-07 be/ review (<a href="REVIEW.html">BE/REVIEW</a>), CRIT confirmed + orchestrator-reread of patch.js:79-104. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>patch.js:80-82</code> &quot;only theirs&quot; arm: <code>if (f &amp;&amp; o &amp;&amp; t &amp;&amp; oEqF &amp;&amp; !tEqF) { writeLeaf(rc, path, t, weave.blobBytes(reader, tSha)); ... }</code> — <code>oEqF</code> compares the OURS COMMIT entry to fork, not disk; a dirty-on-disk file with a clean commit side is unconditionally overwritten.</li>
+<li><code>patchscope.resolveOurs</code> returns the committed cur tip; no path in patch.js / patchscope.js / checkout.js reads wt bytes before writing (orchestrator-verified 2026-07-07).</li>
+<li>Secondary: <code>patch.js:97</code> <code>deleteLeaf</code> swallows unlink errors (<code>catch(e){ st.failed++ }</code> is the OTHER arm) — the failed-arm is effectively dead and <code>st.deleted</code> counts phantom deletes.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>The ours side reads the wt's CURRENT bytes; a dirty file weaves (or refuses per spec), never silent-clobbers. Parity with native PATCH-002.</li>
+<li>PATCH-on-PATCH composes (prior output on disk is the ours input).</li>
+<li>deleteLeaf surfaces a real unlink failure; <code>deleted</code> counts only true unlinks.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first: a store+wt fixture with a commit-clean-but-disk-dirty file patched → assert the edit survives (RED today). Mirror native PATCH-002's test.</li>
+<li>Read wt bytes via <code>shared/wtread.js</code> (the ONE reg-file read), not a new reader.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending — likely: classify against wt bytes for the ours side, routing dirty≠commit into the weave arm as GET does post-JGET-004)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: dirty-wt file survives a patch that touches it.</li>
+<li class="open"><input type="checkbox" disabled> Ours side reads disk; weave/refuse dirty; deleteLeaf error surfaced; suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Shares the dirty-wt-semantics root with JGET-004 (GET) — coordinate the classify helper.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

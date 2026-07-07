@@ -29,13 +29,17 @@ Cleanup label bypassed by early returns.
 <p>
 None. Reached on missing inputs / mmap / BASS pressure.
 </p>
-<h2>Planned</h2>
+<h2>WIP</h2>
 <p>
-Single cleanup path per function.
+Re-verified 2026-07-07: MAP.c and LOG.c sites were fixed by MEM-040's render-helper split; MERGE.c and REBASE.c remain.
 </p>
-<ul>
-<li>Repro first: <code>graf merge</code> with a missing <code>ours</code>/<code>theirs</code>; fault-inject <code>WEAVEInit</code>/<code>wh128bAcquire</code>/branch-switch failures; assert no map/fd/handle leak.</li>
-<li>Replace <code>call()</code>/bare returns with <code>try()</code> + <code>goto cleanup</code> (NULL-init the map/own_graf vars), so <code>FILEUnMap</code>/<code>WEAVEFree</code>/<code>GRAFClose</code> always run.</li>
-</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./ .html"> </a> <code>graf/MERGE.c:33-35</code> <code>GRAFMerge</code> — three <code>call(graf_merge_read,…)</code> in a row; a failure of the 2nd/3rd bare-returns past the <code>cleanup:</code> label (:60-63), leaking the earlier map(s). Capture results and <code>goto cleanup</code>.  -<a href="./ .html"> </a> <code>graf/REBASE.c:1031-1033</code> <code>GRAFRebaseBlobMerge</code> — <code>call(WEAVEInit,&amp;w1/&amp;nu)</code> failure returns before <code>WEAVEFree(&amp;w0/&amp;w1)</code> (:1044-1046); capture-result the three inits.  -<a href="./v.html">v</a> <code>graf/MAP.c</code> <code>GRAFMap</code> — fixed by MEM-040 <code>d857a9cc</code>: post-open body funneled through <code>grafmap_render</code> so <code>if (own_graf) GRAFClose()</code> (:229-230) runs on every exit; the <code>wh128bAcquire</code> NOROOM (:249-250) now returns through it.  -<a href="./v.html">v</a> <code>graf/LOG.c</code> <code>graf_head_ahead_behind</code> — fixed by MEM-040 <code>d857a9cc</code>: post-open body funneled through <code>grafhead_render</code> so <code>if (own_open) GRAFClose()</code> (:1135-1136) runs on every exit, incl. the <code>GRAFSwitchBranch</code> failure (:1179-1181).  -<a href="./ .html"> </a> Repro first: <code>graf merge</code> with a missing <code>ours</code>/<code>theirs</code>; fault-inject <code>WEAVEInit</code>; assert no map/handle leak.
+</p>
+<h3>Blockers and bummers</h3>
+<p>
+None. Reached on missing inputs / mmap / BASS pressure.
+</p>
 </body>
 </html>

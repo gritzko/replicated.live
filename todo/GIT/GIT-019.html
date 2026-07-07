@@ -52,11 +52,11 @@ A <code>jab post //host</code> push opens the remote's <code>git-receive-pack</c
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> T1 — repro test: a <code>jab post ssh://…</code> (FF-success AND non-FF-refusal) opens receive-pack ONCE and emits NO <code>remote end hung up unexpectedly</code> on stderr (spy the spawns + scan stderr).</li>
-<li class="open"><input type="checkbox" disabled> T2 — <code>advertRefs</code> flush-close: send <code>pkt.flushPkt()</code> before <code>io.close(wfd)</code>; verify pull verbs (head/get advert) no longer print the hangup.</li>
-<li class="open"><input type="checkbox" disabled> T3 — <code>wire.js</code> push session: add the open-once <code>{adv, send, close}</code> (or <code>push(remoteUri, updates, pack, adv?, child?)</code>) reusing one spawned receive-pack for advert+send; share drain+body helpers with <code>advertRefs</code>/<code>push</code>.</li>
-<li class="open"><input type="checkbox" disabled> T4 — make <code>relate</code> advert-injectable; reflow <code>pushRemote</code> to advertise once, verdict off that advert, then send on the same session (FF) or flush-close+refuse (non-FF).</li>
-<li class="open"><input type="checkbox" disabled> T5 — regression: <code>push-ssh</code> FF, <code>push-nonff</code> honest refusal, <code>put</code> force-push twin (GIT-014), head/get advert; run the wire + post buckets.</li>
+<li class="done"><input type="checkbox" checked disabled> T1 — repro test: ONE receive-pack spawn per FF push, NO <code>remote end hung up</code> on stderr (counting ssh shim). — <code>test/wire/push-1conn</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> T2 — <code>advertRefs</code> flush-close before <code>io.close(wfd)</code> so an advert-only session exits clean (pull verbs incl.). — landed <code>3610b643</code> (<code>wire.js</code> ~566).</li>
+<li class="done"><input type="checkbox" checked disabled> T3 — <code>wire.js</code> open-once push session (advert drained once, send on the same fds), drain+body helpers shared with <code>advertRefs</code>/<code>push</code>. — landed <code>3610b643</code> (<code>wire.js</code> §GIT-019 ~574).</li>
+<li class="done"><input type="checkbox" checked disabled> T4 — <code>relate</code> advert-injectable (<code>adv</code> param, relate.js ~42); <code>pushRemote</code> advertises once, verdict off that advert, send or flush-close+refuse on the same session (<code>post.js</code> ~301). — landed <code>3610b643</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> T5 — regression: <code>push-ssh</code> FF, <code>push-nonff</code> honest refusal, put force twin, head/get advert; wire + post buckets. — green at land.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -67,7 +67,8 @@ A <code>jab post //host</code> push opens the remote's <code>git-receive-pack</c
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(pending)</li>
+<li>Landed <code>3610b643</code> (&quot;reuse the same git connection for all phases&quot;, be/ trunk): one receive-pack session per ssh/local push (advert once → relate verdict → send on the same fds), <code>advertRefs</code> flush-closes so advert-only sessions exit clean (no <code>remote end hung up</code> on push gates or pull verbs), <code>relate</code> advert injectable. Test <code>test/wire/push-1conn</code>.</li>
+<li>http push kept stateless by design (GET advert + POST body — no fake session over curl).</li>
 </ul>
 </body>
 </html>

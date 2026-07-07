@@ -49,20 +49,25 @@ A URI with a RELATIVE path — path-rooted (no scheme/authority: <code>.?</code>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro: <code>cd &lt;wt&gt;/be/test &amp;&amp; jab post .?</code> resolves to <code>be/test?</code> (RED today — targets root); add a subdir case to be/test.</li>
-<li class="open"><input type="checkbox" disabled> Repro 2: <code>cd &lt;wt&gt;/blog &amp;&amp; jab put escher.mkd</code> stages <code>blog/escher.mkd</code> (bare-word file arg, cwd-rebased; RED today — PUTNONE).</li>
-<li class="open"><input type="checkbox" disabled> <code>resolveWtPath</code> in <code>shared/util/path.js</code>: join cwd, normalize, re-anchor to wt root, refuse climb-above-root.</li>
-<li class="open"><input type="checkbox" disabled> Route post/put/delete/log narrow paths through it; drop the ad-hoc <code>./</code>-strips (<code>fold-decide.js:90</code>, <code>put.js:46</code>, <code>delete.js:55</code>, <code>log.js</code>).</li>
+<li class="done"><input type="checkbox" checked disabled> Repro <code>test/put/subdir-cwd</code> (golden authored PRE-fix, ran RED: &quot;no eligible paths&quot;+PUTNONE) — <code>cd blog &amp;&amp; jab put escher.mkd</code> stages <code>blog/escher.mkd</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Repro <code>test/post/subdir-narrow</code> — <code>cd sub &amp;&amp; jab post . '#msg'</code> narrows to <code>sub</code> (pre-fix <code>.</code> was swallowed as a message word, BOTH files committed). NOTE: uses <code>post . '#msg'</code>, not <code>.?</code> — Path-slot + bare-<code>?</code> trunk needs <a href="URI-009.html">URI-009</a> presence detection in isBareTrunkQuery (left as-is).</li>
+<li class="done"><input type="checkbox" checked disabled> <code>resolveWtPath</code> + <code>cwdRel</code> in <code>shared/util/path.js</code> (join cwd, normalize dots, re-anchor, <code>URICLIMB</code> on climb-above; absolute/&quot;&quot; bypass, dir-form <code>/</code> kept).</li>
+<li class="done"><input type="checkbox" checked disabled> Routed put (putRun args + move-dst), delete (normRel), post narrow (isPathSlot takes bare <code>.</code>/<code>..</code>; resolve before decide), log (parseArg strip dropped); <code>fold-decide.js</code> <code>./</code>-strip retired. spell.js/pager untouched (out of scope).</li>
+<li class="done"><input type="checkbox" checked disabled> Green: 148/149 in wt <code>//URI-010</code> (only the pre-existing be-js-bro-view listing-order golden drift); probes: <code>put ../../x</code> → URICLIMB, <code>put ./e.mkd</code> → <code>blog/e.mkd</code>.</li>
 <li class="open"><input type="checkbox" disabled> Cross-check native <code>be</code> CLI; split a beagle/ ticket if it diverges.</li>
-<li class="open"><input type="checkbox" disabled> Green: subdir repro + existing post/put/delete suites pass.</li>
+<li class="open"><input type="checkbox" disabled> Merge wt <code>//URI-010</code> (pending human gate).</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
 <li>Overlaps <a href="../DIS/DIS-054.html">DIS-054</a> Path-slot narrowing (landed-pending in the clone with the WRONG root-relative assumption) — that <code>makeNarrow</code> must adopt this resolver before it is sound.</li>
+<li>MERGE RISK (audit 2026-07-07): main be has since landed URI-015 <code>082b172c</code> touching the SAME files (put.js putRun argv map, post.js parseSlots, get/head/wire) — the wt diff must rebase over the <code>fromGit</code> intake calls before merge.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>OPEN — filed 2026-06-28 from the <code>jab post .?</code> (be/test submodule onto trunk) rule. Pins POST.mkd's underspecified Path-slot cwd semantics to git-like cwd resolution, re-anchored at the wt root.</li>
+<li>IMPLEMENTED in wt <code>//URI-010</code> (2026-07-07, worker agent; orchestrator re-ran the suite + inspected the diff) — UNCOMMITTED, pending review/merge. Native <code>be</code> CLI cross-check still open.</li>
+<li>AUDIT 2026-07-07: confirmed NOT merged — <code>resolveWtPath</code> present in <code>/home/gritzko/src/URI-010/be/shared/util/path.js</code> (+put/delete/post/log call sites) but ABSENT from <code>~/src/journal/be</code>; no URI-010 commit in the be log. Still open.</li>
+<li>Worker side-findings (not fixed there): (1) fresh colocated wt <code>mkdir .be; jab put f; jab post 'm'</code> → JS exception <code>Not a directory</code> in <code>writePack→book→_mmap</code> — ticket-worthy 3-command repro; (2) after a narrowed post, an out-of-scope STAGED file reads back <code>mod</code> (its put row seems consumed) — intended fold semantics or a bug, needs a ruling.</li>
+<li>Filed 2026-06-28 from the <code>jab post .?</code> (be/test submodule onto trunk) rule. Pins POST.mkd's underspecified Path-slot cwd semantics to git-like cwd resolution, re-anchored at the wt root.</li>
 </ul>
 </body>
 </html>

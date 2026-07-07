@@ -11,7 +11,7 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-084 <a href="">LOW</a>: confirmed-minor correctness/perf cleanup batch</h1>
+<h1>JS-084 <a href="./LOW.html">LOW</a>: confirmed-minor correctness/perf cleanup batch</h1>
 <p>
 A batch of confirmed low-severity correctness/perf nits from the review, each a 1-2 line fix, grouped into ONE ticket (a TODO checkbox per item) to avoid ticket sprawl. Every cited file:line is verified below. The cheap ones land together; any item that grows past a couple of lines splits out into its own ticket. Repro where the bug is observable (the CR-in-line matcher, the oversized-line split, the empty-dir/dead-branch cases). Method: <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -126,19 +126,25 @@ repro. The error-classification nits (<code>includes(&quot;full&quot;)</code>, N
  read; guard the short read.
 </p>
 </li>
-<li class="open"><input type="checkbox" disabled> <code>job.js:57,85,107</code> drop the <code>| 0</code> 32-bit truncation on the ULOG offsets.</li>
-<li class="open"><input type="checkbox" disabled> Repro+fix <code>match.js:77</code> — strip a trailing <code>\r</code> from the line range.</li>
-<li class="open"><input type="checkbox" disabled> <code>tree.js:115-120</code> deref an annotated <code>tag</code> to its commit/tree.</li>
-<li class="open"><input type="checkbox" disabled> <code>blob.js:122</code> remove the dead <code>sha === null</code> BLOBFAIL branch (or make<p>
- resolveHexAny signal ambiguity distinctly).
+<li class="wontfix"><input type="checkbox" disabled> <del><code>job.js</code> <code>| 0</code> offsets: MOOT — <code>core/job.js</code> deleted with the work queue (<a href="./JSQUE-020.html">JSQUE-020</a> <code>928aaad5</code>).</del></li>
+<li class="open"><input type="checkbox" disabled> Repro+fix <code>match.js</code> <code>splitLinesBytes</code> — strip a trailing <code>\r</code> from the line range (now ~<code>:73-81</code>).</li>
+<li class="open"><input type="checkbox" disabled> <code>tree.js</code> <code>commitOrTree</code> deref an annotated <code>tag</code> to its commit/tree (now <code>:146-151</code>, returns null for tag).</li>
+<li class="open"><input type="checkbox" disabled> <code>blob.js</code> dead BLOBFAIL: RE-EVAL — <code>resolveHexOrFull</code> now returns <code>k.resolveHexAny(hex)||null</code><p>
+ (blob.js:69-72), so <code>sha===null</code> at <code>:134</code> is REACHABLE, not dead; the original premise changed.
 </p>
 </li>
-<li class="open"><input type="checkbox" disabled> Repro+fix <code>blob.js:161-167</code> — keep an oversized (&gt;CAP, no-<code>\n</code>) line whole.</li>
+<li class="open"><input type="checkbox" disabled> Repro+fix <code>blob.js</code> oversized line split (now <code>:174-179</code>) — keep an oversized (&gt;CAP, no-<code>\n</code>) line whole.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul class="todo">
 <li class="open"><input type="checkbox" disabled> An item that needs a binding change (typed grow error, ambiguity signal)<p>
  splits into its own ticket rather than bloating this batch.
+</p>
+</li>
+</ul>
+<ul>
+<li>2026-07-07 audit: 11 of 13 items STILL OPEN at shifted line refs — bro mmap <code>view/bro.js:499</code>;<p>
+dir-hunk O(n²) <code>bro.js:511-525</code>; diff prefixingSink <code>views/diff/diff.js:364-374</code>; loop <code>includes(&quot;full&quot;)</code>+40-retry <code>core/loop.js:80-83</code>; store readRecord retry-any <code>shared/store.js:359-368</code>; store locate <code>fileIdx&lt;0</code> <code>:278,:330</code>; pkt <code>&gt;0xffff</code> <code>shared/pkt.js:30</code>; classify stale <code>st.size</code> <code>shared/classify.js:124-139</code> (switched mmap→fd read, race remains). Two changed: job.js item moot, blob.js dead-BLOBFAIL now reachable.
 </p>
 </li>
 </ul>

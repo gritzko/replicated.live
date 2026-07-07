@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-018</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-018 <a href="./MED.html">MED</a>: hunk-body tok32 end field wraps at 16 MiB — large-file views corrupt silently</h1>
+<p>
+Views that build one big hunk let the tok32 END offset (a 24-bit field) wrap at 16 MiB with no guard:
+</p>
+<ul>
+<li><code>views/log/log.js:46</code> — log builds ONE unbounded hunk; past 16 MiB of body the tok ends wrap.</li>
+<li><code>views/why/why.js:166</code> — buildBody sizes the body at 64 MiB but the same 24-bit end wraps at 16 MiB, so blame spans / O-targets corrupt on large files.</li>
+</ul>
+<p>
+From the 2026-07-07 be/ review (<a href="REVIEW.html">BE/REVIEW</a>), both CONFIRMED. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>tok32's end offset is 24-bit (16 MiB ceiling); a body larger than that produces silently-wrapped token boundaries — wrong spans, not a crash.</li>
+<li>why.js's 64 MiB body allocation is itself a tell that the author expected &gt;16 MiB inputs the tok can't address.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A body approaching 16 MiB either splits into multiple hunks or refuses with a code; token ends never wrap silently.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first (a &gt;16 MiB file/log → correct spans or loud refusal); reuse the hunk-chunking contract other views use if one exists.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending — chunk vs refuse)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: &gt;16 MiB body renders correct spans (or refuses).</li>
+<li class="open"><input type="checkbox" disabled> Guard/chunk the tok end; suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

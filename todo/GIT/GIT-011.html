@@ -11,7 +11,7 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>GIT-011 <a href="">MED</a>: <code>ZINFInflate</code> wraps output on fill, never signals NOROOM</h1>
+<h1>GIT-011 <a href="./MED.html">MED</a>: <code>ZINFInflate</code> wraps output on fill, never signals NOROOM</h1>
 <p>
 <code>ZINFInflate</code> (<code>dog/git/ZINF.c</code>) mishandles a too-small <code>into</code> slice: when <code>avail_out</code> hits 0 it WRAPS <code>next_out</code> back to <code>into[0]</code> and keeps inflating (corrupting already-produced bytes), then the trailing <code>u8sFed(into, total_out)</code> — all-or-nothing — no-ops because <code>total_out</code> exceeds capacity, so the head never advances and the call returns <code>OK</code> with produced 0. A genuine empty result also yields 0, so overflow is undetectable by the caller. Surfaced by <a href="../JS/JS-035.html">JS-035</a> (<code>zip.inflate</code> grow-and-retry), which had to add an XOR head-sentinel hack to guess at overflow. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
@@ -69,14 +69,17 @@ path stays byte-identical for the pre-sized native callers.
   <code>ZINF</code>/<code>PACK</code>/<code>UNPK</code> (the pre-sized callers must stay green).
 </p>
 </li>
-<li class="open"><input type="checkbox" disabled> Follow-up (own commit, after <a href="../JS/JS-035.html">JS-035</a> lands): drop the XOR sentinel in<p>
-  <code>js/zip.cpp</code>, let <code>zip.inflate</code> grow directly on a <code>ZINFROOM</code> throw.
+<li class="open"><input type="checkbox" disabled> Follow-up (own commit; <a href="../JS/JS-035.html">JS-035</a> HAS landed — the sentinel sits at jab<p>
+  <code>zip.cpp:46-55</code>): drop the XOR hack, grow directly on a <code>ZINFROOM</code> throw.
 </p>
 </li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>None known.</li>
+<li>None known. Audit 07Jul26: bug still present — the wrap block is intact<p>
+(<code>ZINF.c</code> <code>avail_out==0</code> reset) and <code>ZINF.h</code> declares no <code>ZINFROOM</code>.
+</p>
+</li>
 </ul>
 <h2>Outcome</h2>
 <ul>

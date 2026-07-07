@@ -11,7 +11,7 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>STATUS-003 <a href="">HIGH</a>: full-repo <code>be</code> / <code>be post</code> SNOROOM on a large sub aborts the parent commit</h1>
+<h1>STATUS-003 <a href="./HIGH.html">HIGH</a>: full-repo <code>be</code> / <code>be post</code> SNOROOM on a large sub aborts the parent commit</h1>
 <p>
 Bare <code>be</code> (full-repo status) and <code>be post</code> recurse into the <code>html</code> submodule (483 files on disk, 481 tracked); AFTER html's clean <code>481 ok</code> summary a cumulative status/HUNK buffer overflows → <code>Error: SNOROOM</code> → <code>Error: BEDOGEXIT</code>, and <code>be post</code> then ABORTS the parent commit (&quot;sub recursion failed — worst=BEDOGEXIT&quot;). Crucially <code>be status:html</code> ALONE is fine (rc=0, <code>481 ok</code>), so the overflow is in the AGGREGATE recursion, not html's own scan. A clean/unchanged big sub wedges all landing. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -39,7 +39,7 @@ when the caller's <code>into</code> slice is too small — a FIXED buffer, not g
 </p>
 </li>
 <li>ALSO affects be/ STANDALONE: <code>cd be &amp;&amp; be status</code> → <code>SNOROOM</code>/<code>BEDOGEXIT</code> (no<p>
-<code>ok</code> count) — be/'s own tracked set overflows the same buffer.  So be/ can't be statused or <code>be post</code>-ed standalone EITHER, and it drops from the parent submodule list (<a href="">BE-009</a>).  No <code>be post</code> workaround exists for be/ until fixed.
+<code>ok</code> count) — be/'s own tracked set overflows the same buffer.  So be/ can't be statused or <code>be post</code>-ed standalone EITHER, and it drops from the parent submodule list (<a href="./BE-009.html">BE-009</a>).  No <code>be post</code> workaround exists for be/ until fixed.
 </p>
 </li>
 <li>Impact: BLOCKS <code>be post</code> for any tree containing a large sub AND blocks landing<p>
@@ -79,13 +79,16 @@ no-op (an UNCHANGED sub must not contribute a fatal BEDOGEXIT).
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: a fixture worktree with a many-file sub that SNOROOMs bare <code>be</code><p>
- / <code>be post</code> today; assert clean status + a completed parent commit after.
+<li class="done"><input type="checkbox" checked disabled> Repro-first: <code>dog/test/ULOG.c::T_open_over_1024_rows</code> (a &gt;1024-row log<p>
+ that overflowed the fixed scratch index; RED pre-fix).
 </p>
 </li>
-<li class="open"><input type="checkbox" disabled> Find + grow (or right-size) the aggregate buffer; rebuild <code>beagle/build</code>.</li>
-<li class="open"><input type="checkbox" disabled> Verify: bare <code>be</code> + <code>be post</code> over the journal tree (incl. html) succeed;<p>
- <code>ctest</code> beagle suite green; small-repo output unchanged.
+<li class="done"><input type="checkbox" checked disabled> Find + right-size the buffer: <code>dog/ULOG.c ulog_idx_scan_cap</code> sizes the<p>
+ scratch index to content (<code>log_size/16 + 1024</code>, capped at the sidecar  ceiling) — the BE.cli.c carves were a red herring.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Verify: bare <code>be</code> over the journal tree rc=0 (no SNOROOM), `cd be &amp;&amp; be<p>
+ status` rc=0; beagle 464/464 + be 65/65 green; small-repo output unchanged.
 </p>
 </li>
 </ul>
@@ -98,6 +101,10 @@ no-op (an UNCHANGED sub must not contribute a fatal BEDOGEXIT).
 </ul>
 <h2>Outcome</h2>
 <ul>
+<li>LANDED dog <code>be89684d</code> / beagle pin <code>e5071f32</code> &quot;ULOG-003: ensure ulog index<p>
+has the capacity&quot; (the commit rode the ULOG-003 label; <code>dog/ULOG.c</code>'s <code>ulog_idx_scan_cap</code> comment cites STATUS-003). Audit 2026-07-07: sizing + repro test verified in-tree. CLOSED.
+</p>
+</li>
 <li>FIXED (working tree, pending land): <code>dog/ULOG.c</code> — the fixed 1024-row scratch<p>
 index in ULOGOpenRO/ULOGOpenBooked/ULOGOpenIdx now sizes to content (<code>log_size/16 + 1024</code>); <code>be/.be</code> (1030 wtlog rows) overflowed it. The dispatcher carve (BE.cli.c:237/:322) was a red herring (diff:-only). Repro <code>dog/test/ULOG.c::T_open_over_1024_rows</code>. Verified: bare <code>be</code> over the journal tree rc=0 (6 status: blocks, no SNOROOM); <code>cd be &amp;&amp; be status</code> rc=0; beagle 464/464 + be 65/65. The BEDOGEXIT-decouple WIP item is moot (SNOROOM gone).
 </p>

@@ -29,14 +29,17 @@ Recursion per parent/subtree with a 1MB mmap live across the call; caps don't bo
 <p>
 None.
 </p>
-<h2>Planned</h2>
+<h2>WIP</h2>
 <p>
-Bound depth, release before recursing, propagate errors.
+Re-verified 2026-07-07: the tree arm was fixed by KEEP-001/POST-021; the commit-chain recursion (and a new sibling walker) remains.
 </p>
-<ul>
-<li>Repro first: build a long unshared linear commit chain (and a deep tree) and <code>WIREPush</code> it; assert bounded failure rather than SIGSEGV.</li>
-<li>Capture parent list + tree_sha by value and unmap <code>cbuf</code>/<code>tbuf</code> BEFORE recursing; or convert to an explicit bounded work-stack so only O(1) maps/frames are live.</li>
-<li>Check/propagate the recursive return at :1182; add a depth cap fired in both <code>out!=NULL</code> and <code>out==NULL</code> modes.</li>
-</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./v.html">v</a> <code>wpush_walk_tree</code> — no longer hand-recurses: delegates to depth-capped <code>KEEPWalkTree</code> via <code>try()</code> so per-call BASS scratch rewinds (keeper/WIRECLI.c:1265-1291; <code>0eb0afab</code> KEEP-001, <code>387a6f99</code> POST-021).  -<a href="./ .html"> </a> <code>keeper/WIRECLI.c:1303-1359</code> <code>wpush_walk_commit</code> — 1MB <code>u8bMap(cbuf)</code> (:1319-1320) still live across the per-parent recursion (:1352), unmapped only at :1356; capture parents by value and unmap BEFORE recursing, or convert to a bounded work-stack.  -<a href="./ .html"> </a> <code>keeper/WIRECLI.c:1352</code> — recursive return still discarded; no depth cap in either mode (haveset callers :1997-2002 pass <code>out=NULL</code> so even the <code>*n&gt;=cap</code> count check (:1312) is skipped → depth = full chain length).  -<a href="./ .html"> </a> NEW same-pattern site: <code>keeper/WIRECLI.c:1366-1395</code> <code>wpush_collect_commits</code> — 1MB map (:1373-1374) live across the :1390 parent recursion, recursive return discarded, no depth cap (<code>seen</code> dedups revisits, not first-visit chain depth).  -<a href="./ .html"> </a> Repro first: build a long unshared linear commit chain and <code>WIREPush</code> it; assert bounded failure rather than SIGSEGV.
+</p>
+<h3>Blockers and bummers</h3>
+<p>
+None.
+</p>
 </body>
 </html>

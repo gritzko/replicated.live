@@ -11,7 +11,7 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-080 <a href="">MED</a>: <code>verbs/put/put.js</code> <code>appendAndAssign</code> is O(N^2) + re-rolls ulog ts</h1>
+<h1>JS-080 <a href="./MED.html">MED</a>: <code>verbs/put/put.js</code> <code>appendAndAssign</code> is O(N^2) + re-rolls ulog ts</h1>
 <p>
 <code>be put a b c …</code> lowers each path arg to its own handler call, and each call's <code>commitOps</code> invokes <code>appendAndAssign</code>, which DRAINS the whole wtlog, concatenates the new rows, and rewrites the entire file (temp + fsync + rename) — once per arg. A wide arg list is quadratic plus N temp-file cycles. It also HAND-ROLLS ulog's monotonic-stamp policy (<code>nowAfter(tail)</code> then <code>+1</code> per row) instead of calling the shared writer, so any future ts-policy change diverges silently. <code>ulog.appendInPlace</code>/<code>feedRows</code> exist for exactly this. Output is correct today (put rows carry no per-row ts in the tree), so the divergence is latent. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -84,6 +84,12 @@ the tail to recover assigned ts, or (b) add an <code>ulog</code> helper that fee
 <ul class="todo">
 <li class="open"><input type="checkbox" disabled> <code>appendInPlace</code> does not currently return assigned ts — needs the small<p>
  helper or a tail re-read; pick one.
+</p>
+</li>
+</ul>
+<ul>
+<li>2026-07-07 audit: STILL OPEN, but the proposed fix API IS GONE — <a href="./JSQUE-020.html">JSQUE-020</a> <code>928aaad5</code><p>
+RETIRED <code>ulog.appendInPlace</code>/<code>feedRows</code> with <code>core/job.js</code> (<code>shared/ulog.js:246</code> note). <code>verbs/put/put.js:198 appendAndAssign</code> still drains all rows (<code>ulog.each:200</code>) + rewrites the whole file (<code>ulog.write:213</code>), called per arg-batch (<code>:449,:502,:660,:681</code>). The fix must re-introduce a streaming append helper (they no longer exist) or add one to ulog.js.
 </p>
 </li>
 </ul>

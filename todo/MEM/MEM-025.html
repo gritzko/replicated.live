@@ -29,14 +29,17 @@ A captured slice aliases a buffer that later compacts under it.
 <p>
 None.
 </p>
-<h2>Planned</h2>
+<h2>WIP</h2>
 <p>
-Snapshot the name at first sight.
+Re-verified 2026-07-07: flaw intact, sites shifted — capture <code>keeper/WIRECLI.c:617</code> <code>u8csMv(first_name, name)</code> in <code>wcli_match_advert</code> (:551), compaction <code>wcli_read_pkt</code> :97-111 (<code>u8bShift(buf, 0)</code> at :111), stale use :669 <code>a_dup(u8c, fn, first_name)</code>, <code>WCLI_BUF</code> 64KiB at :48. The new second-pass rescan (:645-666) only reads the compacted tail, so the legacy first-ref fallback (:667-671) still consumes the dangled slice.
 </p>
-<ul>
-<li>Repro first: feed an advert &gt; <code>WCLI_BUF</code> (forcing compaction) with empty <code>want_branch</code> and no <code>refs/heads/main</code>; assert the recorded first-ref name matches the real first ref, not garbage.</li>
-<li>Snapshot the first ref name into a stable buffer (small <code>a_pad</code>/<code>u8bFeed</code> copy, like <code>WCLI_RECORD_NAME</code>→name_out) when first seen; use that copy in the fallback.</li>
-<li>Or fold the legacy first-ref pick into the <code>WCLI_RECORD_NAME</code> path during the main loop so no buffer-pointing slice is held across compacting reads.</li>
-</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./ .html"> </a> Snapshot the first ref name into a stable buffer (small <code>a_pad</code>/<code>u8bFeed</code> copy, like <code>WCLI_RECORD_NAME</code>→name_out) at first sight (:615-619); use that copy in the :669 fallback.  -<a href="./ .html"> </a> Or fold the legacy first-ref pick into the <code>WCLI_RECORD_NAME</code> path during the main loop so no buf-aliasing slice is held across compacting reads.  -<a href="./ .html"> </a> Repro first: feed an advert &gt; <code>WCLI_BUF</code> (forcing compaction) with empty <code>want_branch</code> and no <code>refs/heads/main</code>; assert the recorded first-ref name matches the real first ref, not garbage.
+</p>
+<h3>Blockers and bummers</h3>
+<p>
+None.
+</p>
 </body>
 </html>

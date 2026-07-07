@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-023</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-023 <a href="./MED.html">MED</a>: view semantics — multi-arg grep/spot drop args, theme bold sticks, pager escape-split leak</h1>
+<p>
+Five view-layer correctness gaps:
+</p>
+<ul>
+<li><code>views/grep/grep.js:38</code> — multi-arg grep runs the FIRST arg's search N times; the OTHER search args are never searched.</li>
+<li><code>views/spot/spot.js:26</code> — spot/regex plain-args conversion DROPS trail args, so the documented <code>spot:#body .c</code> form now throws SPOTNOEXT.</li>
+<li><code>view/theme.js:123</code> — theme.reset() leaves BOLD enabled for combined colour+bold slots (dark/light N/C = <code>&quot;38;5;33;1&quot;</code>) — subsequent output stays bold.</li>
+<li><code>views/bro/pager.js:779</code> — _feed mishandles a mouse/paste escape sequence split 1-2 bytes before the read-buffer end → the tail bytes leak as literal keystrokes.</li>
+<li><code>view/bro.js:220</code> — colorWhyHunk: a dead ternary and no newline between soft-wrapped rows, diverging from colorDiffHunk's row contract.</li>
+</ul>
+<p>
+From the 2026-07-07 be/ review (<a href="REVIEW.html">BE/REVIEW</a>), CONFIRMED. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>grep/spot both mis-handle the multi/trail-arg case — likely a shared arg-fanout helper is the fix.</li>
+<li>theme.reset must clear ALL SGR attributes it set, bold included.</li>
+<li>pager _feed must buffer a partial escape across reads (a classic terminal-input reassembly bug).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Every grep/spot search arg is searched; reset() clears bold; a split escape reassembles, never leaks; colorWhyHunk matches colorDiffHunk's row contract.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first per defect (multi-arg grep hits all patterns; <code>spot:#body .c</code> resolves; reset clears bold; a boundary-split paste reassembles).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repros; fix the five; suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

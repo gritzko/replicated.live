@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-019</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-019 <a href="./MED.html">MED</a>: thin-pack index buffer sizing — silent object drop + &gt;1GB balloon on corrupt input</h1>
+<p>
+Three sizing/typing defects in <code>shared/store.js</code>'s thin-pack walk:
+</p>
+<ul>
+<li><code>store.js:114</code> — indexPackByWalk sizes the resolve buffer off the DELTA length with no NOROOM grow; an object whose resolved size exceeds that is silently dropped from the index (later reads miss it).</li>
+<li><code>store.js:366</code> — readRecord retries ANY resolve error as NOROOM, doubling the buffer up to &gt;1GB on a CORRUPT record instead of failing fast.</li>
+<li><code>store.js:92</code> — inferType mis-types a blob whose first bytes look like a tree/commit header, indexing it under a WRONG sha in the walk.</li>
+</ul>
+<p>
+From the 2026-07-07 be/ review (<a href="REVIEW.html">BE/REVIEW</a>), CONFIRMED. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>store.js:114</code> sizes to the delta length, but the reconstructed object is larger; no grow → SNOROOM drop, no diagnostic.</li>
+<li><code>store.js:366</code> conflates &quot;buffer too small&quot; with &quot;record corrupt&quot; — every error path balloons.</li>
+<li><code>store.js:92</code> inferType guesses type from leading bytes; a blob starting <code>tree </code>/<code>commit </code> is misclassified, changing its computed sha.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Buffer sizes track the RESOLVED object size (grow-on-NOROOM, capped); a corrupt record fails fast with a code, never balloons; type comes from the pack's own object header, not a byte-shape guess.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first: an object &gt;delta-length indexes correctly; a corrupt record fails fast; a blob shaped like a tree header types as blob.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repros for the three; fix sizing/typing; suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

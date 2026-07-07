@@ -11,7 +11,7 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-078 <a href="">MED</a>: <code>core/job.js</code> — dead crash-resume; crashed runs leak <code>/tmp/.bequeue</code></h1>
+<h1>JS-078 <a href="./MED.html">MED</a>: <code>core/job.js</code> — dead crash-resume; crashed runs leak <code>/tmp/.bequeue</code></h1>
 <p>
 <code>job.openOrResume</code> documents a crash-safe RESUME (a surviving queue file is an interrupted run to re-open via its <code>.done</code> offset).  But the ONLY caller (<code>core/loop.js</code> cli) PID-KEYS the queue name and unlinks it on clean exit, so a fresh process can NEVER re-open a dead one — <code>fresh</code> is always true and the done-tracking is inert.  The net effect inverts the contract. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -87,12 +87,9 @@ stale-PID detection so a dead run's queue is re-opened, not collided.
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: simulate a crash (skip <code>close(true)</code>); assert the stale<p>
- <code>/tmp/.bequeue.&lt;pid&gt;</code> + <code>.done</code> persist and are never reclaimed.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Implement A: collapse openOrResume to seed+append+consume.</li>
-<li class="open"><input type="checkbox" disabled> Add a best-effort startup sweep of stale <code>/tmp/.bequeue.*</code>.</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Crash repro: MOOT — no file queue exists to leak.</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Option A collapse: SUPERSEDED — <code>core/job.js</code> was deleted outright, not collapsed.</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Startup sweep: MOOT — nothing is written under <code>/tmp/.bequeue.*</code> anymore.</del></li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul class="todo">
@@ -100,7 +97,14 @@ stale-PID detection so a dead run's queue is re-opened, not collided.
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(pending)</li>
+<li>MOOT via <a href="./JSQUE-020.html">JSQUE-020</a> <code>928aaad5</code> (be/) &quot;phase out the work queue&quot;: <code>core/job.js</code> and<p>
+<code>loop.js</code>'s <code>_tmpQueue</code> are deleted; each <code>cli()</code> run owns an in-memory FIFO, dispatch is by recursion — no on-disk queue, no <code>.done</code>, nothing for a crash to leak.
+</p>
+</li>
+<li>2026-07-07 audit: zero <code>bequeue</code>/<code>openOrResume</code> hits across be/; <code>shared/ulog.js:246</code><p>
+records <code>appendInPlace</code>+<code>feedRows</code> &quot;retired with core/job.js (their sole&quot; consumer).
+</p>
+</li>
 </ul>
 </body>
 </html>

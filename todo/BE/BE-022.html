@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-022</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-022 <a href="./MED.html">MED</a>: be/ helper duplication sweep — re-implemented reads, tip-peeks, constants, decoders</h1>
+<p>
+Landed refactors (JSQUE-016 reorg, URI-013 cleanup) left copy-sites that should call the shared helper; several have already DRIFTED. One sweep, each site listed:
+</p>
+<ul>
+<li><code>verbs/head/head.js:120</code> + <code>:203</code> — the cached-remote-tip peek (eachRemote match + stripLeadRef) is duplicated VERBATIM from get.js, with DIVERGENT error vocabulary (HIGH-ish: two codes for one refusal).</li>
+<li><code>verbs/get/get.js:130</code> — oldTipOf re-implements the wtlog tip read and MISSES detached <code>?&lt;sha&gt;</code> rows.</li>
+<li><code>shared/wire.js:545</code> — ZERO_SHA tombstone constant defined THREE times; <code>util/sha.js</code> owns the zero-sha concept.</li>
+<li><code>views/bro/pager.js:228</code> — re-implements spell.js helpers it ALREADY imports (joinPath verbatim, dirOf/dirOfPath, an inline dirname).</li>
+<li><code>views/status/status.js:423</code> — re-implements isMount WITHOUT recurse.js's GET-036 symlink guard (and duplicates joinPrefix).</li>
+<li><code>views/cat/cat.js:104</code> — readFileBytes re-implemented in cat.js and spot/search.js despite wtread.js being &quot;the ONE reg-file wt read&quot;.</li>
+<li><code>shared/wtread.js:10</code> — io.readAll called with a 3rd size arg the binding SILENTLY IGNORES — wrong contract encoded at 5 sites.</li>
+<li><code>shared/serve.js:45</code> — inline branch→refs/heads mapping instead of relate.resolveRef, DROPPING its guards.</li>
+<li><code>core/loop.js:180</code> — TRANSPORT map duplicates SCHEME_ALLOW's transports (loop.js:27); pager.js:241 already drifted (missing <code>keeper</code>).</li>
+</ul>
+<p>
+From the 2026-07-07 be/ review (<a href="REVIEW.html">BE/REVIEW</a>), all CONFIRMED. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Each copy is a place a future fix lands in one site and misses the other(s); the pager/keeper and head/get error-vocab drifts already happened.</li>
+<li>Shared owners exist: <code>shared/util/path.js</code>, <code>util/sha.js</code>, <code>shared/wtread.js</code>, <code>shared/spell.js</code>, <code>core/recurse.js</code> isMount, <code>relate.resolveRef</code>.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Each site calls the shared helper; one TRANSPORTS constant seeds SCHEME_ALLOW + TRANSPORT + pager; head/get share one tip-peek with one error code; ZERO_SHA single-sourced; wtread readAll called with the real 2-arg contract.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Pure refactor — behavior-preserving except the fixed drift (detached-row tip read, keeper transport, GET-036 symlink guard now applied in status). Suite byte-stable where output is asserted.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Consolidate each listed site onto its shared owner; suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>status isMount adopting recurse.js's guard changes nested-mount output — cross-check against GET-036.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

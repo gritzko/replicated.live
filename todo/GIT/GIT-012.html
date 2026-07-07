@@ -53,24 +53,27 @@ The JS wire (<code>be/shared/wire.js</code>) speaks git's smart protocol but onl
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> T1 — extract the negotiation core from <code>wire.js</code> behind a byte-stream/async interface; keep ssh + local adapters green (the seam).</li>
-<li class="open"><input type="checkbox" disabled> T2 — port the core to non-blocking <code>pol</code>: incremental <code>pkt.Reader</code> feed from watched fds / net 'data', resolve on advert-flush + pack-EOF.</li>
-<li class="open"><input type="checkbox" disabled> T3 — HTTPS fetch adapter: spawn curl GET info/refs (skip the <code># service</code> preamble) + POST git-upload-pack; return the pack bytes. (needs T1)</li>
-<li class="open"><input type="checkbox" disabled> T4 — <code>classify()</code>: add an http/https branch and split <code>git://</code> off the ssh case; route each scheme to its adapter. (small, independent)</li>
-<li class="open"><input type="checkbox" disabled> T5 — OPTIONAL git:// adapter: <code>net.connect</code> :9418, send the daemon request pkt-line, run the core. (needs T1/T2)</li>
-<li class="open"><input type="checkbox" disabled> T6 — wire the new adapters into <code>get.js</code>/<code>patch.js</code> fetch sites; confirm <code>jab get https://…</code> end-to-end.</li>
-<li class="open"><input type="checkbox" disabled> T7 — tests: hermetic per-transport — local <code>git http-backend</code> (driven by curl) or recorded fixtures for https, a local git daemon for git://; table-driven.</li>
+<li class="done"><input type="checkbox" checked disabled> T1 — shared negotiation core (advert drain / want-have / NAK+pack) reused by the spawn and curl adapters. — landed <code>4370d67e</code> (<code>wire.js</code> <code>drainAdvert</code>/<code>pickWant</code>/<code>fetchHttp</code>).</li>
+<li class="done"><input type="checkbox" checked disabled> T2 — non-blocking <code>pol</code> I/O for the CURL adapter (<code>curlRun</code>: <code>pol.watch</code> + <code>pol.run</code> pump, wire.js ~158-182). The ssh/local spawn path STAYS blocking (<code>pkt.Reader</code> over <code>io._read</code>) — the T-scope decision resolved as curl-only; revisit only if a real stall shows.</li>
+<li class="done"><input type="checkbox" checked disabled> T3 — HTTPS fetch adapter: curl GET info/refs (preamble skipped) + POST git-upload-pack. — landed <code>4370d67e</code> (<code>fetchHttp</code>).</li>
+<li class="done"><input type="checkbox" checked disabled> T4 (http part) — <code>classify()</code> http/https branch → the curl adapter. — landed <code>4370d67e</code>.</li>
+<li class="open"><input type="checkbox" disabled> T4 (git:// part) — <code>git://</code> is STILL lumped with ssh (<code>classify</code> comment: <code>git:// → ssh host git-upload-pack</code>), so a <code>git://</code> URL misroutes; split it off (route to T5's adapter or refuse clearly).</li>
+<li class="open"><input type="checkbox" disabled> T5 — OPTIONAL git:// adapter: <code>net.connect</code> :9418, daemon request pkt-line, run the core.</li>
+<li class="done"><input type="checkbox" checked disabled> T6 — adapters reached from the verb fetch sites via <code>wire.fetch</code>→<code>classify</code>; http end-to-end proven by the wire tests.</li>
+<li class="done"><input type="checkbox" checked disabled> T7 — hermetic http tests over a local <code>git http-backend</code>: <code>test/wire/http-clone</code>, <code>http-update</code>, <code>http-incremental</code>, <code>big-http</code>.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Decision needed: migrate the ssh/local path to async-<code>pol</code> too (one uniform core), or keep it blocking and run only the new transports async? Affects T1/T2 scope.</li>
+<li>Decision needed: migrate the ssh/local path to async-<code>pol</code> too (one uniform core), or keep it blocking and run only the new transports async? Affects T1/T2 scope. — Landed answer: curl-only async; ssh/local kept blocking (audit 07Jul26: <code>pkt.js</code> still refills via <code>io._read</code>).</li>
+<li>AUDIT 07Jul26: ticket is LANDED except the git:// residue (T4-git/T5) — <code>git://</code> still silently routes to <code>ssh host git-upload-pack</code>. Close-or-finish call is the owner's; kept open for that residue only.</li>
 <li>Real servers (e.g. github) may need ACK/<code>multi_ack_detailed</code> handling once <code>have</code>s are sent; the no-side-band assumption must be checked live before HTTPS relies on it.</li>
 <li>Private HTTPS auth (tokens / credential helper) is deferred — anonymous/public fetch first; curl header/<code>-n</code> injection a follow-up.</li>
 <li>curl presence/version is an external dependency; surface a clear error when <code>curl</code> is absent.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(pending)</li>
+<li>Core landed <code>4370d67e</code> (&quot;git protocol client&quot;, be/ trunk): smart-HTTP fetch over spawned curl (<code>fetchHttp</code> + <code>curlRun</code> on <code>pol</code>), <code>classify()</code> http/https branch, ssh/local behaviour-identical; tests <code>test/wire/http-clone</code>/<code>http-update</code>/<code>http-incremental</code>/<code>big-http</code>. Enabled the push twin (<a href="GIT-013.html">GIT-013</a> <code>cb3881f8</code>).</li>
+<li>Open residue: git:// (T4 split + optional T5 adapter) — a <code>git://</code> URL still routes to ssh.</li>
 </ul>
 </body>
 </html>

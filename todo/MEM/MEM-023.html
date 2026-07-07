@@ -28,14 +28,16 @@ Per-level recursion with a 1MB buffer live across the recursive call; no depth c
 <p>
 None.
 </p>
-<h2>Planned</h2>
+<h2>WIP</h2>
+<h3>TODOs</h3>
 <p>
-Cap depth; keep only O(1) buffers live.
+ -<a href="./v.html">v</a> Depth cap: <code>walk_tree_dive</code> returns WALKBADFMT at <code>WALK_MAX_DEPTH</code> (4096) — keeper/WALK.c:50, WALK.h:56 (<code>0eb0afab</code> KEEP-001).  -<a href="./v.html">v</a> Per-level buffer shrunk 1MB→64KiB (keeper/WALK.c:60) and subtree recursion goes through <code>try()</code> so each child's BASS scratch rewinds on return (WALK.c:142-144) — <code>0eb0afab</code> + <code>49039f36</code> GET-020.  -<a href="./v.html">v</a> <code>keep_walk_tree</code> (KEEP.c) no longer exists — converged with 3 other walkers into <code>KEEPWalkTree</code> (<code>0eb0afab</code> KEEP-001).  -<a href="./v.html">v</a> Repro: keeper/test/WALK.c Test 7 &quot;deep tree terminates cleanly, cap holds (KEEP-001)&quot;.
 </p>
+<h2>Outcome</h2>
 <ul>
-<li>Repro first: construct a deeply nested single-entry tree chain and walk it via <code>KEEPPush</code>/<code>keep_walk_commit</code> and <code>WALKTree</code>; assert a bounded failure, not SIGSEGV/exhaustion.</li>
-<li>Add an explicit max-depth parameter (mirroring <code>UNPK_MAX_CHAIN</code>) to both walkers, returning KEEPFAIL/WALKBADFMT when exceeded.</li>
-<li>Convert to an iterative work-stack (reuse the <code>out</code> array as the queue) or pass one shared buffer down and unmap/rewind before recursing.</li>
+<li><code>0eb0afab</code> KEEP-001: converged 4 tree-walkers into <code>KEEPWalkTree</code>; <code>walk_tree_dive</code> gets the WALK_MAX_DEPTH=4096 cap and a right-sized 64KiB per-level carve (1MB only on &gt;64KiB re-inflate).</li>
+<li><code>49039f36</code> GET-020: try()-wraps the tree-walk recursion so per-subtree BASS scratch is rewound (no more one-live-carve-per-level).</li>
+<li>No MEM-023-tagged commit — the fixes landed under KEEP-001/GET-020; verified in code 2026-07-07 (WALK.c:50,60,142).</li>
 </ul>
 </body>
 </html>

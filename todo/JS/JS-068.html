@@ -11,7 +11,7 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-068 <a href="">MED</a>: predictable <code>/tmp</code> post-barrier scratch path (symlink/TOCTOU + collision)</h1>
+<h1>JS-068 <a href="./MED.html">MED</a>: predictable <code>/tmp</code> post-barrier scratch path (symlink/TOCTOU + collision)</h1>
 <p>
 <code>verbs/post/post.js</code>'s <code>barrierPath()</code> builds the commit-JOIN scratch ULOG. For a secondary <code>.be</code>-FILE repo (no <code>.be/</code> dir) it falls back to a PREDICTABLE <code>/tmp/.bepost.barrier.&lt;USER&gt;.&lt;bePath-with-_&gt;</code>, later opened <code>O_CREAT|O_RDWR|O_TRUNC</code> with NO <code>O_NOFOLLOW</code>/<code>O_EXCL</code> — another user can pre-plant a symlink there and the open follows+truncates the target (CWE-59). The name is not PID-keyed, so same-user concurrent posts collide on it too. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -71,25 +71,23 @@ get distinct barriers.
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/post/*</code>: pre-plant a symlink at the predicted<p>
- <code>/tmp/.bepost.barrier.&lt;USER&gt;.&lt;key&gt;</code> and assert the post does NOT  follow/truncate it (open refused or fresh name chosen).
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Rewrite <code>barrierPath()</code> + open to the per-user-dir + <code>O_EXCL|O_NOFOLLOW</code><p>
- + nonce scheme; keep <code>cleanupBarrier</code> unlinking the right path.
-</p>
-</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Repro symlink pre-plant: MOOT — no <code>/tmp</code> scratch file exists to plant against.</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Rewrite <code>barrierPath()</code>: MOOT — <code>barrierPath</code>/<code>cleanupBarrier</code> deleted with the durable barrier.</del></li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Confirm <code>io.spawn</code>/<code>io</code> exposes the <code>O_NOFOLLOW</code>/<code>O_EXCL</code> open flags (or<p>
- an <code>mkstemp</code>); if not, that primitive is a prerequisite.
-</p>
-</li>
+<li class="wontfix"><input type="checkbox" disabled> <del><code>O_NOFOLLOW</code>/<code>O_EXCL</code> primitive: no longer needed (no scratch file).</del></li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(pending)</li>
+<li>MOOT via <a href="./JSQUE-020.html">JSQUE-020</a> <code>928aaad5</code> (be/): the durable post-barrier scratch ULOG was removed —<p>
+the commit JOIN now folds the in-memory decision set (<code>verbs/post/post.js:650-652</code> comment &quot;the former durable back-scan barrier only re-derived a leaf count, so assert it in-memory&quot;).
+</p>
+</li>
+<li>2026-07-07 audit: zero <code>bepost</code>/<code>barrierPath</code> hits across be/; the predictable-/tmp-path,<p>
+TOCTOU and same-user-collision surfaces are all gone with the file.
+</p>
+</li>
 </ul>
 </body>
 </html>

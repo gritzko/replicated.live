@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-013</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-013 <a href="./HIGH.html">HIGH</a>: wire.js child/fd lifecycle on error — push() finally leaks stdin → reap HANGS; curl siblings leak</h1>
+<p>
+Three spawn-lifecycle holes in <code>shared/wire.js</code> where a throw on the happy path leaks the child's fds and can deadlock the blocking reap:
+</p>
+<ol>
+<li><code>push():642</code> — the <code>finally</code> closes only <code>rfd</code> then <code>io.reap(pid)</code>; wfd is closed IN-try at <code>:639</code>, so a throw in drainRecvAdvert/writeAll BEFORE it leaves <code>git-receive-pack</code> blocked reading commands on its still-open stdin. <code>FILEReap</code> is an unconditional blocking <code>waitpid</code> loop (<code>dog/abc/FILE.c:303</code>) → <code>be put --force</code> over ssh HANGS forever, plus fd/zombie leak in the resident loop. Reachable via <code>verbs/put/put.js:310</code>. JS-076 fixed only wire.fetch; JS-100 only pushSession/pushRemote — push() is the untouched sibling.</li>
+<li><code>curlRun():181</code> — no try/finally: a handler throw or the guard path leaks/zombies the curl child, and reap precedes the fd close.</li>
+<li><code>curlPost():198</code> — stages the request body OUTSIDE the try: a write failure leaks the fd and the tmp file; the tmp name is predictable.</li>
+</ol>
+<p>
+From the 2026-07-07 be/ review (<a href="REVIEW.html">BE/REVIEW</a>), all three CONFIRMED (push() structural, curl by inspection). Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>push():642</code> <code>finally { try{io.close(rfd)}catch; try{io.reap(pid)}catch }</code> — wfd absent; the peer never sees EOF on stdin so waitpid never returns.</li>
+<li>Canonical shape (<a href="../../meta/abc.html">abc</a> resource lifecycle): a single try/finally owning EVERY fd + the reap, wfd closed FIRST so the child sees EOF, reap AFTER all closes.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>push(): close wfd in the finally (before rfd/reap) on every path so the peer gets EOF; no hang, no leak.</li>
+<li>curlRun/curlPost: try/finally owning the child + fds + tmp file; body staged inside; unpredictable tmp name (mkstemp-style).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first where feasible: a forced mid-session receive-pack throw asserting no hang (may need a fault-injection hook); the curl leaks are inspection-verified.</li>
+<li>Reuse the wire.fetch cleanup shape JS-076/JS-100 already landed.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending — factor the JS-076/100 cleanup helper and apply to push()+curl)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> push(): wfd in finally, reap last; no-hang test/hook.</li>
+<li class="open"><input type="checkbox" disabled> curlRun/curlPost: try/finally + safe tmp; suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

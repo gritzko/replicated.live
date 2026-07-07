@@ -63,24 +63,34 @@ banner is suppressed.
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <p>
-(pending — likely run the internal bump put under the quiet/relay guard, or fold its row into the parent post table rather than open a separate <code>put:</code> banner.)
+As shipped: the internal bump runs <code>be put -q &lt;sub&gt;</code> with stdout CAPTURED to a pipe (<code>BE.cli.c::bepost_bump_sub</code>, :3028-3098); under <code>-q</code> PUTStage opens the HUNK table with EMPTY state so a no-op sub flushes no banner (<code>sniff/PUT.c:1174</code>). The <code>be: post &lt;sub&gt;</code> stderr echo is gone — a clean/no-op sub instead emits a ULOG <code>post &lt;sub&gt;</code> marker row on stdout (<code>BE.cli.c:3628-3639</code>, <code>bepost_emit_outer</code>).
 </p>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Trace <code>be post</code> with an advanced sub (<code>strace -f</code> / ABC_TRACE) to confirm the<p>
-  put call site + why it prints non-quiet.
+<li class="done"><input type="checkbox" checked disabled> Trace the put call site + why it prints non-quiet (fixed at the source:<p>
+  quiet empty-state banner + captured-pipe stdout, PUT.c:1174 / BE.cli.c:3034).
 </p>
 </li>
-<li class="open"><input type="checkbox" disabled> Add a failing repro in <code>test/post/</code> (advanced-sub parent post, assert no put banner).</li>
-<li class="open"><input type="checkbox" disabled> Gate the <code>put:</code> banner off for the internal gitlink-bump path; re-run <code>ctest</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Repro coverage in <code>test/post/</code>: post/09, post/10, post/23 assert the sub<p>
+  descent reports via stdout ROWS/marker rows, no stderr echo, no put banner.
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Gate the <code>put:</code> banner off for the internal gitlink-bump path; ctest green.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <p>
-(none yet)
+(none)
 </p>
 <h2>Outcome</h2>
-<p>
-(pending)
+<ul>
+<li>LANDED (audit 2026-07-07): no POST-019-tagged commit in <code>jab log</code>; the fix is<p>
+verified in-tree at tip <code>b0fb0ce4</code> (POST-019 comment tags at <code>BE.cli.c:20/ 3342/3628/3755/3843</code>, <code>sniff/PUT.c:1180</code>), carried by the untagged 21-26Jun batches (SUBS-029 <code>3fd64016</code>/<code>c2e1b0d9</code> reworked <code>bepost_bump_sub</code>; the 25/26Jun <code>1fd33d9f</code>/<code>0447e4a7</code> tool-fix batch).
 </p>
+</li>
+<li>Both goals shipped: internal gitlink-bump <code>put:</code> banner suppressed (sub shows<p>
+only as <code>mod &lt;sub&gt;</code> in the parent rows); <code>be: post .</code>/<code>be: post &lt;sub&gt;</code> echo replaced by the stdout <code>post &lt;sub&gt;</code> marker row. Tests post/09, post/10, post/23.
+</p>
+</li>
+</ul>
 </body>
 </html>

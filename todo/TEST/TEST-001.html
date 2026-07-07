@@ -11,7 +11,7 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>TEST-001 <a href="">done</a>: pin git default branch to master in the wire-parity harness</h1>
+<h1>TEST-001 <a href="./done.html">done</a>: pin git default branch to master in the wire-parity harness</h1>
 <p>
 git 2.52 defaults <code>init.defaultBranch</code> to <code>main</code>, but the keeper/git wire-parity tests hardcode <code>master</code>; a bare origin then carries a dangling <code>HEAD → refs/heads/main</code> (only <code>master</code> is pushed), so the stock-<code>git</code> ORACLE clone checks out an empty tree while beagle correctly fetches <code>?master</code> — the comparison then reports a spurious diff. Six tests fail (ROUNDtest, BEroundtrip, blobs-from-git, tag-blobs-from-keeper, clone-from-git, clone-from-keeper). Make the branch explicit. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -70,14 +70,18 @@ out the branch explicitly and never relies on keeper's served HEAD symref.
 <h3>Blockers and bummers</h3>
 <ul>
 <li>Latent interop gap (NOT fixed here, low impact): keeper advertises <code>HEAD→main</code><p>
-even when <code>main</code> is absent on the served mirror; a stock <code>git clone</code> of a <code>master</code>-only keeper repo checks out nothing. Harmless in normal <code>main</code> usage; a more correct keeper would advertise HEAD at the actual default/only branch. Candidate follow-up <a href="">KEEP</a> ticket if real-world non-<code>main</code> mirrors matter.
+even when <code>main</code> is absent on the served mirror; a stock <code>git clone</code> of a <code>master</code>-only keeper repo checks out nothing. Harmless in normal <code>main</code> usage; a more correct keeper would advertise HEAD at the actual default/only branch. Candidate follow-up <a href="./KEEP.html">KEEP</a> ticket if real-world non-<code>main</code> mirrors matter.
 </p>
 </li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>Applied to the working tree (pending commit): <code>beagle/keeper/test/ROUND.c</code>,<p>
-<code>beagle/beagle/test/{clone-from-git,clone-from-keeper,blobs-from-git, tag-blobs-from-keeper,roundtrip}.sh</code>. Full <code>beagle/build</code> suite 464/464 green.
+<li>LANDED (committed, untagged).  2026-07-07 audit: all pins present in-tree<p>
+(<code>init.defaultBranch=master</code> in ROUND.c:284/286/305 + the 5 .sh origins; <code>git clone --branch master</code> in clone-from-keeper.sh:69) AND the beagle wt is CLEAN (<code>jab status</code> all-ok; scoped <code>jab diff</code> of ROUND.c/roundtrip.sh empty) — so &quot;pending commit&quot; is stale, the changes are in the store baseline.
+</p>
+</li>
+<li>No TEST-001-tagged commit exists in be log; file-scoped <code>jab log</code> last shows<p>
+<code>1fd33d9f</code> (25Jun) for these files, so the pins rode an untagged/batch post (hashlet unattributable from the log alone).  CLOSED on the clean-tree evidence; the keeper <code>HEAD→main</code> advert gap stays a candidate <a href="./KEEP.html">KEEP</a> ticket.
 </p>
 </li>
 </ul>

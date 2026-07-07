@@ -11,7 +11,7 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-066 <a href="">HIGH</a>: <code>.gitignore</code> glob is catastrophically backtrackable (ReDoS)</h1>
+<h1>JS-066 <a href="./HIGH.html">HIGH</a>: <code>.gitignore</code> glob is catastrophically backtrackable (ReDoS)</h1>
 <p>
 <code>shared/util/ignore.js</code>'s <code>glob()</code> (the IGNOGlob port behind <code>be status</code>/<code>ls</code> wt-scan) implements <code>*</code>/<code>**</code> by recursing on EVERY suffix with no memoization, so a pattern like <code>*a*a*a*a*az</code> against a long non-matching path is exponential. <code>.gitignore</code> is untrusted — a checkout writes attacker-controlled content and <code>load()</code> walks UP to <code>$HOME</code> stacking every <code>.gitignore</code> — and <code>match()</code> runs once per worktree entry, so a hostile repo wedges the single-threaded runtime. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -77,21 +77,23 @@ no-match (fail-safe), since JS RegExp BACKTRACKS (it is not a ragel DFA).
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Repro <code>test/ignore.js</code>: the <code>*a*a*…*az</code> bomb vs a 50k-<code>a</code> path returns<p>
- no-match &lt;2s + a native-parity corpus; registered as <code>be-js-unit-ignore</code>.
+<li class="open"><input type="checkbox" disabled> REGRESSED/never landed: re-do glob()→cached-RegExp + work budget in the CURRENT<p>
+ <code>shared/util/ignore.js</code> (<code>:39-70</code> is the recursive per-suffix matcher again).
 </p>
 </li>
-<li class="done"><input type="checkbox" checked disabled> glob() rewritten as a cached glob→RegExp compile (NO hand-rolled matcher).</li>
-<li class="done"><input type="checkbox" checked disabled> No per-step slicing — one compile, the engine matches.</li>
+<li class="open"><input type="checkbox" disabled> Re-add the repro <code>test/ignore.js</code> (<code>*a*a*…*az</code> bomb &lt;2s + native-parity corpus).</li>
 </ul>
 <h3>Blockers and bummers</h3>
-<ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> <code>**/</code>-prefix + trailing-<code>*</code> edges verified against the parity corpus.</li>
+<ul>
+<li>2026-07-07 audit: the 2026-06-25 working-tree fix is NOT in the be/ shard —<p>
+<code>glob()</code> (ignore.js:39) recurses on every suffix for <code>*</code>/<code>**</code> (<code>:52</code>,<code>:59</code>), no memo, no budget, per-step <code>pat.slice</code>/<code>str.slice</code>; no <code>test/ignore.js</code> exists. Presumably lost in the beagle-ext catch-up/JSQUE-016 reorg (<code>027beac9</code>+); still exploitable.
+</p>
+</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>Implemented in the working tree (pending land): <code>shared/util/ignore.js</code><p>
-glob()→RegExp + work budget; <code>test/ignore.js</code> registered <code>be-js-unit-ignore</code> (<code>be/test/CMakeLists.txt</code>). be/ 65/65, beagle/ 464/464 green. NB the first cut used a DP matcher; reworked to RegExp on review feedback (abc.mkd: manual parsing forbidden — JS uses RegExp where C uses ragel).
+<li>(pending — the earlier &quot;implemented in the working tree&quot; claim did not survive into<p>
+the be/ tree; see the 2026-07-07 audit note above. Design stands: RegExp translate, NOT a hand-rolled DP matcher — abc.mkd forbids manual parsing.)
 </p>
 </li>
 </ul>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-012</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-012 <a href="./HIGH.html">HIGH</a>: emitPack's 256-byte deflate slack overflows on incompressible blobs — every push of such a repo aborts</h1>
+<p>
+<code>emitPack</code> (<code>shared/wire.js:441</code>) sizes a FIXED <code>Uint8Array</code> at <code>1024 + Σ(obj.bytes.length + 256)</code>, but <code>ZINFDeflate</code> is real zlib: incompressible input (jpeg, zip, already-compressed binary) deflates to <code>len + ~5 B per 64KB stored block + header/adler</code> ≈ 330 B/MB, so any object over ~4MB needs more than 256 B of slack. <code>git.pack.over(...)</code> has no growth path — <code>abc._pack_feed</code> throws <code>pack: feed (full?)</code> (jab <code>pack.hpp:117</code>). Pushing (or serving via uploadPack, which reuses buildPushPack) a repo containing one large binary always fails with a cryptic error. From the 2026-07-07 be/ review (<a href="REVIEW.html">BE/REVIEW</a>), CONFIRMED with a sizing probe. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Probe (2026-07-07, mirrors emitPack's cap formula, one xorshift-random blob): OK at 1MB/3MB, <code>Error: pack: feed (full?)</code> at 4/8/16/20MB.</li>
+<li><code>cap += o.bytes.length + 256;</code> then a fixed <code>Uint8Array(cap)</code> fed via <code>pk.feed</code> — no NOROOM grow/retry.</li>
+<li>Not JS-055 (read-side scratch) nor PACK-002 (RAW vs OFS_DELTA); this is push/serve-side buffer sizing.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Any legal repo pushes: size by worst-case zlib expansion (<code>len + len/16383*5 + ~64</code> per object) or grow-on-NOROOM; a big binary never aborts a push.</li>
+<li>uploadPack serve path (shared buildPushPack) covered by the same fix.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first (a &gt;4MB incompressible blob → push succeeds); ABC buffer idioms, no ad-hoc realloc loop.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending — worst-case bound vs grow-on-feed-NOROOM)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: push a repo with a 16MB binary blob → exit 0.</li>
+<li class="open"><input type="checkbox" disabled> Fix the cap formula (or add grow); suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

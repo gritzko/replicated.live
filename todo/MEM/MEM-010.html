@@ -28,14 +28,17 @@ One null-deref plus two resource leaks in the request lifecycle.
 <p>
 None.
 </p>
-<h2>Planned</h2>
+<h2>WIP</h2>
 <p>
-Check allocations; release handle and slist exactly once at completion.
+Re-verified 2026-07-07 (now dog/abc/CURL.c): all three flaws present, sites re-cited below.
 </p>
-<ul>
-<li>Repro first: fault-inject <code>calloc</code>/<code>curl_easy_init</code> NULL and a failing <code>multi_add_handle</code>; a POST-with-content-type leak check under ASan/valgrind.</li>
-<li><code>if (!req) return BALLOCFAIL;</code> and <code>if (!req-&gt;easy) { free(req-&gt;url); free(req); return CURLFAIL; }</code> before any setopt.</li>
-<li>In the add-handle error branch <code>curl_easy_cleanup(req-&gt;easy)</code>; store the slist in <code>CURLreq</code> and <code>curl_slist_free_all</code> it in <code>CURLTick</code> at completion.</li>
-</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./ .html"> </a> <code>dog/abc/CURL.c:201-202</code> <code>CURLGetTimed</code> and <code>:217-218</code> <code>CURLPost</code> — <code>calloc</code>/<code>curl_easy_init</code> (and <code>strdup</code>) still unchecked; add <code>if (!req) return ...</code> and <code>if (!req-&gt;easy) { free(req-&gt;url); free(req); return CURLFAIL; }</code> before any setopt.  -<a href="./ .html"> </a> <code>dog/abc/CURL.c:181-186</code> <code>CURLStart</code> — add-handle fail branch still frees <code>req-&gt;url</code>/<code>req</code> only; add <code>curl_easy_cleanup(req-&gt;easy)</code> (and free <code>req-&gt;headers</code>/<code>req-&gt;response</code> if allocated).  -<a href="./ .html"> </a> <code>dog/abc/CURL.c:228-235</code> <code>CURLPost</code> — slist still leaks per request (<code>// Note: headers leak</code> comment at :234); store the slist in <code>CURLreq</code>, <code>curl_slist_free_all</code> in <code>CURLTick</code>'s completion cleanup (:152-158) and in the CURLStart fail branch.  -<a href="./ .html"> </a> Repro first: fault-inject <code>calloc</code>/<code>curl_easy_init</code> NULL and a failing <code>multi_add_handle</code>; POST-with-content-type leak check under ASan/valgrind.
+</p>
+<h3>Blockers and bummers</h3>
+<p>
+None.
+</p>
 </body>
 </html>

@@ -13,7 +13,7 @@
 </a>
 <h1>GET-022: no per-file checkout-from-rev — <code>be get &lt;path&gt;?&lt;rev&gt;</code> drops the path, treats the rev as a branch</h1>
 <p>
-There is no way to materialize ONE file at a given rev into the worktree (git <code>checkout &lt;rev&gt; -- &lt;path&gt;</code> parity). <code>be get &lt;path&gt;?&lt;rev&gt;</code> silently DROPS the path and resolves <code>?&lt;rev&gt;</code> as a branch/ahead-behind target → a no-op or <code>KEEPNONE</code>. The <code>blob:</code>/<code>cat:</code> projection resolves the file at the rev for READING, but no VERB writes it back. This is the tool <a href="">GET-021</a> needs: fix a single stale working file without a whole-tree <code>be get</code> that would clobber unrelated WIP. Method: <a href="../../rule/Issues.html">Issues</a>.
+There is no way to materialize ONE file at a given rev into the worktree (git <code>checkout &lt;rev&gt; -- &lt;path&gt;</code> parity). <code>be get &lt;path&gt;?&lt;rev&gt;</code> silently DROPS the path and resolves <code>?&lt;rev&gt;</code> as a branch/ahead-behind target → a no-op or <code>KEEPNONE</code>. The <code>blob:</code>/<code>cat:</code> projection resolves the file at the rev for READING, but no VERB writes it back. This is the tool <a href="./GET-021.html">GET-021</a> needs: fix a single stale working file without a whole-tree <code>be get</code> that would clobber unrelated WIP. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -68,13 +68,19 @@ that reuses the projector's resolve, instead of falling through to the branch ah
   becomes that rev's blob (and a clean error when the path is absent at the rev).
 </p>
 </li>
-<li class="open"><input type="checkbox" disabled> Implement the single-blob restore arm; <code>--force</code> overwrites a dirty path only.</li>
-<li class="open"><input type="checkbox" disabled> Test: per-file restore changes ONLY that path; unrelated dirty WIP untouched.</li>
+<li class="open"><input type="checkbox" disabled> Implement the single-blob restore arm; <code>--force</code> overwrites a dirty path only.<p>
+  Audit 2026-07-07: still absent — the branch-resolve fall-through returns <code>KEEPNONE</code> (<code>sniff/GET.c:1890</code>) and prints <code>sniff: get: cannot resolve &lt;path&gt;?&lt;rev&gt;</code> (now <code>sniff/GET.c:1928</code>/<code>2043</code>; the ticket's :1711/:1821 refs drifted).
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Test: per-file restore changes ONLY that path; unrelated dirty WIP untouched.<p>
+  Note: the JS side grew a path-scoped restore (<code>get.js</code> scoped RESTORE, <code>noPrune: true</code>, ~:545-580) but it restores at the CURRENT tip, not an arbitrary <code>?&lt;rev&gt;</code> — parity check both impls when fixing.
+</p>
+</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Pairs with <a href="">GET-021</a> (this is its per-file materialization tool) and the<p>
-path-scope semantics of <a href="">GET-017</a>/SUBS-018.
+<li>Pairs with <a href="./GET-021.html">GET-021</a> (this is its per-file materialization tool) and the<p>
+path-scope semantics of <a href="./GET-017.html">GET-017</a>/SUBS-018.
 </p>
 </li>
 </ul>

@@ -30,14 +30,17 @@ Partial open survives because the close path is gated on the never-set ready fla
 <p>
 None.
 </p>
-<h2>Planned</h2>
+<h2>WIP</h2>
 <p>
-Make close work on a partial open.
+Re-verified 2026-07-07: flaw intact, sites shifted — keeper/graf/spot/sniff acquired at woof/CONN.c:586-602, then fallible <code>call(PATHu8bAlloc/u8csbAlloc/PATHu8bFeed,…)</code> (:604-606,614) and <code>memfd_create&lt;0 fail(WOOFFAIL)</code> (:627) bare-return; <code>woof_api_ready=YES</code> only at :629; <code>WOOFApiClose</code> still gates <code>if (!woof_api_ready) return;</code> at :634 before its per-resource frees (:637-648).
 </p>
-<ul>
-<li>Repro FIRST (§17): force a late open/alloc/memfd failure in <code>WOOFApiOpen</code>; assert keeper/graf/spot/sniff + cli buffers are released.</li>
-<li>Drop the <code>woof_api_ready</code> gate in <code>WOOFApiClose</code> and rely on its existing <code>have_*</code>/<code>keep_owned</code>/<code>memfd&gt;=0</code> checks; call it on the error path.</li>
-<li>Or restructure <code>WOOFApiOpen</code> to acquire only past a single ready point, or add a <code>callsafe</code> cleanup arm per acquiring step; re-run <code>woof --api</code> tests.</li>
-</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./ .html"> </a> Drop the <code>woof_api_ready</code> gate in <code>WOOFApiClose</code> (:634) and rely on its existing <code>have_*</code>/<code>keep_owned</code>/<code>memfd&gt;=0</code> checks; call it on <code>WOOFApiOpen</code>'s error path.  -<a href="./ .html"> </a> Or restructure <code>WOOFApiOpen</code> to acquire only past a single ready point, or add a cleanup arm per acquiring step; re-run <code>woof --api</code> tests.  -<a href="./ .html"> </a> Repro FIRST (§17): force a late alloc/memfd failure in <code>WOOFApiOpen</code>; assert keeper/graf/spot/sniff + cli buffers are released.
+</p>
+<h3>Blockers and bummers</h3>
+<p>
+None.
+</p>
 </body>
 </html>

@@ -11,7 +11,7 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-072 <a href="">HIGH</a>: <code>patchscope.lca</code> returns a stale (non-recent) merge base</h1>
+<h1>JS-072 <a href="./HIGH.html">HIGH</a>: <code>patchscope.lca</code> returns a stale (non-recent) merge base</h1>
 <p>
 <code>patchscope.resolve</code> pins the 3-way <code>fork</code> for <code>be patch</code> via <code>lca(ours, theirs)</code> (<code>patchscope.js:139</code>); <code>patch.js:354</code> consumes <code>sc.fork</code> as the common base of the merge. But <code>lca()</code> walks <code>theirs</code> with a LIFO stack and returns the FIRST popped sha present in <code>ancestorSet(ours)</code> — DFS pop order has no relation to recency, so a diamond/merge history can hand back an older shared ancestor as the base. A too-old fork yields a noisier, wrong 3-way merge. Both walks are also uncapped. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -34,7 +34,7 @@ overkill; a DFS that returns the first b-ancestor … is the merge base&quot; �
 fork makes file-level merges take/keep the wrong side (noise/conflicts).
 </p>
 </li>
-<li>Contrast <a href="">PATCH</a>'s <code>dag.js</code>: <code>ancestors</code> BFS is WALK_CAP-bounded<p>
+<li>Contrast <a href="./PATCH.html">PATCH</a>'s <code>dag.js</code>: <code>ancestors</code> BFS is WALK_CAP-bounded<p>
 (<code>dag.js:30,43</code>), the divergence is recency-ordered by commit ts.
 </p>
 </li>
@@ -85,6 +85,10 @@ the local <code>ancestorSet</code> DFS, removing the unbounded-walk hazard.
 <ul>
 <li>Confirm <code>dag.commitParents</code> parent set matches patchscope's intent<p>
 (foster/rebase edges excluded — <code>dag.js:18-24</code>) before delegating.
+</p>
+</li>
+<li>2026-07-07 audit: STILL OPEN — <code>shared/patchscope.js:101 lca</code> is the DFS first-hit<p>
+(comment <code>:104-105</code> still says &quot;a DFS that returns the first b-ancestor … is the merge base&quot;); <code>ancestorSet:83</code> and <code>lca</code> are both uncapped <code>stack.pop()</code> walks.
 </p>
 </li>
 </ul>

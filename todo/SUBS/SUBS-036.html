@@ -68,7 +68,7 @@ absent → create. Reuse <code>SUBSDirty</code> / the <a href="SUBS-027b.html">S
 bare <code>be put ?&lt;synth&gt;</code> → <code>PUTCreateBranch</code> (create-ONLY, errs PUTDUP if present). FIX: read the sub tip (R4) via <code>SNIFFSubReadTip</code> and issue <code>be put ?&lt;synth&gt;#&lt;tip&gt;</code>, routing through <code>PUTSetBranch</code> (create-or-repoint) — idempotent: absent → create, present → re-point/FF to the tip. The forward-only bump gate (<code>bepost_bump_sub</code> returns OK only on a real advance) already guarantees the tip is forward.
 </p>
 </li>
-<li>User-facing <code>be put ?&lt;branch&gt;</code> keeps its strict create-only PUTDUP (<a href="">DIS-020</a>);<p>
+<li>User-facing <code>be put ?&lt;branch&gt;</code> keeps its strict create-only PUTDUP (<a href="./DIS-020.html">DIS-020</a>);<p>
 only the internal anchor switched to the tip-form. No <code>PUTCreateBranch</code> change.
 </p>
 </li>
@@ -97,7 +97,8 @@ only the internal anchor switched to the tip-form. No <code>PUTCreateBranch</cod
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li><strong>(pending-commit — human gates the commit)</strong> Root cause: <code>bepost_anchor_sub</code><p>
+<li>LANDED <code>ae64dc7f</code> (&quot;SUBS-036 idempotent sub synth-branch anchor&quot;, beagle trunk 26Jun); <code>test/post/55-sub-attached-reanchor-idempotent</code> registered in <code>test/CMakeLists.txt</code>.  CLOSED (audit 2026-07-07).</li>
+<li>Root cause: <code>bepost_anchor_sub</code><p>
 (<code>beagle/BE.cli.c:3025</code>) anchored the SUBS-027b R2 keep-alive with bare <code>be put ?&lt;synth&gt;</code>, which dispatches (<code>sniff/SNIFF.exe.c:1156</code>) to <code>PUTCreateBranch</code> (<code>sniff/PUT.c:1220</code>) — a CREATE-ONLY writer that returns PUTDUP when the dot-branch already exists. On a LATER advance of an already-attached sub the branch IS present → PUTDUP → BEDOGEXIT, aborting the parent commit. SUBS-035/post-54 only exercised the FIRST anchor (branch absent), never the re-anchor; this is that create-vs-FF half.
 </p>
 </li>

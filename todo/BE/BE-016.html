@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-016</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-016 <a href="./HIGH.html">HIGH</a>: the pager emits file-content control bytes verbatim to the tty — ANSI/OSC injection</h1>
+<p>
+<code>views/bro/pager.js:145</code> writes rendered file content to the terminal without neutralizing control bytes, so repo content carrying ESC/CSI/OSC sequences is interpreted by the tty: a hostile (or merely binary) file viewed via <code>cat:</code>/<code>bro</code>/<code>diff</code> can move the cursor, recolor, set the window title, or emit clipboard/OSC-52 sequences. From the 2026-07-07 be/ review (<a href="REVIEW.html">BE/REVIEW</a>), CONFIRMED. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Viewers render untrusted repo bytes; the render path passes control bytes (0x00-0x1F except t/n, 0x7F, and CSI/OSC intro) straight through to fd 1.</li>
+<li>git's own defense: caret-notation / replacement for control chars in pager output unless a diff/color layer owns the escape.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>File-content control bytes are neutralized (caret-notation or U+FFFD) at the render boundary; only the view's OWN styling escapes reach the tty.</li>
+<li>Applies across the content viewers sharing the pager sink (cat/blob/diff/why/grep).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first (a file with embedded <code>\e]0;pwned\a</code> / CSI → rendered inert); neutralize once at the shared sink, not per view.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending — caret-notation vs replacement char; where in the sink)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: control-byte file renders inert.</li>
+<li class="open"><input type="checkbox" disabled> Neutralize at the render boundary; suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

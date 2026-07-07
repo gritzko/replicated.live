@@ -59,7 +59,14 @@ path; decide whether to release-before-spawn, pass the fd, or have receive-pack 
  the per-shard <code>.lock</code>; confirm RED (hang/timeout), then fix.
 </p>
 </li>
-<li class="open"><input type="checkbox" disabled> Fix the double-acquire; green: concurrent posts don't wedge.</li>
+<li class="open"><input type="checkbox" disabled> Fix the double-acquire; green: concurrent posts don't wedge.<p>
+ Verified still present 2026-07-07: <code>keeper post</code> opens rw (KEEP.cli.c:104  <code>KEEPOpen(YES)</code> → KEEP.c:423-424 <code>FILECreate</code>/<code>FILELock</code> on <code>&lt;leaf&gt;/.lock</code>)  and holds it across <code>WIREPush</code> (KEEP.exe.c:1036) → <code>wcli_spawn</code> of the local  <code>keeper receive-pack</code> child, whose <code>keeper_receive_pack_inner</code>  (KEEP.cli.c:102-110) does its own <code>KEEPOpen(YES)</code> on the same shard — no  release-before-spawn, no lock inheritance/skip marker anywhere in keeper/.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Candidate shape: mirror <code>RECVAdvanceColocatedWt</code> (RECV.h:143 — it already<p>
+ runs strictly AFTER <code>KEEPClose</code>+<code>HOMEClose</code> &quot;so the spawned child can  acquire the store lock without deadlocking&quot;) — i.e. close/release the  keeper before the local receive-pack spawn, or pass the flock fd.
+</p>
+</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>

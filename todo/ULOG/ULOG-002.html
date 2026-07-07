@@ -47,10 +47,10 @@
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: a log with a page-aligned zero pad (simulated abnormal exit) opens with DATA = last complete row and IDLE = the pad, touching only O(pad) bytes; assert on a large log that the whole body is not walked.</li>
-<li class="open"><input type="checkbox" disabled> Repro: a partial trailing row (interrupted append) SELF-HEALS — opens with the complete rows, the incomplete last append dropped (NOT <code>ULOGTORN</code>); prior rows byte-intact; open touches O(pad+partial), not O(content).</li>
-<li class="open"><input type="checkbox" disabled> Replace the forward <code>ulog_scan_log</code> tail-find in <code>ULOGOpenBooked</code> with the backward zero-scan; keep the RW-grow / RO-no-grow open shapes.</li>
-<li class="open"><input type="checkbox" disabled> Ensure close trims to PAST+DATA (drop IDLE); confirm <code>FILETrimBook</code> covers PAST or that the ULOG <code>b[0]==b[1]</code> invariant holds.</li>
+<li class="done"><input type="checkbox" checked disabled> Repro-first: <code>T_backscan_zero_pad</code> (<code>dog/test/ULOG.c:1208</code>) — zero-pad open, DATA = last complete row, IDLE = the pad — landed <code>df3b5885</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Repro: partial trailing row SELF-HEALS — <code>T_backscan_torn_partial_row</code> (<code>dog/test/ULOG.c:1286</code>), incomplete append dropped, not <code>ULOGTORN</code> — landed <code>df3b5885</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Forward <code>ulog_scan_log</code> tail-find replaced by <code>ulog_backscan_tail</code> (<code>dog/ULOG.c:262</code>, called from booked <code>:574</code> and RO <code>:617</code> opens); the pre-scan throw-away anon idx alloc removed — landed <code>df3b5885</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Close trims to PAST+DATA: <code>FILETrimBook</code> now resizes to <code>b[2]-b[0]</code> (<code>abc/FILE.c:1045-1054</code>, ULOG-002 comment) — landed abc <code>e8d7c59d</code>.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -58,7 +58,9 @@
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(pending) — landed hashlets recorded on close.</li>
+<li>LANDED dog <code>df3b5885</code> (&quot;expose ulog append in the JS API, self-heal&quot;, 2026-07-04): <code>ulog_backscan_tail</code> back-scan on both RW-booked and RO opens, partial-row self-heal, O(page) not O(content); tests <code>T_backscan_zero_pad</code> + <code>T_backscan_torn_partial_row</code>.</li>
+<li>LANDED abc <code>e8d7c59d</code> (same session): <code>FILETrimBook</code> trims to PAST+DATA (<code>b[2]-b[0]</code>), dropping only IDLE.</li>
+<li>The commit message carries no ULOG-002 tag — grep <code>df3b5885</code>/&quot;self-heal&quot;, not the ticket code; the code comments cite ULOG-002 (<code>dog/ULOG.c:567</code>, <code>abc/FILE.c:1049</code>).</li>
 </ul>
 </body>
 </html>

@@ -13,7 +13,7 @@
 </a>
 <h1>HEAD-004: <code>be head be://</code> fetches subs from <code>.gitmodules</code> URL, not parent</h1>
 <p>
-For a <code>be://</code> (beagle-scheme) remote, <code>be head</code> recursing into a submodule goes STRAIGHT to the sub's declared <code>.gitmodules</code> URL instead of fetching the sub from the SAME parent source first. <code>be head be://localhost/beagle</code> reached into <code>abc</code> and tried <code>https://github.com/gritzko/libabc.git</code> over ssh → <code>github.com:22</code> refused → <code>WIREUNRCH</code>, aborting the whole peek. A beagle parent keeps every sub in its own shard (<a href="../../wiki/Submodules.html">Submodules</a>/<a href="">submodule-parent-source-fetch</a>), so the parent source MUST be the primary candidate; the declared URL is a fallback used only when the parent has no copy. <code>be get</code> already forwards <code>--source</code> (GET-011); HEAD's recursion does not. Relates to <a href="HEAD-003.html">HEAD-003</a>.
+For a <code>be://</code> (beagle-scheme) remote, <code>be head</code> recursing into a submodule goes STRAIGHT to the sub's declared <code>.gitmodules</code> URL instead of fetching the sub from the SAME parent source first. <code>be head be://localhost/beagle</code> reached into <code>abc</code> and tried <code>https://github.com/gritzko/libabc.git</code> over ssh → <code>github.com:22</code> refused → <code>WIREUNRCH</code>, aborting the whole peek. A beagle parent keeps every sub in its own shard (<a href="../../wiki/Submodules.html">Submodules</a>/<a href="./submodule-parent-source-fetch.html">submodule-parent-source-fetch</a>), so the parent source MUST be the primary candidate; the declared URL is a fallback used only when the parent has no copy. <code>be get</code> already forwards <code>--source</code> (GET-011); HEAD's recursion does not. Relates to <a href="HEAD-003.html">HEAD-003</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -49,7 +49,7 @@ can serve the sub — no <code>WIREUNRCH</code> abort.
 </p>
 </li>
 <li>Fallback order is parent-source → declared <code>.gitmodules</code> URL, in that order;<p>
-never the reverse (<a href="">submodule-parent-source-fetch</a>).
+never the reverse (<a href="./submodule-parent-source-fetch.html">submodule-parent-source-fetch</a>).
 </p>
 </li>
 </ul>
@@ -63,24 +63,25 @@ way <code>BEGetSubMount</code> does, so the read-only peek mirrors <code>be get<
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro hermetic (WITH_SSH=ON): be-parent with a sub whose declared URL is<p>
+<li class="done"><input type="checkbox" checked disabled> Repro hermetic (WITH_SSH=ON): be-parent with a sub whose declared URL is<p>
   dead; <code>be head be://</code> must still peek via the parent.
 </p>
 </li>
-<li class="open"><input type="checkbox" disabled> Forward the parent source into HEAD's sub recursion; fallback on miss.</li>
-<li class="open"><input type="checkbox" disabled> Verify github-offline no longer aborts; declared-URL fallback still works.</li>
-<li class="open"><input type="checkbox" disabled> Land + ctest WITH_SSH=ON.</li>
+<li class="done"><input type="checkbox" checked disabled> Forward the parent source into HEAD's sub recursion; fallback on miss.</li>
+<li class="done"><input type="checkbox" checked disabled> Verify github-offline no longer aborts; declared-URL fallback still works.</li>
+<li class="done"><input type="checkbox" checked disabled> Land + ctest WITH_SSH=ON.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
 <li>Needs <code>WITH_SSH=ON</code> to exercise the ssh-localhost sub path<p>
-(<a href="">build-with-ssh-not-inet</a>); plain INET=OFF silently skips it.
+(<a href="./build-with-ssh-not-inet.html">build-with-ssh-not-inet</a>); plain INET=OFF silently skips it.
 </p>
 </li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(pending)</li>
+<li>Landed <code>6dad6c58</code> (beagle, 2026-06-20): &quot;be head be:// peeks subs from parent first&quot; — HEAD's sub recursion tries the parent source before the declared <code>.gitmodules</code> URL.</li>
+<li>Regression kept as <code>test/head/25-sub-parent-source</code> (beagle test tree).</li>
 </ul>
 </body>
 </html>

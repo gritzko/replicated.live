@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-011</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-011 <a href="./HIGH.html">HIGH</a>: wtdir SRC_ROOT confinement is a lexical prefix check — <code>..</code> escapes the root</h1>
+<p>
+<code>be.wtdir</code> (<code>core/discover.js:232</code>) confines a nav authority to <code>SRC_ROOT</code> with a LEXICAL prefix compare (<code>repo.wt.indexOf(top+&quot;/&quot;)===0</code>), but the URI parser does not normalize <code>..</code>: a host of <code>..</code> passes authorityRepo's dotless-typo gate (it contains a dot) and <code>u.path</code> may carry <code>../</code>. <code>io.stat</code> then resolves the dots PHYSICALLY while the confinement compare stays lexical, so <code>//../name</code> and <code>//name/../../..</code> adopt any anchored tree OUTSIDE SRC_ROOT. <code>shared/util/path.js safeRel</code> (JS-065's &quot;ONE worktree-confinement guard&quot;) is never applied to host/path — the JS twin of native DOG-009. From the 2026-07-07 be/ review (<a href="REVIEW.html">BE/REVIEW</a>), CONFIRMED with a probe. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Probe (2026-07-07): <code>be.wtdir(&quot;//name/../../outside&quot;)</code> and <code>be.wtdir(&quot;//../outside&quot;)</code> both returned a path physically resolving to <code>.../play/outside</code>, OUTSIDE <code>SRC_ROOT=.../play/root</code>.</li>
+<li><code>const top = root + &quot;/&quot; + host; const dir = top + (u.path||&quot;&quot;); ... if (repo.wt !== top &amp;&amp; repo.wt.indexOf(top+&quot;/&quot;) !== 0) return null;</code> — find()'s walk-up uses lexical dirname, so <code>root/name/..</code> keeps its prefix and passes the guard while io.stat escapes.</li>
+<li>safeRel is wired only into checkout.materialise / store.readTreeRecursive / stage.isMeta (tree-entry writes), never wtdir; DOG-009 tickets only the native <code>dog/HOME.c</code> escape.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A nav authority/path that resolves outside SRC_ROOT is REFUSED (a code-worded throw), not adopted; <code>..</code> in host or path never escapes.</li>
+<li>Apply the existing confinement guard (safeRel or a normalize-then-prefix check) to the composed wtdir before io.stat.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first (the two escape URIs above → refusal); no hand-rolled path normalization beyond <code>shared/util/path.js</code>.</li>
+<li>URI slots via the URI class only.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending — normalize the composed path and re-check the SRC_ROOT prefix, or reject any <code>..</code> segment in host/path pre-compose)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: <code>//../x</code> and <code>//name/../../x</code> refuse.</li>
+<li class="open"><input type="checkbox" disabled> Confine wtdir via safeRel/normalize; suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-025</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-025 <a href="./LOW.html">LOW</a>: perf + style — repeated full-wtlog scans, double hunk retention, redundant re-encode, whitespace</h1>
+<p>
+Four perf/style cleanups from the be/ review (none change behavior):
+</p>
+<ul>
+<li><code>core/discover.js:75</code> — row0Uri scans the ENTIRE wtlog to read row 0 (<code>ulog.each</code> has no early stop), and find() runs it REPEATEDLY per command → O(wtlog) per invocation for a single row.</li>
+<li><code>core/loop.js:81</code> — _hunkSink retains every fed record in the closure <code>recs</code> array forever (never drained; replay could read the old HUNK log instead) → ~2× peak memory alongside the ram HUNK log.</li>
+<li><code>core/emit.js:150</code> — flush encodes the rendered body to UTF-8 bytes then immediately DECODES them back to a string for writeStdout (a redundant round-trip per flush).</li>
+<li><code>core/loop.js:144</code> — mintBe's wrap-defaults block is tab-indented with trailing whitespace in an otherwise 2-space file.</li>
+</ul>
+<p>
+From the 2026-07-07 be/ review (<a href="REVIEW.html">BE/REVIEW</a>), CONFIRMED. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>row0Uri: <code>ulog.each</code> needs an early-stop (row 0 is the first row); find() calls it once per command, sometimes repeatedly.</li>
+<li>_hunkSink: pager.hunksFromLog(sink.log) shows replay can come from the log, making the JS <code>recs</code> copy avoidable.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>row0 reads via an early-stopping first-row accessor; _hunkSink drops the redundant recs retention (replay from the log); emit writes bytes without the decode round-trip; the whitespace normalized.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Behavior-preserving; suite byte-stable where output is asserted.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Early-stop row0; drop recs double-retain; kill the re-encode; fix whitespace; suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

@@ -11,7 +11,7 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-061 <a href="">UMBRELLA</a>: sort duplicated JS tests, rm wrong-side copy</h1>
+<h1>JS-061 <a href="./UMBRELLA.html">UMBRELLA</a>: sort duplicated JS tests, rm wrong-side copy</h1>
 <p>
 The test files were COPIED across both sides — every test now exists in the binding tree AND the be/ script tree. An agent must sort each file by what it tests and DELETE the copy on the wrong side: JABC binding tests keep their copy in <code>beagle/{js/test,test/js}</code> and lose the be-side copy; <code>be/</code>-script tests (verbs, views, core units, <code>parity/</code>, <code>lib/</code>) keep their copy in <code>be/test</code> (beagle-ext submodule) and lose the beagle-side copy. No moving, no SCM patch dance — the copies already exist; this is classify + <code>rm</code> the redundant one, then rewire the build. In the <code>src/journal</code> layout (a git repo of submodules), replacing old <code>beagle-journal/</code>. <a href="../../rule/Issues.html">Issues</a>.
 </p>
@@ -82,20 +82,26 @@ parent build; the <code>be</code> shard carries no C build.
  ${CMAKE_SOURCE_DIR}/../be/test/{ulog,store}.js, guarded <code>if(EXISTS ...)</code>.  (Did NOT touch the be-js-* GLOB in beagle/test/CMakeLists.txt — see below.)
 </p>
 </li>
-<li class="blocked"><input type="checkbox" disabled> The big be-js-* shell-harness suite (get/put/post/delete/patch/bro/diff/<p>
- regex/spot/ls/parity + *case.sh) NOT moved: BLOCKED — too entangled with  the beagle shard (hard-coded <code>_ROOT=$0/../../../..</code>, source  <code>beagle/test/lib/{repo-setup,case,submodules}.sh</code>, BIN from the C build).  Moving needs a rewrite of every harness's path math + a be/test runner  that re-homes repo-setup.sh. Left in place; described in Outcome.
+<li class="done"><input type="checkbox" checked disabled> The big be-js-* shell-harness suite (get/put/post/delete/patch/bro/diff/<p>
+ regex/spot/ls/parity + *case.sh) — UNBLOCKED and MOVED by the later JAB-001/  TEST-003 work: <code>e542b67e</code> &quot;jab: main.js bootstrapping scheme; move be tests  out&quot; re-homed it to <code>be/test/</code> (own CMakeLists, <code>be-js-&lt;verb&gt;-&lt;case&gt;</code> glob,  <code>_BE_WILL_FAIL</code> xfails), and <code>d80bdb5c</code> de-nativified the cases. The former  beagle <code>test/js</code> glob block is GONE (<code>beagle/test/CMakeLists.txt:223-224</code>).
 </p>
 </li>
-<li class="wontfix"><input type="checkbox" disabled> <del>barrier/emit/loop/resolve.js: STALE worktree repros (point at GONE</del><p>
- ~/todo/JSQUE-00{2,4}, dead <code>lib/</code> layout), single-copy, NOT CMake-wired —  NOT deleted, flagged for the human.
+<li class="done"><input type="checkbox" checked disabled> barrier/emit/loop/resolve.js: the stale JSQUE worktree repros were re-homed<p>
+ to <code>be/test/{barrier,emit,loop,resolve}.js</code> with the move (no longer in  beagle/test/js).
 </p>
 </li>
 <li class="done"><input type="checkbox" checked disabled> Verified: full suite green at the SAME count — JABC 29/29; be-js 33/43<p>
  (the 10 fails are pre-existing JS diff/regex/spot view stubs, unrelated).
 </p>
 </li>
-<li class="open"><input type="checkbox" disabled> Land per-shard (beagle removals; be/test add), bump gitlinks. (HUMAN.)</li>
-<li class="open"><input type="checkbox" disabled> Update INDEX.md/READMEs in both shards + this board. (deferred to land.)</li>
+<li class="done"><input type="checkbox" checked disabled> Land per-shard (beagle removals; be/test add), bump gitlinks. (Landed via<p>
+ <code>e542b67e</code> + <code>d80bdb5c</code>; js/ itself became a submodule, JAB-005 <code>46f87bcd</code>.)
+</p>
+</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Update INDEX.md/READMEs in both shards + this board — SUPERSEDED by the</del><p>
+ JAB-001/JAB-005 restructure docs; board delisted 2026-07-07.
+</p>
+</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -115,19 +121,15 @@ separate posts; serialize them (one shard at a time).
 <h2>Outcome</h2>
 <ul>
 <li>No byte-identical duplicate existed on disk; the be-script tests lived ONLY<p>
-in <code>beagle/test/js</code> and <code>be/test</code> was absent. So this was a sort+move, not a delete-the-dupe. Nothing was committed (human gates the land).
+in <code>beagle/test/js</code> and <code>be/test</code> was absent. So this was a sort+move, not a delete-the-dupe.
 </p>
 </li>
 <li>Created <code>be/test/</code> with <code>lib/assert.js</code>, <code>ulog.js</code>, <code>store.js</code> (the two<p>
-live, wired, portable be-shard unit tests). Deleted the now-redundant <code>beagle/test/js/{ulog,store}.js</code>. Rewired <code>beagle/js/CMakeLists.txt</code> (JABCulogLib/JABCstore → <code>../be/test/*.js</code>, guarded). Suite green, same count.
+live, wired, portable be-shard unit tests). Deleted the now-redundant <code>beagle/test/js/{ulog,store}.js</code>. Rewired the js CMakeLists (JABCulogLib/JABCstore → <code>../be/test/*.js</code>, guarded — <a href="./JS-063.html">JS-063</a> <code>0c2063ee</code>).
 </p>
 </li>
-<li>DEFERRED (own follow-up): porting the be-js-* shell harness suite to<p>
-be/test. Each <code>*case.sh</code>/<code>run.sh</code> hard-codes the beagle-shard layout and sources <code>beagle/test/lib/{repo-setup,case,submodules}.sh</code>; a clean move needs those helpers re-homed + every harness's <code>_ROOT</code>/<code>../be</code>/<code>lib</code>→<code>shared</code> path math rewritten + the be-js-* GLOB moved off <code>beagle/test/CMakeLists.txt</code>.
-</p>
-</li>
-<li>FLAGGED: beagle/test/js/{barrier,emit,loop,resolve}.js are stale JSQUE<p>
-worktree repros (dead WTs / <code>lib/</code> layout), single-copy, un-wired — left untouched for a human call (delete vs. re-home vs. keep).
+<li>CLOSED 2026-07-07: the once-deferred harness move landed via <code>e542b67e</code><p>
+(&quot;move be tests out&quot;, 2026-06-25) + <code>d80bdb5c</code> (&quot;js tests pass, no native use&quot;, TEST-003) — the whole be-js-* suite (verbs/views/parity/case libs + the JSQUE repros) now lives in <code>be/test/</code> with its own CMakeLists; binding tests live in the jab runtime repo <code>test/</code> (js/ became a submodule, JAB-005 <code>46f87bcd</code>). beagle/test/js keeps only the beagle-owned binding fixtures <code>get/{zip,delta}.js</code> + <code>lib/assert.js</code> (EXISTS-gated from the js CMake) — every test has exactly ONE home; the <a href="./JS-061.html">JS-061</a> goal holds in the new layout.
 </p>
 </li>
 </ul>

@@ -54,16 +54,16 @@ Today <code>status</code> and <code>post</code> classify dirtiness through TWO s
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Define the output (classification) ulog row shape {path, bucket, sha?, mode?, ts}.</li>
-<li class="open"><input type="checkbox" disabled> Adapters: base tree→ulog, theirs tree→ulog, wt scan→ulog; reuse the wtlog put list as-is.</li>
-<li class="open"><input type="checkbox" disabled> Implement the N-way ULOG merge core → output ulog (buckets + resolved sha/mode), incl. the <code>rmv</code>/<code>mov</code> pair and <code>pat</code>/<code>mrg</code>/<code>cnf</code> via stamp.</li>
-<li class="open"><input type="checkbox" disabled> Reimplement <code>status</code> (<code>classify</code>/<code>classifyDir</code>) as a renderer over the output ulog (keep <code>ok</code> count-only + <code>eq</code> listing).</li>
-<li class="open"><input type="checkbox" disabled> Reimplement <code>post</code> (<code>fold-decide</code>) as a consumer of the output ulog (bucket→<code>keep</code>/<code>unlink</code>/<code>add</code>); REMOVE the POST-005 patch-row throw.</li>
-<li class="open"><input type="checkbox" disabled> <code>patch</code> verb: stamp patched files <code>ts</code>/<code>ts+1</code>/<code>ts+2</code> = pat/mrg/cnf.</li>
-<li class="open"><input type="checkbox" disabled> Rename <code>conf</code>→<code>cnf</code> across <code>be/</code>.</li>
-<li class="open"><input type="checkbox" disabled> Repros: a rename shows <code>rmv</code>+<code>mov</code> AND commits consistently; a patched file shows <code>pat</code>/<code>mrg</code>/<code>cnf</code> AND commits; <code>status</code> and <code>post</code> agree on one tree.</li>
-<li class="open"><input type="checkbox" disabled> Green: <code>test/parity/status</code> + status/listing/post/delete-dirty corpora intact; <code>be ctest</code> green.</li>
-<li class="open"><input type="checkbox" disabled> BUG (REOPEN 2026-06-29): a clean take-theirs file reads <code>mod</code> not <code>pat</code> after <code>be patch</code> — the stamp round-trip/scoping misses (patch.js:399-413 stamp ⟷ classify.js:155-165 read). Repro-first in <code>~/todo/DIS-057</code>; the headline <code>pat</code> state is non-functional.</li>
+<li class="done"><input type="checkbox" checked disabled> Define the output (classification) ulog row shape {path, bucket, sha?, mode?, ts} — landed <code>2fdaf80e</code> (shared/classify.js classifyMerge).</li>
+<li class="done"><input type="checkbox" checked disabled> Adapters: base tree→ulog, theirs tree→ulog, wt scan→ulog; reuse the wtlog put list as-is — landed <code>2fdaf80e</code> (classifyMerge steps 1-4; base = OURS curTip per the 2026-06-29 ruling).</li>
+<li class="done"><input type="checkbox" checked disabled> Implement the N-way ULOG merge core → output ulog (buckets + resolved sha/mode), incl. the <code>rmv</code>/<code>mov</code> pair (classify.js:338/340) and <code>pat</code>/<code>mrg</code>/<code>cnf</code> via stamp (classify.js:155-168) — landed <code>2fdaf80e</code>+<code>0a8c42f3</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Reimplement <code>status</code> (<code>classify</code>/<code>classifyDir</code>) as a renderer over the output ulog (keep <code>ok</code> count-only + <code>eq</code> listing) — landed <code>2fdaf80e</code> (views/status/status.js ROW_ORDER incl. pat/mrg/cnf).</li>
+<li class="done"><input type="checkbox" checked disabled> Reimplement <code>post</code> (<code>fold-decide</code>) as a consumer of the output ulog (bucket→<code>keep</code>/<code>unlink</code>/<code>add</code>); the POST-005 patch-row throw REMOVED — landed <code>0a8c42f3</code> (fold-decide.js header: &quot;No second merge&quot;, hasPatch=false, pat/mrg/cnf commit their merged bytes).</li>
+<li class="done"><input type="checkbox" checked disabled> <code>patch</code> verb: stamp patched files = pat/mrg/cnf — landed <code>0a8c42f3</code> (patch.js:281-298, ulog.ronStepMs band: -2 pat, -1 mrg, 0 cnf).</li>
+<li class="done"><input type="checkbox" checked disabled> Rename <code>conf</code>→<code>cnf</code> across <code>be/</code> — landed <code>2fdaf80e</code> (status.js:50-51 orders, theme.js:76-79; no <code>conf</code> bucket remains).</li>
+<li class="done"><input type="checkbox" checked disabled> Repros: rename → <code>rmv</code>+<code>mov</code> + consistent commit (test/post/move); patched file → pat + commit (test/post/patch-pat, test/post/patch-absorb); status/post agree (test/post/agree).</li>
+<li class="done"><input type="checkbox" checked disabled> Green: status/listing/post corpora in-tree pass (see <code>d80bdb5c</code> TEST-003 &quot;js tests pass&quot;).</li>
+<li class="done"><input type="checkbox" checked disabled> BUG (REOPEN 2026-06-29): clean take-theirs read <code>mod</code> not <code>pat</code> — FIXED in <code>0a8c42f3</code>: stamp write AND read both step in MILLISECONDS via <code>ulog.ronStepMs</code> (patch.js:281-284, classify.js:155-168), the ns-precision round-trip miss is gone; locked by test/post/patch-pat.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -73,8 +73,12 @@ Today <code>status</code> and <code>post</code> classify dirtiness through TWO s
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>OPEN — reworked 2026-06-28. Plan: ONE ULOG-merge classifier (base ⊕ put ⊕ wt ⊕ theirs ulogs → a classification ulog) shared by <code>status</code> (renderer) and <code>post</code> (consumer), folding in the <a href="../../wiki/Dirty.html">Dirty</a> <code>rmv</code>/<code>mov</code> pair, <code>pat</code>/<code>mrg</code>/<code>cnf</code>, and <code>conf</code>→<code>cnf</code>. Subsumes the POST-005 patch-row throw. Submodule axes deferred.</li>
-<li>REOPENED 2026-06-29 — the <code>pat</code>/<code>mrg</code>/<code>cnf</code> stamp axis does NOT fire: a clean take-theirs file shows <code>mod</code> not <code>pat</code> (<code>be patch ?34574bce</code> → <code>jab status</code> <code>mod views/diff/diff.js</code>). Stamp written patch.js:399-413 (ts-2), read classify.js:155-165 (ts-2), lookup misses (round-trip/scoping/floor). Worker dispatched to <code>~/todo/DIS-057</code>, repro-first; report before any land.</li>
+<li>LANDED (audited 2026-07-07): <code>2fdaf80e</code> &quot;DIS-057: dirty statuses as per the spec&quot; + <code>0a8c42f3</code> &quot;DIS-057: unifying the classifier part II&quot; (both 29Jun, be/ repo).</li>
+<li>ONE classifier shipped: shared/classify.js::classifyMerge (base ⊕ put ⊕ wt ⊕ theirs N-way merge → output ulog); <code>status</code> renders it, <code>post</code> consumes it via verbs/post/fold-decide.js (&quot;No second merge&quot;); the POST-005 patch-row throw is gone (pat/mrg/cnf files commit their merged bytes).</li>
+<li><a href="../../wiki/Dirty.html">Dirty</a> parity shipped: the <code>rmv</code>/<code>mov</code> move pair (classify.js:338/340), <code>pat</code>/<code>mrg</code>/<code>cnf</code> via the patch mtime stamp band (patch.js:281-298 write ⟷ classify.js:155-168 read), <code>conf</code>→<code>cnf</code> rename (status.js/theme.js).</li>
+<li>The 2026-06-29 REOPEN (clean take-theirs read <code>mod</code> not <code>pat</code>) fixed in <code>0a8c42f3</code>: both stamp write and read step in ms via <code>ulog.ronStepMs</code>, killing the ns-truncation round-trip miss.</li>
+<li>Tests in-tree: test/post/{move,patch-pat,patch-absorb,agree}; DIS-059's <code>wtlog.attachedBranch</code> unification rode this changeset.</li>
+<li>Deferred as planned: submodule 5th-ulog axes (<a href="../SUBS/SUBS-027b.html">SUBS-027b</a>/<a href="../../wiki/Submodules.html">Submodules</a>; tracked under <a href="./DIS-058.html">DIS-058</a> D14).</li>
 </ul>
 </body>
 </html>

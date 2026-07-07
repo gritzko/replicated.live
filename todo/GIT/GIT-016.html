@@ -54,12 +54,12 @@ The four remote verbs (<code>get</code>/<code>head</code>/<code>post</code>/<cod
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> T1 — repro test: a non-FF <code>post</code> refuses with an HONEST message (non-FF, no &quot;be put to force&quot; hint); an FF <code>post</code> still advances — over local objects, no content fetch.</li>
-<li class="open"><input type="checkbox" disabled> T2 — extract the shared advertise→resolve→verdict routine (advertRefs + ref-resolution + <code>dag.aheadBehind</code>/<code>isAncestor</code>) into one module; extend the dag fns to accept an optional remote <code>abc.index(&quot;wh128&quot;,{mem})</code> (run-stack, in-memory) alongside <code>keeper.commitParents</code> — no hand-rolled map.</li>
-<li class="open"><input type="checkbox" disabled> T3 — reroute <code>post</code>/<code>put</code> through it: <code>post</code> FF-or-refuse STRICTLY (honest, no force hint), <code>put</code> set/force; send only local ahead commits (no content download), then SAVE the updated remote-tracking ref(s).</li>
-<li class="open"><input type="checkbox" disabled> T4 — add the <code>head</code> verb (<code>verbs/head</code>): fetch the connecting commits into the IN-MEMORY remote DAG (no pack-log write), report ahead/behind commit lists + changed paths, update remote-tracking refs only.</li>
-<li class="open"><input type="checkbox" disabled> T5 — reroute <code>get</code> through the shared routine for the behind list; <code>get</code> remains the sole pack-log writer (<code>wire.fetch</code> persist + checkout).</li>
-<li class="open"><input type="checkbox" disabled> T6 — regression: <code>push-ssh</code> FF, <code>push-nonff</code> (honest path), <code>get</code>/fetch; run the wire + post buckets.</li>
+<li class="done"><input type="checkbox" checked disabled> T1 — repro test: a non-FF <code>post</code> refuses with an HONEST message (non-FF, no &quot;be put to force&quot; hint); an FF <code>post</code> still advances — over local objects, no content fetch. — <code>test/wire/push-nonff-msg</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> T2 — extract the shared advertise→resolve→verdict routine into <code>shared/relate.js</code>; <code>shared/dag.js</code> fns take an optional remote wh128 index. — landed <code>14924366</code>; tests <code>test/dag/remoteindex</code>, <code>test/relate/verdict</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> T3 — reroute <code>post</code>/<code>put</code> through it: <code>post</code> FF-or-refuse STRICTLY (honest, no force hint), <code>put</code> set/force; local ahead commits only, then <code>saveRemoteRef</code>. — landed <code>c12f6d4b</code> (<code>post.js</code> relate spine, <code>put.js</code> shared <code>resolveRef</code>).</li>
+<li class="done"><input type="checkbox" checked disabled> T4 — add the <code>head</code> verb (<code>verbs/head/head.js</code>): in-memory remote DAG (no pack-log write), ahead/behind + changed paths (<code>shared/changedpaths.js</code>), remote-tracking refs only. — landed <code>c12f6d4b</code>; tests <code>test/wire/head-bare</code>/<code>head-local</code>/<code>head-ssh</code>/<code>head-ssh-paths</code>/<code>head-cached</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> T5 — reroute <code>get</code> through the shared routine for the behind list; <code>get</code> remains the sole pack-log writer. — landed <code>c12f6d4b</code> (<code>verbs/get</code> uses <code>relate.verdict</code>).</li>
+<li class="done"><input type="checkbox" checked disabled> T6 — regression: <code>push-ssh</code> FF, <code>push-nonff</code> (honest path), <code>get</code>/fetch; wire + post buckets. — wire bucket green at land.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -70,7 +70,9 @@ The four remote verbs (<code>get</code>/<code>head</code>/<code>post</code>/<cod
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(pending)</li>
+<li>Landed <code>14924366</code> (&quot;remote negotiation unified somewhat&quot;) + <code>c12f6d4b</code> (&quot;remainder, tests and other things&quot;), be/ trunk: <code>shared/relate.js</code> (advertise→resolve→verdict, POSTNOREF/POSTREF guards), <code>shared/dag.js</code> optional remote wh128 index, <code>shared/changedpaths.js</code>, <code>verbs/head/head.js</code>; post/put/get rerouted; honest POSTNOFF (no force hint).</li>
+<li>Tests: <code>test/relate/verdict</code>, <code>test/dag/remoteindex</code>, <code>test/put/wire-refguard</code>, <code>test/wire/push-nonff-msg</code>, <code>test/wire/head-*</code>, <code>test/wire/saveremote</code>.</li>
+<li>Residue split out: <a href="GIT-017.html">GIT-017</a> (remote-tracking rows still strip the branch — the T3 <code>saveRemoteRef</code> write is host-only).</li>
 </ul>
 </body>
 </html>

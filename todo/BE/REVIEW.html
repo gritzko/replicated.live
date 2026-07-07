@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>REVIEW</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE code-review digest (be/ JS, 2026-07-07)</h1>
+<p>
+Full record of the parallelized be/ review (7 finders × 5 dimensions — style, duplication, memory/resource safety, semantics, consistency — each finding adversarially re-verified + novelty-checked against the board). 54 CONFIRMED, 6 KNOWN (already ticketed), 11 REFUTED. This digest holds every CONFIRMED finding; the <a href="./BE.html">BE</a> tickets <a href="./BE-010.html">BE-010</a>..<a href="./BE-025.html">BE-025</a> group them by root cause. Two jab-SIDE findings (<code>buf.cpp</code>) routed to <a href="../JAB/README.html">JAB</a>. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Standalone CRIT/HIGH → own tickets</h2>
+<ul>
+<li><a href="./BE-010.html">BE-010</a> CRIT — <code>verbs/patch/patch.js:81</code> PATCH ours side = cur's COMMIT tree, not wt bytes → dirty edits clobbered (JS twin of native PATCH-002 <code>2583217c</code>; GET twin JGET-004). +<code>patch.js:97</code> deleteLeaf swallows unlink errors → phantom <code>deleted</code> count.</li>
+<li><a href="./BE-011.html">BE-011</a> HIGH — <code>core/discover.js:232</code> wtdir SRC_ROOT confinement is a LEXICAL prefix check; <code>//../name</code> / <code>//name/../../..</code> physically escape the root (safeRel never applied to host/path). JS twin of DOG-009.</li>
+<li><a href="./BE-012.html">BE-012</a> HIGH — <code>shared/wire.js:441</code> emitPack sizes the pack buffer at len+256/obj; real-zlib overhead on incompressible input is ~330 B/MB → a single &gt;~4MB binary blob aborts every push (<code>pack: feed (full?)</code>), no grow path.</li>
+<li><a href="./BE-013.html">BE-013</a> HIGH — <code>shared/wire.js:642</code> push() <code>finally</code> never closes wfd; a pre-close throw leaves receive-pack blocked on stdin → blocking reap HANGS. +<code>wire.js:181</code> curlRun and +<code>wire.js:198</code> curlPost: no try/finally, child/fd/tmp leak on throw.</li>
+<li><a href="./BE-014.html">BE-014</a> HIGH — <code>verbs/delete/delete.js:318</code> DELETE ignores the Host slot: <code>be delete //origin?feat</code> tombstones the LOCAL branch, not the remote.</li>
+<li><a href="./BE-015.html">BE-015</a> HIGH — <code>verbs/post/post.js:190</code> POST <code>#</code>/<code>#!</code>/<code>#msg!</code> forms unimplemented: absorbed-message reuse missing, forget-<code>!</code> silently dropped.</li>
+<li><a href="./BE-016.html">BE-016</a> HIGH — <code>views/bro/pager.js:145</code> file-content control bytes emitted verbatim to the tty → ANSI/OSC injection from repo content.</li>
+<li><a href="./BE-017.html">BE-017</a> HIGH — mmap-leak class (JS-031 regressing): <code>shared/util/ignore.js:155</code>, <code>views/diff/diff.js:313</code>, <code>shared/gitmodules.js:16</code>, <code>views/why/why.js:25</code> io.mmap and never unmap → region exhaustion in the resident loop.</li>
+</ul>
+<h2>MED/LOW clusters → grouped tickets</h2>
+<ul>
+<li><a href="./BE-018.html">BE-018</a> — tok32 24-bit end field wraps at 16 MiB: <code>views/log/log.js:46</code> one unbounded hunk; <code>views/why/why.js:166</code> body sized 64 MiB — blame spans corrupt past 16 MiB.</li>
+<li><a href="./BE-019.html">BE-019</a> — thin-pack buffer sizing: <code>shared/store.js:114</code> indexPackByWalk sizes off delta length, no NOROOM grow → silent object drop; <code>store.js:366</code> readRecord retries ANY error as NOROOM → doubling to &gt;1GB on a corrupt record; <code>store.js:92</code> inferType mis-types blobs shaped like tree/commit headers.</li>
+<li><a href="./BE-020.html">BE-020</a> — verb URI-slot handling: <code>verbs/head/head.js:73</code> HEAD ignores the Path slot (full-tree diff); <code>verbs/put/put.js:278</code> pathless no-ref remote falls past the log-only gate → force-pushes trunk; <code>verbs/put/put.js:329</code> host slot decoded 3 divergent ways (put vs wire vs get/head).</li>
+<li><a href="./BE-021.html">BE-021</a> — classify semantics: <code>shared/classify.js:142</code> wtEqBase ignores the exec bit → chmod-only change reads <code>ok</code>, never committable, reverted by re-get; <code>classify.js:470</code> classifyDir baselines baselineTip() vs classifyMerge curTip() → ls/lsr disagree with status after patch; <code>classify.js:77</code> nested primary <code>.be</code> DIR floods status with <code>unk</code>.</li>
+<li><a href="./BE-022.html">BE-022</a> — duplication sweep: <code>verbs/head/head.js:120</code>+<code>:203</code> cached-tip peek dup'd from get.js with divergent error vocab (HIGH-ish); <code>verbs/get/get.js:130</code> oldTipOf re-reads wtlog tip, misses detached <code>?&lt;sha&gt;</code>; <code>shared/wire.js:545</code> ZERO_SHA thrice; <code>views/bro/pager.js:228</code> re-impl of imported spell.js helpers; <code>views/status/status.js:423</code> isMount re-impl w/o GET-036 symlink guard; <code>views/cat/cat.js:104</code> readFileBytes re-impl vs wtread; <code>shared/wtread.js:10</code> io.readAll 3rd arg ignored (5 sites); <code>shared/serve.js:45</code> inline branch→refs/heads vs relate.resolveRef; <code>core/loop.js:180</code> TRANSPORT vs SCHEME_ALLOW dup.</li>
+<li><a href="./BE-023.html">BE-023</a> — view semantics: <code>views/grep/grep.js:38</code> multi-arg grep searches arg0 N times; <code>views/spot/spot.js:26</code> drops trail args (<code>spot:#body .c</code> throws SPOTNOEXT); <code>view/theme.js:123</code> reset() leaves BOLD on combined slots; <code>views/bro/pager.js:779</code> _feed mishandles an escape split near the buffer end → tail bytes leak as keystrokes; <code>view/bro.js:220</code> colorWhyHunk dead ternary + missing row newline.</li>
+<li><a href="./BE-024.html">BE-024</a> — robustness + error doctrine: <code>core/recurse.js:53</code> joinPrefix uri.<em>parse unguarded → one bad .gitmodules path aborts the whole walk; <code>core/loop.js:331</code> lowercase <code>loop:</code>/<code>be.find:</code> throw prefixes; <code>shared/serve.js:74</code> uploadPack serves only wants<a href="./0.html">0</a>; <code>shared/argline.js:44</code> shellSplit drops backslashes in double quotes; <code>shared/ulog.js:233</code> </em>book truncates before restoring snapshot (not crash-safe); <code>shared/submount.js:327</code> mount() rollback unlinks a PRE-EXISTING healthy sub anchor; <code>verbs/post/post.js:269</code> advanceBranch POSTNONE unreachable → reported POSTNOFF.</li>
+<li><a href="./BE-025.html">BE-025</a> — perf + style: <code>core/discover.js:75</code> row0Uri scans the ENTIRE wtlog per find(), repeatedly per command; <code>core/loop.js:81</code> _hunkSink retains every record in <code>recs</code> → ~2× peak memory; <code>core/emit.js:150</code> flush encodes to UTF-8 then decodes back for writeStdout; <code>core/loop.js:144</code> tab-indent + trailing whitespace in a 2-space file.</li>
+</ul>
+<h2>Routed elsewhere / KNOWN</h2>
+<ul>
+<li><a href="../JAB/README.html">JAB</a> — <code>buf.cpp:48</code> Buf.feedStr silently truncates on full IDLE vs API.md NOROOM; <code>buf.cpp:124</code> API.md documents io.book/close/trim that buf.cpp lacks (no deterministic unmap).</li>
+<li>KNOWN (already ticketed, not re-filed): loop.js:32/17 → <a href="../URI/URI-013.html">URI-013</a>/JS-088; argline.js:60 → CODE-021; diff.js:371 + blob.js:134 + put.js:321 → JS-084/<a href="../URI/URI-013.html">URI-013</a>.</li>
+</ul>
+</body>
+</html>

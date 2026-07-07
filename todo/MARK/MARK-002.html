@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MARK-002</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>MARK-002 <a href="./HIGH.html">HIGH</a>: output cap len*8+16384 under-sizes dense-todo pages — wholesale BNOROOM</h1>
+<p>
+<code>mark</code> sizes its output buffer at <code>len*8+16384</code> (<code>MARK.cli.c:60</code>), but a todo line expands ~12× (<code>&lt;ul class=&quot;todo&quot;&gt;\n&lt;li class=&quot;wontfix&quot;&gt;&lt;input type=&quot;checkbox&quot; disabled&gt; &lt;del&gt;…</code> ≈ 96 bytes per 8 source bytes) — a legitimate 9.6KB page of todo entries fails wholesale with <code>Error: BNOROOM</code> exit 22, no HTML written, and one such page fails an entire directory build even without <code>--strict</code>. <code>fuzz/MARK.c:22</code> uses the same 8× heuristic, so fuzzing never surfaces it. From the 2026-07-07 mark/ diagnostic review, orchestrator-verified by probe. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Probe (2026-07-07): <code>#   T</code> + 1200× <code>-[x] a\n\n</code> (9.6KB) → <code>Error: BNOROOM</code>, exit 22, no output file (fresh build/bin/mark).</li>
+<li>Worst-case expansion is the todo/wontfix entry markup; 8× covers prose but not marker-dense pages.</li>
+<li>The fuzzer shares the heuristic (<code>fuzz/MARK.c:22</code>) AND swallows errors by design — the gap is structurally invisible to it.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Any legal input renders: size by worst-case expansion factor, grow the buffer, or stream/flush — one ruling; a single page must never fail a whole directory build on a sizing artifact.</li>
+<li>Fuzz harness sizing follows the same rule so BNOROOM-class gaps become fuzzable.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first (the dense-todo page as a test case); ABC buffer idioms (u8b/BASS), no ad-hoc realloc loops outside them.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro case in mark/test (dense-todo page renders, exit 0).</li>
+<li class="open"><input type="checkbox" disabled> Fix the sizing rule; align fuzz/MARK.c; suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+</body>
+</html>

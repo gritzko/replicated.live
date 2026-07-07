@@ -40,6 +40,21 @@ Phase the work, make the read path reentrant by passing scratch as parameters (C
 <li>Safe shared-read (no change): pack mmaps + <code>packs</code>/<code>puppies</code> registries, and the pure DAG readers (<code>DAGLookup</code>/<code>DAGCommitTree</code>/<code>DAGParents</code>).</li>
 <li>Mechanism: C11 <code>&lt;threads.h&gt;</code> + <code>Threads::Threads</code> on graflib, atomic work-counter; add a <code>graf/bench/</code> blame benchmark; Amdahl est. ~6–9× (≈1.16s → 0.15–0.25s), memory-bandwidth capped.</li>
 </ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Re-measure post-<a href="../todo/BLAME-002.html">BLAME-002</a>: run <code>blame:</code> with <code>GRAF_BLAME_STATS</code> (<code>graf/BLAME.c:579</code>) + <code>graf/test/blame-perf.sh</code> on a hot file — with the index-served descent (<code>1a5acce8</code>, zero re-inflate on unchanged trees) the residual inflate count is ~folds, not ~nord; quantify the parallelizable remainder BEFORE any threading work.</li>
+<li class="blocked"><input type="checkbox" disabled> Ruling (blocked on gritzko), pick one:<p>
+ (a) WONTFIX/moot — BLAME-002 evaporated the ROI (residual inflates ≈ changed blobs only);  (b) fork-based workers + shared-mmap emit, the precedent that NOW EXISTS in <code>keeper/UNPK.c</code> Phase B (round-robin roots, per-worker scratch, no pthread dependency) — the ticket's &quot;no threading exists anywhere&quot; premise is stale;  (c) C11 <code>&lt;threads.h&gt;</code> per the original plan (new build dependency + reentrancy work on <code>GRAF.obj_buf</code>/<code>tree_buf</code>, keeper <code>buf1..4</code>).
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Only after the ruling: phase the work per <code>## Planned</code> (or close the ticket).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Ordering dependency satisfied: <a href="../todo/BLAME-001.html">BLAME-001</a>'s core landed via <a href="../todo/BLAME-002.html">BLAME-002</a> <code>1a5acce8</code> — the re-measure gate is now actionable.</li>
+<li>2026-07-07 audit: no threads in graf/; <code>keeper/UNPK.c</code> phase-B fork workers are the in-tree parallelism precedent (comment at UNPK.c:451).</li>
+</ul>
 <h2>Landed</h2>
 <p>
 None yet.

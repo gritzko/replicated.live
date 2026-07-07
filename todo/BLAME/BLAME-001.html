@@ -42,9 +42,23 @@ Compare object hashes top-down, stop at the highest unchanged subtree, and infla
 <li>Correctness: anchors (first/tail/fork/merge) always fold; OID-equality ≡ byte-equality (git OID == content); compare vs the prev FOLDED version, never a global set.</li>
 <li>Residual floor: one small root-tree inflate per changed-tree commit — <a href="../todo/BLAME-002.html">BLAME-002</a>'s index <code>(tree,name)→child</code> records remove even that. Expected: ~1.16s → low tens of ms.</li>
 </ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Step 0 perf counters/test: <code>GRAF_BLAME_STATS</code> (<code>graf/BLAME.c:579</code> — folds vs blobfetch vs treeinfl) + <code>graf/test/blame-perf.sh</code> — landed with <code>1a5acce8</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Step 1 free root skip: <code>tree_hs[i] == prev_root_h ⇒ continue</code>, zero inflate, no commit-body inflate (<code>graf/BLAME.c:457-463</code>) — landed <code>1a5acce8</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Step 2 top-down OID descent, inflate only on change: <code>blame_descend_leaf</code> (<code>graf/BLAME.c:202,486</code>) stops at the first matching level (<code>BLAME_DESC_SAME ⇒ continue</code>), blob fetched only on a changed leaf OID — landed <code>1a5acce8</code> (index-served, i.e. the <a href="../todo/BLAME-002.html">BLAME-002</a> variant subsumed this keeper-side plan).</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Step 3 <code>(tree_sha,name)→child</code> step cache — moot: <code>DAGChildStep</code> (graf/DAG.h:170) serves the descent from the index with ZERO keeper inflate, beyond what the cache would save.</del></li>
+<li class="open"><input type="checkbox" disabled> Residual: the unindexed-commit fallback (<code>tree_hs[i]==0</code>, <code>graf/BLAME.c:510</code>) still <code>GRAFBlobAtCommit</code>-fetches then byte-dedups post-inflate (&quot;correct, just not faster&quot;) — decide whether that path matters in practice.</li>
+<li class="blocked"><input type="checkbox" disabled> Ruling: close BLAME-001 as subsumed by <a href="../todo/BLAME-002.html">BLAME-002</a> <code>1a5acce8</code>, or keep it open for the unindexed fallback — blocked on gritzko.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>2026-07-07 audit ambiguity: the board still lists this open (&quot;re-inflates unchanged blobs&quot;) though the headline fix is demonstrably in <code>graf/BLAME.c</code> since <code>1a5acce8</code> (2026-06-12); left open pending the close-as-subsumed ruling above.</li>
+</ul>
 <h2>Landed</h2>
-<p>
-None yet.
-</p>
+<ul>
+<li><code>1a5acce8</code> (BLAME-002 &quot;index-served tree descent, zero re-inflate&quot;) delivers this ticket's Steps 0-2 and moots Step 3; only the unindexed-commit fallback remains on the old fetch+byte-dedup path.</li>
+</ul>
 </body>
 </html>

@@ -11,9 +11,9 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>PUT-003 <a href="">MED</a>: multi-path / glob <code>be put</code> is per-path, not aggregated (repeat banner + PUTNONE spam)</h1>
+<h1>PUT-003 <a href="./MED.html">MED</a>: multi-path / glob <code>be put</code> is per-path, not aggregated (repeat banner + PUTNONE spam)</h1>
 <p>
-A glob (or shell-expanded multi-path) <code>be put</code>, e.g. <code>be put */*/*.sh</code>, where most matches are unchanged, emits — PER ineligible match — a fresh <code>put:</code> banner, a <code>sniff: put: no eligible paths</code> line, <code>Error: PUTNONE</code>, AND a redundant <code>Error: NONE</code>.  The eligible matches DO stage; it is the unchanged ones that turn a benign &quot;most files unchanged&quot; put into a wall of error spam.  An unchanged match in a multi-path put should be a SILENT skip, not a per-path error pair.  Native <code>be</code> (sniff). Sibling of <a href="../BE/BE-008.html">BE-008</a> (unchanged empty-put → silent no-op) and the <a href="../BE/BE-003.html">BE-003</a>/<a href="../BE/BE-006.html">BE-006</a> error-line work.  Method: <a href="../../meta/work.html">Issues</a>.
+A glob (or shell-expanded multi-path) <code>be put</code>, e.g. <code>be put */*/*.sh</code>, where most matches are unchanged, emits — PER ineligible match — a fresh <code>put:</code> banner, a <code>sniff: put: no eligible paths</code> line, <code>Error: PUTNONE</code>, AND a redundant <code>Error: NONE</code>.  The eligible matches DO stage; it is the unchanged ones that turn a benign &quot;most files unchanged&quot; put into a wall of error spam.  An unchanged match in a multi-path put should be a SILENT skip, not a per-path error pair.  Native <code>be</code> (sniff). Sibling of <a href="../BE/BE-008/README.html">BE-008</a> (unchanged empty-put → silent no-op) and the <a href="../BE/BE-003.html">BE-003</a>/<a href="../BE/BE-006.html">BE-006</a> error-line work.  Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -80,12 +80,18 @@ skipped match neither prints a banner nor returns PUTNONE on its own; only the a
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: a tree where <code>*/*/*.sh</code> matches many files, ≤1 changed; assert<p>
- today's per-match PUTNONE/<code>Error: NONE</code> spam, then a single clean result.
+<li class="done"><input type="checkbox" checked disabled> Repro-first: a tree where <code>*/*/*.sh</code> matches many files, ≤1 changed; assert<p>
+ today's per-match PUTNONE/<code>Error: NONE</code> spam, then a single clean result.  (<code>sniff/test/refuse.sh</code> Scenarios 5+6, <code>test/put/01-states</code>)
 </p>
 </li>
-<li class="open"><input type="checkbox" disabled> Aggregate the multi-path/glob dispatch (one pass; skipped ⇒ silent).</li>
-<li class="open"><input type="checkbox" disabled> Verify single-file unchanged-skip + bare-empty-put PUTNONE unchanged; <code>-q</code> quiet.</li>
+<li class="done"><input type="checkbox" checked disabled> Aggregate the multi-path/glob dispatch (one pass; skipped ⇒ silent).<p>
+ (<code>sniff/PUT.c::put_stage_named</code> <code>multi = nuris &gt; 1</code>, PUT.c:770/1029/1074/1131)
+</p>
+</li>
+<li class="done"><input type="checkbox" checked disabled> Verify single-file unchanged-skip + bare-empty-put PUTNONE unchanged; <code>-q</code> quiet.<p>
+ (PUT.c:1035 <code>is unchanged</code> kept; PUT.c:1141 aggregate summary only for nuris&gt;1)
+</p>
+</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -96,8 +102,16 @@ received PATH LIST (shell-expanded) and an internal glob alike.
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>FIXED (working tree, pending land): <code>sniff/PUT.c::put_stage_named</code> — a<p>
+<li>LANDED: <code>sniff/PUT.c::put_stage_named</code> — a<p>
 multi-path/glob put (<code>nuris&gt;1</code>) silently skips unchanged matches (no per-path banner / PUTNONE / <code>no eligible paths</code>); one-changed → ONE <code>put:</code> hunk. Single-file <code>is unchanged — skipped</code> + bare-empty PUTNONE preserved. Tests: <code>sniff/test/refuse.sh</code> (PUT-003 cases), <code>test/put/01-states</code>. beagle 464/464 + be 65/65 green. Residual (DESIGN, not a one-liner): a wholly no-op SUB still relays a banner-only <code>put:&lt;sub&gt;</code> hunk — needs a HUNKTableAbort / defer-banner / relay-filter change to the shared HUNK contract (status/get/ls). The doubled <code>Error: NONE</code> 2nd line is the <a href="../BE/BE-003.html">BE-003</a>/<a href="../BE/BE-006.html">BE-006</a> error-line class.
+</p>
+</li>
+<li>Land audit 2026-07-07: no PUT-003-tagged commit in <code>jab log</code>; the fix rode the<p>
+untagged 25/26Jun batch (<code>1fd33d9f</code>/<code>0447e4a7</code> &quot;JS-065..JS-091 … <a href="./beagle.html">beagle</a>&quot;). Verified in-tree at tip <code>b0fb0ce4</code>: PUT.c PUT-003 comments + refuse.sh cases present, wtlog shows no pending <code>sniff/PUT.c</code> put row since the 26Jun get.
+</p>
+</li>
+<li>Residuals delegated: no-op-sub banner-only <code>put:&lt;sub&gt;</code> relay + PUTNONE/NONE<p>
+stderr cascade → <a href="../BE/BE-008/README.html">BE-008</a> (open); doubled <code>Error: NONE</code> → <a href="../BE/BE-003.html">BE-003</a>/<a href="../BE/BE-006.html">BE-006</a>.
 </p>
 </li>
 </ul>

@@ -37,5 +37,43 @@ Best-effort detect the real WEAVE output shape; where undetectable, <code>be pos
 <li>Recognize only the WEAVE output shape — the full <code>&lt;&lt;&lt;&lt;</code> / <code>||||</code> / <code>====</code> / <code>&gt;&gt;&gt;&gt;</code> sequence at line starts in the structural order a real conflict emits — not any inline occurrence in a comment/literal. This clears the obvious documentation cases (e.g. <code>sniff/PATCH.c</code>).</li>
 <li>Where the file legitimately contains a full, well-formed conflict-shaped block the scan cannot distinguish from a real one, do NOT try to be cleverer — <code>be post!</code> (bang = <code>--force</code>, DIS-030/031) is the documented, sanctioned override. Accept the bluntness there; that is the intended escape, not a defect.</li>
 </ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Partial mitigation already in-tree: <code>SNIFFHasConflictMarker</code> (<code>sniff/PATCH.c:397</code>)<p>
+now requires the ordered open→mid→close shape with nested-open abort, so a BARE <code>&lt;&lt;&lt;&lt;</code> / <code>&gt;&gt;&gt;&gt;</code> in prose no longer fires. An inline full triple in a comment (e.g. PATCH.c's own doc line <code>&lt;&lt;&lt;&lt;theirs||||ours&gt;&gt;&gt;&gt;</code> at <code>PATCH.c:385</code>) STILL fires — confirmed live 2026-06-27 (the <a href="POST-023.html">POST-023</a> land needed <code>be post!</code>).
+</p>
+</li>
+<li>New lever since filing: DIS-046 (<code>6d7ee04f</code>) sizes REAL WEAVE fences ONE LONGER<p>
+than the longest <code>&lt;</code>/<code>|</code>/<code>&gt;</code> run in the whole merged content (<code>graf/WEAVE.c::weave_fence_run_max</code>, :1145-1215). A genuine unresolved conflict in a file quoting a 4-char triple therefore carries fences ≥5 — the post pre-flight scan can use that invariant to clear doc/literal triples.
+</p>
+</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro-first (<code>test/post/</code>): stage a <code>.c</code> with an inline <code>&lt;&lt;&lt;&lt;a||||b&gt;&gt;&gt;&gt;</code><p>
+ triple in a <code>//</code> comment → <code>be post</code> must NOT refuse; a WEAVE-shaped  unresolved block (DIS-046-sized fences) still refuses. RED today.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Teach the pre-flight scan (<code>sniff/POST.c:1288</code> / <code>:2755</code>) the DIS-046<p>
+ invariant: a real conflict's fence run is strictly longer than every other  marker run in the file — clear a triple whose fence length ties the file max.
+</p>
+</li>
+<li class="open"><input type="checkbox" disabled> Keep <code>be post!</code> as the sanctioned escape for the residual undecidable case;<p>
+ don't regress <code>test/post/42-refuse-atomic-store</code> (POST-017 atomicity).
+</p>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None. (The old top-board line pointed at <a href="../DIS/DIS-040.html">DIS-040</a>; the DIS-046 fence sizing is<p>
+the piece that actually unblocks a precise fix.)
+</p>
+</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+(pending)
+</p>
 </body>
 </html>

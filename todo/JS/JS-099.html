@@ -82,7 +82,7 @@ pack without a fresh idx run — audit every pack-write site for a paired <code>
 <h3>TODOs</h3>
 <ul class="todo">
 <li class="open"><input type="checkbox" disabled> <code>ingest.buildIndex</code>: name the run by <code>logName</code>/<code>fileId</code>, not <code>ron.now()</code> — the<p>
-  verified collision fix (see ROOT CAUSE); tolerate old <code>&lt;ron&gt;.keeper.idx</code> shards.
+  verified collision fix (see ROOT CAUSE); tolerate old <code>&lt;ron&gt;.keeper.idx</code> shards.   (Re-verified UNFIXED 2026-07-07: <code>be/shared/ingest.js:66</code> still   <code>ron.encode(ron.now()) + &quot;.keeper.idx&quot;</code>.)
 </p>
 </li>
 <li class="open"><input type="checkbox" disabled> Repro test: TWO posts under a frozen <code>SOURCE_DATE_EPOCH</code> (same tick) → assert<p>
@@ -93,8 +93,8 @@ pack without a fresh idx run — audit every pack-write site for a paired <code>
   native <code>keeper get .#&lt;tip&gt;</code> resolves — RED before the fix.
 </p>
 </li>
-<li class="open"><input type="checkbox" disabled> Audit pack-write sites (<code>ingest.clone</code>/<code>add</code>, <code>fold-commit</code>, barrier<p>
-  re-fold) → each pairs with a <code>.keeper.idx</code> run; close the re-fold gap.
+<li class="done"><input type="checkbox" checked disabled> Audit pack-write sites (<code>ingest.clone</code>/<code>add</code>, <code>fold-commit</code>, barrier<p>
+  re-fold) → each pairs with a <code>.keeper.idx</code> run: verified 2026-07-07,   <code>ingest.js clone:80</code> / <code>add:116</code> / <code>fold-commit.js writePack:192</code> all call   <code>buildIndex</code> per pack — the residual hole is the same-tick run-name collision.
 </p>
 </li>
 <li class="open"><input type="checkbox" disabled> Make indexing incremental + idempotent: one run per pack, a re-fold replaces<p>
@@ -102,7 +102,7 @@ pack without a fresh idx run — audit every pack-write site for a paired <code>
 </p>
 </li>
 <li class="open"><input type="checkbox" disabled> Backfill: a <code>be</code>/jab step (or native <code>keeper</code>-side rebuild) to index any<p>
-  pre-existing unindexed pack — the wild stores already in this state.
+  pre-existing unindexed pack — the wild stores already in this state.   (PACK-001 <code>PIDXScan from_off</code> — the reindex-on-open leaf — is drafted on the   board; the jab runtime landed a js pack-log APPEND leaf under PACK-001.)
 </p>
 </li>
 <li class="open"><input type="checkbox" disabled> Parity: native <code>keeper get</code>/<code>verify</code>/<code>be post</code> FF on a JS-built store green.</li>
@@ -116,7 +116,10 @@ repro shard); fixing the writer does not retro-index them — needs the backfill
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(pending)</li>
+<li>(pending) NB commit <code>d80bdb5c</code> (&quot;TEST-003,JS-099,SUBS-046: js tests pass, no<p>
+native use&quot;, 2026-07-06) MENTIONS this ticket but touched only test harnesses / discover.js / submount.js — it de-nativified the tests (removing the native-keeper oracle this bug needs), NOT the <code>ingest.js</code> writer; the root cause is still in place.
+</p>
+</li>
 </ul>
 </body>
 </html>

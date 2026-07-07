@@ -11,7 +11,7 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-079 <a href="">MED</a>: <code>verbs/get/get.js</code> fan-out reads <code>ctx._get</code> with no guard</h1>
+<h1>JS-079 <a href="./MED.html">MED</a>: <code>verbs/get/get.js</code> fan-out reads <code>ctx._get</code> with no guard</h1>
 <p>
 The get fan-out smuggles whole-run state through <code>ctx._get</code> (the pinned reader + wt + kinds map), but ONLY <code>handleSeed</code> sets it; <code>reconcileDir</code>/<code>leaf</code>/<code>delSweep</code> all assume it is present. Fine on a fresh run where the seed row dispatches first, but if the queue ever resumes PAST the consumed seed (a survivor resume, JSQUE-003), these children dispatch with <code>ctx._get===undefined</code> and throw a bare TypeError instead of a clean refusal. It also violates the loop per-row contract (state on ctx, not the row). Method: <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -70,22 +70,29 @@ resumed fan-out self-heals; heavier, only if resume must survive.
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/get/*</code>: invoke <code>reconcileDir</code>/<code>leaf</code> with <code>ctx._get</code><p>
- unset and assert the named refusal (not a TypeError).
+<li class="wontfix"><input type="checkbox" disabled> <del>Seed-less child repro: MOOT — fan-out rows live only in the in-fn FIFO of the same</del><p>
+ <code>get()</code> call that ran the seed; no cross-process queue can replay them.
 </p>
 </li>
-<li class="open"><input type="checkbox" disabled> Add the <code>if(!ctx._get)</code> guard to <code>reconcileDir</code>, <code>leaf</code>, <code>delSweep</code>.</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Per-child guards: SUPERSEDED — dispatch itself gates on <code>ctx._get</code> (get.js:322-324).</del></li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Confirm whether a get queue can actually resume past the seed today; if<p>
- not, this is hardening — keep it minimal.
+<li class="wontfix"><input type="checkbox" disabled> <del>&quot;Can a get queue resume past the seed?&quot; — NO, by construction since <a href="./JSQUE-020.html">JSQUE-020</a></del><p>
+ (queue removed, dispatch by recursion); the hardening premise is structurally gone.
 </p>
 </li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(pending)</li>
+<li>MOOT via <a href="./JSQUE-020.html">JSQUE-020</a> <code>928aaad5</code> (be/): the resumable file queue (JSQUE-003) is gone; the<p>
+get driver owns an in-fn FIFO and <code>dispatchRow</code> (get.js:313-326) routes fan-out children ONLY when <code>ctx._get</code> is set (<code>ctx._get</code> set ⇒ fan-out; unset ⇒ seed) — the documented invariant.
+</p>
+</li>
+<li>2026-07-07 audit: <code>verbs/get/get.js:322-324</code> guards <code>_leaf</code>/<code>_dir</code>/root children on <code>ctx._get</code>;<p>
+<code>:317</code> reads <code>ctx._get &amp;&amp; ctx._get.conf</code> guarded; a seed-less child dispatch is unreachable.
+</p>
+</li>
 </ul>
 </body>
 </html>

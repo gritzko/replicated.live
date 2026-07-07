@@ -13,7 +13,7 @@
 </a>
 <h1>GET-009: efficient beagle↔beagle (<code>be://</code>) sync — reachability-based upload-pack, cross-file serving, redundant-pack GC</h1>
 <p>
-Make <code>be://</code> keeper-to-keeper sync as efficient as git's own transport: the serving keeper should ship <strong>only the objects the requesting keeper lacks</strong>, across any number of pack files and divergent branches, and never let a shard accumulate duplicates. This is the umbrella ticket for the beagle-side upload-pack; <a href="GET-007.html">GET-007</a> landed the first increment (<code>5124b2ee</code>: <code>wire_locate_sha</code> resolves to the LATEST copy, so the byte-offset watermark stops re-shipping duplicate tails for the common linear/dup-reingest case), but the watermark model is structurally a single contiguous byte-range of one log file — it cannot do reachability across files or exclude duplicates mid-range. The remaining work is to replace it with true object-level negotiation and to reclaim already-bloated shards. This is a <code>be://</code>-only concern: fetches from a git remote (<code>ssh:</code>/<code>https:</code>) use real <code>git-upload-pack</code> reachability and are unaffected. See <a href="../../wiki/GET.html">GET</a>, <a href="../../wiki/POST.html">POST</a>, <a href="GET-007.html">GET-007</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
+Make <code>be://</code> keeper-to-keeper sync as efficient as git's own transport: the serving keeper should ship <strong>only the objects the requesting keeper lacks</strong>, across any number of pack files and divergent branches, and never let a shard accumulate duplicates. This is the umbrella ticket for the beagle-side upload-pack; <a href="GET-007.html">GET-007</a> landed the first increment (<code>5124b2ee</code>: <code>wire_locate_sha</code> resolves to the LATEST copy, so the byte-offset watermark stops re-shipping duplicate tails for the common linear/dup-reingest case), but the watermark model is structurally a single contiguous byte-range of one log file — it cannot do reachability across files or exclude duplicates mid-range. The remaining work is to replace it with true object-level negotiation and to reclaim already-bloated shards. This is a <code>be://</code>-only concern: fetches from a git remote (<code>ssh:</code>/<code>https:</code>) use real <code>git-upload-pack</code> reachability and are unaffected. See <a href="./GET.html">GET</a>, <a href="../../wiki/POST.html">POST</a>, <a href="GET-007.html">GET-007</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
 </p>
 <h2>Issues</h2>
 <p>
@@ -41,6 +41,14 @@ Replace the offset watermark with object-level negotiation; add cross-file servi
 <li><strong>St.4 (optional) — <code>multi_ack</code>/<code>ACK common</code></strong> so large divergent fetches narrow iteratively instead of one-shot.</li>
 <li>Metric/guard: a <code>be://</code> re-fetch transfers object-count ≈ git's minimal set; a fresh <code>be://</code> clone's shard ≈ a fresh git clone's <code>.git</code>; assert in a load test. Update <code>keeper/INDEX.md</code>.</li>
 <li>Note: the <a href="GET-007.html">GET-007</a> held ingest-dedup band-aid (60-bit-hashlet decide-before-append) is SUPERSEDED by reachability serving and stays dropped (silent-drop tail risk).</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> St.1 latest-copy <code>wire_locate_sha</code> (landed <a href="GET-007.html">GET-007</a> <code>5124b2ee</code>; regressions <code>WIREREFETCH</code>/<code>WIREE2EREFETCH</code>).</li>
+<li class="open"><input type="checkbox" disabled> St.2 reachability serve: <code>closure(wants) − closure(haves)</code> in <code>WIREBuildSegments</code>/<code>WIREServeUpload</code>. Audit 2026-07-07: still the watermark model (<code>keeper/WIRE.c:176-178</code> watermark comments, <code>WIREBuildSegments</code> at :284) — no code change since <code>5124b2ee</code>.</li>
+<li class="open"><input type="checkbox" disabled> St.3 redundant-pack GC/compaction (append-only-safe shard rewrite + atomic swap).</li>
+<li class="open"><input type="checkbox" disabled> St.4 (optional) <code>multi_ack</code>/<code>ACK common</code>; metric/load guard; update <code>keeper/INDEX.md</code>.</li>
 </ul>
 </body>
 </html>

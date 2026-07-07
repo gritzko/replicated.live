@@ -44,11 +44,12 @@
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro: <code>be put &lt;sub&gt;/file</code> (and <code>be delete &lt;sub&gt;/file</code>) is dropped / not delegated today. RED.</li>
-<li class="open"><input type="checkbox" disabled> Add the reusable submodule-path delegation routine (shared), reusing <code>isMount</code>/<code>gitmodulesOrder</code>/<code>joinPrefix</code>.</li>
-<li class="open"><input type="checkbox" disabled> Wire PUT + DELETE to it; stage the sub gitlink after (reuse the bump primitive).</li>
-<li class="open"><input type="checkbox" disabled> Friendly handling for a declared-but-unmounted sub path.</li>
-<li class="open"><input type="checkbox" disabled> Green: new repros; read-side recursion + manual bump + DIS-058 sub-cycle intact.</li>
+<li class="done"><input type="checkbox" checked disabled> PUT arm — landed <code>1c4a97c8</code>: <code>put.js::subMountPrefix</code> (shallowest mounted-sub prefix, <code>recurse.isMount</code> gate) + <code>stageInSub</code> (stage in the sub's own wtlog; gitlink bump left to POST per <a href="../../wiki/Submodules.html">Submodules</a>); wired in <code>putOne</code> (put.js:524-528).</li>
+<li class="open"><input type="checkbox" disabled> DELETE arm — <code>delete.js::delStage</code> still runs a <code>&lt;sub&gt;/file</code> arg against the PARENT engine (no sub-crossing split; verified 2026-07-07): reuse <code>subMountPrefix</code>-style delegation for the file- and dir-forms.</li>
+<li class="open"><input type="checkbox" disabled> HOIST the splitter to a shared home: <code>subMountPrefix</code> is put.js-private; the read twin <code>core/recurse.js::resolveRepoForPath</code> (SUBS-045) already exists — one write-side <code>delegatePath</code> next to it, consumed by put + delete.</li>
+<li class="open"><input type="checkbox" disabled> Friendly handling for a declared-but-unmounted sub path (today falls through to the normal leaf).</li>
+<li class="open"><input type="checkbox" disabled> Repro: a <code>jab delete &lt;sub&gt;/file</code> case (sub wtlog gets the delete row, parent untouched); put side is covered implicitly — add an explicit <code>put &lt;sub&gt;/file</code> case too.</li>
+<li class="open"><input type="checkbox" disabled> Green: read-side recursion + manual <code>put &lt;sub&gt;#&lt;sha&gt;</code> bump + sub/cycle intact.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -57,7 +58,7 @@
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>OPEN — child of <a href="../DIS/DIS-058.html">DIS-058</a> D10, filed 2026-06-29. Deliverable: the reusable <code>&lt;sub&gt;/&lt;path&gt;</code> delegation routine + PUT/DELETE as first consumers.</li>
+<li>PARTIAL (audit 2026-07-07): the PUT arm landed <code>1c4a97c8</code> (put.js subMountPrefix + stageInSub).  OPEN: the DELETE arm (delete.js has no sub-crossing split), hoisting the splitter to a shared routine (pair with <code>core/recurse.js::resolveRepoForPath</code>), unmounted-sub refuse, repros.</li>
 </ul>
 </body>
 </html>

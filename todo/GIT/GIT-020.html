@@ -79,10 +79,11 @@ exec spawns); the CLI must NOT emit its normal banners on these (raw wire only).
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> <code>jab upload-pack &lt;store&gt;</code> serve loop (advertise → negotiate → pack) over stdio.</li>
-<li class="open"><input type="checkbox" disabled> <code>jab receive-pack &lt;store&gt;</code> serve loop (commands → pack ingest → report-status).</li>
-<li class="open"><input type="checkbox" disabled> Point the be: transport at the JS server (KEEPER_BIN or a <code>jab serve</code> alias).</li>
-<li class="open"><input type="checkbox" disabled> Flip get/be + get/cached (and a be-store push case) to the JS server; green.</li>
+<li class="done"><input type="checkbox" checked disabled> <code>jab upload-pack &lt;store&gt;</code> serve loop (advertise → negotiate → pack) over stdio. — landed <code>261680bf</code>: <code>shared/serve.js</code> <code>uploadPack</code> (reuses <code>serveReader</code>/<code>buildPushPack</code>/<code>pkt</code>), raw-wire CLI intercept in <code>core/loop.js</code> ~229.</li>
+<li class="open"><input type="checkbox" disabled> <code>jab receive-pack &lt;store&gt;</code> serve loop (commands → pack ingest → report-status). — NOT built: <code>serve.js</code> exports <code>uploadPack</code> only, <code>loop.js</code> intercepts only <code>upload-pack</code>; a be:// PUSH still needs the native keeper.</li>
+<li class="done"><input type="checkbox" checked disabled> Point the be: transport at the JS server. — landed <code>261680bf</code> via the existing <code>KEEPER_BIN=jab</code> override (proven jab-to-jab in <code>test/serve/uploadpack</code>); no <code>jab serve</code> alias, <code>classify()</code> default stays <code>keeper</code>.</li>
+<li class="open"><input type="checkbox" disabled> Flip get/be + get/cached (and a be-store push case) to the JS server; green. — NOT flipped: <code>test/get/be/run.sh</code> still SKIPs on <code>command -v keeper</code>, <code>test/get/cached</code> still clones over ssh-keeper; only the new <code>test/serve/uploadpack</code> runs jab-to-jab (fetch side, local-exec).</li>
+<li class="open"><input type="checkbox" disabled> ssh-remote be:// jab-to-jab: <code>classify()</code>'s ssh arm still hardcodes <code>keeper &lt;verb&gt;</code> for <code>be://host</code> (wire.js ~85) — an <code>ssh host jab upload-pack</code> form (or KEEPER_BIN-honouring remote cmd) is needed before the native daemon retires.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -95,6 +96,10 @@ RAW-pack contract, and v0/v1 advert must match <code>wire.js</code> exactly or f
 <ul>
 <li>Open. Filed from the <a href="../TEST/TEST-003.html">TEST-003</a> jab-only test conversion: option-1 (be:→file://)<p>
 handles the local/ingest tests NOW; this ticket is option-2 — the JS keeper that lets the be:// WIRE itself be tested jab-to-jab, retiring the native daemon.
+</p>
+</li>
+<li>PARTIAL land <code>261680bf</code> (&quot;js upload-pack, also fix bro tests&quot;): the FETCH serve<p>
+side only — <code>shared/serve.js</code> <code>uploadPack</code> + the <code>jab upload-pack</code> raw-wire CLI entry + <code>test/serve/uploadpack</code> (be: local-exec fetch jab-to-jab via KEEPER_BIN=jab, incl. a want+have thin-serve drive). Remaining: receive-pack serve, the get/be + get/cached test flips, and an ssh-remote jab spawn form (see TODOs).
 </p>
 </li>
 </ul>

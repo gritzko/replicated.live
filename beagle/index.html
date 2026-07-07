@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>README</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>Beagle</h1>
+<p>
+*<strong>Beagle</strong>* is a revision control system suitable for modern workflows.  The data format and the syncing protocol are 100% git to stay compatible with the existing mass of git repos. The rest is reworked. 
+</p>
+<ol>
+<li>The system is made syntax-aware, diffing and merging is finer <p>
+grained and draws heavily from CRDT ideas. No false conflicts. 
+</p>
+</li>
+<li>Content is indexed for efficient search. May grep fast, use<p>
+regexes, search for code snippets/templates (syntax aware).
+</p>
+</li>
+<li>CLI UX is reworked; <strong>beagle</strong> uses HTTP-like command language<p>
+of verbs and URIs (get, post, put, delete etc). Not a zoo of CLI flags, but <strong>uniform</strong> language/syntax for everything.
+</p>
+</li>
+<li>The branching model is tree-like (e.g. <code>feature/fix</code>), very<p>
+patch stack friendly (e.g. to rebase the stack as one),
+</p>
+</li>
+<li>The UI is reworked as well, to the text-mode repo browser<p>
+level.
+</p>
+</li>
+</ol>
+<p>
+Beagle focuses on making a comfortable git client for local multi-branch multi-worktree development.  While Beagle's command language can express any git operation, the model steers the user towards tree-structured rebase-centric branching model.
+</p>
+<p>
+The project dogfoods from day 1.
+</p>
+<h2>Using <code>be</code></h2>
+<p>
+Beagle's dispatcher command is <code>be</code>. It only uses standard URI arguments <code>scheme:host/path?version#message</code> and the verbs from the HTTP dictionary that cover all possible data maneuvers. Think of git. Nobody remembers  all git commands and flags. To avoid that effect, Beagle's verbs are made  orthogonal: there is no way to supplement one with creative use of another.    * read-only commands
+</p>
+<div>
+<p>
+ - <code>GET</code> fetches/checks out a particular version/branch/project,  - <code>HEAD</code> is <code>GET</code> dry-run, lists the changes to the version/branch,
+</p>
+</div>
+<p>
+  * read-write commands
+</p>
+<div>
+<p>
+ - <code>POST</code> advances the current branch (commit and/or fast-forward),
+</p>
+<div>
+<p>
+this is worktree-to-repo write,
+</p>
+</div>
+<p>
+ - <code>PATCH</code> applies changes from another branch to the working tree,
+</p>
+<div>
+<p>
+this is repo-to-worktree write,
+</p>
+</div>
+</div>
+<p>
+  * reflog commands
+</p>
+<div>
+<p>
+ - <code>PUT</code> sets branch tip, adds a file, etc,  - <code>DELETE</code> deletes a branch, a file, etc.
+</p>
+</div>
+<p>
+The general work sequence is to edit the worktree, maybe merge in other branches/commits, verify everything works, then commit it. Verbs reflect this exact sequence. Same applies to URIs, each component reflects some aspect of a command:
+</p>
+<ol>
+<li>scheme stands for app/protocol,</li>
+<li>host for remotes,</li>
+<li>path for file path (relative to the project root),</li>
+<li>query for project / branch / tag / commit.  Beagle is<p>
+multi-project: every store hosts an arbitrary set of projects, each with its own branch tree.  Shapes (full grammar at &lt;https://replicated.wiki/html/wiki/URI.html&gt;):
+</p>
+<ul>
+<li><code>?/project/branch/tag</code>  — absolute,</li>
+<li><code>?branch/</code>              — project-relative *<strong>branch</strong>*;<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<p>
+  the trailing slash forces   branch over a same-named tag,
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</li>
+<li><code>?v1.2.3</code>               — bare = tag (no trailing slash),</li>
+<li><code>?./fix</code>, <code>?..</code>         — branch-relative,</li>
+<li><code>?abc1234</code>              — sha-prefix lookup,</li>
+<li><code>?free text</code>            — commit-message search<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<p>
+  (whitespace = search),
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</li>
+<li><code>?null</code>, <code>?back</code>        — magic: no-branch / previous-<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<p>
+  branch (cd -).
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</li>
+</ul>
+</li>
+<li>fragment is for free-form payload (commit-message *<strong>body</strong>*<p>
+for <code>be post '#fix'</code>, line jumps, extension filters, etc).
+</p>
+</li>
+</ol>
+<p>
+Changing the shape of URI changes the command's semantics, e.g. <code>patch</code> becomes merge, rebase or cherry-pick, depending of the shape. These three (git) commands all do merge-then-commit, but details differ.
+</p>
+<h3>GET: checkout / fetch / view / search</h3>
+<div>
+<p>
+be get ssh://host/repo.git       # clone (fetch + checkout + index) be get ?v1.2                     # checkout the &quot;v1.2&quot; tag locally be get ?feat/                    # switch to branch <code>feat</code> (trailing slash) be get ?back                     # cd - : previously checked-out branch be path/to/file.c                # open the file in the pager (bro) be grep:path/to/file.c#TODO      # grep inside one file be spot:#FuncName                # structural search across repo
+</p>
+</div>
+<h3>POST: commit / fast-forward</h3>
+<div>
+<p>
+...                              # above: be get, etc vim file.c                       # go wild be post &quot;wonderful changes&quot;      # commit be head //host                   # see if remote changed be post //host                   # ff-push to remote (refuses if diverged;
+</p>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<p>
+ # rebase is <code>be patch //host?</code> + <code>be post</code>)
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<h3>PUT/DELETE: reflog edits (stage, add/remove branch)</h3>
+<div>
+<p>
+... be put src/foo.c src/bar.c       # stage two files be put                           # stage everything dirty be delete src/obsolete.c         # stage removal of one path be delete                        # stage every tracked file rm'd on disk be post &quot;new files&quot;              # commit be put //host                    # fast forward remote to the head
+</p>
+</div>
+<h3>Projections</h3>
+<p>
+Apart from verbs, Beagle has <strong>projections</strong>: read-only and presentation-only <strong>verbless</strong> use, e.g. <code>be diff:?other_branch</code> or <code>be log:file.c</code> or <code>be grep:TODO</code>. These typically can be used with URIs of any shapes, e.g. <code>be diff://host/file.c?remote_branch</code>.
+</p>
+<h2>The dogs</h2>
+<p>
+&lt;img src=&quot;dog/dogs.png&quot; width=&quot;50%&quot; align=&quot;right&quot;/&gt; The repo is structured into <strong>dogs</strong>. Each dog has its purview, the data and functions it is responsible for. Dogs coordinate to carry out complex tasks.
+</p>
+<p>
+  * *<strong>Bro</strong><strong>: interactive syntax-highlighted pager/viewer.    </strong> *<strong>Spot</strong>*: structural code search, grep, regex, and replace 
+</p>
+<div>
+<p>
+across a repo. Maintains a trigram index for instant lookups.
+</p>
+</div>
+<p>
+  * *<strong>Graf</strong>*: does token-level diffing, 3-way merges, history
+</p>
+<div>
+<p>
+navigation. Maintains a history index. 
+</p>
+</div>
+<p>
+  * *<strong>Sniff</strong><strong>: serves the worktree, detects changes.   </strong> *<strong>Keeper</strong>*: keeps the data per se (git blobs, trees, commits) in
+</p>
+<div>
+<p>
+one flat object pool per project — branches, tags and remotes are just refs into that shared pool.
+</p>
+</div>
+<p>
+New dogs may join, old dogs may learn new tricks. If it works, it gets used. If it's used, it evolves.
+</p>
+<h2>Quick start</h2>
+<p>
+Build (requires libsodium, libcurl, lz4, zlib and cmake; ninja recommended):
+</p>
+<div>
+<p>
+mkdir build &amp;&amp; cd build CC=clang CXX=clang++ cmake -GNinja -DCMAKE_BUILD_TYPE=Release .. ninja ls bin/
+</p>
+</div>
+<h2>FAQ</h2>
+<p>
+<strong>Is this git based?</strong> This is git-compatible. git does not provide meaningful API for external tools, unfortunately. Also, git's internal format  junglified over 20 years of evolution. Meanwhile, git's internal object model is simple and sound.
+</p>
+<p>
+<strong>Is this VC funded?</strong> Nope. The project is ran on old hardware discarded by a university.  Heavy things (eg massive fuzzing), all run on a 32 core discounted Hetzner server. Coding is mostly done by Claude Max, in 2..5 parallel sessions.
+</p>
+<h2>Credits</h2>
+<p>
+Trigram indexing idea from <a href="https://swtch.com/~rsc/regexp/regexp4.html">Russ Cox</a>. Dogenizers started with <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a>, later rewritten as <a href="https://www.colm.net/open-source/ragel/">ragel</a> scanners for speed. The Merkle scheme is by Linus Torvalds.
+</p>
+</body>
+</html>

@@ -30,16 +30,17 @@ Latent unsafety, grouped for one cleanup pass.
 <p>
 None. All require extreme inputs or allocator failure.
 </p>
-<h2>Planned</h2>
+<h2>WIP</h2>
 <p>
-Clamp, validate, and compute magnitudes unsigned.
+Re-verified 2026-07-07 (abc now at dog/abc; <code>round_power_of_2</code> lives in 01.h): all five sites unfixed.
 </p>
-<ul>
-<li><code>SKIPfeed</code>: cap <code>len</code> at <code>sizeof(off)/sizeof(T)</code> before forming the slice (mirror <code>SKIPfinish</code>).</li>
-<li><code>round_power_of_2</code>/<code>MMAPmayresize</code>: reject/clamp inputs where <code>clz64(a)==0</code> (&gt;2^62) before the shift/round.</li>
-<li><code>MMAPresize</code>: <code>munmap(new_mem,new_size)</code> on old-unmap failure.</li>
-<li><code>DNSNameText</code>: check and propagate <code>u8sFeed*</code> return (DNSNOROOM).</li>
-<li><code>utf8sFeedInt</code>: <code>u = (*i&lt;0) ? (~(u64)*i + 1) : (u64)*i;</code> (or special-case <code>INT64_MIN</code>).</li>
-</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./ .html"> </a> <code>dog/abc/SKIPx.h:67</code> <code>SKIPfeed</code> — slice still formed over <code>k-&gt;off + X(SKIP,len)(pos)</code> with no clamp (<code>off[40]</code> at :20, len can hit 41); cap at <code>sizeof(off)/sizeof(T)</code> like <code>SKIPfinish</code> (:85 has the check).  -<a href="./ .html"> </a> <code>dog/abc/01.h:242-245</code> <code>round_power_of_2</code> — still <code>1UL &lt;&lt; (64 - clz64(a))</code>, UB shift for a in (2^63,2^64); callers <code>MMAPresize4</code>/<code>MMAPmayresize</code> (dog/abc/MMAP.h:25,32) still overflow-prone before rounding.  -<a href="./ .html"> </a> <code>dog/abc/MMAP.c:27-28</code> <code>MMAPresize</code> — non-MREMAP path: <code>munmap(old)</code> failure <code>testc</code>-returns leaking <code>new_mem</code>; unmap the new mapping first.  -<a href="./ .html"> </a> <code>dog/abc/DNS.h:233</code> <code>DNSNameText</code> — <code>u8sFeed(into, label)</code> return still ignored (silent truncation); the dot feed (:228-230) is now $empty-guarded but the label feed is not. Same unchecked <code>u8sFeed(into, label)</code> pattern at DNS.h:170 and :212.  -<a href="./ .html"> </a> <code>dog/abc/UTF8.c:119-121</code> <code>utf8sFeedInt</code> — still <code>u = -*i</code> (INT64_MIN signed-negation UB); compute the magnitude unsigned.
+</p>
+<h3>Blockers and bummers</h3>
+<p>
+None. All require extreme inputs or allocator failure.
+</p>
 </body>
 </html>
