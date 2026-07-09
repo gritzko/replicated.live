@@ -124,15 +124,17 @@ function syndicate(arg) {
   try { src = readFile(srcPath); }
   catch (e) { io.log("rss: cannot read " + srcPath + "\n"); throw "RSSARG"; }
 
-  //  1) render the page, exactly like mark, into $PWD.
+  //  1) render the page, exactly like mark, into $PWD.  head/banner/footer
+  //  chrome is read from $PWD (where we write); links anchor to `root`.
+  const base = io.cwd();
   const opts = {
-    head: tryRead(root + "/head.html"),
-    body: tryRead(root + "/banner.html"),
+    head: tryRead(base + "/head.html"),
+    body: tryRead(base + "/banner.html"),
+    foot: tryRead(base + "/footer.html"),
     root: root,
     exists: function (r) { try { return !!io.stat(root + "/" + r); } catch (e) { return false; } },
   };
   const html = render.renderDoc(src, stemOf(baseName(rel)), opts);
-  const base = io.cwd();
   const outRel = rel.replace(/\.(mkd|md)$/, ".html");
   writeFile(base + "/" + outRel, html);
   io.log("rss: wrote " + outRel + "\n");

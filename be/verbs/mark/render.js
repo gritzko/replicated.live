@@ -392,6 +392,7 @@ function renderDoc(src, title, opts) {
   if (opts && opts.body) rd.lit(opts.body);
   rd.collectRefs(src);
   renderBlocks(rd, src);
+  if (opts && opts.foot) rd.lit(opts.foot);      // footer.html, before </body>
   rd.lit("</body>\n</html>\n");
   return rd.out.join("");
 }

@@ -4,9 +4,9 @@
 //    :mark wiki/StrictMark.mkd                  (in the pager)  same, in $PWD
 //
 //  Mirrors the input's tree-relative path into $PWD (cwd), rewriting .mkd->.html.
-//  The <head>/<body> injects are the source tree's `head.html` / `banner.html`
-//  (the Makefile's --head/--body), so output matches the C `mark`.  Asset links
-//  (stylesheet, images) are probed under $PWD and any missing one is WARNED
+//  The <head>/<body>/footer injects are $PWD's `head.html` / `banner.html` /
+//  `footer.html` — the published site's chrome, read from where we write.  Asset
+//  links (stylesheet, images) are probed under $PWD and any missing one is WARNED
 //  (never fatal).  Pure JS: the render lives in ./render.js.  See [MARK], BE-029.
 "use strict";
 
@@ -61,16 +61,19 @@ function renderOne(arg) {
   try { src = readFile(srcPath); }
   catch (e) { io.log("mark: cannot read " + srcPath + "\n"); throw "MARKARG"; }
 
+  //  head/banner/footer chrome is read from $PWD (the site root we write into),
+  //  not the source tree; link .mkd->.html resolution still anchors to `root`.
+  const base = io.cwd();
   const opts = {
-    head: tryRead(root + "/head.html"),
-    body: tryRead(root + "/banner.html"),
+    head: tryRead(base + "/head.html"),
+    body: tryRead(base + "/banner.html"),
+    foot: tryRead(base + "/footer.html"),
     root: root,
     exists: function (r) { try { return !!io.stat(root + "/" + r); } catch (e) { return false; } },
   };
   const html = render.renderDoc(src, stemOf(baseName(rel)), opts);
 
   const outRel = rel.replace(/\.(mkd|md)$/, ".html");
-  const base = io.cwd();
   writeFile(base + "/" + outRel, html);
   io.log("mark: wrote " + outRel + "\n");
   checkAssets(html, base);
