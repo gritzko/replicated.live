@@ -242,8 +242,9 @@ function classify(line) {
   if (/^ *- +/.test(slot) || /^ *-  ?$/.test(slot) || slot === " -  " || slot === "-   ") {
     if (/^ *-/.test(slot)) { b.marker = "ulist"; b.content = i + 4; return b; }
   }
-  var om = /^([0-9]{1,3})\./.exec(rest);
-  if (om && (rest.length === om[0].length || rest[om[0].length] === " ")) {
+  //  numbered marker (MKDTB `number`): 1-3 digits then '.', spaces padding the
+  //  rest of the EXACTLY-4-char slot — nothing wider or narrower is a marker.
+  if (slot.length === 4 && /^ *[0-9]{1,3}\. *$/.test(slot)) {
     b.marker = "olist"; b.content = i + 4; return b;
   }
   return b;
