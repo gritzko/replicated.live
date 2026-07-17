@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Status</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>Status: one quad per path — track·base·patch·wt against root</h1>
+<p>
+Status reporting is unified across <code>status</code>, <a href="GET.html">GET</a>, <a href="POST.html">POST</a> and <a href="PATCH.html">PATCH</a>: one vocabulary for file rows and commit ahead/behind, replacing the per-verb noun zoo of <a href="Dirty.html">Dirty</a>. Four states of a path — the tracked tip, the base, the patched-in lines, the worktree bytes — each compare to the <strong>root</strong>, the nearest common ancestor of track and base. Each comparison yields one of four relations, so a path displays as a quad of chars; all-same <code>....</code> rows are omitted. Implementation: <a href="../todo/BRO/BRO-030.html">/todo/BRO/BRO-030</a>.
+</p>
+<h2>The four columns</h2>
+<p>
+The columns are the four states a path can live in, in fixed order; position is authoritative, color is decoration. Patch and worktree build on base, so they are ahead of or diverged from root by construction.
+</p>
+<ul>
+<li>1st, the tracked ref tip (blue): where a sync would take the wt — the recentmost <code>get</code> row's target line.</li>
+<li>2nd, the base commit (green): the wt's baseline tree — the recentmost <code>get</code>/<code>post</code> row.</li>
+<li>3rd, the patched-in lines (yellow): refs absorbed by <a href="PATCH.html">PATCH</a> since the base, pending for the next post.</li>
+<li>4th, the worktree (orange): the bytes on disk, compared to the BASE (not root) — the local-dirt axis, so a committed change reads <code>.v..</code> and only uncommitted work lights the 4th char.</li>
+</ul>
+<h2>The four relations</h2>
+<p>
+Per path, the track/base/patch columns compare to root's entry and the wt column to BASE's (local dirt); the relation is one char of the greppable ASCII canon <code>.xov</code>. A gitlink compares exactly like a blob, so an advanced submodule is a <code>v</code> like any file. A tty renders the Unicode glyphs (<code>x</code>→<code>∅</code> removed, <code>o</code>→<code>●</code> created, <code>v</code>→<code>↑</code> advanced); plain/piped output is always the ASCII canon.
+</p>
+<ul>
+<li><code>.</code> same: the hash equals root's entry, or the path is absent in both.</li>
+<li><code>x</code> removed: present in root, absent in the column.</li>
+<li><code>o</code> created: absent in root, present in the column.</li>
+<li><code>v</code> advanced: present in both, different hash — changed, no ancestry implied.</li>
+</ul>
+<h2>Style annotations</h2>
+<p>
+Two facts do not reduce to a relation and ride as styles on the wt char: staging provenance and merge outcome. In plain output the style IS a char change, so the fact greps; a tty adds color on top.
+</p>
+<ul>
+<li>Staged (an explicit <code>put</code>/<code>delete</code> row backs the wt relation): UPPERCASE in plain — <code>put</code> is <code>...V</code>, <code>del</code> is <code>...X</code>; a tty INVERTS the wt char (column color as bg, RGB-white glyph).</li>
+<li>Conflicted (the weave left markers): plain spells the wt char <code>!</code>; a tty inverts it to white-on-red — a conflict must not be missable.</li>
+<li>A tty glyph carries its column's truecolor (blue/green/amber/orange for track/base/patch/wt); <code>.</code> is unpainted; white is RGB, never the theme-remappable palette white.</li>
+</ul>
+<h2>Commit rows use the same relations</h2>
+<p>
+Ahead/behind is the same comparison one level up: commits against root instead of tree entries, so the old <code>post</code>/<code>miss</code> divergence rows join the same vocabulary.
+</p>
+<ul>
+<li>A commit row marks <code>o</code> in every column whose tip reaches it: a local unposted commit is <code>.o..</code>, an unabsorbed track commit <code>o...</code>; a tty renders that <code>o</code> as <code>✔</code> (&quot;present in this line&quot;), never the file-row <code>●</code>.</li>
+<li>A commit already absorbed into the wt is patch-column territory, <code>o.o.</code> — no longer <code>miss</code> (see <a href="../todo/STATUS/STATUS-012.html">/todo/STATUS/STATUS-012</a>).</li>
+</ul>
+<h2>Old vocabulary mapped</h2>
+<p>
+Every <a href="Dirty.html">Dirty</a> noun is a named quad (plus a style), so the old 3-char statuses become display aliases at most; each verb reports the transitions it produced through the same renderer.
+</p>
+<ul>
+<li><code>mod</code> = <code>...v</code>, <code>put</code> = <code>...V</code>, <code>unk</code> = <code>...o</code>, <code>new</code> (staged add) = <code>...O</code>, <code>mis</code> = <code>...x</code>, <code>del</code> = <code>...X</code>.</li>
+<li><code>pat</code> and <code>mrg</code> are both <code>..vv</code> — the overlay-vs-weave distinction is outcome detail, no longer a status; <code>cnf</code>/<code>con</code> = <code>..v!</code>.</li>
+<li><code>v...</code> is a theirs-side change pending sync; <code>v..v</code> both sides touched — the conflict candidates; <code>adv</code> = a gitlink <code>v</code>.</li>
+</ul>
+<h2>Open edges</h2>
+<p>
+The quad is settled and is THE default output of <code>status</code>, <a href="GET.html">GET</a>, <a href="POST.html">POST</a> and <a href="PATCH.html">PATCH</a> reports (not a flag); a few renderings are fixed by implementation and listed here for the record.
+</p>
+<ul>
+<li>Collapse rule: several patched-in lines share the one yellow column newest-wins (a later absorption shadows an earlier one).</li>
+<li>Moves: the dst row's path column spells <code>src#dst</code>, so the <code>o</code>/<code>x</code> pair does not read as an unrelated delete+create.</li>
+<li>The status summary line's count segments are per-column tallies (<code>N track, N base, N patch, N wt, N staged, N con</code>), zeros omitted.</li>
+</ul>
+<h2>Degenerate roots</h2>
+<p>
+The corner cases reduce cleanly: root=base and root=track just blank one side of the quad, a detached wt tracks its pin, and no common ancestor is not a status at all.
+</p>
+<ul>
+<li>Detached: track = the pinned hash itself (<code>get ?&lt;sha&gt;</code>), so the track column is that commit and root = LCA as usual.</li>
+<li>Root=base (all-behind) and root=track (all-ahead) need nothing special — the elder side's column reads all-<code>.</code>.</li>
+<li>No common ancestor between track and base is a broken tree — an error to refuse, never a quad to render.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

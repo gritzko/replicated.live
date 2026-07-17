@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>git</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>git-compatible object store</h1>
+<figure class="left w40">
+<img src="./img/relativity.jpg#leftw40" alt="Escher: Relativity">
+<figcaption>Escher: Relativity</figcaption>
+</figure>
+<p>
+<code>git</code> is <strong>the</strong> industry standard for revision control for 20 years or so while <code>git</code> CLI is equally widely hated. No need to list <code>git</code>'s quirks all over again, we know it is a jungle. Its labyrinthine UI is such a contrast to its own key abstraction: the <strong>blob, tree and commit model</strong> that I can only compare to IP and HTTP in its power and minimalism. In fact, that brilliant <a href="https://en.wikipedia.org/wiki/Hourglass_model">hourglass waist</a> architecture let <code>git</code> survive decades of code accretion, use and abuse while staying on top.
+</p>
+<p>
+Beagle is a 100% git-compatible SCM for modern workflows. As of now, Beagle employs pack logs for object storage, which are pretty close to what <code>git</code> does, except append-only and simplified. To get some performance, there are LSM-ish sorted indexes, which are totally Databases 101. Metadata is kept in plain text files: ref logs, worktree states, these are mainly lists of hashes with annotations. Assuming this very basic architecture gets the Big-O right, it will take some time to find its limits of scalability. At which point changes can always be made, as long as the &quot;waist&quot; interface holds.
+</p>
+<p>
+There have been attempts to reimplement <code>git</code> in Rust which I believe are less interesting. There is no need to do so, like there is no need to reimplement MS Internet Explorer in Rust. Just take HTTP and HTML and work from there. That codebase is not the best part of the story. <code>git</code>'s repo data formats also evolved by code accretion with 100% backward compatibility;  such codebases are almost inevitably ugly.
+</p>
+<p>
+I toyed with cloning and updating various larger <code>git</code> repos, including the Linux kernel. It worked, and the performance  bottleneck was on the server side. In the long run, there is no need to work with even larger repos because Beagle can glue together a bunch of smaller repos to form a larger sharded (mono)repo through its <a href="./polyrepo.html">seamless submodules</a> mechanics.
+</p>
+<p>
+In part because of that submodule machinery, Beagle prefers sharded stores that host multiple repos. Ideally, you only have one store in <code>$HOME/.be/</code> while all the worktrees in the system are &quot;flat&quot;. Another strong argument for this approach is tens of agentic worktrees per a repo, being forked and rm-rf'd all the time. We do not want to copy all the <code>git</code> objects over each and every time we do it, that makes no sense. Objects are identified by their hash, they are immutable, one store is enough.
+</p>
+<p>
+This rebalanced <code>git</code> model now looks subtly different from the original. As a result, Beagle deals with the following stack of entities:
+</p>
+<ol>
+<li><strong>Store</strong> is the shared <code>git</code> object store of blobs, trees, and commits, sharded by a <strong>repo</strong>. Most often, at <code>$HOME/.be/</code>. The most boring part of it all, nothing happens here.<ul>
+<li>use <code>:du</code> to check the disk usage, per-repo.</li>
+</ul>
+</li>
+<li><strong>Project</strong> is something we are working on; it has its rules,  processes, wikis, issues and tickets, all the GitHub-style  metadata. A project is a repo, but not vice-versa. A project may coordinate many repos. <ul>
+<li>use <code>:todo</code> (TUI) or <code>jab todo</code> to see open tickets;</li>
+<li><code>:work</code> lists the active worktrees;</li>
+<li>the project is the top repo, so all the repo verbs apply.</li>
+</ul>
+</li>
+<li><strong>Repo</strong> is a regular <code>git</code>/GitHub repo, a versioned file tree with its commit history, mostly source code.<ul>
+<li><code>:commit #33295788</code> - read the commit object,</li>
+<li><code>:tree #a9617facfbd03debba40a2c4b091fa74d9066064</code>,</li>
+<li><code>:blob main.js#33295788</code> - read a blob,</li>
+<li><code>:log</code> - read the commit log, also <code>:log ?branch</code> or <code>:log #332957</code>, or just click around in TUI.</li>
+</ul>
+</li>
+<li><strong>Worktree</strong> is a snapshot of a repo, an editable file tree, often with submodule subtrees in it. It is OK to have tens of outstanding worktrees: some wait for blockers, others for decisions, or simply for their turn.<ul>
+<li><code>:work</code> list the active worktrees,</li>
+<li><code>://ABC-123</code> switches to a worktree,</li>
+<li><code>:get //ABC-123</code> update from another worktree,</li>
+<li><code>:get</code> update the current three from the upstream,</li>
+<li><code>:put dir/file.js</code> stage a file,</li>
+<li><code>:post &quot;my changes&quot;</code> commit,</li>
+<li><code>:work ABC-123</code> create a worktree,</li>
+<li><code>:done ABC-123</code> merge, rm -rf, close the ticket,</li>
+<li><code>:done</code> close the current worktree itself.</li>
+</ul>
+</li>
+</ol>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

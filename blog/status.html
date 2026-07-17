@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>status</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>Order and Chaos</h1>
+<figure class="left w40">
+<img src="./img/order_and_chaos.jpg#leftw40" alt="M.C.Escher: Order and Chaos">
+<figcaption>M.C.Escher: Order and Chaos</figcaption>
+</figure>
+<p>
+The nature of our work is changing. Software development is no longer a chain-of-thought code-it-all process, but increasingly is a work of coordinating, directing and selecting. Beagle is a git-compatible revision control system that tunes the underlying <a href="./git.html">git model</a> to this new reality.  This short post is one of the series on How Beagle Works.
+</p>
+<p>
+The way I work now can be very messy, having tens of in-flight worktrees is very much the norm. Some are waiting for a blocker, others need some more thinking, yet more are lower priority batches waiting for their turn. In this environment, sorting things out can be challenging. Some say, agents can do that, but in my experience, some amount of steering is necessary to get anything but a random result, and commit/merge gates are certainly the place to do so.
+</p>
+<p>
+The minimal situational awareness is what the <code>status</code> command reports, so let's talk about that. The state of a file can be, in the first approximation, one of four:
+</p>
+<figure class="right w40">
+<img src="./img/status.png#rightw40" alt="be status output">
+<figcaption>be status output</figcaption>
+</figure>
+<ol>
+<li>unchanged: <code>.</code></li>
+<li>modified: <code>↑</code></li>
+<li>created: <code>●</code></li>
+<li>deleted: <code>∅</code></li>
+</ol>
+<p>
+That only reflects the difference between the worktree and its <strong>base</strong> commit; unchanged worktree is exactly the base. But the state of a file in Beagle actually involves four trees:
+</p>
+<ol>
+<li>the base tree, i.e. the pristine state,</li>
+<li>the tracked tree, i.e. the upstream branch/remote/ref,</li>
+<li>local changes,</li>
+<li>finally, trees patched in.</li>
+</ol>
+<p>
+The tracked tree is typically our upstream, so it has a lot of value to know whether something changed in there, to avoid any unnecessary rebases, etc. We keep an eye on the upstream at all times!
+</p>
+<p>
+The patch-in thing is the way Beagle does merges and rebases. The idea is that blindly merging synthetic tree states (merges and rebases) is bad-bad-bad because no one actually checked them. The idiomatic loop is get-change-test-post. Hence, any other trees get merged in by the <code>patch</code> command, then edited, tested, and eventually committed with the <code>post</code> command. The worktree is like a cauldron where you put your ingredients  to make your stew.
+</p>
+<p>
+What does it mean in practice though? It means, a file can be in one of 256 states of dirtiness. How? For the base tree and the tracked tree, there is their recentmost common ancestor tree (aka &quot;root&quot;). So, any file in the base, tracked or patched-in tree can be in one of four states: same, changed, created, deleted. Plus, there are local changes, relative to the base tree. That produces <code>4**4=256</code> shades of a file being <strong>somewhat changed</strong>. Like: committed, but not pushed yet. Or: freshly committed. Or: locally edited <strong>and</strong> patched by a merge, but not committed yet.
+</p>
+<p>
+These are all crucial states that one may want to check. But, can we invent 256 terms (adjectives?) to use them consistently? Sure no.
+</p>
+<p>
+For that reason, Beagle expresses that quad-state as four colored chars: 
+</p>
+<ol>
+<li>tracked tree, blue, </li>
+<li>base tree, green,</li>
+<li>patched in tree, amber,</li>
+<li>worktree, orange.</li>
+</ol>
+<p>
+That explains the picture:
+</p>
+<ul>
+<li>oranges are new files;</li>
+<li>green apples are newly committed, not pushed;</li>
+<li>green arrows are committed not pushed yet;</li>
+<li>orange arrows are uncommitted changes;</li>
+<li>green ∅ is a file that was deleted locally,  but that is not pushed yet;</li>
+<li>inverse-colored entries are staged edits.</li>
+</ul>
+<p>
+<code>status</code> uses the same four slots (track-base-patch-work) to  describe the commit delta between the trees; a commit is  ✔ checked in every tree that has it already.
+</p>
+<p>
+This kind of awareness certainly helps when navigating two levels of in-progress worktrees locally on my laptop, all upstreamed to the main trunk tree.  Just 104 worktree dirs, not much. No branches, no stable/testing/edge, YOLO all around.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>
