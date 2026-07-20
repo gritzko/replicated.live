@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-024</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>POST-024 <a href="./HIGH.html">HIGH</a>: a tree-URI post target is mis-slotted as a path scope — silent no-op + misleading POSTNONE</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+From <code>work/ABC-008/abc</code>, <code>jab post file:../../../libdog/abc/</code> answered <code>POSTNONE: no changes since</code> — the wrong diagnosis (the wt HAD a fresh commit; the TARGET was the problem).
+</p>
+<ul>
+<li><code>file:&lt;rel&gt;</code> carries a scheme but NO authority, so post's slot parse (verbs/post/post.js parseSlots, DIS-054 Host&gt;Query&gt;Path) reads its PATH as a commit path SCOPE, not a target.</li>
+<li>The <code>../…</code> scope escapes the wt, silently matches nothing, and the empty-commit gate (post.js ~647) throws <code>POSTNONE: no changes since base</code> — user-hostile misdirection.</li>
+<li>Wire push (GIT-013) serves ssh:/http(s): Host slots only; a local <code>file:</code>/<code>be://</code> tree target has NO leg at all.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>a scheme'd arg post cannot serve refuses LOUDLY with its own code (BE-003 spirit: one uniform line naming the unsupported target), never silently re-slots as a path scope.</li>
+<li>a <code>..</code>-climbing path-scope arg throws NAVESCAPE, never a silent empty scope.</li>
+<li>(design, cross-link PATCH-011) the wt→orig merge flow goes through patch-with-fetch, NOT post: post to a local tree target stays refused.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>URI classification via uri._parse / the URI class only (<a href="/meta/work.html">work</a> bans regex/manual URI parsing); minimal diff in verbs/post/post.js.</li>
+<li>repro test first; existing tests untouched.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>POSTSCHEME gate fires only on scheme'd args with TARGET shape (authority/query/path-slot path) — scheme-lexing message words (<code>T:v2</code>, <code>POST-024: msg</code>) stay prose, pinned by a control case.</li>
+<li><code>be://host</code> refuses BEFORE the GIT-013 Host-slot branch; narrow's value stays byte-identical (resolveInTree validates, never rewrites).</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> repro test test/post/target-refuse (red-first on the exact ticket bug; POSTSCHEME for file:&lt;rel&gt;/be://…/file:/abs, NAVESCAPE for the climb, store tip intact, colon-message control)</li>
+<li><a href="./v.html">v</a> slot parse: scheme'd non-wire arg → POSTSCHEME; climbing scope → NAVESCAPE (verbs/post/post.js parseSlots)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>change sits UNCOMMITTED in work/POST-024, awaiting review/merge; suite there 171/172 (the 1 red = pre-existing be-js-get-oddname, JS-096 area), orchestrator re-ran the new test green.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

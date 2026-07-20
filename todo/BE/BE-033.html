@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-033</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-033 <a href="./DONE.html">DONE</a>: scheme-less <code>//host</code> still routes to cached remote — spec says worktree, period</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Ruling 2026-07-09 (<a href="../../wiki/URI.html">URI</a>, Invariants): a scheme-less <code>//name</code> is ALWAYS a worktree; a remote URI always carries its transport scheme. The code decides local-vs-remote by EXISTENCE, not shape: <code>core/loop.js:197-201</code> (<code>authorityRepo</code>) lets a dotted <code>//host</code> or a <code>_isCachedRemote</code> hit fall through to the wire, NAVNONE only for dotless non-cached misses; <code>verbs/get/get.js:111</code> classifies <code>cached = !hasScheme &amp;&amp; hasAuth</code> and <code>seedCached</code> (get.js:248) resets from the remote-tracking tip. The get.js D7 comment still quotes the pre-ruling GET.mkd (&quot;uses the cached tip if no scheme set&quot;) — amended in the wiki this same day.
+</p>
+<h3>Goals</h3>
+<ul>
+<li>/X` never reaches the wire or the remote-tracking cache: worktree hit or NAVNONE, for every verb.</li>
+<li>worktree named like a remote (<code>work/origin</code>) resolves as the worktree, deterministically.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>ched remote reads (old <code>be head //origin</code>, <code>//origin?feat</code> resets) need their NEW spelling — a ruling, not silent removal; kin of the landed DIS-060 verb/scheme conflation.</li>
+<li>sh/fetch forms are already scheme-ful in the wiki; only the cached-read spelling is open.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>RULING (gritzko 2026-07-09): cached-remote reads are NOT USED IN PRACTICE — drop the feature entirely, no replacement spelling. Scheme-less <code>//X</code> = wtdir hit or NAVNONE, every verb.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> Dropped 2026-07-09 (uncommitted): <code>_isCachedRemote</code> + dotted fall-through gone (loop.js), get.js D7 <code>cached</code>+<code>seedCached</code> gone, head.js <code>peekCached</code> gone, put.js scheme-less <code>//host</code> push form gone; scheme-ful push/fetch + bare <code>be head</code> cached counterpart kept. <code>jab cat //nosuchtree/x</code> → NAVNONE, no wire.</li>
+<li><a href="./x.html">x</a> Repro moot: the routing no longer exists to race a worktree name against a cache entry.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>RULED (gritzko 2026-07-09): drop the cached-feature tests. Deleted <code>test/wire/head-cached/</code> and <code>test/get/cached/</code>; <code>nav-navnone</code> part b FLIPPED to assert the new rule (dotted <code>//host</code> NAVNONEs too) instead of deleting, keeping part a's swallowed-authority coverage. Suite after: 1 fail = pre-existing bro-view only.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

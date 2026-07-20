@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-028</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-028 <a href="./DONE.html">DONE</a>: <code>classifyDir</code> nav scope escapes the wt (<code>ls</code> <code>relDir</code> lexical prefix)</h1>
+<p>
+<code>shared/classify.js classifyDir(be, …, scopePfx)</code> opens <code>scopeAbs = join(wtRoot, scopePfx.slice(0,-1))</code> and <code>readdir</code>s it (<code>:462</code>, <code>:502</code>, <code>:506</code>), where <code>scopePfx</code> arrives from a nav URI via <code>views/ls/ls.js relDir()</code> (<code>:105</code>, <code>:146</code>) — a LEXICAL prefix computation that <code>..</code> defeats. So <code>ls //name/../../etc</code> (or <code>ls:../../etc</code>) yields <code>scopePfx = &quot;../../etc/&quot;</code>, then <code>readdir(join(wtRoot, scopePfx))</code> escapes the worktree. The exact defeated-by-<code>..</code> lexical-prefix pattern <a href="BE-011.html">BE-011</a> removed from <code>wtdir</code>, surviving in the <code>ls</code> scope path; found in the BE-011 follow-up wt-open audit. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Audit (2026-07-08): <code>classify.js:462</code> <code>scopeAbs = scopePfx ? join(wtRoot, scopePfx.slice(0,-1)) : wtRoot</code>, then <code>readdir(scopeAbs)</code> (<code>:502</code>), <code>lstat(join(scopeAbs, nm))</code> (<code>:506</code>).</li>
+<li><code>ls.js:146</code> <code>scopePfx = relDir(repo.wt, absScope)</code> — <code>relDir</code> (<code>:105</code>) is a lexical prefix strip, no <code>..</code> collapse; <code>absScope</code> itself may already carry <code>..</code> from the nav URI.</li>
+<li><code>path.js</code> now has <code>resolveInTree</code>/<code>wtJoin</code> (throw NAVESCAPE) and <code>discover.resolve()</code> (nav-URI → confined abs).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>An <code>ls</code> scope that resolves outside the wt is REFUSED (NAVESCAPE), never <code>readdir</code>'d.</li>
+<li>Confine <code>scopePfx</code> via <code>resolveInTree(&quot;&quot;, scopePfx)</code> in <code>classifyDir</code>, OR have <code>ls.js</code>/<code>list.js</code> build <code>absScope</code> through <code>discover.resolve(base, uri)</code> instead of <code>join(topWt, uri)</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first (<code>ls //name/../../etc</code> / <code>ls:../../x</code> → refusal).</li>
+<li>URI slots via the URI class; no hand-rolled normalization beyond <code>shared/util/path.js</code>. Same tree (no worktree).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>BOTH layers: entry-point confine + a defensive floor (belt &amp; suspenders).</li>
+<li>Entry point: <code>ls.js</code>/<code>list.js</code> compose the wt-relative scope via <code>pathlib.wtJoin(topWt, uri)</code> (resolveInTree-confine + join, THROWS NAVESCAPE on climb), replacing the lexical <code>join(topWt, uri)</code>.  Chose <code>wtJoin</code> over <code>resolve()</code>: the loop's <code>authorityRepo</code> already refuses/strips any <code>//authority</code> (the <code>//name/..</code> forms ARE <a href="BE-011.html">BE-011</a>'s NAVESCAPE), so inside <code>ls</code> the scope is a plain wt-relative path that must confine to the OWNING <code>topWt</code> — <code>wtJoin</code> does exactly that, whereas <code>resolve(&quot;&quot;,…)</code> re-roots an ABSOLUTE lsr recursion child against SRC_ROOT (wrong).  The absolute branch (a trusted lsr child — real in-tree dir names) is left as-is.</li>
+<li>Defensive floor: <code>classifyDir</code> runs <code>scopePfx</code> through <code>pathlib.resolveInTree(&quot;&quot;, scopePfx)</code> before the <code>readdir</code>/<code>lstat</code>, so ANY caller handing a <code>..</code>-laden scope is refused (NAVESCAPE), never readdir'd outside the wt.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled>  Repro: <code>ls</code> with a <code>..</code> scope escapes today (RED) — <code>test/ls/scope-escape/run.sh</code>.</li>
+<li class="done"><input type="checkbox" checked disabled>  Confine scope via <code>wtJoin</code>/<code>resolveInTree</code>; suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>RED repro <code>test/ls/scope-escape/run.sh</code>: <code>ls ../outside</code> / <code>ls ls:../outside</code> inside a <code>root</code> wt escaped and listed a SIBLING <code>outside/secret.txt</code> (exit 0); now REFUSED with NAVESCAPE, no leak.</li>
+<li>Fix: entry-point <code>wtJoin</code> confine in <code>views/ls/ls.js</code> + <code>views/list/list.js</code>; defensive <code>resolveInTree</code> floor in <code>shared/classify.js</code> <code>classifyDir</code>.</li>
+<li>GREEN: <code>test/ls/*</code>, <code>test/list/e2e</code>, <code>test/status/*</code>, <code>test/spot/submount</code> all pass (the two <code>submount</code> cases SKIP without git-over-ssh; both PASS when run under $HOME).</li>
+<li>Working tree left DIRTY for review — NOT committed (no hashlets).</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

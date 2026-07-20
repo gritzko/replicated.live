@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-047</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-047 <a href="./OPEN.html">OPEN</a>: <code>vim</code>/<code>nvim</code> verbs — edit the currently open file, return to the pager, refresh</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The pager can view and click but not edit; dropping to a shell to edit the file on screen breaks the flow.
+</p>
+<ul>
+<li>Verbs take (context, arg) and resolve via resolve(context, arg) (BE-030); a typed <code>:vim</code> inherits the view's context — the current file rides the context URI's path (BE-046 launch-context threading included).</li>
+<li>The pager runs raw-mode fullscreen on /dev/tty (views/bro/pager.js); an editor needs the tty handed over (cooked mode, alt-screen released) and taken back on exit.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>vim</code> and <code>nvim</code> verbs (ONE shared implementation, two names): open the editor on the currently open file (<code>:vim</code> bare = the view's file; <code>vim &lt;path&gt;</code> = an explicit file, context-resolved).</li>
+<li>on editor exit: return to the pager and REFRESH the current view (re-drive its spell — the edit must show).</li>
+<li>outside the pager (plain CLI <code>jab vim &lt;file&gt;</code>): just exec the editor on the resolved file.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>the fs path comes from resolve(context, arg) — confined, NAVESCAPE on climbs; no raw path math, no regex URI parsing.</li>
+<li>needs a child-process + tty handover story — survey the existing exec/spawn bindings (shared/wire.js local/ssh sessions) FIRST; if jab lacks a tty-passthrough exec, that is a BLOCKER to report, not to improvise around.</li>
+<li>editor binary = the verb's own name (vim → <code>vim</code>, nvim → <code>nvim</code>); no $EDITOR magic in this ticket.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>bindings exist, no blocker: io.spawnFds (execvp, -1 = inherit, /dev/tty handover) + io.reap (wait); tty.raw/cook stateless; wire.js already spawns this way.</li>
+<li>editor gate = a <code>fn.tty</code> marker on the handler (the _isMutation pattern); the pager owns suspend/resume (fd + termios), the VERB owns spawn+wait; binary = be.verb (vim|nvim, one impl).</li>
+<li>new <code>be.context</code> (the nav context URI on mintBe) so a bare editor verb sees the view's file, not just its dir.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> survey exec/tty bindings (io.spawnFds/io.reap/tty.raw|cook|openpty — API.md)</li>
+<li><a href="./v.html">v</a> the shared verb verbs/vim/vim.js + the 4-line nvim alias</li>
+<li><a href="./v.html">v</a> pager edge: <em>suspend/</em>resume + _editSpell → refresh re-drives the view spell</li>
+<li><a href="./v.html">v</a> repro test be-js-bro-vim, 3 legs (fake-PATH CLI e2e incl NAVESCAPE + VIMNONE; in-process openpty order+refresh; python pty.fork full stack)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>change sits UNCOMMITTED in work/BE-047 (3 mod: core/loop.js, views/bro/bro.js, views/bro/pager.js; 2 new verbs; 3 test files); suite 171/172 (the 1 red = pre-existing be-js-get-oddname), orchestrator re-ran the new test green.</li>
+<li>UX nuance (needs a ruling?): only a NAV'D view carries a FILE in its context — <code>:vim</code> right after <code>jab cat f</code> (launch view, no navigation yet) refuses VIMNONE, per the context-only-changes-by-navigation law.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

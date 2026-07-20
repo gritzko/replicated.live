@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-072</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-072 <a href="./DONE.html">DONE</a>: a submodule must track the parent's pin URI <code>//WT/path/to/sub</code>; kill the synthetic pin-branches</h1>
+<p>
+RULED 2026-07-15 (gritzko, law #4 of <a href="DIS-071.html">DIS-071</a>): a submodule tracks the parent's PIN, addressed by the child worktree's own local URI <code>//WT/path/to/sub</code> — the same syntax a worktree tracks — set by the parent's first <code>get</code> and refreshed by any later parent update; the sub's own commit leaves the pin behind and DETACHES it (bare-hash post records, <a href="DIS-075.html">DIS-075</a>), and ONLY the parent's <code>get</code>/<code>post</code> re-attaches it by writing a fresh <code>//WT/path/to/sub#&lt;hash&gt;</code> record. be/ JS instead mints a synthetic branch <code>/child/.parent/.grandparent/gp_branch</code> (submount.js:109-116 syntheticBranch over branch.js:64-68 sub()), records it as an ordinary ATTACHED branch (submount.js:287), and lets the child's own commit advance that ref (post.js:720-721) — so a sub never detaches and the parent never refreshes anything. <a href="../../wiki/Submodules.html">Submodules</a>:7-8,28,49 specs the synthetic branch and is rewritten here. Carries the pin half of the stale <a href="DIS-061.html">DIS-061</a> (whose 2026-07-13 pin-reflection ruling — materialized pin refs the parent maintains — is overruled by the URI model).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The sub is mounted on an invented branch nobody owns; the pin relation it should track exists only as a comparison in subs.js.
+</p>
+<ul>
+<li>syntheticBranch composes <code>/&lt;title&gt;/.&lt;parent&gt;[/&lt;parent_branch&gt;]</code> (submount.js:109-116) via branch.js:64-68 sub(); the mount records it as <code>get ?&lt;synthetic&gt;#&lt;pin&gt;</code> (submount.js:287).</li>
+<li>The child's own commit advances the child's ref — att.detached is false for a mount, so post.js:720-721 fires.</li>
+<li><a href="../../wiki/Submodules.html">Submodules</a>:33 says the exact opposite: &quot;the sub's pin ref is refreshed by the PARENT's commit, never by the child's&quot;.</li>
+<li>Nothing anywhere refreshes a pin-branch ref on a parent base move: the only ref writers are post.js:225-231 advanceRef and put.js:96,110.</li>
+<li>subs.enumerate already compares the sub's curTip against the parent's gitlink for the adv/ok/stale buckets (subs.js:84-122) — that comparison IS the pin relation the track URI should name.</li>
+<li>Nested subs are FLAT under the owning wt (RULED 2026-07-15): <code>//ABC-123/lib/abc/dog</code>, so the <code>.parent/.grandparent</code> chain (<a href="../../wiki/Submodules.html">Submodules</a>:49) has no successor.</li>
+<li><a href="DIS-063.html">DIS-063</a> wants a fork to INHERIT the source's pin-branch — under this model it inherits the source's track URI instead; reconcile at land time.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+The pin is a URI the parent writes, not a branch the child owns.
+</p>
+<ul>
+<li>The mount records <code>get //WT/path/to/sub#&lt;pin&gt;</code>: the pin resolves through the parent's gitlink — no refs entry, no synthetic branch, no <code>.parent</code> chain.</li>
+<li>A sub's own commit records a bare-hash post row (detached, <a href="DIS-075.html">DIS-075</a>) and moves NO ref; status keeps reporting it &quot;adv&quot; off the same pin comparison.</li>
+<li>The parent's <code>get</code>/<code>post</code> re-attaches each immediate child by writing a fresh <code>//WT/path/to/sub#&lt;newpin&gt;</code> record into the child's wtlog.</li>
+<li>Delete branch.js:sub() + submount.js:syntheticBranch; rewrite <a href="../../wiki/Submodules.html">Submodules</a>:7-8,28,33,49 and its Store-layout section to the pin-URI model.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Old mounts must survive the flip, and the orphaned refs are somebody else's problem.
+</p>
+<ul>
+<li>Read-compat: existing sub wtlogs carry <code>?/child/.parent/br#pin</code> rows and must still parse, re-anchoring on the next parent move (<a href="DIS-071.html">DIS-071</a> law).</li>
+<li>Synthetic-branch refs already written into shards become orphans; a tombstone sweep is OUT of scope — file a follow-up if they hurt.</li>
+<li>Depends on <a href="DIS-071.html">DIS-071</a> (row grammar) and <a href="DIS-075.html">DIS-075</a> (detach shape); the commit/advance split rides <a href="DIS-076.html">DIS-076</a>.</li>
+<li>Repro-first; a fixture seeds with <code>jab get file:&lt;path&gt;</code> (the working wt-clone form), 2 levels deep.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(none yet — the pin-URI shape is RULED, the resolution path through the parent's gitlink is not designed)</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: mount, commit in the sub → sub detached, NO ref moved; parent post → sub re-attached at the new pin</li>
+<li><a href="./ .html"> </a> repro: sub-of-sub tracks <code>//WT/lib/abc/dog</code> flat, not a <code>.parent/.grandparent</code> chain</li>
+<li><a href="./ .html"> </a> submount: record the pin URI; delete syntheticBranch + branch.js:sub()</li>
+<li><a href="./ .html"> </a> post/get: the parent refreshes each immediate child's track record on ANY base move</li>
+<li><a href="./ .html"> </a> <a href="../../wiki/Submodules.html">Submodules</a> rewrite (:7-8,28,33,49 + Store layout)</li>
+<li><a href="./ .html"> </a> test inventory: SUBS legs pinning synthetic branches; request the user</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="../SUBS/SUBS-040.html">SUBS-040</a> I2 and <a href="DIS-058.html">DIS-058</a> both carry the synthetic-branch model as settled — each needs a ruling note pointing here.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FILED 2026-07-15 (track/base audit); nothing landed yet.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

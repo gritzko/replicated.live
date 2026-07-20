@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PATCH-013</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PATCH-013 <a href="./OPEN.html">OPEN</a>: VERIFY patch stamps every affected file per the DIS-057 band — fix any gap</h1>
+<p>
+INVARIANT (gritzko, 2026-07-17): every file affected by get/patch and every file undirtied by post carries that wtlog record's ts as its mtime (patch: the DIS-057 band slot — row ceil-2ms <code>pat</code> / ceil-1ms <code>mrg</code> / ceil <code>cnf</code>), so status confirms outcomes with no content reads. patch HAS a stamp site (<code>be/verbs/patch/patch.js:417</code>, BE-011) — this ticket VERIFIES full coverage and exactness, and fixes what falls short. Siblings: <a href="/todo/GET/GET-049.html">GET-049</a> (get stamps nothing), <a href="/todo/POST/POST-029.html">POST-029</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The DIS-057 band is reconstructed by <code>classify.patchStamps</code> (<code>be/shared/classify.js:176</code>) via <code>ulog.ronStepMs</code> — a stamp that is off by even the ms packing makes the band miss and the outcome silently degrades to <code>mod</code> (the DIS-057 REOPEN incident class).
+</p>
+<ul>
+<li>Verify EVERY file the patch touched gets stamped: clean applies, merges, conflicts, take-theirs ADDS (base-absent paths), files under dirs, symlinks.</li>
+<li>Verify the stamp value: exact band slot of the patch ROW ts (<code>ronStepMs(t,-2/-1/0)</code>), row appended before stamping.</li>
+<li>Verify status reads them back: pat/mrg/cnf buckets with zero content reads on clean applies (STATUS-011 fast path must NOT swallow band stamps into <code>ok</code> — the <code>!pb</code> guard).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+A repro test that patches a wt with all four outcome classes and asserts on-disk mtimes == the reconstructed band, and that status buckets match with no content read for clean applies. Fix any file class the stamp loop misses.
+</p>
+<h3>Constraints</h3>
+<ul>
+<li>DIS-057 semantics are the spec — this ticket verifies conformance, it does NOT redesign the band.</li>
+<li>Files the patch did NOT write keep their mtimes.</li>
+<li>Minimal diff in patch.js if a gap is found; repro first.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>ONE scenario case (<code>test/patch/stampband/</code>, run.sh + assert.js) drives a REAL <code>jab patch</code> over all classes at once, then asserts the band off the PERSISTED patch row (<code>ulog.ronStepMs(row.ts, -2/-1/0)</code> vs <code>io.lstat</code> mtimes) and re-runs classify with an io.open hook.</li>
+<li>The STAMP side verified fully correct — the gap found was READ-side: classify.js:418-428 ran <code>wtEqBase</code> (a content read) on every band-stamped in-base file, so a clean apply paid one io.open, violating the 2026-07-17 ruling's &quot;no content read on clean applies&quot;. Fix is at the band READ, not patch.js:417 (nothing was unstamped/mis-stamped).</li>
+<li>Minimal fix: route <code>pb</code> (pat/mrg/con) BEFORE the stamp-set/<code>wtEqBase</code> ladder — the exact ms slot only exists where patch wrote it, the same trust STATUS-011 extends to the wtlog stamp-set. The <code>!pb</code> guard becomes implicit (a pb file never reaches the stamp-set test, so <code>cnf</code>==row-ts still never collapses to <code>ok</code> — statusfast C stays green).</li>
+<li><code>slink</code> deliberately points at f-merge.txt (the mrg slot): a follow-the-link <code>io.setMtime</code> would clobber the target's mrg stamp to pat, so the case proves nofollow stamping, which exec-symlink's golden could not distinguish.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> Verify test: 4 outcome classes × {file, subdir file, add} — mtime == band slot, status buckets pat/mrg/con.</li>
+<li><a href="./v.html">v</a> If a class is unstamped/mis-stamped: fix at patch.js:417's loop, repro-first. (No stamp gap existed; the RED was read-side — fixed at classify.js's band read, one hunk.)</li>
+<li><a href="./v.html">v</a> Full suite green; note verified-OK classes in Outcome even if no fix needed.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<p>
+VERIFIED-OK stamp classes (all mtimes == exact band slot off the persisted row; unaffected files' mtimes byte-identical pre/post):
+</p>
+<ul>
+<li>clean take-theirs, top-level (<code>f-take.txt</code>) → ceil-2ms, status <code>pat</code>.</li>
+<li>clean take-theirs under a dir (<code>sub/f-deep.txt</code>) → ceil-2ms, <code>pat</code>.</li>
+<li>take-theirs ADD, base-absent (<code>f-add.txt</code>, <code>sub/f-newadd.txt</code>) → ceil-2ms, <code>pat</code>.</li>
+<li>take-theirs ADD symlink (<code>slink</code>) → ceil-2ms on the LINK (nofollow), <code>pat</code>; target's own mrg stamp intact.</li>
+<li>weave merge (<code>f-merge.txt</code>) → ceil-1ms, <code>mrg</code>.</li>
+<li>true conflict (<code>f-conf.txt</code>) → ceil (== row ts), <code>con</code>.</li>
+<li>unaffected files (<code>own.txt</code>, <code>keep.txt</code>): mtimes untouched, clean count-only <code>ok</code>.</li>
+</ul>
+<p>
+GAP FOUND+FIXED (read side, NOT a stamp gap): classify content-read every band-stamped in-base file (<code>wtEqBase</code>), breaking &quot;zero content reads on clean applies&quot; — repro RED at exactly that assert, then shared/classify.js routes <code>pb</code> before the content ladder (ONE hunk, 11→14 lines: the <code>if (pb &amp;&amp; !eqBase)</code> arm hoisted to <code>if (pb)</code> above the stamp-set/<code>wtEqBase</code> reads, <code>!pb</code> guard now implicit). Suite 273/273 (baseline 272/272), incl. patch/conflict, patch/exec-symlink, post/patch-pat, post/patch-absorb, unit patchband + statusfast. Uncommitted in work/PATCH-013 for review: shared/classify.js (mod), test/patch/stampband/{run.sh,assert.js} (new).
+</p>
+<p>
+Behavior delta of the fix (deliberate, per the ruling): a band-stamped file whose bytes were hand-reverted to equal OURS previously read <code>ok</code>; the stamp now wins (<code>pat</code>). Reachable only via mtime forgery/collision — the accepted-risk class statusfast B already documents for the stamp-set.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

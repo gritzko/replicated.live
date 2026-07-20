@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-017</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-017 <a href="./HIGH.html">HIGH</a>: the initial pager view loses its address — loop.js mints a <code>verb:</code>-only banner, so the context anchor starts EMPTY</h1>
+<p>
+The universal-pager edge (core/loop.js:369-372) wraps a columnar view's rendered text as ONE hunk whose uri is just <code>&lt;verb&gt;:</code> (or the bare verb) — the actual args of the invocation are dropped. <code>jab put sub/x.c</code> opens a view whose tracked context is <code>verb=put, uri=&quot;&quot;</code>: <code>R</code> re-drives the bare <code>put </code> (a NO-ARG mutation re-fire, cf <a href="BRO-015.html">BRO-015</a>), and a typed <code>./x</code> falls back to <code>be.navCwd()</code> — anchored on the process cwd, not the path on screen. Nav.mkd:3 says an address resolves ONCE at entry and the view carries it; here it never arrives. 2026-07-07 audit, runtime-VERIFIED. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Affected: verbs emitting via the emit sink only — refs, post, put, delete, get, head, patch, plus status's summary hunk. ls/tree/log/status detail rows feed the HUNK sink with proper <code>verb addr</code> banners and are fine.</li>
+<li>VERIFIED: hunk uri <code>put</code> → <code>_verbUri()</code> = <code>{verb:&quot;put&quot;, uri:&quot;&quot;}</code>; <code>_refresh</code> drives <code>&quot;put &quot;</code>; typed <code>./x</code> composes against navCwd, not the invocation's path arg.</li>
+<li>Root cause: <code>_cli</code> HAS the resolved (verb, args) at the edge but hands the pager only rendered bytes + a minted banner; the pager re-derives the address from the banner and gets nothing.</li>
+<li>Related: <code>_refresh</code> on an untracked view re-derives verb/uri from whatever hunks the refresh RETURNED — the context drifts with the output instead of the invocation.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>The pager's initial view is seeded with the ENTRY call: verb + composed arg0 (+ rest), the same shape <code>_driveApply</code> tracks for a typed spell.</li>
+<li><code>R</code> on the initial view re-runs the original invocation exactly; <code>./x</code> anchors on the invocation's path.</li>
+<li>Repro: <code>jab ls &lt;subdir&gt;</code> (or a sink-less verb) on a pty → status bar shows the path; refresh keeps it.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>core/loop.js</code> <code>_openPager</code>/<code>_cli</code> edge + <code>views/bro/pager.js</code> (accept a seed address); the minted banner hunk may keep its short uri for DISPLAY — the tracked state is what must carry the address.</li>
+<li>Coordinate with <a href="BRO-015.html">BRO-015</a> (same tracked-call struct) — one shape, two tickets.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> Repro: initial-view context empty; refresh fires bare verb.</li>
+<li><a href="./ .html"> </a> Seed the pager with the entry (verb, arg0, rest); suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

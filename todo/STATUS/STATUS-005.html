@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STATUS-005</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>STATUS-005 <a href="./HIGH.html">HIGH</a>: merge conflicts must land in the wtlog and status as red <code>con</code>, not yellow <code>mod</code></h1>
+<div>
+<p>
+-- gritzko (order), agent-drafted
+</p>
+</div>
+<p>
+A merge that leaves conflict markers in a file records NOTHING: the wtlog gets only the bare <code>get</code>/<code>patch</code> row, and <code>status</code> shows the conflicted file as a plain yellow <code>mod</code>. Order: file conflicts must be recorded into the wtlog (<code>.be</code>) at merge time, and such files must be statused <code>con</code> and rendered red, not yellow. The existing <code>cnf</code> bucket (<a href="./DIS-057.html">DIS-057</a>) is a fragile mtime-stamp band tied only to <code>patch</code> rows — a <code>get</code> merge never gets it.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Incident 2026-07-10 (work/JS-117): <code>jab get ?#1a751c…</code> merged JS-116 in, left ONE <code>&lt;&lt;&lt;&lt;</code>/<code>||||</code>/<code>&gt;&gt;&gt;&gt;</code> block in shared/ingest.js; wtlog tail shows just the <code>get</code> row, <code>jab status</code> showed <code>mod shared/ingest.js</code> — indistinguishable from an ordinary edit.</li>
+<li>Bonus symptom: store-open maintenance <code>require()</code>d the conflicted .js and leaked <code>idxmaint: SyntaxError: Unexpected token '&lt;&lt;'</code> into status output — a red <code>con</code> would have explained the state at a glance.</li>
+<li>Existing pieces: <code>shared/conflict.js</code> hasConflictMarker (the POST-017 pre-flight scan, both WEAVEEmitMerged marker shapes); consumers verbs/get/get.js, verbs/patch/patch.js, verbs/post/post.js; <code>shared/classify.js:150-170,241-260</code> the DIS-057 <code>pat/mrg/cnf</code> mtime-stamp band (ceil-2ms/-1ms/ceil on an in-scope <code>patch</code> row only).</li>
+<li>wtlog rows are <code>&lt;ron60&gt; &lt;verb&gt; &lt;uri&gt;</code> (shared/wtlog.js); per-file rows already exist (<code>put &lt;file&gt;</code>), so a conflict row has a natural shape.</li>
+</ul>
+<h3>Goals</h3>
+<ol>
+<li>The merging verb (get AND patch), right where weave emits a conflicted result, appends a per-file conflict row to the wtlog — durable, survives mtime churn, visible to any later session.</li>
+<li><code>status</code> classifies such files <code>con</code>: wtlog row says &quot;merge left conflicts here&quot;, hasConflictMarker on the wt bytes confirms still-unresolved; markers gone → the file degrades to ordinary <code>mod</code> (resolved, uncommitted).</li>
+<li>Render <code>con</code> red (mis/del-class severity), not the yellow mod class; summary line counts it (<code>… 4 mod, 1 con, …</code>).</li>
+<li><code>post</code> pre-flight keeps refusing marker'd adds (POST-017) — unchanged, but its error can now name the recorded <code>con</code> rows.</li>
+</ol>
+<h3>Constraints</h3>
+<ul>
+<li>One state name must win: the order says <code>con</code>, the existing DIS-057 bucket is <code>cnf</code> — reconcile (rename or alias), do NOT ship both; flag the choice in the report for gritzko's confirmation.</li>
+<li>wtlog is append-only (<a href="/wiki/Sniff.html">Sniff</a> owns it): resolution is detected by scan (goal 2), never by rewriting/deleting the conflict row.</li>
+<li>The DIS-057 mtime-stamp band stays for patch outcome reporting (pat/mrg) — this ticket only makes the CONFLICT state durable and verb-agnostic; don't vandalize classify.js's stamp logic.</li>
+<li>Marker-string false positives: prose <code>&lt;&lt;&lt;&lt;</code> is already excluded by the triple scan; <code>--force</code> posting stays the escape hatch.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(proposed) row shape <code>con &lt;path&gt;</code> mirroring <code>put &lt;path&gt;</code>; one row per conflicted file per merge, duplicates across merges tolerated (newest wins, scan decides liveness).</li>
+<li>(open) whether <code>con</code> rows scope status's patch-band (classify.js) or ride a separate check in the classifier walk.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled>  repro test: get-merge leaving a conflict block → status shows <code>con</code> (red), not <code>mod</code>; resolving the markers (edit) degrades to <code>mod</code></li>
+<li class="open"><input type="checkbox" disabled>  get.js + patch.js: append <code>con &lt;path&gt;</code> wtlog rows where weave reports conflicts</li>
+<li class="open"><input type="checkbox" disabled>  classify.js/status.js: <code>con</code> bucket wired from wtlog row + marker scan; red rendering; summary count</li>
+<li class="open"><input type="checkbox" disabled>  post.js: error message names the recorded con rows (no behavior change)</li>
+<li class="open"><input type="checkbox" disabled>  cnf/con reconciliation, single name, report the choice</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="./JS-116.html">JS-116</a>/<a href="./JS-117.html">JS-117</a> worktrees are in flight on overlapping shared/ files (store.js/ingest.js are NOT touched here, but classify/status/verbs are theirs-adjacent) — coordinate landing order.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

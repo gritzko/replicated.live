@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-077</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-077 <a href="./MED.html">MED</a>: <code>put ?&lt;40hex&gt;</code> writes a ref keyed off cur's query — a sha-named branch when detached, silently TRUNK after <a href="DIS-075.html">DIS-075</a>; RULED: <code>put #hex</code> sets the BASE</h1>
+<p>
+<code>put ?&lt;40hex&gt;</code> (put.js:656, the set-cur arm) is a REF WRITE: it calls <code>store.set(k.shard, branch, sha)</code> (put.js:110) with the ref key taken from cur's recorded query (<code>curQuery</code>, put.js:697 — &quot;Only curQuery is needed — it pins <code>?&lt;40hex&gt;</code>'s target branch&quot;). So its target is whatever cur happens to track, which breaks at both ends. On a DETACHED wt the old record was <code>?&lt;sha&gt;</code> — the query held the sha, so the key WAS a 40-hex string and <code>put ?&lt;newsha&gt;</code> minted a ref literally named <code>&lt;40hex&gt;</code>. After <a href="DIS-075.html">DIS-075</a> the detached record is <code>#&lt;sha&gt;</code> (query ABSENT), so <code>curQuery</code> reads <code>&quot;&quot;</code> and the SAME command silently advances TRUNK while the wt is detached. RULED 2026-07-15 (gritzko): &quot;<code>put #hex</code> should probably set the base commit to that hex&quot; — the sha belongs in the FRAGMENT (<a href="DIS-071.html">DIS-071</a> law #3: the fragment carries the base), never in the query. Found by the <a href="DIS-075.html">DIS-075</a> worker, which refused to pick a side (correctly — both behaviors are wrong).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The set-cur arm conflates two motions: moving the worktree's base, and writing a branch ref.
+</p>
+<ul>
+<li>put.js:656 dispatches the arm: <code>hasQ &amp;&amp; !hasPath &amp;&amp; !hasAuth &amp;&amp; !hasFrag &amp;&amp; isFullSha(q)</code> — a bare full sha in the QUERY.</li>
+<li>put.js:697 reads <code>curQuery = (cur &amp;&amp; cur.query) || &quot;&quot;</code> and pins the ref key to it; put.js:110 <code>store.set(k.shard, branch, sha)</code> writes it.</li>
+<li>Detached, pre-<a href="DIS-075.html">DIS-075</a>: <code>curQuery</code> was the 40-hex sha → a ref keyed <code>&lt;40hex&gt;</code> (a sha-named branch, addressable by nothing).</li>
+<li>Detached, post-<a href="DIS-075.html">DIS-075</a>: the record is <code>#&lt;sha&gt;</code>, <code>curQuery</code> is <code>&quot;&quot;</code> → the same spell moves TRUNK, unasked, while detached.</li>
+<li><a href="DIS-050.html">DIS-050</a> (DONE) already found this arm's dispatch inconsistent; it fixed the dispatch, not the target-key rule.</li>
+<li>A sha in the QUERY contradicts <a href="DIS-071.html">DIS-071</a> law #1 anyway: a bare hash is not a branch/remote/worktree, so it is not a trackable thing.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Split the two motions along the URI grammar: fragment = base, query = ref.
+</p>
+<ul>
+<li><code>put #&lt;hex&gt;</code> sets the worktree's BASE commit to that hex (RULED) — a wt-local motion, no ref touched.</li>
+<li><code>put ?&lt;branch&gt;</code> keeps writing the branch ref (put.js:96,110) — unchanged.</li>
+<li>Decide <code>put ?&lt;40hex&gt;</code>'s fate: an error naming the <code>#hex</code> form, or a detach — it must NOT silently key a ref off cur.</li>
+<li>Repro each: detached wt + <code>put #&lt;hex&gt;</code> moves the base only; <code>put ?&lt;40hex&gt;</code> never mints a sha-named ref nor moves trunk.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+The base is a recorded row, not a ref — and <code>#hex</code> must not become a third resolver.
+</p>
+<ul>
+<li>Resolution through be/core ONLY (<a href="./[resolve-hash-mandatory.html">[resolve-hash-mandatory</a>]): the hex resolves via the existing <code>store.resolveHexAny</code>/<code>resolve_hash</code>, never a hand-rolled lookup.</li>
+<li>Setting the base means recording a row that the ONE attach reader (<code>wtlog.attachedBranch</code>, DIS-059) reads back correctly — do not invent a shape; follow <a href="DIS-075.html">DIS-075</a>'s records.</li>
+<li>Read-compat: old <code>?&lt;40hex&gt;</code>-keyed refs may exist in stores; resolveRef must keep reading them. No migration.</li>
+<li>Repro-first; minimal — the set-cur arm only.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>RULED 2026-07-15 (gritzko): <code>put #hex</code> sets the base commit. The sha lives in the fragment; the query names a ref.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: detached wt + <code>put ?&lt;40hex&gt;</code> → today mints a sha-named ref (pre-075) / moves trunk (post-075)</li>
+<li><a href="./ .html"> </a> implement <code>put #&lt;hex&gt;</code> → sets the base; no ref written</li>
+<li><a href="./ .html"> </a> rule + implement <code>put ?&lt;40hex&gt;</code>'s fate (error pointing at <code>#hex</code>, or detach)</li>
+<li><a href="./ .html"> </a> <a href="../../wiki/PUT.html">PUT</a> spec: the fragment/query split for the set-cur arm</li>
+<li><a href="./ .html"> </a> audit the other <code>cur.query</code>-keyed writers for the same &quot;key off whatever cur tracks&quot; class</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Lands after <a href="DIS-075.html">DIS-075</a> (the detached record is what changes <code>curQuery</code> to <code>&quot;&quot;</code>).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FILED 2026-07-16, found by the <a href="DIS-075.html">DIS-075</a> worker; nothing landed yet.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

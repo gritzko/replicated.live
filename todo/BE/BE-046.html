@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-046</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-046 <a href="./HIGH.html">HIGH</a>: pager launched via <code>jab &lt;view&gt; //WT</code> loses the //WT context — <code>:diff</code> falls back to cwd</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+In the meta root, <code>jab status //ABC-008</code> then a typed <code>:diff</code> diffs the META, not ABC-008 — the address-bar composer's context fell back to navCwd(cwd).
+</p>
+<ul>
+<li>loop.cli's universal pager edge (_openPager, core/loop.js) hands the Pager ONLY hunks; the run's resolved nav scope (authorityRepo → authority/ctxDir) is dropped.</li>
+<li>pager._composeCall reads <code>(view.uri) || be.navCwd()</code>; the INITIAL view (setHunks at launch) has no tracked uri, and the design law forbids scavenging hunks<a href="./0.html">0</a>'s banner — so the CLI arg's <code>//WT</code> never enters the context.</li>
+<li>:spell-navigated views DO track context (_driveApply sets view.uri = c.context) — only the CLI-launched first view leaks.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>RULING 2026-07-10: the initial pager context derives from cwd AND the argument — AT LEAST the worktree; the worktree only ever switches explicitly.</li>
+<li><code>jab status //ABC-008</code> + <code>:diff</code> → <code>diff</code> scoped to //ABC-008.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>context rides Pager opts (the explicit thread), never a hunk-row scavenge (<a href="./Nav.html">Nav</a> law); minimal diff in core/loop.js + views/bro/pager.js.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>launch context = be.navCwd(ctxDir): ctxDir already encodes cwd AND the arg (an explicit <code>//X</code> pins the tree root, BE-039 sub re-anchor included; a plain run pins the invocation cwd — the pager's old default, so no behavior change without an authority arg).</li>
+<li>Pager gains opts.context; _composeCall falls back view.uri → opts.context → navCwd().</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> thread context through <em>openPager → Pager opts → </em>composeCall (core/loop.js + views/bro/pager.js, uncommitted)</li>
+<li><a href="./v.html">v</a> verify: headless driver-style script — launch context inherited by a bare <code>:diff</code>, explicit <code>//OTHER</code> still switches, no-context fallback unchanged, a nav'd view.uri outranks; suite 172/173 (the 1 red = pre-existing be-js-get-oddname, JS-096)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

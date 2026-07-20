@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-040</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-040 <a href="./MED.html">MED</a>: <code>done</code> verb — close a ticket from CLI/pager</h1>
+<p>
+Closing a ticket today is manual (edit the header, delist the bullets) or the <code>todo/mark-done.sh</code> sweep. Wanted: a <code>done</code> mutation verb so <code>be done BE-012</code> / pager <code>:done BE-012</code> closes the ticket in one move — header marked <code>[DONE]</code>, the key's bullet delisted from the parent READMEs (the curated-open convention of <a href="BE-038.html">BE-038</a>). Once typable, the <code>[done]</code> button in <code>:todo</code> rows is just a hidden O <code>done KEY</code> spell (<a href="../../wiki/Nav.html">Nav</a>) — that splice waits on <a href="BE-038.html">BE-038</a> landing. Requested by gritzko 2026-07-10.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Close convention (<code>todo/mark-done.sh</code>, header-grep per <a href="BE-038.html">BE-038</a>): flip the page header to <code>#   KEY [DONE]: title</code> handling the three forms <code>KEY [MARK]:</code> / <code>KEY: [MARK] </code> / <code>KEY: title</code>; <code>[DONE]</code>/<code>[WONTFIX]</code> pages are left alone; odd headers are reported, skipped.</li>
+<li>OPEN = curated (<a href="BE-038.html">BE-038</a> ruling): a ticket is open iff a topic-README bullet starts with its key (<code>^\s*-\s+\[?KEY\b</code>); so closing must ALSO delist that bullet, per <a href="../../meta/todo.html">/meta/todo</a> &quot;closed tickets must be delisted from parents&quot; — topic <code>todo/TOPIC/README.mkd</code> and the board <code>todo/README.mkd</code>.</li>
+<li>Root/page resolution exists: <code>discover.todoRoot()</code> probes <code>$TODO_ROOT</code> → current wt → launch wt → hive meta root; <code>shared/ticket.js</code> maps KEY → page (thin <code>TOPIC/KEY.{mkd,md,txt}</code>, fat <code>TOPIC/KEY/README.*</code>).</li>
+<li>Pager side is free: a registered verb is typable as a <code>:done KEY</code> spell; O click-targets are <code>verb args</code> spells followed token-precisely (<code>views/bro/pager.js</code> <code>_uriAt</code>), and BACK re-runs the popped view's spell, so the <code>:todo</code> board refreshes after a done.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>be done TICKET-123</code> (CLI) and <code>:done TICKET-123</code> (pager): mark the page header <code>[DONE]</code>, delist the key's bullet from the topic README and the board README, emit ONE confirmation row (key + title).</li>
+<li>Idempotent + uniform errors: already <code>[DONE]</code>/<code>[WONTFIX]</code> → one &quot;already closed&quot; row, no edits; no page → <code>done: KEY: TODONONE</code> one line (<a href="BE-003.html">BE-003</a> spirit); odd header → report, skip, no edit.</li>
+<li>Multiple keys in one call: <code>done BE-012 BE-014</code> loops per key, one row each.</li>
+<li>Delisting removes ONLY bullet lines starting with the key; footer refdefs and mid-bullet mentions stay (other pages keep resolving).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>File edits only — the verb NEVER commits/posts the meta tree; review and commit stay with the user (no VC ops).</li>
+<li>Tests drive a FIXTURE todo tree via <code>$TODO_ROOT</code>, never the live journal board; repro-first (red → green), the suite stays at baseline, no other tests edited.</li>
+<li>Mutations confined to <code>&lt;todoRoot&gt;/todo/</code> — resolve pages via the shared helpers, no path concat escapes (<a href="BE-011.html">BE-011</a> class).</li>
+<li>The <code>[done]</code> O-button splice into <code>views/todo/todo.js</code> rows is IN SCOPE but BLOCKED until <a href="BE-038.html">BE-038</a> lands (todo.js sits unlanded in wt <code>work/BE-038</code>).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>A mutation verb, not a view: <code>verbs/done/done.js</code> exporting <code>command(context_uri, args...)</code>; keys routed by shape <code>[A-Z][A-Z0-9]*-[0-9]+</code>, anything else is one TODONONE-style error line.</li>
+<li>Refresh UX v1: <code>:done</code> pushes its confirmation view; BACK re-runs the board spell, so the closed ticket drops out — in-place refresh after mutating O-buttons is a separate <a href="../BRO/BRO-015.html">BRO-015</a>-kin ruling, not this ticket.</li>
+<li>Header-mark RULING (gritzko 2026-07-10): ONE mark only — a priority (<code>[MED]</code>…) while open, <code>[OPEN]</code> iff no priority, <code>[DONE]</code>/<code>[WONTFIX]</code> closed; <code>[OPEN] [MED]</code> is redundant but in the wild, so <code>done</code> collapses the whole leading mark-run to one <code>[DONE]</code>.</li>
+<li>Live-use bug (round 2): a two-mark header hit the odd-header branch whose report went to <code>io.log</code> — invisible in the pager, which answered <code>no hunks</code>; skips must emit a visible row.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./v.html">v</a> Fixture todo tree + red tests (<code>test/done/close/run.sh</code>): 3 header forms, fat/thin, already-closed zero-edit cmp, TODONONE miss, delist both READMEs, refdefs + mid-bullet + prefix-key decoy untouched, idempotent, multi-key; red-first then green. -<a href="./v.html">v</a> <code>verbs/done/done.js</code>: <code>.jab=&quot;args&quot;</code> mutation verb reusing landed <a href="BE-038.html">BE-038</a> helpers (<code>shape</code>/<code>pageFile</code>, <code>be.todoRoot()</code>); header flip, bullet delist, lazy <code>todo</code> banner rows, multi-key loop; suite 166/164 = baseline reds only. -<a href="./v.html">v</a> Pager smoke (orchestrator, pty-driven 2026-07-10): <code>:done FIX-001</code> typed in <code>jab todo</code> flips the header + delists both fixture READMEs; CLI re-run prints &quot;(already closed)&quot;, miss exits 1 with one <code>done: KEY: TODONONE</code> line (+ the known <a href="BE-003.html">BE-003</a> trailer). -<a href="./v.html">v</a> Round 2 (live <code>:done BE-040</code> fail, orchestrator-verified 2026-07-10): <code>flipHeader</code> collapses a leading multi-mark run (<code>[OPEN] [MED]</code> → one <code>[DONE]</code>) per the one-mark ruling; odd headers emit a VISIBLE <code>odd header, skipped</code> row (no more pager <code>no hunks</code>); new red→green legs in <code>test/done/close/run.sh</code>, suite 166/164 = baseline reds. -<a href="./v.html">v</a> Round 3 <code>[done]</code> buttons (orchestrator-verified 2026-07-10): board/topic LIST rows grow the <a href="./BE-041.html">BE-041</a> house button tail (S sep, <code>Y:&quot;[done]&quot;</code>, <code>O:&quot;done KEY&quot;</code>, S <code>&quot;\n&quot;</code>) after the <code>todo KEY</code> U; plain byte-identical to pre-change goldens; <code>test/done/buttons/</code> red→green, suite 168/166 = baseline reds; independent pty click flipped the fixture header + delisted both READMEs; NOTE back key is <code>-</code>/BS (<code>h</code> is help in this pager).
+</p>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(cleared) <a href="BE-038.html">BE-038</a> landed <code>c8fb7fd6</code> mid-ticket, so <code>views/todo/todo.js</code> helpers were reused directly; the button TODO is now unblocked.</li>
+<li>The cell <code>work/BE-040</code> reports behind 1 (<code>BE-036</code> glob support landed after the clone); rebase/land ordering is the user's call.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Rounds 1–2 (the <code>done</code> verb + multi-mark/visible-skip fix) LANDED <code>9dad5857</code> by gritzko 2026-07-10.</li>
+<li>Round 3 (<code>[done]</code> buttons in <code>:todo</code> list rows) STAGED uncommitted in wt <code>work/BE-040</code>: <code>views/todo/todo.js</code>, <code>test/done/buttons/{run.sh,check.js,board.golden,topic.golden}</code>; orchestrator-verified, pending review and land.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

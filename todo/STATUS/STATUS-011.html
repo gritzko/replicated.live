@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STATUS-011</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>STATUS-011 <a href="./OPEN.html">OPEN</a>: status re-hashes every clean tracked file — add the wtlog mtime-stamp fast path</h1>
+<p>
+Status's <code>classifyMerge</code> calls <code>wtEqBase</code> on EVERY in-base+on-disk path (<code>be/shared/classify.js:417</code>), a full open/readAll/blob-hash per file, even when the file is untouched since checkout. Yet every verb-written mtime is already recorded in the wtlog stamp-set (<code>wtlog.js has(ts)</code>; get/post stamps, DIS-057 patch bands), and <code>stage.js:150</code> already uses exactly this fast path: mtime ∈ stamp-set → clean, no read. Status is the outlier: on a big wt the content sweep dominates wall-clock (PACK-003 fixture: full re-read+re-hash of every path, no stat shortcut at all).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+<code>jab status</code> wall-clock on a large wt is dominated by <code>wtEqBase</code> content reads; the wtlog already carries the ground truth for &quot;untouched since the verb wrote it&quot;.
+</p>
+<ul>
+<li><code>classify.js:417</code> — <code>wtEqBase(wtRoot, path, b.sha)</code> unconditionally; <code>classify.js:127-161</code> is the per-file open/readAll/<code>frameSha</code> cost.</li>
+<li><code>wtScan</code> already lstat's every path and carries <code>ts</code> (mtime ron60 BigInt, JS-042) in the merge row — the stamp is in hand, unused.</li>
+<li><code>stage.js:150,216,242</code> — put/post staging already skips content compare when mtime ∈ get/post stamp-set; status never got the same treatment.</li>
+<li><a href="/todo/DIS/DIS-023.html">DIS-023</a> ruled clean must be content-confirmed, never mtime-ALONE — that ban targets the old re-stamping drift gate, NOT a read-only membership test against verb-recorded stamps (which stage.js has used since).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Fast path in <code>classifyMerge</code>: for an in-base+on-disk path, if wt mtime ∈ the wtlog stamp-set → treat as <code>eqBase</code> true (bucket <code>ok</code>) without opening the file; only mtime-miss paths pay the read+hash.
+</p>
+<ul>
+<li>Same stamp sources stage.js trusts: get/post row stamps + DIS-057 patch bands (a patch-band stamp still routes pat/mrg/cnf first, as today).</li>
+<li>Status stays read-only: membership test only, NO re-stamping (the DIS-023 sin).</li>
+<li>Listing mode (<code>eq</code> rows, JAB-018) keeps emitting the wt mtime it already has.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Byte-parity with today's output on stamp-miss paths; the fast path may only skip work, never change a bucket vs content truth for verb-stamped files.</li>
+<li>A restored/copied mtime that COLLIDES with a recorded stamp over edited bytes reads clean — accepted risk, same trust stage.js already extends (ron60 stamps are sub-ms; collision is adversarial, not accidental).</li>
+<li>No new index/cache files; the wtlog stamp-set is the only source.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>3-line fast path in the inBase+onDisk arm: <code>!pb &amp;&amp; w.ts &amp;&amp; wtlogReader.has(w.ts)</code> short-circuits <code>wtEqBase</code>; no reader threading needed (wtlogReader already in scope).</li>
+<li>The <code>!pb</code> guard is load-bearing: the <code>cnf</code> band slot IS the patch row ts, a stamp-set member — pb routes con/mrg first.</li>
+<li>Membership test only, zero writes — DIS-023-safe; the stamp-collision misread stays the stage.js:150 accepted risk.</li>
+<li>Repro test/statusfast.js hooks io.open to count content reads: clean+stamped wt reads 0 (was N), stamp-miss paths keep the content sweep + byte-identical buckets.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> Thread the wtlog reader (or its <code>has(ts)</code>) into <code>classifyMerge</code>'s inBase+onDisk arm; consult before <code>wtEqBase</code> at <code>classify.js:417</code>.</li>
+<li><a href="./v.html">v</a> Repro/perf test first: N-file wt, all clean via get; assert status does zero content reads (count <code>io.open</code> via hook or timing bound) and output is byte-identical.</li>
+<li><a href="./v.html">v</a> Verify the patch-band interplay: pat/mrg/cnf stamps must not collapse to <code>ok</code> (<code>pStamp</code> check precedes the fast path).</li>
+<li><a href="./v.html">v</a> Check the <code>con</code>-row marker scan (<code>classify.js:383</code>) — already gated on conSet, unaffected.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><code>get</code> never restamps checkout mtimes (no io.setMtime in get.js/checkout.js) — only post/put/patch stamp, so a FRESH CLONE still pays the full content sweep; stamping get checkouts would need its own ticket.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-051</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-051 <a href="./OPEN.html">OPEN</a>: put's sub-crossing delegation is single-level — nested-sub paths PUTNONE</h1>
+<p>
+<code>be put &lt;path&gt;</code> crossing a mounted submodule delegates the stage into the sub (SUBS-039), but only ONE mount deep: <code>stageInSub</code> resolves the shallowest mount and hands the remainder straight to the stage engine, never re-checking it for a nested mount. Any path ≥2 mounts down (e.g. <code>dog/abc/POL.c</code>: dog=libdog, dog/abc=libabc) classifies as &quot;exists but is not stageable&quot; in the mid sub and the run dies <code>PUTNONE: no eligible paths</code>. Found 2026-07-11 in JS-113b via a status-view <a href="./put.html">put</a> click; CLI reproduces identically. Fix: make the descent recur mount by mount. Related: <a href="./SUBS-039.html">SUBS-039</a> (the delegation), <a href="./SUBS-049.html">SUBS-049</a> (dir-anchor mounts, full-path probe), <a href="./SUBS-052.html">SUBS-052</a> (post's selective-gate twin: staged grandchild changes silently skipped).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>cd work/JS-113b &amp;&amp; jab put dog/abc/POL.c</code> → <code>be put: no eligible paths</code> + <code>PUTNONE</code>; <code>jab status dog/abc</code> shows <code>mod dog/abc/POL.c</code> (a real dirty file in the nested libabc sub).</li>
+<li>Mechanism (<code>be</code> @ jsrc tip): putOne finds the SHALLOWEST mount prefix (<code>dog</code>) via subMountPrefix (put.js:465-476) and delegates to stageInSub (put.js:482-507), which be.find's the sub and calls stageArg directly with the remainder <code>abc/POL.c</code> — no nested-mount re-check. In libdog's engine <code>abc</code> is a gitlink, so classifyNamed hits <code>!w &amp;&amp; !b</code> + on-disk (stage.js:227-233) → skip &quot;exists but is not stageable&quot; → all-skip PUTNONE.</li>
+<li>One mount deep works today: with cwd/context inside <code>dog</code>, <code>put abc/POL.c</code> descends once and stages — the workaround is <code>://JS-113b/dog/abc</code> + <code>:put POL.c</code>.</li>
+<li>SUBS-049 made isMount accept a <code>.be</code>-DIR primary anchor too (recurse.js:36-), so nested green-field <code>jab get</code> clones read as mounts — a jab-only repro fixture is buildable (no native <code>be</code>).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>be put &lt;a&gt;/&lt;b&gt;/&lt;file&gt;</code> with <code>&lt;a&gt;</code> and <code>&lt;a&gt;/&lt;b&gt;</code> both mounts stages the file in the INNERMOST sub's own wtlog; the parent and mid wtlogs record nothing (the gitlink bump stays POST's job, per SUBS-039).</li>
+<li>The <code>put:</code> banner row shows the full top-relative path, any nesting depth.</li>
+<li>Repro test (jab-only) in beagle-ext-tests: 3-level fixture, assert PUTNONE before / inner-wtlog put row after, siblings untouched.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fix inside <code>be/verbs/put/put.js</code> stageInSub/putOne: loop subMountPrefix over the remainder against each descended subRepo, accumulating the display prefix; the move-dst fragment slicing must use the FINAL accumulated prefix.</li>
+<li>Preserve SUBS-049's full-path probe (<code>put &lt;sub&gt;</code> dir-arg delegation) and the one-level behaviour byte-for-byte.</li>
+<li>Comments ≤2 lines, SUBS-051-prefixed; repro-first per <a href="../../meta/work.html">Issues</a>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./v.html">v</a> Repro test <code>test/sub/nestedput</code> (jab-only, nested green-field mounts) — in work/SUBS-051, RED on live be / GREEN on the fix. -<a href="./v.html">v</a> Recursive descent in stageInSub; display-prefix + dst composition — work/SUBS-051 verbs/put/put.js (uncommitted). -<a href="./v.html">v</a> Jab-only suites: 11/11 pass (sub/* + get/nav-submod + get/confdrop), zero skips.
+</p>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none yet)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

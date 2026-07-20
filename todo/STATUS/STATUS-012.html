@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STATUS-012</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>STATUS-012 <a href="./OPEN.html">OPEN</a>: divergence row says <code>miss</code> for a commit already PATCHed into the wt</h1>
+<p>
+Incident 2026-07-17, work/PUT-010: after <code>jab patch ?e3a937bd</code> absorbed the behind-commit (wtlog patch row live, wt full of pat/mrg rows), status still lists it as <code> miss ?e3a937bd#PATCH-013: fix timestamping</code>. <code>miss</code> reads as &quot;you don't have this work&quot; — wrong once the wt carries the absorbed bytes pending post. The divergence walk (status.js computeDivergence) should consult the wtlog's in-scope patch rows (<a href="/wiki/PATCH.html">PATCH</a> ancestor-skip: parent ∪ foster reachability) and mark an absorbed commit distinctly — e.g. <code>pat ?&lt;sha&gt;#&lt;subject&gt;</code> — or drop it from <code>miss</code>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>The behind-set is computed against the track tip; absorbed-but-unposted commits are indistinguishable from truly missing ones in the current row verb.</li>
+<li>The absorbed sha sits in the wtlog <code>patch</code> row URI (DIS-030 shapes); POST will consume it — status already reads those rows elsewhere (patchStamps).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Behind-commits absorbed by a pending patch render with a distinct verb — <code>ptch</code> (gritzko ruling 2026-07-17, <a href="/wiki/PATCH.html">PATCH</a> §Summary 1.1: absorbed miss commits &quot;become ptch&quot;; COMMIT statuses are 4-char, FILE rows stay 3-char) — leaving <code>miss</code> for genuinely un-absorbed work; count summary follows.
+</p>
+<ul>
+<li><code>mrg</code> and <code>pat</code> file rows carry a <a href="./put.html">put</a> button in the pager, like the <code>adv</code> sub rows do (BE-049) — stage the absorbed file straight off the status view (gritzko, 2026-07-17).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Display/classification change only — no wtlog/store writes, byte-parity elsewhere.</li>
+<li>Ancestor-skip semantics are the truth: a commit reachable via parent ∪ foster is not <code>miss</code> either (verify both cases).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Absorbed = behind ∩ ancestors(patchTheirs) (dag.ancestors per in-scope theirs sha) — covers <code>?br!</code>'s whole replayed stack, and a NEXT/NAMED row marks exactly its one commit (its ancestors are cur-reachable, so never behind).</li>
+<li>Row keeps its place in the behind list; only the verb flips to <code>ptch</code> (4-char COMMIT status per the ruling; the <code>pat</code>/<code>mrg</code> FILE buckets stay 3-char). Summary note follows the verbs: <code>(behind B, ptch P, ahead A)</code>, each segment omitted at 0 — byte-parity when no patch row is in scope.</li>
+<li>The <a href="./put.html">put</a> button rides the existing BE-041 table: <code>ACT_PUT += {pat, mrg}</code> in status.js; no pager change, no classify flag. The <code>ptch ?&lt;sha&gt;</code> COMMIT row carries no button (buttons live in the file-bucket loop only).</li>
+<li>Repro shape: the wt-operand track (<code>get //srcwt</code>, DIS-062). A <code>?branch</code>/trunk track can't repro — patchscope.resolveOurs prefers resolveRef(cur.branch), so the advanced ref becomes ours and the patch no-ops (see bummers).</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> Repro: patch a behind-commit, assert the divergence row verb (test/status/patched, RED pre-fix).</li>
+<li><a href="./v.html">v</a> Fix computeDivergence to consult in-scope patch rows.</li>
+<li><a href="./v.html">v</a> Pin: a POSTed absorption (theirs = merge parent) is not listed at all (patched leg 3).</li>
+<li><a href="./v.html">v</a> <code>pat</code>/<code>mrg</code> file rows carry the <a href="./put.html">put</a> button like BE-049 <code>adv</code> rows (test/status/patchbtn, RED pre-fix; headless-Pager click leg: mutate + in-place refresh, no push).</li>
+<li><a href="./v.html">v</a> Ruling 2026-07-17 (<a href="/wiki/PATCH.html">PATCH</a> §Summary 1.1): divergence verb is <code>ptch</code>, not <code>pat</code> — verb, summary segment and test/status/patched assertions renamed; file buckets untouched.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>patchscope.resolveOurs resolves ours ref-FIRST (resolveRef(cur.branch) over cur.sha), so on a shared-store wt whose track ref advanced, <code>jab patch ?&lt;behind-sha&gt;</code> silently absorbs NOTHING (ours == theirs, exit 0, no row). Not this ticket's display fix — possible own ticket.</li>
+<li>JS post records theirs as a real merge PARENT (no foster header yet), so the parent ∪ foster pin here exercises the parent leg only.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-029</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>POST-029 <a href="./OPEN.html">OPEN</a>: VERIFY post restamps every file it undirties — commit-all is the suspect gap</h1>
+<p>
+INVARIANT (gritzko, 2026-07-17): every file undirtied by a post carries a wtlog-stamp mtime, so the next status confirms it clean with zero content reads. post HAS a stamp site (<code>be/verbs/post/post.js:942</code>, BE-011) — this ticket VERIFIES coverage of every undirtied class and fixes gaps. Siblings: <a href="/todo/GET/GET-049.html">GET-049</a> (get stamps nothing), <a href="/todo/PATCH/PATCH-013.html">PATCH-013</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+put-staged files already carry their put row stamps, which stay in the wtlog after post — those confirm clean without a post restamp. The suspect classes are files post undirties WITHOUT a prior put stamp:
+</p>
+<ul>
+<li>Commit-all <code>jab post</code> (stages <code>mod</code> files directly, PUT-009 ruling): do those get a stamp at post time (post.js:942 — what does its loop cover)?</li>
+<li>mov/rmv destinations, delete-side survivors, patch-band files folded by the post: post moves the pd boundary — do pre-pd put/patch stamps still count in <code>has(ts)</code> after the boundary moves, or do they fall out of the in-scope stamp-set?</li>
+<li>Sub posts (fold-decide gitlink bumps): the parent tree's undirtied rows.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+A repro test per class: post, then assert every undirtied file's mtime ∈ the wtlog stamp-set AND status does zero content reads on them (STATUS-011 observable). Fix whichever class misses, repro-first.
+</p>
+<h3>Constraints</h3>
+<ul>
+<li>Row-before-stamp ordering (ULOGAppendAt refuses ts&lt;=tail); ts policy of <code>post.js:942</code>'s BE-011 stamp is the pattern to extend, not replace.</li>
+<li>Files post did not undirty keep their mtimes; a still-dirty file must NOT be stamped.</li>
+<li>Minimal diff in post.js (+ shared/stage.js only if the restamp helper moves there); no other verbs.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>The gap was ONE for all classes, not per-class: postOne sampled <code>stamp</code> BEFORE the pack write, and <code>ulog.append</code>'s old guard (<code>use &lt; nowAfter → bump</code>) silently re-stamped the ms-stale explicit ts to NOW — so BE-011 stamped an mtime no wtlog row carries, and status content-re-read every committed file after every post.</li>
+<li>ROOT-CAUSE fix in <code>shared/ulog.js</code> append (RULING 2026-07-17): an explicit row ts is HONOURED whenever it stays strictly past the running floor (all native ULOGAppendAt refuses is ts&lt;=last); only a genuine collision bumps.  append RETURNS the assigned ts per row — a restamping caller uses the return value (a log READ-BACK, the first-cut <code>ulog.prevRow</code> approach, was REJECTED by gritzko).  Hunk kept minimal/byte-stable — <a href="/todo/GET/GET-049.html">GET-049</a> duplicates it for a clean weave.</li>
+<li>The row/mtime ts source is the RUN-START stamp: <code>be.now</code>, minted afresh PER VERB INVOCATION at the loop edge (core/loop.js mintBe ambient — a pager-spelled post in the resident process gets a fresh one; snapshot/restored across re-entry).  post() reads be.now (ron.now() fallback) into ctx.now; ONE ctx.now is reused across the parent and every folded sub (threaded via ctx, never re-sampled per repo).  Same-ms collision edge (ts&lt;=tail, e.g. the parent row after a just-appended gitlink-bump row): the row bumps, the mtime restamp uses append's returned assigned ts, so row-ts==mtime holds unconditionally.</li>
+<li>OUT of scope per gritzko's correction: <code>ts = use + 1n</code> stepping in append stays (ms&gt;999 packed stamps are valid numbers); the ron-&gt;ts conversion clamp belongs to <a href="/todo/PUT/PUT-010.html">PUT-010</a>.</li>
+<li><code>has(ts)</code> is boundary-BLIND (the whole drained row set, wtlog.js:249) — a pre-pd stamp never ages out; the test's <code>-aged</code> mode pins that with mtimes strictly below the just-moved pd (incl. the DIS-072 sub re-attach get row landing past the sub's post stamp).</li>
+<li>The mounted sub's get-materialised files (helper.c) are NOT post-undirtied — get stamps nothing, that stays <a href="/todo/GET/GET-049.html">GET-049</a>'s ground (a same-ms collision made it pass standalone; the test checks only post-undirtied files).</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> Verify test: {put-staged post, commit-all post, move post, sub post} → all undirtied mtimes ∈ stamp-set, 0 content reads on next status.</li>
+<li><a href="./v.html">v</a> Check <code>has(ts)</code> scope vs the moved pd boundary — a stamp that ages out of scope is a fast-path hole even with correct mtimes.</li>
+<li><a href="./v.html">v</a> Fix gaps at post.js:942, repro-first; full suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<ul>
+<li>GAP FOUND + FIXED (all four classes were broken the same way): post row ts != BE-011 mtime whenever a ms passed between stamp sampling and the append (i.e. always — the pack write sits between).  RED: test/post/restamp NOSTAMP+READ on every class; GREEN after the rework (be.now → row ts + mtime, ulog.append honours it and returns the assigned ts).</li>
+<li>Verified-OK post-fix: (a) put-staged post (put row survives in the wtlog, file restamped to the post row ts); (b) commit-all post over bare <code>mod</code> files (PUT-009 ruling); (c) staged-move post (destination); (d) sub post folding a gitlink bump (sub interior file + parent rows) — each: mtime ∈ wtlogReader.has() via the SAME reader status.js:278 opens, zero io.open on those files during classify, no dirty rows.</li>
+<li>pd-boundary finding: <code>has()</code> is scope-blind, pre-pd stamps stay members — asserted with aged-past-pd mtimes in every class.</li>
+<li>Suite 273/273 (<code>ctest -j16 -LE big</code>), stable over reruns; worktree updated (<code>jab get</code>, base e4501b50) and re-verified.  New test test/post/restamp/run.sh (+ its .stampchk.js checker inline); diff: shared/ulog.js append (+return, honour-explicit guard), verbs/post/post.js (ctx.now/stamp/assigned, ~+14/-4), core/loop.js (+3: be.now ambient + snapshot).</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

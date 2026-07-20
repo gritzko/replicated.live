@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-049</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-049 <a href="./OPEN.html">OPEN</a>: <code>//</code>-empty-host nav resolves to rootTop, not the launch tree — cross-repo mutation hazard from nested worktrees</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Found 2026-07-11 while diagnosing <a href="/todo/PUT/PUT-008.html">PUT-008</a>: in a scratch clone at <code>work/putrepro</code> (nested INSIDE the journal repo), <code>jab put '///shared'</code> resolved to <code>/home/gritzko/src/journal/shared</code> — the OUTER repo — and only PUTNONE stopped a stage into the wrong tree.
+</p>
+<ul>
+<li><a href="./BE-037.html">BE-037</a> ruled <code>//</code> = topWt (memoized launchTop, matches navCwd) — but the <code>core/discover.js:320</code> comment still says &quot;the LAUNCH tree (find(cwd).wt)&quot;, stale either way.</li>
+<li>From a worktree nested under another repo (every <code>work/*</code> clone) topWt and find(cwd).wt DIVERGE: <code>wtdir</code> empty-host anchors the OUTER repo; relates to the two open <code>//X</code> rulings in <a href="./BE-042.html">BE-042</a>'s context model.</li>
+<li><code>authorityRepo</code> (core/loop.js, BE-032) strips arg0 via this wtdir, so a mutation verb inherits the wrong repo silently; BE-037 ruled a <code>///path</code> miss must be LOUD, but here it is a wrong-tree HIT, worse than a miss.</li>
+<li>Probe evidence: <code>uri._parse(&quot;///shared&quot;)</code> → host &quot;&quot;, path &quot;/shared&quot;; <code>wtdir(&quot;///shared&quot;)</code> from <code>work/putrepro</code> → <code>journal/shared</code> while <code>find(cwd).wt</code> = the putrepro clone.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Ruling needed (gritzko): <code>//</code> empty-host = the LAUNCH/nearest tree (<code>find(cwd)</code>) per the spec comment, or rootTop as the code does — then make spec and code agree.</li>
+<li>A mutation arg0/context must never silently anchor a DIFFERENT repo than the run's own tree; if <code>//</code> legitimately names an outer tree, crossing INTO it from a nested wt should refuse loudly.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro test first (<a href="/meta/work.html">work</a>); nested-worktree fixture (a clone inside a repo).</li>
+<li>Touching <code>wtdir</code>/<code>resolve</code> affects every verb — audit <code>//</code>-empty-host callers (pager launch context BE-046, <code>contextRepo</code> BE-039) before changing.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> gritzko ruling: launch tree vs rootTop for the empty host</li>
+<li><a href="./ .html"> </a> repro test: nested clone, <code>///path</code> arg + <code>//</code> context anchor the RIGHT tree</li>
+<li><a href="./ .html"> </a> align wtdir/resolve with the ruling; audit callers</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Blocked on the ruling above; <a href="/todo/PUT/PUT-008.html">PUT-008</a>'s worker must not touch this.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

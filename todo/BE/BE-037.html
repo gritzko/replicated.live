@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-037</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-037 <a href="./DONE.html">DONE</a>: diff ignores the context path — <code>./</code> prefix + <code>//</code> meta/launch split</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Reported by gritzko 2026-07-09: in the pager, <code>jab diff</code> then spell <code>:./test</code> → &quot;no hunks&quot; (bar <code>diff //journal/be/test</code>, SRC_ROOT set) and, SRC_ROOT unset, bar <code>diff ///be/test</code> (correct) but the view re-runs the BARE diff (first hunk <code>core/discover.js</code>) — the context path is not respected. Three causes traced:
+</p>
+<ul>
+<li>CONFIRMED by CLI repro: <code>jab diff test</code> scopes, <code>jab diff ./test</code> is EMPTY — <code>parseDiffArg</code> (views/diff/diff.js:434) keeps <code>u.path</code> verbatim and <code>diffWtTree</code>'s prefix filter (:267) compares <code>./test/</code> against classifier rows <code>test/…</code>; the <code>./</code> is never collapsed (only wtpath's lstat normalizes, not the prefix).</li>
+<li>BE-031 S2 aftershock: <code>navCwd</code> composes the META as <code>//</code> (empty authority), but <code>resolve()</code> (discover.js:280) and <code>wtdir()</code> treat host &quot;&quot;/&quot;.&quot; as the LAUNCH tree <code>find(io.cwd()).wt</code> — the NEAREST anchor, i.e. the be/ SUBMODULE when launched there — so <code>///be/test</code> resolves <code>&lt;be&gt;/be/test</code> (absent), not <code>&lt;meta&gt;/be/test</code>.</li>
+<li><code>authorityRepo</code> (core/loop.js): an empty-host arg whose wtdir misses skips the NAVNONE throw (<code>host !== &quot;&quot;</code> guard) and <code>continue</code>s — the raw <code>///be/test</code> reaches the verb, degrading to a bare whole-wt diff.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>jab diff ./test</code> (CLI) and <code>:./test</code> (pager, both SRC_ROOT states) scope the diff to <code>test/</code>.</li>
+<li><code>//</code>-authority URIs resolve against ONE tree definition, matching what <code>navCwd</code> composes.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first: a RED test per leg (new test cases allowed; existing tests untouched).</li>
+<li>Confinement invariants stay (resolveInTree NAVESCAPE paths byte-identical).</li>
+<li>The pager stays arg-blind (<a href="../../wiki/Nav.html">Nav</a>): fixes land in the verb/resolver, not in spell pre-merging.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>./</code>-collapse belongs where the path enters the verb (parseDiffArg or a shared normalizer), so the classifier prefix compare sees canonical repo-relative paths; sibling views (cat/ls/why/log) likely share the pattern — sweep.</li>
+<li>Empty-host semantics: &quot;&quot;/&quot;.&quot; should mean <code>topWt(find(cwd).wt)</code> — the tree <code>navCwd</code> names <code>//</code> — in resolve()/wtdir(); the launch-tree reading predates BE-031 S2 making <code>//</code> the meta's everyday name.</li>
+<li>authorityRepo: an empty-host wtdir MISS must be loud (NAVNONE), never a silent verbatim pass-through.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> RED repro: <code>test/diff/15-dot-dir-scope</code> + <code>test/uri011/nav-empty-host-top</code> (both RED pre-fix, GREEN after); pty spell repro skipped — driver.js mocks driveSpell, composer unit-covered.</li>
+<li><a href="./v.html">v</a> Path slot canonicalized via <code>resolveInTree(&quot;&quot;,path)</code> in diff/cat/why parseArg seams; bonus leg fixed: <code>diff ./file</code> no longer renders wholly-added (blobAtTree verbatim miss); log/status/ls/tree already fine; spot/grep reject paths; stage.js = mutation seam, out of scope.</li>
+<li><a href="./v.html">v</a> resolve()/wtdir() empty host → memoized <code>launchTop()</code> (topWt of launch; unmemoized find+topWt per wtpath call exhausted fds on whole-wt diffs — bisected); authorityRepo NAVNONEs every wtdir miss.</li>
+<li><a href="./v.html">v</a> Suite 161/162 (bro-view pre-existing); orchestrator re-verified live: <code>diff ./test</code> scopes (both SRC_ROOT states), <code>diff '///be/test'</code> scopes test-relative (anchors the test/ secondary wt), bare diff whole-wt, <code>../../etc</code> NAVESCAPE.</li>
+</ul>
+<h3>Fixed (uncommitted 2026-07-09)</h3>
+<ul>
+<li>views/diff/diff.js:442, views/cat/cat.js:152, views/why/why.js:81; core/discover.js launchTop + resolve/wtdir empty-host; core/loop.js authorityRepo miss→NAVNONE.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

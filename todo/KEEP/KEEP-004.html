@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KEEP-004</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>KEEP-004 <a href="./DONE.html">DONE</a>: keeper index runs must be compacted — every reindex piles on another <code>.keeper.idx</code> LSM run</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+RULING 2026-07-10 (gritzko): keeper index runs have to be compacted.
+</p>
+<ul>
+<li>shared/ingest.js buildIndex (per landed log) and PATCH-011's reindexShard (whole-shard combined run) each write a fresh <code>&lt;ron64&gt;.keeper.idx</code> and NEVER remove the superseded runs — runs accumulate on every get/clone/fetch.</li>
+<li>shared/store.js opens ALL <code>.keeper.idx</code> runs in the shard (abc.index over ext) — reads degrade with run count and stale runs shadow disk space forever.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+RULING 2026-07-10 (gritzko, supersedes the threshold idea):
+</p>
+<ul>
+<li>OPEN side: &gt;64 idx files → compact ON OPEN (a cliff-crossed shard self-heals the moment any verb opens the idx).</li>
+<li>WRITE side: whenever a new index run is added — check IsCompact; if not compact → compact (HITwh128IsCompact/Compact via the jab <code>_compact_wh128</code> binding).</li>
+<li>crash-safe order: the new run is durable BEFORE any old run unlinks (a reader must never see zero runs where it had one).</li>
+<li>acceptance on the LIVE hive: return the 65 moved-aside <code>.idx</code> files to ~/.be/beagle-ext (scratchpad hive-idx-backup/), then run any idx-opening verb — it must self-heal-compact and work.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>compaction lives at the WRITE side (ingest); store.js read side stays run-count-agnostic.</li>
+<li>repro test first: land N fetches, assert ONE run survives and the reader still locates every object; existing tests untouched.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> repro test: run-count after repeated land/reindex == 1, reader intact</li>
+<li><a href="./v.html">v</a> reindexShard: durable-new-then-unlink-old compaction</li>
+<li><a href="./v.html">v</a> per-log buildIndex runs folded/compacted</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The live-hive acceptance rite (restore the 65 moved-aside idx files from the session scratchpad, watch a verb self-heal) is unverifiable now — that scratchpad is gone; the hive's current state is the rite's outcome anyway.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Landed 2026-07-10 as <code>?1a751c6d</code> &quot;JS-116: compact the pack log indexes&quot; — be/shared/idxmaint.js: RUN_CAP=64 compact-on-open cliff, OPEN_CAP=32 threshold, post-build isCompact → compactAll, durable-before-unlink order.</li>
+<li>Live evidence 2026-07-17: ~/.be/beagle-ext (the 65-run incident shard) holds 3 idx runs; ~/.be/journal holds 1 keeper.idx run.</li>
+<li>Closed 2026-07-17 during the PACK-003 session (ticket had gone stale-open).</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

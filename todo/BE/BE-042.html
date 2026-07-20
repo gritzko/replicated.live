@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-042</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-042 <a href="./OPEN.html">OPEN</a>: formal context model — context(cwd) as a total function, one law for CLI and pager</h1>
+<p>
+The context URI must be DERIVED, never improvised: a process start or a navigation yields <code>address(tree) + subpath</code>, and every verb then resolves relative args via <code>resolve(context, base, rel)</code> <a href="BE-030.html">BE-030</a>. Today each consumer guesses its own anchor: the CLI drops the cwd sub-path <a href="BE-032.html">BE-032</a>, <code>//X</code> anchoring mis-fires across sub mounts <a href="BE-034.html">BE-034</a><a href="BE-039/README.html">BE-039</a>, and the cwd-rebase resolver sits unmerged <a href="../URI/URI-010.html">URI-010</a>. This ticket pins the formal model; <a href="../../wiki/Nav.html">Nav</a> gets rewritten from it once the open rulings land.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Ruling seed (gritzko, 2026-07-10): in <code>~/src/journal/wiki</code> the implied context is <code>//wiki</code> — journal is a PROJECT root (<a href="../../wiki/Project.html">Project</a>: the top-level repo holding meta/wiki/todo/html/work), not a worktree and not a submodule; the project's own name never enters the context URI.</li>
+<li>Live repro same day: <code>cd wiki &amp;&amp; jab delete Sniff.mkd</code> → &quot;0 row(s), 1 skipped&quot; while <code>jab delete wiki/Graf.mkd</code> from the root deletes; full bare-arg verb matrix (cat/log/why silently EMPTY from a subdir) recorded in <a href="BE-032.html">BE-032</a>.</li>
+<li>Prior art this model must subsume: <a href="BE-030.html">BE-030</a> resolve(context,base,rel) landed; <a href="BE-031.html">BE-031</a> hive (worktrees at <code>&lt;meta&gt;/work/NAME</code>); <a href="BE-033.html">BE-033</a> scheme-less <code>//X</code> is never a cached remote; <a href="BE-037.html">BE-037</a> <code>//</code> = the launch top everywhere; <a href="../URI/URI-010.html">URI-010</a> cwd-rebasing rules (implemented in wt <code>//URI-010</code>, unmerged).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>context(cwd)</code> is TOTAL: climb cwd to the nearest <code>.be</code> anchor giving tree T and sub-path P (cwd = root(T)/P); context = address(T) joined with P.</li>
+<li><code>address(T)</code>: the PROJECT root → bare <code>//</code> (the unnamed top, per <a href="BE-037.html">BE-037</a>); a hive worktree <code>work/N</code> → <code>//N</code> <a href="BE-031.html">BE-031</a> (the <code>work/</code> layer elides, <a href="../../wiki/Project.html">Project</a> §5); a submodule mounted at M → address(parent tree) joined with M.</li>
+<li>Joining with the bare <code>//</code> root puts the FIRST sub-path segment in the authority slot: <code>~/src/journal/wiki</code> → <code>//wiki</code>; <code>~/src/journal/be/core</code> → <code>//be/core</code>; <code>~/src/journal/work/BE-038/src</code> → <code>//BE-038/src</code>.</li>
+<li>Verbs resolve every arg as <code>resolve(context, arg)</code>: relative args join the context (then NAVESCAPE-confined); absolute paths and scheme/authority URIs bypass, exactly the <a href="../URI/URI-010.html">URI-010</a> trigger rule.</li>
+<li>CLI and pager derive the context through ONE composer, byte-identical results; <a href="../../wiki/Nav.html">Nav</a> and <a href="../../wiki/Worktree.html">Worktree</a> rewritten from the ruled model (both stale per <a href="BE-030.html">BE-030</a>).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The pure URI grammar stays cwd-agnostic; composition lives in be/ (<code>discover.js</code> navCwd/find) <a href="../URI/URI-010.html">URI-010</a>.</li>
+<li>Correct wt-root-relative semantics (e.g. <code>be put .</code> at the root, whole-tree get) must not shift <a href="BE-032.html">BE-032</a>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>OPEN RULING (gritzko): <code>//X</code> lookup order when X could be BOTH a hive worktree <code>work/X</code> and a first-level tree entry <code>X</code> (dir or sub) — work/-first, entry-first, or NAVNONE on collision? <a href="BE-031.html">BE-031</a> said &quot;//NAME = work/NAME, fixed convention&quot;; the <code>//wiki</code> ruling adds first-level entries as authorities.</li>
+<li>OPEN RULING (gritzko): is a plain-dir authority like <code>//wiki</code> addressable from OUTSIDE its tree (from another worktree's context), or only ever produced as an implied cwd context?</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> Settle the two rulings above; then rewrite <a href="../../wiki/Nav.html">Nav</a> (+ prune todo_root machinery per <a href="../BRO/BRO-023.html">BRO-023</a>) and the <a href="../../wiki/Worktree.html">Worktree</a> context section from the model.</li>
+<li><a href="./ .html"> </a> Repro tests: context derivation for each node kind — root subdir (<code>wiki/</code>), hive wt (<code>work/N/…</code>), sub mount (<code>be/…</code>), nested sub.</li>
+<li><a href="./ .html"> </a> Rebase + merge wt <code>//URI-010</code> (resolveWtPath) under this model, then the <a href="BE-032.html">BE-032</a> wtpath call-site sweep on top.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="../URI/URI-010.html">URI-010</a> merge risk: main landed URI-015 <code>082b172c</code> touching the same put/post intake paths — rebase before merge.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

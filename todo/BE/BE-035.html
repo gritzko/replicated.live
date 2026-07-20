@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-035</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-035 <a href="./OPEN.html">OPEN</a>: context conformance leftovers — silent <code>?rev</code> drops, leaky be-snapshot</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Two smaller divergences from the context model (<a href="../../wiki/Nav.html">Nav</a>: a <code>?rev</code> context reads repo objects; verbs may DROP context parts, but not mislead). (1) <code>views/status/status.js:92-93</code> and <code>views/ls/ls.js:191</code> deliberately drop <code>?ref</code> and read the live wt — at a pinned context <code>//ABC-123/dir?&lt;oldsha&gt;</code>, <code>:ls</code>/<code>:status</code> silently show live-wt content with no signal (cat/tree honor the rev, so views disagree). (2) <code>_snapBe</code>/<code>_restoreBe</code> (core/loop.js:245-249) snapshot <code>{repo,sink,format,force,flags}</code> but omit <code>be.authority</code> and <code>be.verb</code>, which <code>_cli</code> overwrites — a pager <code>:spell</code> reentry leaks its <code>//name</code> scope into the outer session until the next drive recomputes it.
+</p>
+<h3>Goals</h3>
+<ul>
+<li>/status at a <code>?rev</code> context either read the repo tree at that rev, or refuse/label loudly — a ruling, then fix.</li>
+<li>snapBe<code> covers every field </code>_cli` overwrites (authority, verb) so reentry is side-effect-free.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>e &quot;verbs may drop context parts&quot; clause covers WRITE verbs dropping <code>?rev</code>; read views showing wrong-rev content silently is what needs the ruling.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>RULING (gritzko 2026-07-09): status/head show the DIFFERENCE of tree A and tree B; default A = the worktree, B = its base commit; planned: wt vs any commit, and commit vs commit. A <code>?rev</code> context therefore selects tree B (or A for commit-to-commit), not a silent no-op.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> Implement per ruling: <code>status</code>/<code>head</code> at a <code>?rev</code> context diff against that rev; ls follows the same tree-select rule.</li>
+<li><a href="./ .html"> </a> Repro: pinned context, <code>:ls</code>/<code>:status</code> show live-wt content at <code>&lt;oldsha&gt;</code> with no signal.</li>
+<li><a href="./ .html"> </a> Add authority+verb to <code>_snapBe</code>/<code>_restoreBe</code>; repro via a reads-<code>be.authority</code> probe after reentry.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

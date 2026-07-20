@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-042</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-042 <a href="./HIGH.html">HIGH</a>: get on a mounted sub re-gets the anchor's own pin — a success-shaped no-op that can never advance</h1>
+<p>
+<code>get</code> on a mounted sub reads the checkout target from the SUB ANCHOR's recorded tip row, so it &quot;advances&quot; to the pin it is already at, prints a normal get record, and exits 0. The parent's gitlink and the sub's branch tip are both ignored. When they move ahead the sub is stuck FOREVER: every <code>get</code> reports success, <code>status</code> keeps saying <code>behind 1</code>, and no command moves the tree. Nothing is missing — the target commit is already in the local store.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Found 2026-07-14 on <code>journal/jab/dog</code>, where every source of truth already named <code>8ebbfd35</code> and only the wt lagged at <code>79612854</code>.
+</p>
+<ul>
+<li>Parent <code>journal/jab</code> pins <code>dog</code> -&gt; <code>8ebbfd35</code>; sub branch <code>.jab/JS-101</code> tip -&gt; <code>8ebbfd35</code>; the object is PRESENT locally.</li>
+<li>Sub wt baseline sits at <code>79612854</code>; <code>jab get ///jab/dog</code> prints <code>get ?.jab/JS-101#79612854</code> and exits 0.</li>
+<li><code>jab status</code> after that get is byte-identical to before: <code>367 ok (behind 1)</code> + a <code>miss ?8ebbfd35#bump libabc ver...</code> row.</li>
+<li>The anchor's tip row is the culprit source: <code>26710IOvB_ get ?/libdog/.jab/JS-101#79612854...</code> — get honours THAT pin.</li>
+<li>No fetch can help (the object is local), so this is a target-selection bug, not a transport one.</li>
+<li>Consequence: a sub whose parent gitlink advances is unreachable by <code>get</code> — the only documented update verb (<a href="/meta/work.html">work</a>).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+<code>get</code> on a mounted sub advances to the intended commit, or refuses LOUDLY — never a success-shaped no-op.
+</p>
+<ul>
+<li>Decide and document the authority: the parent's gitlink pin, the sub's tracked branch tip, or an explicit rev arg.</li>
+<li>A get that changes nothing because it is ALREADY at the target says so; a get that cannot reach the target fails.</li>
+<li><code>status</code>'s <code>behind N</code> must be actionable — some command must clear it.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Repro test first (<a href="/meta/work.html">work</a>); fix in beagle-ext (JS), no C changes; minimal diff.
+</p>
+<ul>
+<li><a href="/todo/SUBS/SUBS-053.html">SUBS-053</a> is reordering <code>mount()</code> in the same area — coordinate, do not collide.</li>
+<li>Check native C <code>be get</code> for a behind sub before choosing the authority (parity target).</li>
+<li>Do not weaken <a href="./GET-037.html">GET-037</a> atomicity or the <a href="/wiki/Submodules.html">Submodules</a> pin semantics.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Nothing settled — the authority question is genuinely open and gritzko should rule.
+</p>
+<ul>
+<li>Candidate A: the parent gitlink is authoritative (a sub is a pin). Then a bare <code>get</code> in the SUB should refuse, not no-op.</li>
+<li>Candidate B: the sub's tracked branch tip is authoritative. Then <code>get</code> must resolve the branch, not replay the pin.</li>
+<li>The anchor's recorded pin is a HISTORY row, not a target — reading it as the target is what makes the no-op.</li>
+<li><a href="/todo/GET/GET-045.html">GET-045</a> blocks the explicit escape hatch: the branch form <code>status</code> prints does not resolve.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro test: sub behind its parent gitlink + branch tip -&gt; <code>get</code> must not report a clean no-op</li>
+<li><a href="./ .html"> </a> check native C <code>be get</code> behaviour for a behind sub (parity)</li>
+<li><a href="./ .html"> </a> decide the authority (gitlink vs branch tip vs explicit arg) — gritzko's call</li>
+<li><a href="./ .html"> </a> fix the target selection; keep the get record honest (no success row on a no-op)</li>
+<li><a href="./ .html"> </a> verify <code>status</code>'s <code>behind 1</code> clears after the fix</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<p>
+The authority decision is a spec question, not a code question.
+</p>
+<ul>
+<li><a href="/wiki/Submodules.html">Submodules</a> should state which of the pin / branch tip wins for a sub <code>get</code>; confirm before coding.</li>
+<li>Reproduced only on the live <code>journal/jab/dog</code> state; a hermetic fixture still needs building.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+  -
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STATUS-010</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>STATUS-010 <a href="./HIGH.html">HIGH</a>: <code>jab status ///X</code> resolves the bare-<code>?</code> track in the WRONG project context — the whole branch dumps as <code>post</code> rows, &quot;(behind 1, ahead 52)&quot;</h1>
+<p>
+Live 2026-07-16, right after <a href="STATUS-009.html">STATUS-009</a> landed (<code>cfb712d5</code>): from <code>work/STATUS-009</code>, <code>jab status ///be | cat</code> printed be/'s ENTIRE commit log as 52 <code>post</code> (ahead) rows + one <code>miss ?830e16da#ssh://git@github…</code> and the summary &quot;(behind 1, ahead 52)&quot;. Run INSIDE be/ (its own pre-fix jsrc) the same wt reads a correct &quot;(behind 1)&quot;. be/'s wtlog anchors <code>file:/home/gritzko/.be/?/beagle-ext</code> and tracks trunk (<code>?#d890b27b…</code> last get), so the track tip is central-store beagle-ext trunk <code>cfb712d5</code> — behind 1, ahead 0. Instead the new divergence (STATUS-009: <code>resolve_hash(navCwd(repo.wt), att.track)</code>) resolved <code>?</code> to <code>830e16da</code> — a FOREIGN lineage tip (its subject matches the journal-project family, not beagle-ext), so the ancestry walk classed every beagle-ext commit as ahead and the foreign tip as missing. Same failure CLASS as the known silent project fallback (an unknown project name does NOT error — it silently resolves another project); STATUS-009's own report flagged the sub/mount-root re-anchor as untested ground, predicting REFNONE→empty — reality is worse: a WRONG tip, confidently walked.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The one divergence ref now comes from resolve_hash under the TARGET's context; for a <code>///X</code> arg that context resolves to the wrong project.
+</p>
+<ul>
+<li>Repro: <code>cd work/STATUS-009 &amp;&amp; jab status ///be | cat</code> → 52 <code>post</code> rows (whole log since Jul 7), <code>miss ?830e16da#ssh://git@github.com:gritzko/beagle-journal.git</code>, summary <code>?\t92 ok, 1 mod  (behind 1, ahead 52)</code>.</li>
+<li>Control: <code>cd be &amp;&amp; jab status | cat</code> (pre-fix jsrc) → <code>(behind 1)</code> only — the correct answer is behind={cfb712d5}, ahead=∅.</li>
+<li><code>be/.be</code> row 0 anchors <code>file:/home/gritzko/.be/?/beagle-ext</code>; last get <code>?#d890b27b…</code> → track = trunk of THAT anchor.</li>
+<li><code>830e16da</code> is not the journal wt's trunk tip (<code>7e68484e</code>) but shares its one-line subject family — a journal-lineage commit; the resolver landed in another PROJECT's DAG inside the central store (or a wrong shard), not on beagle-ext trunk.</li>
+<li>RULED (gritzko 2026-07-16): <code>//X</code> resolves ONLY as &quot;wt X in the current project&quot; (<code>$SRC_ROOT/work/X</code>), <code>///X</code> as &quot;main tree, subdir X&quot; (<code>$SRC_ROOT/X</code>) — <a href="/wiki/URI.html">URI</a> resolve_hash step 2. So <code>///be</code> is the main tree's <code>be/</code> subdir; per steps 4-5 the SHARD then derives from the FIXED PATH (be/'s own <code>.be</code> anchor → beagle-ext), and a <code>?branch</code> resolves against THAT store/shard reflog (step 5.3).</li>
+<li>Suspect: <code>views/status/status.js</code> computeDivergence (STATUS-009) — <code>resolve_hash(discover.navCwd(repo.wt), att.track)</code>; the bare <code>?</code> got resolved against the CURRENT project's shard (journal) instead of re-deriving the shard from the resolved path's anchor per step 4; the silent project fallback then hands back a live foreign tip instead of erroring.</li>
+<li>The sub leg is fine: <code>status test</code> renders <code>///be/test#387ee76b\t364 ok</code> — the new label works where the context lands right.</li>
+<li>STATUS-009's worker flagged the adjacent shape in its report (&quot;bare-mount-root re-anchor lands on the parent shard → likely REFNONE&quot;) — untested then, live now with a worse outcome.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+The divergence ref for a targeted wt resolves in THAT wt's own anchor context, or refuses — never a foreign DAG.
+</p>
+<ul>
+<li><code>jab status ///X</code> (from anywhere) computes ahead/behind for X against X's OWN track tip (here: central beagle-ext trunk → behind 1, ahead 0).</li>
+<li>A track that cannot be resolved IN THE TARGET'S context yields NO divergence (or an explicit <code>?</code>-unresolved marker) — never a silently-wrong tip; kill the silent-project-fallback leak on this path.</li>
+<li>Repro-first: a fixture with parent-store + two projects where <code>?</code> under the target wt must pick the target's project; assert behind/ahead counts and that the foreign-project tip never appears.</li>
+<li>Audit the OTHER <code>resolve_hash(navCwd(…))</code> call sites STATUS-009 added for the same context slip (label leg included), and cover the sub/mount-root shape its report flagged.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Same laws as <a href="STATUS-009.html">STATUS-009</a>: one reader, one resolver.
+</p>
+<ul>
+<li>ALL resolution stays in core/resolve_hash.js and follows <a href="/wiki/URI.html">URI</a>'s step order — the fix is deriving the shard from the resolved path (step 4) and resolving <code>?</code> against it (step 5.3), not a second resolver or a hand parse.</li>
+<li>Pager context law (BRO-024) stands: a <code>///X</code> ARG must not mutate the caller's context; the target's shard comes from the arg's resolved path, not from cwd.</li>
+<li>Don't regress the landed <a href="STATUS-009.html">STATUS-009</a> rendering/tests (242 green incl. <code>be-js-status-track</code>).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>ONE line in <code>core/resolve_hash.js frame()</code>: a PATH-LESS uri (the bare-<code>?</code> track) sits AT the context's own dir — <code>entered = raw === &quot;&quot; || &lt;trailing slash&gt;</code> — so the bare-mount-root re-anchor no longer fires and step 4 keeps the TARGET's anchor; step 5.3 then resolves <code>?</code> in the target's shard. No status.js change; the trailing-slash <code>sub</code> vs <code>sub/</code> convention untouched.</li>
+<li>Unresolvable track (absent trunk ref): resolve_hash throws REFNONE, computeDivergence's existing catch emits NO divergence — empty, never silently wrong.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> repro <code>test/status/xproject/run.sh</code> (<code>be-js-status-xproject</code>): 3-shard store, subs anchored to foreign projects; pre-fix reproduces <code>(behind 1, ahead 1)</code> with the foreign tip as <code>miss</code>; post-fix behind-only + no foreign tip; orphan-shard leg asserts empty divergence</li>
+<li><a href="./v.html">v</a> divergence resolves in the target's shard (see design decisions)</li>
+<li><a href="./v.html">v</a> unresolvable track → empty divergence (orph leg)</li>
+<li><a href="./v.html">v</a> audit: status.js has ONE resolve_hash site (fixed via the resolver); the label leg shows the recorded track, no resolution; the flagged sub/mount-root recursion shape had the same slip, fixed by the same line; other verbs' navCwd sites pass caller contexts for user ARGS — correct per spec, suite green</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The ENABLER is its own ticket now: <a href="../JS/JS-118.html">JS-118</a> <code>store.shardDir</code> silently adopts a sibling shard for an unknown project (&quot;last non-dotted subdir wins&quot;) — turned this slip into a foreign-DAG walk instead of a refusal.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FILED 2026-07-16 off gritzko's live repro minutes after STATUS-009 landed.</li>
+<li>2026-07-16 fix + repro in <code>work/STATUS-010</code> (uncommitted): one line in core/resolve_hash.js + new xproject test; suite 246/246 (orchestrator re-ran). Awaiting review/land order.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

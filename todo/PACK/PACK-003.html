@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PACK-003</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PACK-003 <a href="./HIGH.html">HIGH</a>: idxmaint <code>pack.scan: scan (out full? corrupt?)</code> on every <code>jab status</code> — single-pack scan vs JS-117 multi-pack keeper logs</h1>
+<p>
+<code>jab status</code> in the journal tree prints <code>idxmaint: Error: pack.scan: scan (out full? corrupt?)</code> TWICE before rendering. idxmaint finds keeper logs with no idx coverage and calls <code>ingest.buildIndex</code> → <code>pk.scan</code> → native <code>PIDXScan</code> over the WHOLE log; the scan is single-pack/header-count-driven, a JS-117 log with appended packs behind the first header makes it fail. The logs stay unindexed forever, so their objects stay <code>unk</code>/<code>miss</code> — and the warn repeats on EVERY status. Deferred from <a href="/todo/PATCH/PATCH-012.html">PATCH-012</a> (&quot;count-trusting class, needs own repro/ticket&quot;); distinct from <a href="/todo/JAB/JAB-008.html">JAB-008</a> (BASS drain — this repros in a FRESH process).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Incident 2026-07-17, <code>~/src/journal</code>: <code>jab status</code> → the warn twice, then a working status listing (with a <code>miss ?cba10972#README.mkd</code> row). Store <code>~/.be/journal/</code>: 4 logs <code>0000000001..4.keeper</code>, ONE <code>26710JvjCN.keeper.idx</code> run.
+</p>
+<ul>
+<li><code>be/shared/ingest.js</code> buildIndex (line ~143): <code>pk.scan(buf)</code> with <code>buf = io.buf(pk.count*16+256)</code> — <code>pk.count</code> is the FIRST header's count; walkTail (JS-117) covers the appended tail only AFTER a successful scan.</li>
+<li><code>jab/pack.hpp:289</code> JABCpackScan: <code>PIDXScan(pack, 0, ...)</code> walks <code>[0, dataLen)</code> = the whole mmapped log; a mid-stream pack header (appended pack, GET-046 verbatim keeper-served logs) or count/out exhaustion → generic <code>scan (out full? corrupt?)</code>.</li>
+<li><code>be/shared/idxmaint.js</code> line ~247 catches per-log and warn()s — non-fatal but re-attempted (and re-warned) every run; <code>built</code> stays false.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+<code>jab status</code> in the journal tree runs warn-free; all 4 logs get idx coverage; the <code>miss</code> rows for objects living in the unindexed logs clear.
+</p>
+<ul>
+<li>Repro first: a test log = pack A + appended pack B records (or a copy of a failing journal log) making buildIndex throw exactly this error.</li>
+<li>Determine which of the 4 journal logs fail and WHY (mid-stream header vs out sizing vs true corruption) — the fix depends on it.</li>
+<li>Scan multi-pack logs correctly: per-embedded-pack scan windows (PACK-001 <code>from_off</code> exists) or scan-then-walkTail per segment.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Native <code>PIDXScan</code> stays single-pack; segmentation logic belongs to the JS side (ingest.js) that already knows the JS-117 log layout.</li>
+<li>Distinguish the failure classes in the throw — <code>out full</code> vs <code>corrupt</code> as one message is undebuggable (this ticket's incident is the proof).</li>
+<li>The landed logs are durable data — read-only diagnosis; NO log rewriting/migration in this ticket.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Diagnosis OVERTURNED the intro's hypothesis twice: the journal shard is healthy (4 logs fully idx-covered, header count == records, no mid-stream PACK header in ANY store log); the warns come from the beagle SUB store. Failure class is torn/corrupt bytes, so the fix is salvage, not segmentation. CORRECTED 2026-07-17 (STATUS-scan investigation): BOTH warns are <code>~/.be/beagle</code> — status opens that shard TWICE (status.js:279 emitRepo + status.js:485 divergence→resolve_hash.js:302, two reader instances, maintain unmemoized); <code>~/.be/beagle.new</code> is NEVER opened by status (shardDir resolves <code>beagle</code> directly; fixture decoy: 0 opens) — its corruption is real but dormant.
+</p>
+<ul>
+<li><code>~/.be/beagle/0000000001.keeper</code>: 116708-byte ZERO tail = two torn appends (<a href="/todo/JAB/JAB-008.html">JAB-008</a> class: resize + idx run persisted, record bytes/msync lost, 325 records gone); header counts them → count-driven PIDXScan walks into zeros → PIDXFAIL.</li>
+<li><code>~/.be/beagle.new/0000000001.keeper</code>: ~9.5MB corrupt region at 1214193 (bad zlib, born-torn clone; same pack re-appended at 10723328).</li>
+<li>The generic <code>out full? corrupt?</code> here always meant CORRUPT; idxmaint re-attempted both logs on every open — warn x2 per status, forever.</li>
+<li>BONUS live bug: walkTail sized resolve scratch off <code>pk.size</code>, which for ofs-delta is the DELTA size → NOROOM → 11269 of 28986 salvageable beagle records silently dropped.</li>
+<li>Fix (shared/ingest.js): <code>walkOffsets</code> extent census (skips GET-046 verbatim embedded headers, stops at torn bytes); <code>resolveEntries</code> grow-on-NOROOM; buildIndex keeps the native scan as fast path, on throw salvage-indexes every resolvable record + bookmarks the full extent — one-time rebuild, no re-warn.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> diagnose per log: journal 1-4 healthy/covered; beagle torn zero tail; beagle.new corrupt region (table in worker report).</li>
+<li><a href="./v.html">v</a> repro <code>test/packsalvage.js</code> (<code>be-js-unit-packsalvage</code>): torn tail (the incident error), embedded-pack drop, both, ofs-delta NOROOM — all red on pristine be/.</li>
+<li><a href="./v.html">v</a> fix: salvage path in buildIndex (+77/-21 in shared/ingest.js).</li>
+<li><a href="./ .html"> </a> split the pack.hpp:289 throw (jab-side, untouched): PIDXFAIL vs out-full vs NOROOM.</li>
+<li><a href="./ .html"> </a> expose PIDXScan <code>from_off</code> through the <code>pk.scan</code> binding (hardcodes 0) — native segment scans later.</li>
+<li><a href="./v.html">v</a> verify: copies of both bad logs salvage 28986/28986 + 3073 parseable records, full-extent coverage, warn-free; suite 267/267 <code>-LE big</code>. Store itself untouched — the fix must MERGE before the real <code>jab status</code> warns clear; beagle's 325 torn records + beagle.new's garbage need a re-fetch to heal <code>miss</code> rows.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<p>
+Root cause of the torn appends is <a href="/todo/JAB/JAB-008.html">JAB-008</a> (BASS drain): appendRecords' crash-ordering claim does not hold on the BASS path — resize+idx survive while record bytes are lost.
+</p>
+<h2>Outcome</h2>
+<p>
+UNCOMMITTED in work/PACK-003 per the no-post order: mod shared/ingest.js (+77/-21); test subrepo: mod CMakeLists.txt (registration line), new test/packsalvage.js; scratch/ holds log copies + diag scripts. Orchestrator re-verified repro + suite. Suggested commit: <code>PACK-003: salvage-index torn keeper logs</code>.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

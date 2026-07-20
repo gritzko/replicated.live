@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOG-021</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG-021 <a href="./HIGH.html">HIGH</a>: JST regex literal ends at a <code>/</code> inside a char class</h1>
+<p>
+The <code>js</code> dogenizer's regex-literal rule tracks no character-class state, so an unescaped <code>/</code> inside <code>[...]</code> ends the literal early. The tail then lexes as code, and a quote/backtick in it opens a string that never closes, running the machine to EOF and overflowing the markup buffer — <code>weave.fold</code> throws <code>failed (out full?)</code>. Casualty: <code>be/verbs/mark/render.js</code> (its punct rule is such a regex) cannot fold, so <code>jab diff</code> prints nothing for it. <a href="/todo/DIFF/DIFF-014">DIFF-014</a> covers the swallow that hides this.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Hit while diffing uncommitted work in <code>be/</code> — <code>diff</code> reported no hunks though <code>status</code> said <code>2 mod</code> (<a href="/todo/STATUS/STATUS-008.html">STATUS-008</a>).
+</p>
+<ul>
+<li><code>jab diff be/</code> renders <code>core/loop.js</code> but omits <code>verbs/mark/render.js</code>; <code>jab diff &lt;that file&gt;</code> prints nothing, exit 0.</li>
+<li><code>weave.fold(null, blob, &quot;js&quot;, id)</code> throws <code>failed (out full?)</code> on the CLEAN committed blob <code>06f9d7ab</code> (16770 b); cap is 4MB.</li>
+<li>Same blob folds OK with ext <code>&quot;&quot;</code> and <code>txt</code>, fails with <code>js</code> and <code>c</code> — a lexer defect, not a weave/buffer one.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Make <code>JSTLexer</code> tokenise a regex literal whose character class contains <code>/</code>, so <code>render.js</code> folds and <code>diff</code> renders its hunks.
+</p>
+<ul>
+<li>Minimal repro, verified both ways: <code>{ re: /[a;/'b]/y, tag: 1 }</code> FAILs; drop the class <code>/</code> → ok; keep it, drop quote → ok.</li>
+<li>Both halves are needed: the early-terminating <code>/</code> AND an unterminated string in the tail. Either alone is harmless.</li>
+<li>Field case is <code>render.js:43</code>-shaped: <code>{ re: /[[\]()!*_~|\\:.\-+#&amp;&lt;&gt;{}=,;/'&quot;@^</code>]/y, tag: &quot;P&quot; }`.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Ragel only — no hand-written byte scanning (<a href="/meta/abc.html">abc</a>, stated five times over).
+</p>
+<ul>
+<li>Fix lives in <code>jab/dog/tok/JST.c.rl:103</code> (the <code># ---- regex literal ----</code> rule); regenerate <code>JST.rl.c</code>.</li>
+<li><code>beagle/dog/tok/JST.c.rl</code> is the C twin — keep byte-parity or ticket the divergence.</li>
+<li>The rule's comment already concedes it: &quot;true regex detection needs parser state&quot;.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Add a char-class sub-machine to the regex-literal rule so a <code>[...]</code> span swallows <code>/</code>.
+</p>
+<ul>
+<li>Candidate: <code>&quot;/&quot; ( [\\] any8 | &quot;[&quot; ( [\\] any8 | any8 - [\]\\\n] )* &quot;]&quot; | any8 - [/\\\n[] )+ &quot;/&quot; [dgimsuyv]*</code>.</li>
+<li>Regex-vs-divide disambiguation needs parser state and is OUT of scope — this ticket only stops a class ending the literal.</li>
+<li>The <code>ext=c</code> failure is analogous but unconfirmed (likely an unterminated <code>'</code> char literal) — own ticket if real.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro test: fold <code>{ re: /[a;/'b]/y, tag: 1 }</code> with ext <code>js</code>, assert no throw</li>
+<li><a href="./ .html"> </a> fix the <code>JST.c.rl</code> regex rule (char-class sub-machine), regenerate</li>
+<li><a href="./ .html"> </a> assert <code>jab diff be/verbs/mark/render.js</code> renders hunks</li>
+<li><a href="./ .html"> </a> check the <code>beagle/dog/tok/JST.c.rl</code> twin</li>
+<li><a href="./ .html"> </a> confirm/deny the <code>ext=c</code> (CT lexer) analogue → own ticket</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<p>
+The field casualty's wt bytes are uncommitted, but the repro does not depend on them.
+</p>
+<ul>
+<li><code>render.js</code> wt side (19078 b) is UNCOMMITTED; the FROM blob <code>06f9d7ab</code> is in the store and fails alone, so tests need no wt.</li>
+<li>Probe harness: a throwaway <code>jsrc/views/probe</code> plant under <code>work/DIFFPROBE</code> (disposable, no main-tree edits).</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+  -
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

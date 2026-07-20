@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-063</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-063 <a href="./OPEN.html">OPEN</a>: be/ JS <code>get ///jab/</code> must CLONE the submodule into cwd and INHERIT its tracked pin-branch; today it in-place-refreshes the source tree and records trunk</h1>
+<p>
+<a href="../../blog/trees.html">trees</a> example 1 (lines 155-166): <code>jab get ///jab/</code> inside an empty <code>work/TKT-123</code> clones the main tree's jab submodule there, and the fork inherits the pin-branch the source tracks (<code>?/jab/.beagle</code>, lines 193-197). Neither half holds. (a) authorityRepo (loop.js:189-217) consumes the <code>//</code>+empty-host authority, rescopes the run to the main tree's <code>jab/</code> and blanks the arg — get's plain driver then in-place FF-refreshes THE SOURCE (inRepoSeed get.js:1031-1061, 429-434), cloning nothing; get.js:286-292 documents this as known (&quot;a <code>//name</code> nav authority is the CONTEXT…, NOT a clone SOURCE&quot; — the BE-030 &quot;separate follow-up&quot;, unticketed until now). (b) Even on the working local-source path, seedLocal (get.js:170-189) records <code>?&quot;&quot;#tip</code> = TRUNK: rem.branch comes only from an explicit <code>?/proj/branch</code> query (get.js:91-93); resolveLocalSource (get.js:141-165) never reads the source's attachedBranch. The mis-tracked fork poisons the whole example chain: example 4's commit then advances trunk, not <code>?/jab/.beagle</code>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>isRemoteSeed is false for <code>///jab/</code> — empty authority is falsy (get.js:261-267); only schemed/<code>.be</code>-path sources route to handleSeed+seedDest (get.js:296-319).</li>
+<li>Hive-cell minting exists for those seed paths already (<a href="../BE/BE-031.html">BE-031</a>, seedDest) — the mkdir half of the flow.</li>
+<li><a href="../GET/GET-038.html">GET-038</a> resolveLocalSource follows a source wt's <code>.be</code> FILE row-0 store redirect — the store half works; only the branch is dropped.</li>
+<li>Wiki counterpart: <a href="../../wiki/GET.html">GET</a>:28 &quot;<code>//ABC-123</code> checkout the rev worktree ABC-123 is on&quot; — rev only, silent on tracked-branch inheritance (wiki audit omission 17).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>An explicit <code>//X</code>/<code>///sub/</code> OPERAND to <code>get</code>, when cwd is NOT inside X, is a clone SOURCE: seed into cwd (or the named cell), not an in-place refresh of X.</li>
+<li>seedLocal defaults rem.branch to the source wt's <code>attachedBranch</code> (wtlog.open(src).attachedBranch() via branchlib) — the fork tracks the source's pin-branch.</li>
+<li>Repro: fork-from-submodule fixture; assert the new wt's row is <code>?/jab/.beagle#&lt;tip&gt;</code>, then a commit there reads &quot;ahead&quot; of that branch.</li>
+<li><a href="../../wiki/GET.html">GET</a> gains the inheritance sentence.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The explicit-operand-vs-context classifier is shared with <a href="DIS-062.html">DIS-062</a>; keep one mechanism (the BE-030 follow-up), arg0-only per <a href="../BE/BE-039/README.html">BE-039</a>.</li>
+<li>cwd INSIDE X keeps today's meaning (context refresh) — no behavior change for <code>get</code> at home.</li>
+<li>Repro-first; do not touch unrelated get legs (<a href="DIS-055.html">DIS-055</a> adjacency).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(none yet)</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: empty dir + <code>get ///jab/</code> → clone lands in cwd, tracked row = source's pin-branch</li>
+<li><a href="./ .html"> </a> operand classifier (with <a href="DIS-062.html">DIS-062</a>): explicit source vs context authority</li>
+<li><a href="./ .html"> </a> seedLocal: attachedBranch inheritance; keep explicit <code>?query</code> override winning</li>
+<li><a href="./ .html"> </a> GET.mkd:28 inheritance clause</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none yet)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FILED 2026-07-12 (trees.mkd audit); nothing landed yet.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

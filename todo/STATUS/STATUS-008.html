@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STATUS-008</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>STATUS-008 <a href="./HIGH.html">HIGH</a>: status reported <code>91 ok</code> over two files holding uncommitted work — unexplained, not reproduced</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Observed 2026-07-14 on <code>journal/be</code>: <code>jab status</code> reported <code>91 ok</code> (all clean) while <code>core/loop.js</code> and <code>verbs/mark/render.js</code> both held uncommitted local work. After an unrelated same-tip <code>jab get</code> reconcile the SAME command reported <code>89 ok, 2 mod</code>. Nothing but the two files' mtimes changed. Uncommitted work was invisible to status for an unknown period — a <code>get!</code> would have discarded it with no warning.
+</p>
+<ul>
+<li>Reported by gritzko's own <code>jab status | cat</code> → <code>91 ok</code>, and reproduced by a fresh-process <code>jab status</code> (so not a resident-loop artifact alone).</li>
+<li>The work is REAL: <code>verbs/mark/render.js</code> (19078 B) carries a <code>&lt;figure&gt;</code>/<code>&lt;figcaption&gt;</code> renderer the tip does not have; <code>core/loop.js</code> (29376 B) carries a small edit (+33 B, same 514 lines).</li>
+<li>The work is in NO commit: blob sha1 <code>c72e6d54</code> (loop.js) and <code>2ea3e1bf</code> (render.js) both miss <code>store.open(&quot;/home/gritzko/.be&quot;,&quot;beagle-ext&quot;).getObject(h)</code>.</li>
+<li>Probe method validated: the clean committed <code>render.js</code> blob <code>06f9d7ab</code> IS found by the same probe.</li>
+<li>Neither tip carries it: a clean checkout of <code>f21f30f5</code> AND of the prior tip <code>33295788</code> both give <code>render.js</code> = 16770 B with zero <code>figcaption</code> hits.</li>
+<li>The get did NOT create the content: with <code>oldTip == tip</code> (same-tip reconcile) <code>base == theirs</code>, so <code>weave3</code> returns <code>ours</code> verbatim (<code>verbs/get/get.js:895-899</code>) — the <code>mrg</code> rows were byte-identical rewrites that only bumped mtime to 14:53:52.</li>
+<li>Verified in a worktree: a dirty file carried through a same-tip reconcile is byte-identical after its <code>mrg</code> row (<code>cmp</code> clean) — so the pre-get bytes were the same dirty bytes status called <code>ok</code>.</li>
+<li>NOT reproduced: in a clean clone a dirty file reports <code>mod</code> immediately, and backdating the edit's mtime to before the last <code>get</code> record does NOT hide it (<code>shared/classify.js:34</code> — hashes content, &quot;never mtime alone&quot;).</li>
+<li>Same session, same tree, same 13:26 window as the silent sub unmount (<a href="/todo/SUBS/SUBS-053.html">SUBS-053</a>) — a shared transient cause is plausible but unproven.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Explain and fix the under-report: a file whose bytes differ from the baseline blob is ALWAYS <code>mod</code>, never counted <code>ok</code>.</li>
+<li>A regression test that pins the guarantee for whatever state triggered it.</li>
+<li>Until understood, treat <code>get</code>/<code>get!</code> over this tree as capable of discarding invisible work.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro FIRST — no fix without a failing case (<a href="/meta/work.html">work</a>); this ticket is evidence-only so far.</li>
+<li>Fix in beagle-ext (JS), no C changes; minimal diff, no edits to unrelated tests.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Nothing decided — root cause unknown. Hypotheses below are UNTESTED leads, ranked.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> hypothesis: stale <code>be/..be.idx</code> (binary wtlog index, mtime 13:26:24) → <code>wtlog.curTip()</code> yields a baseline that is not the wtlog's last <code>get</code> record</li>
+<li><a href="./ .html"> </a> hypothesis: the 13:26 FF get (<code>be/.be</code> line 54) died part-way, leaving wtlog/index state inconsistent — same blip as <a href="/todo/SUBS/SUBS-053.html">SUBS-053</a></li>
+<li><a href="./ .html"> </a> hypothesis: <code>shared/classify.js:90-95</code> <code>nestedPrefixes</code> wrongly excludes paths from the wt scan (a dir carrying <code>.be</code>/<code>.git</code>); note <code>be/jsrc -&gt; .</code> is a self-symlink</li>
+<li><a href="./ .html"> </a> hypothesis: resident-loop stale require cache serving an old <code>classify.js</code>/<code>status.js</code></li>
+<li><a href="./ .html"> </a> repro test: whatever state reproduces <code>ok</code> over edited bytes</li>
+<li><a href="./ .html"> </a> fix + regression test</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The triggering state was DESTROYED by the recovery get (mtimes bumped, status now honest) — the tree can no longer be sampled in its broken form.</li>
+<li>Evidence preserved only as this ticket; no copy of the pre-get tree was taken.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

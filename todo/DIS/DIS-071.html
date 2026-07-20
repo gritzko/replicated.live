@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-071</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-071 <a href="./DONE.html">DONE</a>: the track-URI model — a worktree tracks the URI it last <code>get</code> from, not a bare branch string (umbrella)</h1>
+<p>
+<a href="../../blog/worktree.html">worktree</a> (AUTHORITATIVE; it replaced the deleted trees.mkd, of which only <code>img/trees.jpg</code> survives) gives a worktree exactly two parameters — the URI it <strong>tracks</strong> and its <strong>base</strong> commit — and RULED 2026-07-15 (gritzko) pins the four laws: (1) you track the URI (branch, remote or worktree) you last <code>get</code> from; (2) bare <code>get</code> and bare <code>post</code> imply that URI; (3) every get/post record carries the base hash in its fragment; (4) a submodule tracks the parent's pin, addressed by the child worktree's local URI <code>//WT/path/to/sub</code>. be/ JS models track as a bare branch STRING: every get record strips the authority (get.js:185,242,520), refOf adopts a branch from LOCAL rows only (wtlog.js:52-55), and tip() walks back PAST a remote row to keep the last local branch (wtlog.js:116-127) — a remote or worktree source is unrepresentable and survives only in row 0's store anchor. The wiki codifies the same narrowing (<a href="../../wiki/Worktree.html">Worktree</a>:7,12, <a href="../../wiki/POST.html">POST</a>:48). This umbrella carries the ONE row grammar <code>//WT/path?branch#base</code> — wt, sub and remote recorded identically; the children carry the concrete defects.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Track is a branch string at every layer — records, readers and wiki alike; the URI never reaches the wtlog.
+</p>
+<ul>
+<li>RULED 2026-07-15 (row shape): every get/post record IS the full context URI <code>//WT/path/to/sub?branch#base</code>; row 0 stays the store anchor.</li>
+<li>RULED 2026-07-15 (detach): a bare <code>post</code> does NOT detach a branch-tracking wt — track stays, base moves, the wt reads &quot;ahead&quot; (<a href="../../blog/worktree.html">worktree</a>:29-33).</li>
+<li>RULED 2026-07-15 (detach, cont.): only pin/hash tracking detaches on its own commit — a pin has nothing to advance.</li>
+<li>RULED 2026-07-15 (nesting): <code>//WT</code> is flat — the worktree owning the tree plus the whole path (<code>//ABC-123/lib/abc/dog</code>), never a per-mount worktree name.</li>
+<li>Every get record drops the authority — <code>URI.make(undefined, undefined, undefined, branch, tip)</code> at get.js:185, 233, 242, 482, 494, 504, 520.</li>
+<li>wtlog.attachedBranch returns <code>{branch, detached, rawQuery, sha}</code> — no host slot (wtlog.js:141-156); refOf's <code>local</code> gate refuses a remote row's branch (wtlog.js:52-55).</li>
+<li>Remote-tracking lives in the refs ULOG instead (<code>//host?br#sha</code>, store.js:462-478 eachRemote) with nothing tying a worktree to it.</li>
+<li><a href="DIS-061.html">DIS-061</a> is <a href="./STALE.html">STALE</a>-superseded here: its trees.mkd authority is deleted, its pin-reflection ruling dies with the pin-branches; live defects refiled as <a href="DIS-072.html">DIS-072</a>/<a href="DIS-074.html">DIS-074</a>/<a href="DIS-076.html">DIS-076</a>.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+One grammar, one reader, one implied target — the whole track/base system, per <a href="../../blog/worktree.html">worktree</a>.
+</p>
+<ul>
+<li>ONE row grammar for every source: <code>//WT/path?branch#base</code> — a wt, a sub and a remote parse and record identically.</li>
+<li>track = the URI of the recentmost <code>get</code> record, authority included; base = the fragment of the recentmost get/post record.</li>
+<li>Bare <code>get</code>/<code>post</code> resolve their target from that track URI — not from a branch string, not from the trunk (<a href="DIS-073.html">DIS-073</a>, <a href="DIS-074.html">DIS-074</a>).</li>
+<li>Commit and branch-advance stay SPLIT (carried from the stale <a href="DIS-061.html">DIS-061</a>): <code>post 'msg'</code> moves the worktree only (<a href="DIS-076.html">DIS-076</a>).</li>
+<li>Wiki sweep: <a href="../../wiki/Worktree.html">Worktree</a>:7,12, <a href="../../wiki/POST.html">POST</a>:5,48, <a href="../../wiki/GET.html">GET</a>:37-40 and <a href="../../wiki/URI.html">URI</a> gain the track-URI model; the 11 files citing the deleted trees.mkd are re-pointed at <a href="../../blog/worktree.html">worktree</a>.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Read-compat is forever and the codecs own the parsing; the children land independently.
+</p>
+<ul>
+<li>Old rows must keep parsing untouched: <code>?br#sha</code>, the legacy <code>?br&amp;sha</code> <code>&amp;</code>-chain, and the absolute <code>?/proj/br</code> shape — no on-disk wtlog rewrite, ever.</li>
+<li>URI/branch codecs only (<a href="../../meta/abc.html">/meta/abc</a>, memory law): no indexOf/slice surgery at call sites; track parsing routes through uri.js + branch.js.</li>
+<li>Large behavioral change: inventory the be/test/ legs assuming a branch-only track; amend only with explicit permission (<a href="../../meta/work.html">/meta/work</a>).</li>
+<li>Repro-first per the norms; this ticket owns the model + the wiki sweep, the children own the code.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>The four laws are RULED (2026-07-15); the row grammar is settled, the reader shape is not.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: <code>get //OTHER?br#sha</code>, then bare <code>get</code> — track must be //OTHER, not the last local branch</li>
+<li><a href="./ .html"> </a> wtlog: ONE track reader returning the whole URI (authority+query+fragment); attachedBranch folds into it</li>
+<li><a href="./ .html"> </a> get: stop stripping the authority at all seven record sites</li>
+<li><a href="./ .html"> </a> wtlog: drop refOf's <code>local</code> branch gate + tip()'s remote walk-back</li>
+<li><a href="./ .html"> </a> wiki sweep (<a href="../../wiki/Worktree.html">Worktree</a>, <a href="../../wiki/POST.html">POST</a>, <a href="../../wiki/GET.html">GET</a>, <a href="../../wiki/URI.html">URI</a>) + trees.mkd cite purge (11 files under todo/)</li>
+<li><a href="./ .html"> </a> test inventory: legs pinning a branch-only track; request the user for amendments</li>
+<li><a href="./ .html"> </a> children: <a href="DIS-072.html">DIS-072</a> subs, <a href="DIS-073.html">DIS-073</a> bare get, <a href="DIS-074.html">DIS-074</a> bare post, <a href="DIS-075.html">DIS-075</a> detach shape, <a href="DIS-076.html">DIS-076</a> commit/advance split</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none — the four rulings of 2026-07-15 make it actionable)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FILED 2026-07-15 (track/base audit of be/ against <a href="../../blog/worktree.html">worktree</a>); nothing landed yet.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

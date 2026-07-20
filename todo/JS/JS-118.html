@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-118</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-118 <a href="./HIGH.html">HIGH</a>: <code>store.shardDir</code> silently adopts a SIBLING shard when the named project is absent — &quot;last non-dotted subdir wins&quot;</h1>
+<p>
+<code>shared/store.js shardDir()</code> (~lines 144-158): when the named project's shard dir does not exist, an auto-detect scans the store and picks the last non-dotted subdir — so an UNKNOWN project name resolves to a random sibling project with rc=0 and no warning. Found mid-fix on <a href="../STATUS/STATUS-010.html">STATUS-010</a> (2026-07-16): with the context fix landed, a sub anchored to nonexistent project <code>ghost</code> in a 3-shard store ran <code>jab status ///ghost</code> clean and silently read the <code>par</code> shard — the foreign trunk walked as <code>miss ?fd462224#par c0</code>, the own base rendered as a metadata-less <code>post</code> row. The same trap has bitten clones for weeks (a <code>?/repo</code> typo yields a clean-looking clone of libabc with no <code>dog/</code>) and is the ENABLER that turned <a href="../STATUS/STATUS-010.html">STATUS-010</a>'s context slip into a confidently-wrong DAG walk instead of a refusal. An unknown project must refuse (SHARDNONE-class error), never adopt a sibling.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The auto-detect was presumably a convenience for single-project stores; in multi-shard stores it is a landmine.
+</p>
+<ul>
+<li><code>shared/store.js shardDir()</code> ~:144-158: named shard absent → scan store root, last non-dotted subdir wins.</li>
+<li>Live probe (work/STATUS-010, post-fix tree): project <code>ghost</code> in a <code>par</code>/<code>ext</code>/<code>orph</code> store → status reads <code>par</code>, rc=0.</li>
+<li>Known prior bites: <code>jab get 'file:…/jab.be/.be?/repo'</code> silently cloned libabc (no error, wrong tree, no <code>dog/</code>); a bare <code>?</code> trunk on that store resolves libabc similarly.</li>
+<li>Enabler for <a href="../STATUS/STATUS-010.html">STATUS-010</a>: the wrong-context <code>?</code> resolution only became a foreign-tip walk because shardDir handed back a live sibling shard.</li>
+<li>Blast radius: every store.open caller — get/clone, status, post, patch, views — any typo'd or stale project name reads/writes a WRONG project.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+An unknown project name is an ERROR, everywhere.
+</p>
+<ul>
+<li><code>shardDir()</code> on an absent named project → refuse (SHARDNONE-class, RON60 code per <a href="../../meta/abc.html">/meta/abc</a> ok64 rules), no auto-detect.</li>
+<li>Decide the legitimate single-project convenience explicitly (e.g. auto-detect ONLY when no project was named at all) — gritzko to rule.</li>
+<li>Repro-first: multi-shard store + unknown project → today rc=0 wrong shard; post-fix a refusal naming the missing project and the store.</li>
+<li>Sweep callers for reliance on the fallback (a legit bare-<code>?</code>-no-project clone flow may exist) before flipping.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Refusal texts follow the post.js RULING 2026-07-16 style: 1 line, ≤64 chars, plain text.</li>
+<li>Don't break the documented single-project store flows (test suite + clone recipes) — the sweep decides scope.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(none yet)</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: unknown project on a multi-shard store → silent sibling read (pre-fix)</li>
+<li><a href="./ .html"> </a> shardDir refusal + the explicit single-project rule (needs gritzko's ruling)</li>
+<li><a href="./ .html"> </a> caller sweep: who legitimately relies on the auto-detect?</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FILED 2026-07-16 off the <a href="../STATUS/STATUS-010.html">STATUS-010</a> worker's probe; nothing landed yet.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

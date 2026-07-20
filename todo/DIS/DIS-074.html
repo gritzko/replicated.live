@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-074</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-074 <a href="./MED.html">MED</a>: bare <code>post</code> never implies the tracked URI — it always commits local, and refuses to advance cur's own branch</h1>
+<p>
+RULED 2026-07-15 (gritzko, law #2 of <a href="DIS-071.html">DIS-071</a>): bare <code>get</code> and bare <code>post</code> imply the URI the worktree tracks. be/ JS <code>post</code> always commits into the LOCAL shard and advances a LOCAL ref (post.js:714-721); reaching anything else demands an explicit slot — a Host slot for a wire push (post.js:608-611, ssh/https only, a scheme-less <code>//X</code> excluded by BE-033) or a Query slot for a branch FF (post.js:618-622). So a worktree cloned from <code>be://localhost?/project</code> or from a sibling tree has no way to say &quot;post back where I got this from&quot;: <a href="../../blog/worktree.html">worktree</a>:50-54 shows the flow (<code>post &quot;msg&quot;</code> commits and the tree goes ahead, then a second bare <code>post</code> fast-forwards the tracked main tree) and it has no code path. Worse, the bare advance is refused twice over: with no changes a bare post throws <code>POSTNONE: no changes since base</code> (post.js:666-673), and the nearest explicit spelling <code>post ?&lt;cur's own branch&gt;</code> throws <code>POSTNONE: cur's own branch — nothing to advance</code> (post.js:263-264) — the exact inverse of the bare post's meaning. Carries the bare-post half of the stale <a href="DIS-061.html">DIS-061</a>; the EXPLICIT-operand half is <a href="DIS-062.html">DIS-062</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Post knows three targets, and none of them is &quot;where I came from&quot;.
+</p>
+<ul>
+<li>post.js:608-611: only <code>slots.host</code> routes to pushRemote; a scheme-less <code>//X</code> is excluded (BE-033) and eaten as nav context by authorityRepo (loop.js:189-217).</li>
+<li>post.js:714-721: the commit path writes the local pack, then advanceRef on the LOCAL shard — the only advance a bare post can reach.</li>
+<li>post.js:618-622: the bare-advance arm requires a Query slot; a clean wt with nothing to commit reports POSTNONE (post.js:666-673) instead of advancing anything.</li>
+<li>post.js:263-264: <code>post ?&lt;cur's own branch&gt;</code> is REFUSED as &quot;nothing to advance&quot; — under <a href="../../blog/worktree.html">worktree</a>:50-54 that is precisely the motion a bare post performs.</li>
+<li><a href="../../blog/worktree.html">worktree</a>:50-54 is the authority for the double-post flow; the track URI it implies is unrepresentable today (<a href="DIS-071.html">DIS-071</a>).</li>
+<li><a href="DIS-062.html">DIS-062</a> covers the EXPLICIT <code>post ///jab/dog</code> operand — same local-receive machinery, different trigger; share the implementation.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Bare post is the advance arm with its target defaulting to the track.
+</p>
+<ul>
+<li>Bare <code>post</code> with nothing to commit FFs the TRACKED URI — a branch ref, a local worktree, or a remote — to the worktree's base (<a href="../../blog/worktree.html">worktree</a>:50-54).</li>
+<li>Drop the own-branch refusal (post.js:263-264) for the implied/explicit-same-branch case — advancing cur's own tracked branch is the normal motion, not a no-op.</li>
+<li>Reuse <a href="DIS-062.html">DIS-062</a>'s local-receive path; FF-only, no forced updates, no non-FF advance.</li>
+<li><a href="../../wiki/POST.html">POST</a> bare-row + <a href="../../wiki/Verbs.html">Verbs</a> gain the implied-target form; <a href="../../blog/worktree.html">worktree</a>'s flow becomes reproducible end-to-end.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+The advance must stay a SEPARATE call from the commit — that is the whole point of the split.
+</p>
+<ul>
+<li>Commit and advance stay split (<a href="DIS-076.html">DIS-076</a>): a bare post advances because it is an ADVANCE-shaped call, never as a commit side-effect. Do not resurrect commit-time FF.</li>
+<li>Depends on <a href="DIS-071.html">DIS-071</a> (the track URI must exist before it can be implied) and shares the receive path with <a href="DIS-062.html">DIS-062</a> — land after or with them.</li>
+<li>Needs a user ruling: does a bare post on a DIRTY tree commit AND advance? <a href="../../blog/worktree.html">worktree</a>:50-54 reads as two separate calls; the one-call reading is not assumed here.</li>
+<li>Repro-first: two local worktrees, FF-able divergence, seeded with <code>jab get file:&lt;path&gt;</code>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending the dirty-tree ruling in Constraints)</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: clone A→B, commit in B, bare <code>post</code> in B → A fast-forwarded, B untouched otherwise</li>
+<li><a href="./ .html"> </a> repro: bare post on a clean wt tracking <code>?feature</code> → the branch ref FFs to base (today: POSTNONE)</li>
+<li><a href="./ .html"> </a> resolve the bare post's target from the track URI; keep the explicit Query slot winning</li>
+<li><a href="./ .html"> </a> drop the own-branch POSTNONE refusal (post.js:263-264)</li>
+<li><a href="./ .html"> </a> ask the user: does a bare post on a DIRTY tree commit AND advance, or commit only?</li>
+<li><a href="./ .html"> </a> <a href="../../wiki/POST.html">POST</a> bare-row + <a href="../../wiki/Verbs.html">Verbs</a> target forms</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Depends on <a href="DIS-071.html">DIS-071</a>'s track reader; the local-receive path is <a href="DIS-062.html">DIS-062</a>'s, which is itself blocked on <a href="../BRO/BRO-024.html">BRO-024</a>:52 (<code>///</code>→main-tree mapping).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FILED 2026-07-15 (track/base audit); nothing landed yet.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PUT-008</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PUT-008 <a href="./OPEN.html">OPEN</a>: bare <code>jab put</code> ignores the cwd/nav dir context — stages the WHOLE tree + every mounted sub</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Reported by gritzko 2026-07-11: a bare <code>:put</code> typed in a wiki-navigated pager view (footer <code>put ///wiki</code>) staged <code>todo/README.mkd</code>, all of <code>wiki/*</code> AND <code>beagle/mark/*</code> inside the beagle sub — the whole tracked-dirty set, sub banners and all.
+</p>
+<ul>
+<li>Repro'd in a scratch clone: bare <code>jab put</code> from <code>shared/</code> staged root-level <code>CMakeLists.txt</code> + <code>README.mkd</code> and descended the <code>test</code> sub; the cwd never scoped anything.</li>
+<li>Root cause: <code>verbs/put/put.js</code> putRun with no path args runs <code>bareStage(repo,…)</code> + <code>bareStageSubs</code> (PUT-004/SUBS-044) over the whole wt; <code>be.ctxDir</code> (BE-032) is never consulted; the loop's BE-048 block deliberately left mutations whole-scope — gritzko now extends the ruling: a DIR context scopes a bare mutation too (git parity: <code>git add -u</code> in a subdir is cwd-scoped).</li>
+<li>Explicit <code>jab put &lt;dir&gt;</code> already scopes correctly (verified) — regression-guard it.</li>
+<li>View-side siblings, same class, landed 2026-07-11: <a href="/todo/STATUS/STATUS-006.html">STATUS-006</a> + <a href="/todo/DIFF/DIFF-013.html">DIFF-013</a> — reuse their <code>discover.ctxSub</code> helper (exported by that fix).</li>
+<li>Found mid-diagnosis, own ticket: <a href="/todo/BE/BE-049.html">BE-049</a> — a <code>///path</code> mutation arg0 rescopes to the OUTERMOST repo from a nested worktree (do NOT fix here).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Bare <code>jab put</code> from a subdir cwd (or a pager context nav'd into one) stages only the tracked-dirty set under that dir; from the wt root, unchanged whole-wt.</li>
+<li>Sub recursion (<code>bareStageSubs</code>) descends only mounted subs AT/BELOW the scope dir.</li>
+<li>A scoped bare put with nothing eligible refuses PUTNONE as today — never a silent whole-wt stage.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro test first (<a href="/meta/work.html">work</a>); fix in beagle-ext (JS); minimal diff; no edits to unrelated tests.</li>
+<li>Reuse <code>discover.ctxSub</code> (the STATUS-006 mechanism), one shared shape — no per-verb reimplementation.</li>
+<li>Mutations are dangerous: an over-broad stage in any repro must stay confined to the throwaway clone.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Sketch: in putRun's no-path-args branch, a non-empty <code>ctxSub</code> becomes the dir-form path arg (rooted <code>/sub/</code>), riding the EXISTING dir-stage path (stageArg dir + stageInSub for crossings) instead of bareStage — auto-pair moves under the scope dir need a check.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro test: bare <code>put</code> from a subdir stages only that subtree (root file + sub file stay unstaged)</li>
+<li><a href="./ .html"> </a> repro test: bare <code>put</code> from the wt root stays whole-wt + sub recursion (regression)</li>
+<li><a href="./ .html"> </a> regression test: explicit <code>put &lt;dir&gt;</code> unchanged</li>
+<li><a href="./ .html"> </a> fix via ctxSub in putRun's bare branch</li>
+<li><a href="./ .html"> </a> pager leg verified: nav into a dir, bare <code>:put</code> stages only that subtree</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-036</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-036 <a href="./DONE.html">DONE</a>: pager word spells expand shell-style globs (put/delete multi-file args)</h1>
+<p>
+On the CLI the user's SHELL expands globs before <code>be</code> sees argv, so <code>be put *.c</code> works; in the pager the typed spell goes to the verb VERBATIM, so <code>put *.c</code> / <code>delete src/*</code> hands the literal pattern as a filename (FILENONE / bogus row). The pager already owns confined FS enumeration for Tab-completion (<code>_fsCompletions</code>, <a href="../BRO/BRO-013.html">BRO-013</a>, wt-confined via <code>resolveInTree</code>/<code>wtJoin</code> per <a href="BE-027.html">BE-027</a>); glob expansion is the same machinery driven by a pattern instead of a prefix. The pager plays the shell here: it multiplies WORDS, it does not resolve them — verbs still resolve each arg via <code>resolve(context,base,rel)</code> (<a href="BE-030.html">BE-030</a>, <a href="BE-032.html">BE-032</a>) and put/delete rest args stay RAW wt-relative (<code>authorityRepo</code> strips arg0 only).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>views/bro/pager.js</code> <code>_runSpell</code>/<code>_applySpell</code> hand the typed word spell to <code>driveSpell</code> → <code>cli()</code>; <code>core/loop.js:327</code> splits/scalar()s the words — no expansion point anywhere, patterns reach the verb literally.</li>
+<li>Tab-completion resolves a <code>./</code> stem against the VIEW dir and a bare stem against the wt root, enumerates via <code>io.readdir</code>, and CONFINES to the wt (<code>resolveInTree</code> throws NAVESCAPE → no candidates) — exactly the enumeration a glob expander needs (<a href="BE-027.html">BE-027</a>, <code>pager.js:604</code>).</li>
+<li>Requested by gritzko 2026-07-09: &quot;commands like put, delete in the pager may benefit from expanding globs shell-style. may do along the same lines as autocompletion.&quot;</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A word spell typed in the pager expands <code>*</code>, <code>?</code>, <code>[...]</code> in its arg words shell-style before dispatch: <code>put *.c</code> stages every matching wt file, <code>delete src/*.tmp</code> removes the matches.</li>
+<li>Expansion reuses the Tab-completion enumeration + confinement (one FS walker, one NAVESCAPE law); matches outside the wt are impossible by construction.</li>
+<li>Expanded words keep the typed stem's shape — a <code>./</code> stem yields view-relative <code>./x</code> words, a bare stem yields wt-relative words (same token shape as <code>_compTok</code>) — so verbs resolve them exactly as if the user had typed each one.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Pager-only (the pager IS the shell); verbs stay glob-unaware, CLI keeps relying on the user's shell.</li>
+<li>Word-spell arg positions only — never rewrite schemed URI spells, <code>?ref</code>/<code>#frag</code> slot edits, or the verb word itself.</li>
+<li>No pre-merging with the context URI: expansion multiplies raw relative words, resolution stays in the verbs (<a href="BE-030.html">BE-030</a> law).</li>
+<li>Repro-first: a pager-driven <code>put *.c</code> failing today, expanding after.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Alphabet: <code>*</code>, <code>?</code>, <code>[...]</code> per segment; <code>**</code> out of scope for the first cut.</li>
+<li>No-match policy RULED failglob (gritzko 2026-07-09): message in the addr bar, spell NOT dispatched — bash's silent pass-through would feed the literal pattern to a destructive <code>delete</code>.</li>
+<li>Dotfiles: skipped unless the pattern segment itself starts with <code>.</code> (shell convention); expansion output sorted. NOTE: <code>io.readdir</code> hides dotfiles entirely (same as Tab-completion), so the dotted-pattern branch is unreachable today — kept as a guard should readdir ever change.</li>
+<li>Expansion point: on the split words of a word spell at spell-apply time (before the <code>driveSpell</code> reentry), gated on the word actually containing a glob metachar.</li>
+<li>As built (wt BE-036): <code>_globToRe</code> (one segment → anchored RegExp), <code>_isGlobWord</code> (skips <code>?ref</code>/<code>#frag</code>/<code>-flag</code>/<code>scheme:</code> words), <code>_glob</code> (segment-wise frontier walk, literals via <code>resolveInTree</code>, glob segs via <code>wtJoin</code>+readdir, output via <code>_compTok</code>), <code>_globSpell</code> (argline.shellSplit, verb peeled, quoted words inert, failglob → null), called from <code>_applySpell</code> before <code>_composeCall</code>.</li>
+<li>A leading-<code>?</code> glob word (<code>?.c</code>) is NOT expanded — leading <code>?</code> is the ref-slot-edit syntax; the slot grammar wins over the shell alphabet.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled>  Repro: pager <code>put *.c</code> today hands the literal <code>*.c</code> to put (RED), <code>test/bro/glob/glob.js</code> unit-drive like navescape.js.</li>
+<li class="done"><input type="checkbox" checked disabled>  Segment-wise glob matcher + expander over the <code>_fsCompletions</code>-style confined readdir walk.</li>
+<li class="done"><input type="checkbox" checked disabled>  Wire into the word-spell path (all word-spell arg words, put/delete included); failglob on no match.</li>
+<li class="done"><input type="checkbox" checked disabled>  Suite: baseline 162/161 pass/1 fail → after 163/162/1; the lone red is the pre-existing <code>be-js-bro-view</code> readdir-order golden (BE-027-documented). Orchestrator re-ran repro + bro subset 2026-07-09: same.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Fresh-clone bootstrap race hit during worktree setup (store trunk <code>2dcfc392</code>): <code>jab get file:…?/beagle-ext</code> checks out the project's own <code>be -&gt; .</code> symlink over the bootstrap locator, then the <code>test</code> submodule gate requires <code>shared/gitmodules.js</code>/<code>core/discover.js</code> BEFORE those subtrees exist → &quot;require: cannot find&quot;. Worked around with per-subtree <code>jab get shared|core|view|views|verbs</code> first. Root-caused 2026-07-09 under <a href="../GET/GET-041.html">GET-041</a> (open umbrella): jab's pinBeStack pins symlink paths verbatim + explicit <code>./</code> requires bypass it; exposed by the <code>a763a86a</code> checkout-order change.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open — fix staged in wt <code>/home/gritzko/src/BE-036</code>, uncommitted: <code>views/bro/pager.js</code> + <code>test/bro/glob/{glob.js,run.sh}</code>; pending user review + land)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

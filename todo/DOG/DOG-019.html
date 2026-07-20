@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOG-019</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG-019 <a href="./OPEN.html">OPEN</a>: GITfuzz + DELTfuzz — git object drains and the delta applier</h1>
+<p>
+<code>dog/git/GIT.c</code> drains tree entries, commit headers and refnames straight off remote pack bytes, and <code>dog/git/DELT.c::DELTApply</code> applies delta instruction streams — git's classic CVE alley. Today only the OFS delta <strong>chase</strong> (<code>PACKResolveOfs</code>, <code>dog/fuzz/PACKRESOLVE.c</code>) is fuzzed; the applier alone and the drains have no targets. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>GITu8sDrainTree</code>/<code>GITu8sFileSplit</code>, <code>GITu8sDrainCommit</code>/<code>GITParseCommit</code>/ <code>GITu8sIdent</code>, <code>GITParseRef</code>/<code>GITFeedRef</code>, <code>PKTu8sDrain</code> — all consume attacker-controlled bytes (pack objects, wire pkt-lines, refnames).</li>
+<li><code>DELTApply(base, delta, out)</code> copy/insert opcodes index into <code>base</code> and size <code>out</code>; <code>PACKRESOLVEfuzz</code> reaches it only through well-framed packs.</li>
+<li><a href="DOG-014.html">DOG-014</a> (<code>PACKResolveOfs</code> ping-pong sizing) is adjacent context; don't duplicate its scope here.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>GITfuzz</code>: one target looping each drain to exhaustion over the raw input (first byte selects the drain); invariants: no crash/OOB, out-slices in-bounds, drains consume monotonically (no infinite loop).</li>
+<li><code>DELTfuzz</code>: split input into (base, delta), <code>DELTApply</code> into a bounded buffer — corrupt streams must yield an error, never a fault; plus the round-trip oracle <code>DELTApply(a, DELTEncode(a,b)) == b</code> on split inputs.</li>
+<li>Both wired into <code>dog/fuzz/CMakeLists.txt</code>; ≥1M execs / 10 min clean under ASan; seeds from real git objects (<code>test/data</code>, a <code>.keeper</code> log).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Harness-only: parser/applier bugs found become their own tickets, linked both ways (per <a href="../../meta/todo.html">todo.mkd</a>); ABC style; follow <code>PACKRESOLVE.c</code> structure.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled>  T1 <code>GITfuzz</code>: selector byte + drain loops for tree/commit/ident/ref/pkt.</li>
+<li class="open"><input type="checkbox" disabled>  T2 <code>DELTfuzz</code>: adversarial apply + encode/apply round-trip property.</li>
+<li class="open"><input type="checkbox" disabled>  T3 CMakeLists wiring + seed corpora; note run commands in this ticket.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>2026-07-12: T1-T3 implemented in worktree <code>~/src/DOG-019</code> (<code>fuzz/GIT.c</code> selector-byte drains, <code>fuzz/DELT.c</code> adversarial apply + encode/apply round-trip oracle, CMake wiring, 14+5 seed corpora), UNLANDED. Orchestrator-verified: only <code>fuzz/CMakeLists.txt</code> modified among tracked files; both targets re-run clean 60 s each, zero artifacts.</li>
+<li>5-min campaigns clean: GITfuzz 15.8M execs, DELTfuzz 2.8M execs, no findings — no crash, no OOB out-slice, no round-trip mismatch.</li>
+<li>DELT round-trip gated to ≤8 KiB halves for exec rate; larger blobs unexercised by the property (adversarial apply runs to 256 KiB).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-07-12, fuzz-coverage review of dog/fuzz.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

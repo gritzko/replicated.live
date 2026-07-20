@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-046</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-046 <a href="./HIGH.html">HIGH</a>: <code>ingest.land</code> append-into-existing-shard is broken for the keeper wire</h1>
+<p>
+A second <code>get</code> from a <code>be://</code> source lands the new tip as BYTES but leaves it UNRESOLVABLE (<code>be get: tip &lt;sha&gt; has no tree</code>), and the shard goes index-blind — even the OLD tip then reads <code>unk</code>. The keeper wire re-sends FULL history each fetch (no have-negotiation), so the appended tail duplicates run-1 keys; the pack-log's PACK-header object count is never bumped, so every rebuild path rescans by header count and drops the appended objects. <code>get-git</code> escapes because git negotiates and sends no duplicates. Found under <a href="./URI-016.html">URI-016</a> while fixing <a href="/todo/SUBS">SUBS</a> <code>titleFromUrl</code>; the append branch was previously UNREACHABLE, so this has never run.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+<code>be-js-get-be</code> is red. It was red for a DIFFERENT reason (<a href="./URI-016.html">URI-016</a>: <code>titleFromUrl(&quot;be://…/.be&quot;)</code> returned <code>&quot;.be&quot;</code> as the shard title, so clone wrote <code>&lt;wt&gt;/.be/.be/</code> while discovery read <code>&lt;wt&gt;/.be/</code>). Fixing that made clone and discovery agree on ONE shard — which routed the second <code>get</code> into <code>ingest.land</code>'s append branch for the FIRST TIME.
+</p>
+<ul>
+<li>The old code passed <code>get2</code> BY ACCIDENT: get1/get2 used two DIFFERENT dirs, so it never appended.</li>
+<li>Proven pre-existing, not a regression: a THREE-get sequence fails IDENTICALLY on the ORIGINAL code (planted repro).</li>
+<li>A full <code>reindexShard</code> still cannot find the new tip — the rebuild is what drops it.</li>
+<li><code>be-js-get-be</code> cannot go green until this is fixed; it is that test's remaining blocker.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+A second/third <code>get</code> from a <code>be://</code> source must land a resolvable tip and leave the shard index-sane.
+</p>
+<ul>
+<li><code>jab get be://&lt;host&gt;/&lt;path&gt;/.be/&lt;shard&gt;</code> twice into one worktree: tip resolves, files read <code>ok</code>, not <code>unk</code>.</li>
+<li>The old tip must stay resolvable after the append.</li>
+<li><code>get-git</code> (negotiating wire) must not regress.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro first (<a href="/meta/work.html">work</a> 3). Plant <code>jsrc</code> above any scratch repo or it silently runs the INSTALLED code.</li>
+<li><code>be get</code> is NOT read-only: it re-checks-out <code>test/</code> and destroys uncommitted test edits.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Unsettled — two candidate fixes, not yet chosen.
+</p>
+<ul>
+<li>Bump the pack-log's PACK-header object count on append, so rebuilds rescan the whole log.</li>
+<li>Or de-duplicate the appended tail against existing keys before writing.</li>
+<li>Or give the keeper wire have-negotiation, so it stops re-sending full history — the root cause, widest blast radius.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: three <code>jab get be://…</code> in a row → assert tip resolves + files <code>ok</code> at each step.</li>
+<li><a href="./ .html"> </a> fix <code>shared/ingest.js</code> <code>land</code>/<code>indexAppended</code> (~L310-345).</li>
+<li><a href="./ .html"> </a> verify <code>reindexShard</code> + <code>idxmaint</code> tail-rebuild find the appended objects.</li>
+<li><a href="./ .html"> </a> confirm <code>be-js-get-be</code> green; <code>get-git</code>/<code>get-file</code>/<code>wire-*</code> unregressed.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The duplicate-key + header-count interaction means a rebuild is index-blind, so the damage outlives the bad <code>get</code>.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+Nothing landed. Diagnosis only, from <a href="./URI-016.html">URI-016</a>'s worktree; no fix attempted.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

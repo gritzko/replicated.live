@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PATCH-010</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PATCH-010 <a href="./HIGH.html">HIGH</a>: patch cannot address a tree as its source — tree URIs fall into the cherry-ref slot</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+From <code>journal/libdog/abc</code> (the orig tree), every tree-addressed source spelling died in the NAMED-cherry resolver:
+</p>
+<ul>
+<li><code>jab patch file:../../work/ABC-008/abc</code> → <code>PATCHFAIL: cannot resolve cherry ref '../../work/ABC-008/abc'</code></li>
+<li><code>jab patch be://localhost/src/journal/work/ABC-008/abc</code> → same, the <code>be://</code> AUTHORITY silently dropped, only the path reached the resolver.</li>
+<li>shared/patchscope.js parseShape knows <code>?br</code> / <code>?br!</code> / <code>#sha</code> / bare-ref ONLY; any other URI's path lands in <code>frag</code> → resolveCherry.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>patch &lt;tree-uri&gt;</code> (a <code>file:</code>/<code>be://</code>/<code>//WT</code> worktree address) resolves that tree's CUR TIP as <code>theirs</code> (the wt's <code>.be</code> cur row / its shard's ref), fork = LCA — the whole-stack absorb of another worktree.</li>
+<li>a scheme'd/authority-carrying arg patchscope cannot serve refuses LOUDLY naming the arg and the supported forms, never misread as a cherry ref.</li>
+<li>same-STORE case first (the hive: wt and orig share the shard); the cross-store fetch leg is PATCH-011 (ruling: download first, then all-local).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>URI handling via the URI class only, no regex/manual parsing; resolve fs paths via resolve(context, arg) — the verb resolves, never the pager.</li>
+<li>repro test first; existing tests untouched; minimal diff (shared/patchscope.js + verbs/patch/patch.js).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>accepted source forms: <code>?&lt;br&gt;</code> | <code>?&lt;br&gt;!</code> | <code>#&lt;sha&gt;</code> | bare ref | <code>file:&lt;path&gt;</code> (no query/frag/host) | scheme-less <code>//WT[/sub]</code>; anything else → ONE line <code>PATCHFAIL: cannot patch from '&lt;arg&gt;' — supported: …</code> (covers be://, ssh:, and <code>file:…?query</code> store forms — the PATCH-011 seam).</li>
+<li>TREE absorbs as scope WHOLE (provenance row stays the <code>?&lt;sha&gt;!</code> grammar POST reads); theirs = the addressed wt's cur tip via wtlog; cross-store gate = object presence (reader.getObject(tip)), refusal names PATCH-011.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> repro test test/patch/tree-uri (red-first on the exact ticket error; two wts off one store, golden absorb <code>A b C d e</code>, three refusal probes)</li>
+<li><a href="./v.html">v</a> parseShape/resolve: the tree-URI leg (shared/patchscope.js + verbs/patch/patch.js resolveScope)</li>
+<li><a href="./v.html">v</a> cross-link PATCH-011 + POST-024 (in code messages/comments)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>change sits UNCOMMITTED in work/PATCH-010; suite 171/172 (the 1 red = pre-existing be-js-get-oddname), orchestrator re-ran the new test green.</li>
+<li>SEAM (needs a ruling): CLI <code>jab patch //WT</code> never reaches the verb — loop.js authorityRepo consumes a mutation's arg0 <code>//authority</code> as the RUN scope (BE-032), so <code>//WT</code> cannot mean &quot;source&quot; from the CLI without a loop.js exemption; the verb-side <code>//WT</code> leg works for pager-reentry args.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

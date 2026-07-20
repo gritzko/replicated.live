@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STATUS-009</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>STATUS-009 <a href="./HIGH.html">HIGH</a>: status does not understand the track-vs-base split — a sub tracking its parent-repo pin is labelled trunk <code>?</code></h1>
+<p>
+The POST-026/027 track/base system (landed <code>59ba63c2</code>, 2026-07-16) encodes both roles in the LAST <code>get</code> record of a wt's <code>.be</code>: the FRAGMENT is the base commit hash, everything else (scheme/host/path/query) is the TRACK — the followed branch/remote/worktree; the first row is the store anchor. So <code>//TEST2/test#ec64900f…</code> = tracking the parent wt's <code>test</code> gitlink, based at <code>ec64900f</code>. <code>shared/wtlog.js:144</code> <code>attachedBranch()</code> — the ONE attach reader (DIS-057) feeding status's <code>?&lt;branch&gt;</code> label, post's detach guard, and the ahead/behind divergence — predates the split: it only looks for a branch NAME in the query, so a track expressed as a remote/worktree URI reads as no-branch → trunk. Live in <code>work/TEST2</code> 2026-07-16: <code>jab status</code> prints <code>?\t93 ok</code> / <code>status test</code> → <code>?\t360 ok</code> — the sub tracks its pin as set in the parent repo, but status labels it trunk. Reported by gritzko (who also stated the record semantics above).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The attach record now carries track (non-fragment) + base (fragment); the reader only understands named-branch queries.
+</p>
+<ul>
+<li><code>work/TEST2/test/.be</code>: <code>26716FVjFD get file:/home/gritzko/.be/?/beagle-ext-tests</code> (store anchor), <code>26716FVjFE get //TEST2/test#ec64900f61417a263b7efd6b5dc847b4d288c595</code> (track = <code>//TEST2/test</code>, base = <code>ec64900f…</code>).</li>
+<li>Top-level <code>.be</code>: anchor <code>file:/home/gritzko/.be/?/beagle-ext</code>, last get <code>?#59ba63c2…</code> (track = trunk, base = <code>59ba63c2…</code>).</li>
+<li><code>jab status | cat</code> → <code>?\t93 ok</code> and <code>status test</code> → <code>?\t360 ok</code>: empty branch token = trunk; the sub's actual track (the parent gitlink) is never shown.</li>
+<li><code>wtlog.js attachedBranch()</code> derives attachment ONLY from a branch name in the record's query (<code>refOf</code>/<code>parseBranch</code>); a track that is a remote/worktree URI (<code>//TEST2/test</code>, an <code>ssh:</code> or <code>file:</code> source) has no query branch → <code>branch=&quot;&quot;</code> → trunk. The base-in-fragment shape also grazes the DIS-075 detach test (<code>query===undefined &amp;&amp; isFullSha(fragment)</code> gated on <code>r.local</code>) — a wrong-positive ATTACHED-to-trunk, not even detached.</li>
+<li>Blast radius beyond the label: <code>views/status/status.js:296-300</code> (label), <code>status.js:475</code> + JS-032 divergence (ahead/behind vs the WRONG ref), post's detach guard + curBranch — all route through <code>attachedBranch()</code> by design (DIS-057: &quot;so they cannot disagree&quot;); now they agree on the wrong answer.</li>
+<li><code>status.js:288</code> (SUBS-050) documents the label contract: named branch, or a mounted sub's <code>/&lt;title&gt;/…/&lt;branch&gt;</code>, or trunk <code>?</code> — a URI-shaped track (parent pin, remote wt) has no rendering at all.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Spec ruled by gritzko 2026-07-16 (chat, transcribed): status's job is simpler now.
+</p>
+<ul>
+<li>The tracked target (branch, tag, parent pin, worktree, or remote) is read from the LAST <code>get</code> record in the wtlog; in get/post/patch records the <code>#fragment</code> is a commit hash and EVERYTHING ELSE is a ref to one of the above.</li>
+<li>Refs resolve to hashes ONLY through the unified resolver <code>resolve_hash()</code> (core/resolve_hash.js — RULE ZERO, <a href="/meta">meta</a> resolve-hash law).</li>
+<li>Status computes ahead/behind the normal way: cur tip vs the resolve_hash()-resolved track tip.</li>
+<li>Status MUST show the tracked URI, and better also show the hash fragment; the shown fragment is the BASE hash — taken from the last get OR post record that has one — as an 8-hex hashlet.</li>
+<li>Repro-first: a wt whose last get record is <code>&lt;track&gt;#&lt;base-sha&gt;</code> with a URI-shaped track (TEST2 shape); assert the shown track URI + base fragment and the divergence ref; cover trunk-track and sub-tracks-parent-pin.</li>
+<li>The track/base record parse lives in ONE place — the reader (<code>wtlog.js attachedBranch()</code> or its successor), not each caller.</li>
+<li>DETACHED is exactly a bare-<code>#sha</code> last-get record (fragment, no ref) — gritzko 2026-07-16; the DIS-075 legacy special-cases in the reader reduce to this.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+The fix stays inside the one reader; no second attach parser.
+</p>
+<ul>
+<li>Ulogs contain only NORMALIZED URIs (gritzko 2026-07-16) — status shows the recorded track URI as-is; normalization is the WRITER's duty (get/post/patch), never a read-time re-canonicalization in status.</li>
+</ul>
+<ul>
+<li>DIS-057 ruling stands: status label, post detach-guard/curBranch, divergence ALL read <code>attachedBranch()</code> — extend it, do not fork per-caller logic.</li>
+<li>POST-026/027 are OPEN and still reshaping post's track/base writes — coordinate; do not hardcode today's row order if the spec says otherwise.</li>
+<li>Legacy single-row <code>.be</code> wts must keep reading exactly as before (DIS-075 detach forms included).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(none yet)</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: last get record <code>&lt;track&gt;#&lt;base-sha&gt;</code>, URI-shaped track → status prints trunk <code>?</code>; assert shown track URI + base fragment + divergence ref</li>
+<li><a href="./ .html"> </a> the ONE reader returns {track ref, base sha}: track = last GET record minus fragment; base = fragment of the last get/post that has one</li>
+<li><a href="./ .html"> </a> resolve the track ref via <code>resolve_hash()</code> ONLY; ahead/behind vs that tip</li>
+<li><a href="./ .html"> </a> summary shows the tracked URI and the base hash fragment</li>
+<li><a href="./ .html"> </a> audit post's detach guard + curBranch and JS-032 divergence against the corrected reader</li>
+<li><a href="./ .html"> </a> legacy single-row <code>.be</code> regression: attach/detach forms of DIS-075 unchanged</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>POST-026/027 in flight — the track/base write shape may still move under this ticket.</li>
+<li>Side-find 2026-07-16: bare put vs the sub's unk repro file — RULED in <a href="../PUT/PUT-009.html">PUT-009</a>: mod-only bare put, unks stage manually; guard test rides this worktree.</li>
+<li>Side-find 2026-07-16: named delete now delegates into mounted subs (<a href="../SUBS/SUBS-055.html">SUBS-055</a>, the SUBS-039 put twin) — fix + tests ride this worktree too.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FILED 2026-07-16 off gritzko's live report in <code>work/TEST2</code>; nothing landed yet.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-070</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-070 <a href="./OPEN.html">OPEN</a>: be/ JS get rejects scheme-less fs-path sources — trees.mkd example 5 <code>jab get ../../jab/dog</code> / <code>jab get ../TKT-123</code> has no code path; wiki spells the form <code>file:../proj</code> only</h1>
+<p>
+<a href="../../blog/trees.html">trees</a> example 5 (lines 199-210, post-2026-07-12 rewrite) pulls between worktrees with BARE relative paths: <code>jab get ../../jab/dog</code> (the main tree's sub as source) and <code>jab get ../TKT-123</code> (a sibling wt as source). No code path: isRemoteSeed (get.js:261-267) admits a seed only with a scheme, an authority, or a <code>.be</code>-suffixed path; a bare relative path falls through to inRepoSeed (get.js:292-293) and parses as an in-repo path/branch — out-of-tree → NAVESCAPE/garbage. The wiki documents only the schemed spelling <code>file:../proj?feat</code> (GET.mkd:31). The Bro spells of the same example (<code>get ///jab/dog</code>, <code>get //TKT-123/</code>) are <a href="DIS-063.html">DIS-063</a>'s operand classifier; THIS ticket is the scheme-less fs-path SHELL form only.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>isRemoteSeed get.js:261-267 gates on scheme/authority/<code>.be</code> suffix; dispatchRow get.js:284-293 routes everything else to inRepoSeed.</li>
+<li>parseRemote's own localish test is WIDER than the gate: hasStorePath (get.js:95-96) counts ANY non-empty authority-less path — dead permissiveness behind isRemoteSeed; the two predicates must end up aligned whichever way the ruling goes.</li>
+<li><a href="../GET/GET-038.html">GET-038</a> resolveLocalSource (get.js:141-165) already resolves a worktree path down to its real store — the machinery works once routed; only the gate excludes bare paths.</li>
+<li>GET.mkd:31 <code>file:../proj?feat</code> is the only documented local-path source form; Verbs.mkd:27 routes a bare tracked-path token to restore, :29 any <code>/</code>-bearing token parses as a URI.</li>
+<li><a href="DIS-062.html">DIS-062</a> treated the analogous POST fs-path (<code>jab post ../../jab</code>, the deleted example) as optional sugar, not spec; the rewrite added these GET twins, making the form spec-ish — hence its own ticket.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>RULING (gritzko): widen the gate (a scheme-less relative path that anchors a wt/store IS a local source) OR keep the gate and fix the post's shell twins to <code>file:</code> spellings (user edit) — pick one.</li>
+<li>If widened: <code>jab get ../TKT-123</code> == <code>jab get file:../TKT-123</code>; precedence stays deterministic — an IN-tree path is an in-repo seed (restore/subtree), only an out-of-tree path holding a <code>.be</code>/wtlog anchor seeds from it, anything else NAVESCAPEs; no existence-probe ambiguity on tracked names.</li>
+<li>GET.mkd:31 + the Verbs bareword note updated either way; example 5's shell twins verified end-to-end.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first: two-wt fixture, <code>get ../TKT-123</code> FFs the caller from the sibling; a tracked <code>sub/dir</code> arg must stay a restore (precedence leg).</li>
+<li>One routing story with <a href="DIS-063.html">DIS-063</a>'s explicit-operand classifier — do not grow a second local-source detector.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(none yet)</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> obtain the ruling: widen isRemoteSeed vs <code>file:</code> spellings in the post</li>
+<li><a href="./ .html"> </a> if widened: repro fixture + the in-tree-path-wins precedence leg</li>
+<li><a href="./ .html"> </a> unify parseRemote.localish with isRemoteSeed (one predicate)</li>
+<li><a href="./ .html"> </a> GET.mkd:31, Verbs.mkd bareword note; re-verify the example 5 twins</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Gates on the ruling; mechanical after that.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FILED 2026-07-13 (trees.mkd re-audit); nothing landed yet.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

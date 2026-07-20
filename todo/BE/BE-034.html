@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-034</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-034 <a href="./OPEN.html">OPEN</a>: <code>be get //name</code> — wrong rev (branch tip) and wrong destination tree</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Ruling 2026-07-09 (<a href="../../wiki/GET.html">GET</a>, <a href="../../wiki/Nav.html">Nav</a>): <code>be get //ABC-123</code> checks out, in the CURRENT context wt, the revision worktree ABC-123 is on — the authority arg supplies the rev, irrespective of context. The code does neither: <code>authorityRepo</code> (core/loop.js:181) re-anchors <code>be.repo</code> to <code>//ABC-123</code> and strips the authority, so <code>inRepoSeed</code> (verbs/get/get.js:450) runs ON ABC-123 — it FFs ABC-123 itself; and D3' (get.js:524-532) takes <code>tip = k.resolveRef(curBranch)</code> — the BRANCH TIP — not <code>curTip().sha</code> (the rev the wt is actually on, read at get.js:455). The destination half is acknowledged as a follow-up in the get.js:331-338 comment (BE-030 adjacent); the tip-vs-curSha half is new.
+</p>
+<h3>Goals</h3>
+<ul>
+<li>om context <code>//MAIN</code>, <code>be get //ABC-123</code> resets MAIN's wt to ABC-123's <code>curTip().sha</code>; ABC-123 untouched.</li>
+<li>pinned-behind-tip source wt (curSha ≠ branch tip) is the repro that distinguishes both halves.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>ain nav (<code>:</code> spell <code>//ABC-123</code>, no verb) must still hop the context; only GET-with-authority changes.</li>
+<li>teracts with <a href="BE-030.html">BE-030</a> (get anchors on context, not cwd) — land on top of, or with, that fix.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> Repro: two wts, source pinned behind its branch tip; <code>be get //src</code> from the other → today FFs src to tip.</li>
+<li><a href="./ .html"> </a> GET reads the authority wt's wtlog <code>curTip()</code> as the source REV; destination = the context wt.</li>
+<li><a href="./ .html"> </a> Fold with the get.js:331-350 <code>//peer</code>-as-SOURCE follow-up (also referenced by <a href="BE-031.html">BE-031</a> S3).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

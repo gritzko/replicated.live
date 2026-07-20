@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-029</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-029 <a href="./DONE.html">DONE</a>: verb discovery must be-climb from CWD (nested be/ shards)</h1>
+<p>
+For a SECOND verb set — publication scripts in <code>html/be</code>, run from <code>html/</code> — <code>jab &lt;verb&gt;</code> must find that shard's verbs while core/shared still load from the parent <code>be/</code>.  Today verb discovery anchors on ONE root, so a nested shard is invisible.  Prereq for the <code>mark</code> publication verb (<a href="./MARK.html">MARK</a>, step (b)).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Plan: <code>be/</code> = rev-ctrl (beagle-ext); a new <code>html/be/</code> = publication verbs, <code>jab</code>-run from <code>html/</code>.</li>
+<li><code>loop.js:_isVerb(w, _here)</code> probes <code>&lt;_here&gt;/verbs|views/&lt;w&gt;/&lt;w&gt;.js</code>; <code>_here = dirname(argv[1])</code> = the resolved <code>main.js</code>.  <code>registry.build([verb], require)</code> (loop.js:319) resolves the handler via loop.js's own require.</li>
+<li>From <code>html/</code> (no <code>html/be/main.js</code>), <code>resolveBe(&quot;main.js&quot;)</code> climbs to <code>journal/be/main.js</code> → <code>_here = journal/be</code>; both the probe and require land in <code>journal/be</code>, never <code>html/be</code> → a cwd-nearest <code>html/be/verbs/mark/</code> is never seen.</li>
+<li>This REVERSES a deliberate JAB-004/JAB-030 choice (&quot;resolve verbs near loop.js, NOT cwd&quot;, the require.cpp:38 wrong-copy hazard) — intentional here: the nearest be/ shard from cwd is exactly the publication set.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>verbFile(w, startDir?)</code>: be-climb from cwd (default) for <code>&lt;dir&gt;/be/verbs|views/&lt;w&gt;/&lt;w&gt;.js</code>, ceiling $HOME, first hit wins — mirrors jab's own <code>resolveBe</code>.</li>
+<li>A nested <code>be/</code> shard supplies its own verbs; verbs absent there INHERIT from the parent be/ up-tree; core/shared stay anchored on <code>_here</code>.</li>
+<li>Repro test first (<a href="./be/test/be029.js.html">be029.js</a>).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>No new hazard beyond jab's existing upward be/-scan (same ceiling, same file probe).</li>
+<li>Minimal churn: reuse <code>registry.convention</code>; keep <code>_isVerb</code>'s signature.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Split resolution: VERBS be-climb from cwd (<code>registry.verbFile</code>), core/shared keep <code>_here</code> — so a nested shard adds verbs without duplicating the loop/kernel.</li>
+<li>New <code>registry.verbFile</code> + <code>registry.resolveVerb</code> (own the climb + contract in ONE module, unit-testable without loop.js's <code>_here</code> bootstrap).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled>  Repro: nested <code>mark</code> found from cwd, <code>get</code> inherited up, no down-leak, resolveVerb → args handler (<a href="./be/test/be029.js.html">be029.js</a>).</li>
+<li class="done"><input type="checkbox" checked disabled>  <code>registry.verbFile</code> / <code>registry.resolveVerb</code> (cwd-climb + convention).</li>
+<li class="done"><input type="checkbox" checked disabled>  <code>loop.js</code>: <code>_isVerb</code> via <code>verbFile</code>; dispatch via <code>resolveVerb</code>.</li>
+<li class="done"><input type="checkbox" checked disabled>  Verify: repro green, <code>jab head</code> regression OK, nested <code>ping</code> shard dispatches PONG.</li>
+<li class="open"><input type="checkbox" disabled>  Land into <code>journal/be</code> (gates the live <code>jab mark</code>); then <a href="./MARK.html">MARK</a> step (b).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Worktree bring-up hit <a href="/todo/GET/GET-041.html">GET-041</a>: store-selector + planted-locator clone self-hosts from the partial checkout.  Workaround: <code>$HOME/be</code> is the locator (do NOT plant <code>be</code> in the worktree); <code>jab get 'file:/home/gritzko/.be?/beagle-ext'</code> from the empty dir then completes.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending land)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

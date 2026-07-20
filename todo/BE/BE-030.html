@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-030</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-030 <a href="./DONE.html">DONE</a>: context-confined path resolution — get anchors on context not cwd; resolve() rel can't escape the tree</h1>
+<p>
+Beagle commands must compute every fs path from the nav CONTEXT, confined to that context's worktree — a <code>//ABC-123</code> context can NEVER yield a path outside <code>$SRC_ROOT/ABC-123/</code>. Two gaps break this: (1) <a href="../../be/core/discover.js">discover.resolve</a> honours a <code>//authority</code> swap in its <code>ref</code> slot, so a relative arg escapes into another wt; (2) <code>get</code> anchors its write/clone on raw <code>io.cwd()</code>, so a bare <code>:get</code> under a nav context whose cwd is a SUBMODULE writes the SUBMODULE's wtlog and checks the parent tree out over it. Continues the <a href="BE-011.html">BE-011</a> confinement lineage (<code>wtJoin</code>/<code>resolveInTree</code>/<code>resolve</code>).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Reported: cwd in a submodule, pager context navigated to the parent (<code>//parent</code>); a bare <code>:get</code> appended the parent's <code>?branch#tip</code> row to the SUBMODULE's <code>.be</code> wtlog (get.js:189-196, seedLocal).</li>
+<li>Mechanism: the pager composer injects the context authority into the arg (<code>:get</code> → <code>get //parent</code>, shared/spell.js:71-98); <code>authorityRepo</code> (core/loop.js:181-211) hoists <code>//parent</code> → <code>be.repo</code>=parent + <code>be.authority</code>, blanks the arg; <code>dispatchRow</code> (verbs/get/get.js:333-335) then clones FROM the context INTO <code>io.cwd()</code>=submod (handleSeed wt=io.cwd(), get.js:348).</li>
+<li>ROOT CAUSE (the entire point): RESOLVING an arg is the VERB's job — only the verb knows what its arg MEANS (a path vs a branch vs a remote vs a message vs a clone source). The pager currently TRIES to resolve (shared/spell.js <code>mergeUri</code>/<code>shapeArg0</code>/<code>bareCtx</code> pre-merge the typed token onto the context URI) and gets it wrong, because a generic merge can't carry per-verb semantics — it injects <code>//parent</code> as if it were an operand. Fix: the pager hands the verb <code>(context, RAW args)</code>; each verb resolves its own args via <code>resolve(context, arg)</code>.</li>
+<li>resolve leak (verified): <code>resolve(&quot;//ABC-123/dir&quot;,&quot;//OTHER/x&quot;)</code> = <code>$SRC_ROOT/OTHER/x</code>; a <code>//authority</code> in the ref slot swaps trees. A <code>..</code> climb-out already throws NAVESCAPE (shared/util/path.js:85).</li>
+<li><a href="../URI/URI-011.html">URI-011</a>/<a href="../../wiki/Nav.html">Nav</a>: a relative arg resolves against the context and stays within its wt; the context is where-I-am, not an operand — an EXPLICIT <code>//name</code> operand is a different thing from an INJECTED nav scope.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Promote <code>discover.resolve</code> to <code>resolve(context, base, rel)</code>: <code>context</code> = the <code>//name[/dir]</code> scope, <code>base</code> = the in-repo dir, <code>rel</code> = untrusted relative; return the confined abs fs path, ALWAYS under <code>$SRC_ROOT/&lt;context-name&gt;/</code>.</li>
+<li><code>rel</code> is AUTHORITY-BLIND: a <code>//x</code> / scheme in <code>rel</code> is refused (a tree swap is the nav layer's job, never the fs resolver's) — this closes the <code>//OTHER</code> escape.</li>
+<li><code>get</code> anchors its write/clone destination on the CONTEXT wt (<code>be.cwd()</code>/<code>contextCwd</code>, discover.js:315), never raw <code>io.cwd()</code>; a bare <code>:get</code> under a nav context refreshes the CONTEXT tree (inRepoSeed on <code>be.repo</code>), it does NOT clone into a submodule cwd.</li>
+<li>A bare <code>:get</code> (no operand) under a nav context refreshes the CONTEXT tree (inRepoSeed on <code>be.repo</code>), it never clones into a submodule cwd. (The injected-vs-explicit <code>//name</code> ambiguity is a pager PRE-MERGE artifact — see Design decisions — dissolved by moving resolution into the verb, not by a get-side gate.)</li>
+<li>Repro FIRST: (a) unit — <code>resolve</code> confines a <code>//OTHER</code> / <code>../..</code> rel to the context tree; (b) get — <code>:get</code> (or <code>get //parent</code>) with cwd in a sub does NOT write the sub's <code>.be</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Pure JS (core/discover.js, verbs/get/get.js, core/loop.js / shared/spell.js as needed); libabc+libdog only; run the repro via <code>jab</code> against the wt shard (NO C rebuild).</li>
+<li>No URI hand-parsing / regex — route through the URI binding (<code>uri._parse</code>/<code>_make</code>) + the <code>shared/util/path.js</code> segment helpers.</li>
+<li>Minimal churn: reuse <code>resolveInTree</code>/<code>wtJoin</code>/<code>safeRel</code>; do NOT sweep the ~14 read-views in this ticket (follow-up).</li>
+<li>No existing test edited — add NEW repro files only. Worktree at <code>$SRC_ROOT/BE-030</code>; do not touch <code>journal/be</code> or <code>journal/todo</code>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>The wt-SWAP (which tree) is the nav-merge layer's job (<code>spell.mergeUri</code> / <code>authorityRepo</code>); <code>resolve</code> resolves only WITHIN a fixed context, so <code>rel</code> never carries an authority — that is what makes the confinement a PROPERTY of the one function.</li>
+<li>3-arg <code>resolve(context, base, rel)</code> supersedes the 2-arg <code>resolve(base, ref)</code>; keep a thin shim for <code>wtdir</code> if it still needs the 2-arg shape, or migrate it.</li>
+<li>Verbs resolve args: a verb takes the CONTEXT + the RAW arg and resolves it (paths via <code>resolve(context, base, rel)</code>; refs/remotes per the verb's own grammar). The pager is arg-semantics-BLIND — it never merges/pre-resolves; it hands the verb the context + raw tokens. This dissolves the <code>//parent</code> injected-vs-explicit ambiguity: a bare <code>:get</code> arrives with NO operand (→ inRepoSeed on the context repo), <code>get //other</code> arrives WITH one (→ clone-from) — the pager no longer flattens both into arg0.</li>
+<li>get (this ticket's slice): replace <code>io.cwd()</code> (get.js:334,348) with <code>contextCwd()</code>; a bare get (no operand) → inRepoSeed on <code>be.repo</code>, never handleSeed(io.cwd). The pager pre-merge retirement is a SEPARATE follow-up.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled>  Repro tests: resolve-confinement unit + get-submod-wtlog case (NEW files under be/test/).</li>
+<li class="open"><input type="checkbox" disabled>  <code>resolve(context, base, rel)</code> 3-arg, rel authority-blind, confined to <code>$SRC_ROOT/&lt;name&gt;</code>.</li>
+<li class="open"><input type="checkbox" disabled>  get.js: anchor write/clone on <code>contextCwd</code> (not io.cwd); a bare get (no operand) → inRepoSeed on <code>be.repo</code>, never handleSeed(io.cwd).</li>
+<li class="open"><input type="checkbox" disabled>  Verify: repros green; test/uri.js, test/resolve.js, test/submount.js regression-clean.</li>
+<li class="open"><input type="checkbox" disabled>  Follow-up (own ticket): move arg resolution fully INTO the verbs — retire the pager's pre-merge (<code>spell.mergeUri</code>/<code>shapeArg0</code>/<code>bareCtx</code>, shared/spell.js; views/bro/pager.js:696-711) so the pager hands the verb <code>(context, RAW args)</code>; route each verb/view's arg→path through <code>resolve(context, base, rel)</code>; correct <a href="../../wiki/Nav.html">Nav</a> §Verb-args-context (the verb resolves context+arg; the pager is arg-blind).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Worktree bring-up (<a href="../GET/GET-041.html">GET-041</a> note, via <a href="BE-029.html">BE-029</a>): <code>$HOME/be</code> is the jab locator; do NOT plant <code>be</code> in the worktree; <code>jab get 'file:/home/gritzko/.be?/beagle-ext'</code> from the empty dir then completes.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>worktree</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h2>Tree-of-life and evolution of code</h2>
+<figure class="right w30">
+<img src="./img/darwin.jpg#rightw30" alt="Darwin's First Notebook on Transmutation of Species, 1837">
+<figcaption>Darwin's First Notebook on Transmutation of Species, 1837</figcaption>
+</figure>
+<p>
+Beagle is a <a href="./git.html">git-compatible</a> SCM for modern workflows. Fundamentally, it is the same commit-tree-blob model, but the higher order constructs are <a href="./tune.html">tuned and rebalanced</a> to make it a useful tool in coordinating a swarm of LLMs and <a href="./stream.html">steering</a> their activity towards an objective.
+</p>
+<p>
+My current workflow is aimed at mercilessly discarding unsuccessful tries, never losing track of useful changes. That was difficult with <code>git</code>. That is in general difficult: some lines of thought lead nowhere, some bugs get totally fixed several times and still appear, this list can go on. Some things you have to put aside till you have a solution, others are waiting for a blocker to resolve -- it gets Gantt complicated.
+</p>
+<p>
+In general, running an LLM as a single-thread chat avoids these issues, but in that mode of work the LLM may or may not pay off.  It tends to think slowly, may go off the rails, and either you reset the context or it gets progressively dumber after 200K tokens or so. Serializing things would probably help to keep it all orderly, but those gains were not x10.  The interesting part is how to run it in parallel.  Easy to start, but then you start losing track of things happening. This is exacerbated in a complex project with libraries and submodules.  
+</p>
+<p>
+Imagine a dozen LLMs poking into a large C codebase and rebuilding it all the time. In fact, I tried running Claude on a 10-year-old 2-core 4GB ThinkCentre. As most of the LLM work happens on cloud GPUs, why not? Got a dozen sessions running, everything worked till they started to build. I also have a 32 core 128GB Ryzen, but building a larger project still takes time and tests take even more. But each larger project consists of smaller parts.
+</p>
+<p>
+The x100 improvement is to task LLM workers with a particular library or submodule. But then it blows up in a different place: you now have a zoo of submodule revisions and their web of dependencies.  It multiplies further if you practice agent role separation: investigators, test writers, code writers, reviewers. Any step failing must be a transient issue. A bad coding run must not wreck the process. A coding agent must not be able to sneak in test changes. A reviewer agent declaring bug is &quot;fixed&quot; does not mean we rush a celebratory commit into the trunk. We have to mark that revision and actually try working with it. How? It all screams &quot;revision control&quot;. But remember, we already had quite a sprawl.  Now, how do we evolve this zoo?
+</p>
+<p>
+That is the core idea, as you may see: managing lots of trees in parallel, mutating them towards the goal, discarding some, putting more attention on others. You may read the code, or you may not. You may have a huge test set, or you may not. You may practice role separation, or you may not. You may test your new medical code on yourself. Either way, you have some way of differentiating good from bad.  Real-world evolution uses very blunt tools, as we know.  The question is how to track a wide front of efforts, turning your attention to where it pays off the most.
+</p>
+<p>
+So, this is how it now looks in Beagle: 
+</p>
+<figure class="center">
+<img src="./img/work3.png#center" alt="`$ be work`">
+<figcaption>`$ be work`</figcaption>
+</figure>
+<p>
+What is the <a href="./tune.html">model</a> here?
+</p>
+<ol>
+<li>It is all worktree-centric, but beagle worktrees qualify as refs, like branches or tags.</li>
+<li>Beagle worktrees track other worktrees or branches.</li>
+<li>If some worktree makes an interesting change, we may start forking child worktrees off it. So far, it did not exceed 3 levels here, but who knows.</li>
+<li>Successful child worktrees get merged back. It may need several merge-backs to reach the trunk.</li>
+<li>Merges across the tree branches are possible, most often even trivial, but so far working along the lines was more natural.</li>
+<li>Can always postpone things, if some blocker is encountered,  or there is some doubt, or need to check if it works.</li>
+</ol>
+<p>
+How this UI works:
+</p>
+<ol>
+<li>Each line is a worktree. The tree reflects upstream/downstream relationships.</li>
+<li>Can click on any, navigate to the tree. Diffs, blames, all is there.</li>
+<li>The shade of the line actually reflects the staleness of the tree's commit.</li>
+<li><code>[-2]</code> markers are ahead/behind counts, relative to the upstream (which is the parent in this tree). Clicking on <code>[-2]</code> updates the tree. Clicking on <code>[+2]</code> sends the changes upstream. </li>
+<li>Beagle merges are token-level with some CRDT features, so false conflicts happen less often.</li>
+<li>Worktrees are ticket-named for the most part. Tickets are one-click away, see the <code>[?]</code> button. In fact, Beagle does not use commit message body at all; commit subject references a ticket instead.</li>
+<li>Discarding a tree is one button too: <code>[done]</code>.</li>
+</ol>
+<p>
+One may say, this tree is somewhat similar to the Linux &quot;lieutenant&quot; change filtering system <code>git</code> emerged from.  Linus takes changes from his subsystem <em>lieutenants</em>, they aggregate changes from their downstream contacts, which in turn may take input from elsewhere.  Maybe, maybe. Then, we made an interesting circle.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

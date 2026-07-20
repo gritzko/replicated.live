@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-016</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-016 <a href="./HIGH.html">HIGH</a>: the follow/click resolver <code>_resolveSpell</code> is stale post-URI-014 — retire it, route follows through the ONE composer</h1>
+<p>
+The pager has TWO spell resolvers: typed spells ride <code>_applySpell</code> → shared/spell.js <code>compose</code>/<code>mergeUri</code>, while Enter/click follows ride <code>_runSpell</code> → <code>_resolveSpell</code> (pager.js:271-324). <code>_resolveSpell</code>'s slot-edit branch is gated on <code>cur.scheme</code> (pager.js:307), but since <a href="../URI/URI-014.html">URI-014</a> the tracked view URI is SCHEME-LESS (<code>_splitSpell</code> peels the verb), so the branch never fires: every relative/ref/frag follow falls to the path-only fallback that drops the <code>//authority</code>, the other slots, and the verb. Nav.mkd:3 promises ONE resolution path; today the same string navigates differently typed vs followed. 2026-07-07 audit, runtime-VERIFIED. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>VERIFIED divergence matrix (view tracked <code>cat //WT/dir/file.c?feat</code>):</li>
+<li>follow <code>?feat2</code> → <code>/dir/file.c?feat2</code> (authority + frag gone); typed <code>?feat2</code> → <code>cat //WT/dir/file.c?feat2#…</code> (correct).</li>
+<li>follow <code>../x.c</code> → <code>/dir/../x.c</code> (authority gone, <code>..</code> NOT collapsed, fs-absolute stat downstream); typed <code>../x.c</code> → <code>//WT/dir/x.c</code> (collapsed — but see <a href="BRO-018.html">BRO-018</a> file-as-dir).</li>
+<li>follow bare <code>status</code> → bare spell, context ERASED (re-entered cli runs in the launch cwd, not <code>//WT</code>); typed <code>:status</code> → <code>status //WT/dir/file.c</code> (Nav.mkd:28 re-lens keeps the URI). Bare-verb targets are real: navLink returns the bare verb on empty addressing (shared/nav.js:40); loop.js:370 mints bare-<code>verb</code> hunk URIs.</li>
+<li>follow <code>/abs/p.c</code> → verbatim, stat'd FILESYSTEM-absolute; typed <code>:cat /abs/p.c</code> → <code>cat //WT/abs/p.c?feat</code> (wt-relative + inherits ?feat). Three meanings of <code>/abs</code> across follow/typed/CLI.</li>
+<li>follow <code>diff:sub/f.c?dev</code> → <code>diff://WT/sub/f.c?dev</code> (authority inherited, pager.js:294-304); typed the same → <code>cat diff:sub/f.c?dev</code> (view verb kept, unscoped) — the typed side is <a href="BRO-018.html">BRO-018</a>'s mergeUri RESET + verb-peel gap.</li>
+<li>Even the surviving schemed branch drops <code>#frag</code> on a <code>?ref</code> follow (pager.js:308), contradicting Nav.mkd:31 (a REF change KEEPS the <code>#L</code> position).</li>
+<li>Duplicated infra to retire with it: pager joinPath (pager.js:228) vs spell.js joinPath; pager TRANSPORT (pager.js:241, no <code>keeper</code>) vs loop.js TRANSPORT (loop.js:180, has <code>keeper</code>); <code>_viewPath</code> (first-hunk path) vs <code>_verbUri</code> (tracked) — two &quot;where am I&quot; answers.</li>
+<li><code>h</code> key → <code>_runSpell(&quot;help:&quot;)</code> inherits the WHOLE current address (<code>help://WT/test/x.c?feat</code>); an unresolvable inherited authority makes the help key show &quot;err: NAVNONE&quot;.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>ONE resolver: <code>_runSpell</code> feeds the followed target through the SAME compose/mergeUri path as typed spells; <code>_resolveSpell</code>, pager joinPath, and the pager TRANSPORT table are deleted.</li>
+<li>A <code>verb addr</code> word-spell target stays a pass-through (already-absolute); everything else slot-edits the context per <a href="../../wiki/Nav.html">Nav</a>.</li>
+<li>Repro tests per matrix row above; typed and followed resolution byte-identical for the same input string.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>views/bro/pager.js</code> + <code>shared/spell.js</code>; keep the C-baked <code>scheme:</code>-residue bridge (<code>_splitSpell</code>) until the C side re-bakes (<a href="../URI/URI-014.html">URI-014</a> follow-up).</li>
+<li>mergeUri fixes are <a href="BRO-018.html">BRO-018</a> — land that first or together; don't fork the semantics a third time.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending) whether <code>help:</code>/<code>h</code> should compose with an EMPTY context (help is context-free).</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> Repro matrix: follow-vs-typed parity for <code>?ref</code> <code>#frag</code> <code>./x</code> <code>../x</code> <code>/abs</code> bare-verb schemed.</li>
+<li><a href="./ .html"> </a> Route <em>runSpell through compose; delete </em>resolveSpell + dupes; suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

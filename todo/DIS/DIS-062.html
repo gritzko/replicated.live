@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-062</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-062 <a href="./STALE.html">STALE</a>: be/ JS post cannot target another LOCAL worktree; trees.mkd example 5 <code>post ///jab/dog</code> has no code path</h1>
+<p>
+<a href="../../blog/trees.html">trees</a> rules &quot;all worktrees may get/post (push/pull) from/to each other directly&quot; (lines 109-112) and example 5 (line 189/194, post-2026-07-12 rewrite; the former example 6) fast-forwards the main tree's <code>jab/dog</code> from the ticket worktree. The pull half exists (<a href="../GET/GET-038.html">GET-038</a> resolveLocalSource, get.js:141-165). The push half does not: post.js knows exactly three targets — Host slot = wire push, ssh/https only, scheme-less <code>//X</code> explicitly excluded (post.js:127-136, 301-376, BE-033); Query slot = branch FF (post.js:259-292); Path slot = narrow commit scope (post.js:150-155, 216-220). <code>post ///jab</code> gets its authority eaten by authorityRepo (loop.js:189-217), rescopes the run to the main tree's jab and degrades to a bare <code>post</code> there → POSTNONE; <code>post ../../jab</code> parses as an out-of-tree NARROW → NAVESCAPE/garbage.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>post.js:127-136 <code>if (u.host)</code> wire-only gate; pushRemote post.js:301-376; BE-033 excludes scheme-less authorities from push.</li>
+<li><code>//X</code> on arg0 is consumed as nav context by authorityRepo (loop.js:189-217) — correct per the verbs-resolve-args law, but it leaves post no way to say &quot;target that tree&quot;.</li>
+<li>Path args are narrow slots (post.js:150-155, 216-220), so a filesystem path to another wt cannot be a target either.</li>
+<li>Prerequisite named in code: get.js:286-292 (BE-030 comment) — distinguishing an EXPLICIT <code>//other</code> operand from the injected context is &quot;a SEPARATE follow-up&quot;; shared prerequisite with <a href="DIS-063.html">DIS-063</a>.</li>
+<li><code>///</code> from a ticket worktree currently names the LAUNCH tree, not the main tree, in the flat layout (rootTop discover.js:279-287, BE-045 fallback) — that mapping rides <a href="../BRO/BRO-024.html">BRO-024</a>:52, do not fix here.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A post arm for a local worktree target: an explicit wt URI or path operand resolves (reuse get.parseRemote localish + <a href="../GET/GET-038.html">GET-038</a> redirect) to the target's anchor; FF the target's tracked ref + wtlog row like a local receive; FF-only gate, no forced updates.</li>
+<li><code>post ///jab/dog</code> works from the ticket wt (<a href="../../blog/trees.html">trees</a> example 5); the fs-path spelling (<code>jab post ../../jab</code>, the deleted example 6) is optional sugar, not spec.</li>
+<li>Spec sweep: <a href="../../wiki/POST.html">POST</a> slot table + <a href="../../wiki/Verbs.html">Verbs</a>:18 gain the local-wt target form.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Depends on the <a href="DIS-061.html">DIS-061</a> ruling for WHAT gets fast-forwarded (ref vs wt row vs both) — land after or together.</li>
+<li>Explicit-operand-vs-context detection must not weaken NAVESCAPE/arg0-only (<a href="../BE/BE-039/README.html">BE-039</a>, memory law); the target is an operand, not a context move.</li>
+<li>Repro-first: a two-wt fixture, post from A targeting B, assert B's ref+row moved and A untouched.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(none yet)</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro fixture: two local worktrees, FF-able divergence</li>
+<li><a href="./ .html"> </a> operand classifier: explicit wt URI/path target vs context authority (coordinate the BE-030 follow-up with <a href="DIS-063.html">DIS-063</a>)</li>
+<li><a href="./ .html"> </a> local-receive FF: refs + wtlog + checkout of the target</li>
+<li><a href="./ .html"> </a> POSTNONE/NAVESCAPE errors for non-FF and out-of-scope targets</li>
+<li><a href="./ .html"> </a> POST.mkd + Verbs.mkd target forms</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="../BRO/BRO-024.html">BRO-024</a>:52 <code>///</code>→main-tree mapping still open; until then example 5 needs the launch tree to BE the main tree to work.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FILED 2026-07-12 (trees.mkd audit); ref/row half landed as <code>advanceWorktree</code> (post.js), the checkout half never did.</li>
+<li><a href="./STALE.html">STALE</a> 2026-07-16: superseded by <a href="../POST/POST-026.html">POST-026</a>, which owns the post-recursion rebuild + the wt-target <code>get</code>-style checkout.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

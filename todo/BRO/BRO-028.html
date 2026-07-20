@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-028</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-028 <a href="./MED.html">MED</a>: mkd syntax colour desyncs mid-file — tokens land mid-word with a growing shift (<code>jab cat todo/ABC/ABC-011.mkd</code>)</h1>
+<p>
+Reported by gritzko 2026-07-17: <code>jab cat todo/ABC/ABC-011.mkd</code> renders the first ~8 lines correctly (header spans, backtick code spans magenta), then colouring goes funky — SGR runs start landing mid-word (<code>^[[32mt^[[39mest co^[[32mv^[[39mers</code>), and the shift GROWS down the page. Looks like a byte-vs-codepoint (or escape-length) desync between the tok32 offsets and the painter's cursor. Repros PIPED (<code>--color</code>), so no tty needed.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Evidence: <code>jab cat todo/ABC/ABC-011.mkd --color | cat -v</code> — clean until the line <code>&quot;GET / HTTP/1.1\r\n\r\n&quot;.</code>; from there single letters mid-word carry colour and the misalignment accumulates. The page is dense in em-dashes (UTF-8 —), a <code>≥</code>, <code>→</code>, and backslash sequences (<code>\r\n</code>) inside prose and quotes.
+</p>
+<ul>
+<li>First 8 lines paint correctly, so base tokenization works; the desync onsets at/after the backslash-quote line and grows — cumulative offset error, not a one-off.</li>
+<li>Painter side: <code>be/view/render.js</code> + the cat view (<code>be/views/cat/cat.js</code>); tok32 comes from the native jab tokenizer. BRO-011 fixed a double-UTF-8-encode in the pager frame; this may be the sibling in the offset accounting (JS string UTF-16 units vs tok32 byte offsets).</li>
+<li>The same funkiness presumably affects the pager's mkd views, not just piped cat.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Colour runs align with the text for the whole file; a repro pins it.
+</p>
+<ul>
+<li>Repro FIRST: a small .mkd fixture (em-dashes + <code>\r\n</code>-style backslashes + quotes) where the current renderer emits SGR mid-word; assert colour-run boundaries fall on token boundaries.</li>
+<li>Diagnose: byte vs UTF-16 cursor in the painter, or tokenizer emitting wrong lengths for escapes/multibyte — pin which side before fixing.</li>
+<li>Fix the one offset accounting; <code>jab cat todo/ABC/ABC-011.mkd --color</code> paints clean end to end.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fix the OFFSET ACCOUNTING, not the palette; BRO-010/BRO-011 ground (verb colour, double-encode) must stay green.</li>
+<li>If the defect is in the NATIVE tokenizer (jab side), do not patch ~/src/jab — diagnose, prove which side, and report for a JAB ticket.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> repro fixture + failing test: <code>be-js-cat-color</code> (test/cat/color/, registered WILL_FAIL), red at token 48 / byte 401.</li>
+<li><a href="./v.html">v</a> pinned: NATIVE side, construct is the backslash-escape <code>\X</code> (1 byte shed per escape); multibyte/quotes clean. Proof + fix ticketed as <a href="/todo/JAB/JAB-009.html">JAB-009</a>; painter is blameless.</li>
+<li><a href="./ .html"> </a> when JAB-009 merges + jab is rebuilt: drop the WILL_FAIL entry in test/CMakeLists.txt (work/BRO-028) and land the test as a regular green case.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<p>
+Fix exists UNCOMMITTED in work/JAB-009 (dog/HUNK.c pointer-based ends); this ticket's flip waits on that merge.
+</p>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

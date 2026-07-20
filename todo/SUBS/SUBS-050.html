@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-050</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-050 <a href="./OPEN.html">OPEN</a>: one parsed-branch type for all branch paths</h1>
+<p>
+REBASE 2026-07-15: the shape inventory shrinks — <code>?/libdog/.jab/JS-101</code> (absolute dot-chain) and <code>?.libdog/.jab/JS-101</code> (relative) both die with the dot-branch (<a href="./URI-016.html">URI-016</a> d5, <a href="./SUBS-054.html">SUBS-054</a>); the replacement shapes are the wtlog pin rows <code>///path/to/sub?proj_branch#pin</code> and <code>///path/to/sub/?branch#base</code>. The unify-on-one-parsed-type goal stands and gets easier.
+</p>
+<p>
+Branch paths in be/ JS are handled by ad-hoc string surgery at every call site; three recorded shapes leak verbatim into display, so <code>status</code> labels the same branch three ways at three depths: plain <code>?JS-101</code> (primary wt), absolute <code>?/libdog/.jab/JS-101</code> (mounted sub), relative <code>?.libdog/.jab/JS-101</code> (sub-of-sub, title-stripped rows). Unify on ONE parsed type <code>{ title, branch: [segments] }</code> and ONE helper module; no string concat or manual parsing at call sites.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+<code>shared/branch.js</code> (SUBS-048) is an ORPHANED string codec — nothing requires it; every call site grew its own indexOf/slice surgery. Composers: submount.js:114 syntheticBranch (manual slice surgery; writes the absolute sub-anchor shape at :233/:283/:325), store.js:626 keyURI/refKey, relate.js:29 resolveRef (<code>refs/heads/X</code> KEEPS the title — disagrees with serve.js:45 which advertises the title-STRIPPED branch), status.js:365 <code>&quot;?&quot;+rawQuery</code> verbatim, refs.js:34, head.js report, get.js <code>?&lt;branch&gt;#&lt;tip&gt;</code> wtlog rows. Parsers: wtlog.js:36 stripProject + refOf (<code>&amp;</code>-chain), store.js:588 stripProj (byte-identical duplicate of stripProject) + resolveRef's 3-way fuzzy match + shaOf's <code>/proj/branch/&lt;sha&gt;</code> split, get.js:92 <code>query.slice(1).split(&quot;/&quot;)</code>, wire.js:135 <code>refs/heads/</code> strip, post.js resolveTarget, delete.js:330, patch/fetchleg.js. Related: <a href="SUBS-040.html">SUBS-040</a> dot-branch tracking, <a href="SUBS-023.html">SUBS-023</a> synthetic-name get (wontfix), <a href="../../wiki/Submodules.html">Submodules</a> wiki, BE-011 segment-array path law.
+</p>
+<h3>Goals</h3>
+<ul>
+<li>ONE value type: sub <code>{ title: &quot;abc&quot;, branch: [&quot;.libdog&quot;, &quot;.jab&quot;, &quot;JS-101&quot;] }</code>; plain <code>{ title: &quot;proj&quot;, branch: [&quot;feature&quot;] }</code>; trunk <code>branch: []</code>. Dots stay ON the segments.</li>
+<li>ONE module (rewrite shared/branch.js) owning parse / format / key / sub / wireRef / fromWireRef / isTrunk / display, built over util/path.js split/merge segment arrays.</li>
+<li><code>status</code> shows ONE branch label shape at every depth.</li>
+<li>Every composer/parser site above routes through the module.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Read-compat FOREVER: parse() accepts all three recorded shapes (absolute / relative-dotted / plain) — old wtlog/refs rows.</li>
+<li>refs-log KEY bytes unchanged (title-stripped rel) so existing refs rows still resolve; NO store migration.</li>
+<li>Wire refs title-stripped (<code>refs/heads/&lt;rel&gt;</code>, the serve.js form); relate.js adopts it.</li>
+<li>test/submount.js:121-129 pins syntheticBranch output — KEEP the expected strings, retarget the calls to the new helper; no other test edits without explicit permission.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Display rule = format(br): plain <code>?feature</code> for a primary wt, absolute <code>?/&lt;title&gt;/.&lt;parent&gt;.../&lt;branch&gt;</code> for a mounted sub.</li>
+<li>Branch objects are INTERNAL; text only at IO edges (ulog rows, wire refs, display labels), parsed once on entry.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> rewrite shared/branch.js: parse/format/key/sub/wireRef/<div>
+<p>
+fromWireRef/isTrunk/display + 3-shape round-trip unit test
+</p>
+</div>
+</li>
+<li><a href="./ .html"> </a> repro FIRST: 3-level status label test (one shape expected)</li>
+<li><a href="./ .html"> </a> wtlog.js: tip/attachedBranch/refOf yield parsed branch;<div>
+<p>
+kill stripProject
+</p>
+</div>
+</li>
+<li><a href="./ .html"> </a> store.js: refs r/w keyed on key(br); kill stripProj, the<div>
+<p>
+fuzzy resolveRef match, shaOf's split
+</p>
+</div>
+</li>
+<li><a href="./ .html"> </a> submount.js: syntheticBranch → branch.sub()</li>
+<li><a href="./ .html"> </a> verbs: get.js remote parse, post.js resolveTarget,<div>
+<p>
+delete.js, head.js, patch/fetchleg.js
+</p>
+</div>
+</li>
+<li><a href="./ .html"> </a> wire refs: relate.js + serve.js + wire.js via wireRef()</li>
+<li><a href="./ .html"> </a> views: status.js + refs.js labels via display()</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>relate.js resolveRef NOT converted: test/put/wire-refguard pins the old title-KEEPING push ref (<code>/project</code> → <code>refs/heads/project</code>) + raw-segment POSTREF guard; the codec's split/merge collapses those. Push/advertise wire refs still disagree; amending that test needs an explicit user ruling.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

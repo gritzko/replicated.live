@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-052</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-052 <a href="./OPEN.html">OPEN</a>: post's selective gate is nesting-blind — a staged change ≥2 mounts down is silently skipped</h1>
+<p>
+<code>be post</code> at the top of a selective wt (anything staged in the TOP wtlog) gates each mounted sub by parent-scope rows, its <code>adv</code> bucket, or <code>anyStaged(that sub's OWN wtlog)</code> — never probing NESTED wtlogs. A change staged two mounts down (JS-113b: <code>dog/abc/POL.c</code> put-staged in libabc's wtlog, dog itself clean) leaves the mid sub out of scope, the recursion never starts, and the top post commits only the top's files — no error, no warning. The cascade itself (postSubs post-order recursion + gitlink bumps, DIS-058 D6/D7) is nested-capable; only the SUBS-042 gate is single-level. Sibling of <a href="./SUBS-051.html">SUBS-051</a> (put's single-level descent); the gate must recur the same way. Found 2026-07-11 by code-read while answering &quot;will a top post commit dog and dog/abc?&quot; — not executed against a live tree.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Gate (<code>be</code> @ jsrc tip, post.js:484-488 in postSubs): <code>if (parentSelective &amp;&amp; !subInParentScope(wtl, s.path) &amp;&amp; s.bucket !== &quot;adv&quot; &amp;&amp; !anyStaged(wtlog.open(subInfo))) continue;</code> — all three probes see ONE level; a grandchild wtlog's staged row is invisible.</li>
+<li>Evidence state (work/JS-113b): top wtlog selective (staged CMakeLists.txt/net.cpp put rows); <code>dog</code> clean, not adv, no parent row targets <code>dog/...</code>; <code>dog/abc</code> has POL.c put-staged → a top <code>jab post</code> would skip <code>dog</code> entirely and silently omit POL.c.</li>
+<li>Commit-all mode (nothing staged at top) is NOT affected: the gate falls through and postTree recurses into every mounted sub, so nested commits + bumps cascade correctly.</li>
+<li><a href="./SUBS-051.html">SUBS-051</a> is the staging-side twin (fixed in work/SUBS-051, pending merge): until it lands, a nested change cannot even be put-staged from the top — the repro should stage from INSIDE the grandchild to stay independent.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A selective top post commits a staged change at ANY mount depth: the sub-scope test becomes transitive (a sub is in scope iff its own wtlog OR any descendant mounted sub's wtlog has staged rows, or any descendant is adv), then the existing post-order recursion does the rest (grandchild commit → child bump+commit → parent bump+commit).</li>
+<li>Selective semantics otherwise unchanged: a dirty-but-unstaged out-of-scope sub stays uncommitted, exactly as SUBS-042 specifies.</li>
+<li>Repro test (jab-only) in beagle-ext-tests: nested fixture (reuse test/sub/nestedput's green-field recipe), stage in the grandchild from within it, stage a top file, top post → assert all three levels commit with correct gitlink bumps; a second fixture arm asserts an unstaged dirty sub is still skipped.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fix inside <code>be/verbs/post/post.js</code> (a transitive <code>anyStagedDeep</code>/scope probe over mounted descendants — subs.enumerate or recurse.isMount per level); do not restructure postSubs' recursion or the bump synthesis.</li>
+<li>Mind the adv bucket transitivity: a grandchild adv under a clean child must still pull the child into scope (the child's own postSubs then bumps it).</li>
+<li>Comments ≤2 lines, SUBS-052-prefixed; repro-first per <a href="../../meta/work.html">Issues</a>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./ .html"> </a> Repro test <code>test/sub/nestedpost</code> (jab-only): staged-grandchild selective post commits all levels; unstaged dirty sub stays skipped. -<a href="./ .html"> </a> Transitive scope probe in postSubs' SUBS-042 gate. -<a href="./ .html"> </a> Re-run the jab-only sub/ suites.
+</p>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none yet)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

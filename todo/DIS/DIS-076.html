@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-076</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-076 <a href="./DONE.html">DONE</a>: <code>post</code> couples the commit with the branch-advance — every commit FFs the tracked branch; <code>post ?/abs/branch</code> mints a bogus ref key (refiles the live half of <a href="DIS-061.html">DIS-061</a>)</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Refiled from <a href="DIS-061.html">DIS-061</a> <a href="./STALE.html">STALE</a> — its 2026-07-13 rulings cite the deleted trees.mkd and its pin-branch half is overruled by law #4; the commit/advance split and the normalization bug survive verbatim.
+</p>
+<ul>
+<li>post.js:717-721: advanceRef on EVERY commit, gated only on <code>!att.detached</code>; branchKey defaults to cur's attached branch (post.js:580, 601-602, 624).</li>
+<li>RULED 2026-07-13, restated under <a href="23-33">worktree</a> 2026-07-15: <code>post 'msg'</code> advances the WORKTREE only, for every branch shape — never as a commit side-effect.</li>
+<li>SUPERSEDED 2026-07-15: <a href="DIS-061.html">DIS-061</a>'s pin-branch exemption (pin refs the parent refreshes level-by-level) dies with the pin-branches — a sub tracks <code>//WT/path/to/sub</code> (<a href="DIS-072.html">DIS-072</a>).</li>
+<li>Normalization: resolveTarget returns the raw <code>/jab/.beagle</code> (post.js:239-249) but curBranch is the stripped <code>.beagle</code> (wtlog.js:39-57) — so the own-branch guard misses.</li>
+<li>Then resolveRef misses too (store.js:420-442) and advanceRef store.set()s a ref literally keyed <code>/jab/.beagle</code> (post.js:281); post's query path never routes through branchlib.</li>
+<li>The overturned model still lives in the wiki/tickets: <a href="../SUBS/SUBS-040.html">SUBS-040</a>:15,26,30 (I2) and <a href="../../wiki/Worktree.html">Worktree</a>:12's &quot;post advances the tip&quot; — both need the ruling note.</li>
+<li>Already matching <a href="23-33">worktree</a>: post-order recursion + the gitlink bump (postSubs, post.js:486-545), the <code>post &quot;msg&quot;</code> commit path (post.js:675-710), status's ahead/behind.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Split the two motions; normalize every branch key through the ONE codec.
+</p>
+<ul>
+<li>postOne moves the wt cur row ONLY: DROP advanceRef from the commit path entirely; the worktree reads &quot;ahead&quot; in status until the branch catches up.</li>
+<li>The branch advance lives ONLY in the advance-shaped arm — an explicit <code>post ?branch</code> or a bare <code>post</code> implying the track (<a href="DIS-074.html">DIS-074</a>).</li>
+<li>Route every post Query through branchlib.parse/key so <code>?/jab/.beagle</code> resolves to the stored <code>.beagle</code> key; no bogus ref is ever minted.</li>
+<li>Amend the overturned spots: <a href="../../wiki/Worktree.html">Worktree</a>:12, <a href="../../wiki/POST.html">POST</a>:27 (narrow the bare-row &quot;reuse absorbed msg&quot; to under-an-active-PATCH), <a href="../SUBS/SUBS-040.html">SUBS-040</a>'s I2 ruling note.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Every test leg assuming commit==advance moves; that is the expensive part.
+</p>
+<ul>
+<li>Large behavioral change: inventory the be/test/ legs asserting a ref moved on commit; amend ONLY with explicit permission (<a href="../../meta/work.html">/meta/work</a> rule 4).</li>
+<li>Repro-first: commit on any tracked branch → wt ahead, ref UNMOVED; <code>post ?branch</code> → FF'd; <code>post ?/jab/.beagle</code> → no bogus key.</li>
+<li>Keep <a href="DIS-054.html">DIS-054</a>/<a href="DIS-058.html">DIS-058</a>/<a href="DIS-059.html">DIS-059</a> post.js changes reconciled at land time (the same arm).</li>
+<li>The pin-refresh half belongs to <a href="DIS-072.html">DIS-072</a> — do NOT re-implement pin-branch reflection here.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(carried) the split is RULED; what remains is the test-leg inventory and the landing order against <a href="DIS-072.html">DIS-072</a>/<a href="DIS-074.html">DIS-074</a>.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: commit on a tracked branch → wt ahead, ref unmoved; then <code>post ?branch</code> → FF'd</li>
+<li><a href="./ .html"> </a> repro: <code>post ?/jab/.beagle</code> → resolves the <code>.beagle</code> key, mints nothing bogus</li>
+<li><a href="./ .html"> </a> postOne: drop advanceRef from the commit path</li>
+<li><a href="./ .html"> </a> branchlib normalization in resolveTarget/advanceBranch</li>
+<li><a href="./ .html"> </a> test inventory: legs assuming commit==advance; request the user for amendments</li>
+<li><a href="./ .html"> </a> spec: <a href="../../wiki/Worktree.html">Worktree</a>:12, <a href="../../wiki/POST.html">POST</a>:27, <a href="../SUBS/SUBS-040.html">SUBS-040</a> I2 ruling note</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Landing order: <a href="DIS-072.html">DIS-072</a> (pin refresh) must land with or after this, or a sub's pin stops moving with nothing to replace it.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FILED 2026-07-15, refiling the live half of <a href="DIS-061.html">DIS-061</a> (FILED 2026-07-12, trees.mkd audit); nothing landed yet.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

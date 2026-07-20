@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOG-020</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG-020 <a href="./OPEN.html">OPEN</a>: wire the orphaned fuzz/NEIL.c back into the build</h1>
+<p>
+<code>dog/fuzz/NEIL.c</code> — a six-property harness over <code>NEILCleanup</code>/<code>NEILShift</code>/ <code>NEILCanon</code> (reconstruction, token balance, hygiene, substantive-EQ preservation, splice canon, shift idempotence) — is orphaned: when NEIL moved to <code>dog/</code> (DOG-002) graf/fuzz dropped its NEILfuzz target, the copied source never entered <code>dog/fuzz/CMakeLists.txt</code>, and it still includes <code>graf/JOIN.h</code> (<code>JOINfile</code>/<code>JOINTokenize</code>/<code>JOINFree</code>) which does not exist in libdog. It silently doesn't build anywhere. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>beagle/graf/fuzz/CMakeLists.txt:17</code> records the relocation; the beagle tree has the same unbuilt copy under <code>dog/fuzz/NEIL.c</code>.</li>
+<li>The harness only needs the JOIN trio for tokenize-to-<code>{toks,hashes}</code>; <code>dog/tok/TOK.h</code> (<code>TOKLexer</code>) + the DIFF u64 hashing cover that locally.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>NEILfuzz</code> builds in <code>dog/fuzz/</code> (libdog standalone, no graf/) and runs; all six property checks preserved verbatim.</li>
+<li>Replace the <code>graf/JOIN.h</code> dependency with a local fuzz-file helper (or a dog-level equivalent if one already exists — check INDEX.md first).</li>
+<li>A short local run (≥1M execs or 10 min) under ASan comes back clean, seeded with small C-source old/new pairs.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Keep the six properties intact — no weakening a check to make it pass.</li>
+<li>No <code>NEIL.c</code>/<code>BRAM.c</code> algorithm edits: a property violation found is its own ticket, linked here (per <a href="../../meta/todo.html">todo.mkd</a>). <a href="DOG-016.html">DOG-016</a> tracks a known <code>NEILShift</code> bound issue — cross-link, don't fix here.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled>  T1 local tokenize helper (TOKLexer + u64 token hashes) replacing JOINfile.</li>
+<li class="open"><input type="checkbox" disabled>  T2 CMakeLists target <code>NEILfuzz</code>; confirm it links against dog + abc-core.</li>
+<li class="open"><input type="checkbox" disabled>  T3 run under ASan; record execs/sec + any findings as new tickets.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>2026-07-12: T1-T3 implemented in worktree <code>~/src/DOG-020</code>, UNLANDED. The only NEIL.c change is the JOIN-block swap: local <code>JOINfile</code> + <code>JOINTokenize</code> (TOKLexer + <code>tok32Pack</code> + <code>RAPHash</code> into heap <code>u32b</code>/ <code>u64b</code>) — all six property checks byte-identical to the original (orchestrator diffed against the orphan copy to confirm).</li>
+<li>FOUND + FIXED (2026-07-12, follow-up worker): the campaign-only c1 trap was NOT an uninit read (first suspicion wrong) — it is BASS ARENA EXHAUSTION. <code>NEILCleanup</code> is invoked directly (fuzz harness AND <code>WEAVE.c:448</code>), never via <code>call()</code>, so its 5 <code>a_carve</code> scratches leak into the caller's frame; the FUZZ macro never rewinds BASS between iterations, the 1 GB arena fills (~187-490K execs), <code>a_carve</code> returns BNOROOM mid-pipeline and the early-return leaves a malformed EDL (zero-len EQ). Fresh-process replay = empty arena = clean, hence the heisenbug. Fix in <code>NEIL.c</code> (+11 lines): NEILCleanup snapshots the BASS data slice at entry and rewinds on both returns — the exact <code>call()</code> idiom from PRO.h. Orchestrator-verified: campaigns clean, RSS flat ~440 MB (was climbing past 1.2 GB), all saved artifacts + corpus replay clean, ctest 66/66 in the same build.</li>
+<li>BONUS in the same tree: root <code>CMakeLists.txt</code> now defines the WITH_ASAN/WITH_FUZZ flag blocks inside the standalone guard (verbatim beagle root), so plain <code>-DWITH_FUZZ=ON -DWITH_ASAN=ON</code> links all five fuzz targets standalone — the cache-var workaround is obsolete. Beagle-child mode untouched by construction (guard is false there).</li>
+<li>Residual (candidate follow-ups): the FUZZ macro itself never rewinds BASS per iteration, so any OTHER directly-called carving fn leaks the same way under fuzzing; <code>a_carve</code>'s own failure path bypasses the new restore (benign once the arena stops filling).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-07-12, fuzz-coverage review of dog/fuzz.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

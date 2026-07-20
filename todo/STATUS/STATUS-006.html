@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STATUS-006</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>STATUS-006 <a href="./OPEN.html">OPEN</a>: jab status ignores a plain-dir arg and the cwd context — silent whole-wt degrade</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Reported by gritzko 2026-07-11, repro'd on the journal repo (jab plant <code>journal/be</code>): <code>jab status wiki</code> (and the pager spell <code>:status wiki</code>) emits the WHOLE tree; bare <code>jab status</code> run from <code>~/src/journal/wiki</code> likewise shows the parent's whole status.
+</p>
+<ul>
+<li><code>views/status/status.js:114</code> parses the arg fine (<code>scope=&quot;wiki&quot;</code>), <code>argRel</code>+<code>wtpath</code> yield <code>.../journal/wiki</code> — then <code>statusOne</code> (status.js:153) only does <code>be.find(row.uri)</code>, which CLIMBS to the nearest shard anchor: a plain dir climbs back to the top repo, whole-wt emit.</li>
+<li>Scoping works ONLY when the arg names a mounted SUB (<code>status test</code> → the sub's own shard, DIS-060 comment); a subtree filter below the found repo root was never implemented in jab.</li>
+<li>Native parity gap: C <code>be status:&lt;path&gt;/</code> sub-scope landed in <a href="./STATUS-001.html">STATUS-001</a> (<code>bc5c0bd4</code>); jab has no equivalent.</li>
+<li>The pager leg is NOT the cause: the footer form <code>status ///wiki</code> parses back to <code>/wiki</code> and <code>wtdir</code> resolves it to <code>journal/wiki</code> correctly (verified); the degrade reproduces on the plain CLI.</li>
+<li>Same class in diff (bare <code>:diff</code> ignores the dir context): <a href="/todo/DIFF/DIFF-013.html">DIFF-013</a>, fix the shared shape together.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>jab status &lt;dir&gt;</code> (CLI and pager spell) emits only rows under <code>&lt;dir&gt;</code>, keeping the sub-shard redirect for mounted subs.</li>
+<li>Bare <code>jab status</code> from a subdir cwd (or a pager context nav'd into one) scopes to that dir — extends the BE-046 &quot;context = cwd&quot; ruling to DIR contexts.</li>
+<li>No silent whole-wt degrade (cf. BE-037): a path that exists but has no dirty rows emits an empty/clean hunk, never the whole tree.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro test first (<a href="/meta/work.html">work</a>); fix in beagle-ext (JS), no C changes.</li>
+<li>Keep <code>find()</code>'s sub-shard redirect intact; the residue below the found repo root becomes a row filter.</li>
+<li>The verb resolves (context, arg) itself; no pager pre-merge (BE-030/BE-039).</li>
+<li>Minimal diff; no edits to unrelated tests.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Sketch: <code>statusOne</code> keeps the sub-path residue (<code>row.uri</code> minus <code>repo.wt</code>) and threads it as a prefix filter into <code>emitRepo</code>'s row emission; recurse only into mounted subs BELOW the filter.</li>
+<li>Bare-status cwd scoping: default the filter to the run's context dir (<code>be.ctxDir</code> already rides the run, BE-032 <code>_ctxSub</code>); alternatively the loop edge (BE-048 block, <code>core/loop.js:390</code>) pushes the context DIR as a rooted arg for no-arg views — decide ONE shared mechanism with <a href="/todo/DIFF/DIFF-013.html">DIFF-013</a>.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro test: dirty files in two dirs, <code>status &lt;dir&gt;</code> shows only that dir's rows</li>
+<li><a href="./ .html"> </a> repro test: bare <code>status</code> from a subdir cwd scopes to that dir</li>
+<li><a href="./ .html"> </a> fix: subtree filter in statusOne/emitRepo (+ sub recursion below the filter)</li>
+<li><a href="./ .html"> </a> fix: bare-status context-dir default (shared mechanism with DIFF-013)</li>
+<li><a href="./ .html"> </a> pager leg verified end-to-end: <code>:status wiki</code> from a journal-root session scopes</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

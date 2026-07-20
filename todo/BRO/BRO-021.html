@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-021</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-021 <a href="./LOW.html">LOW</a>: viewport/state nits — <code>G</code> strands ONE row on a blank screen, <code>W</code> throws without <code>be.wrap</code>, verb-less views mint a junk wrap key, UTF-16 truncation</h1>
+<p>
+Small verified defects in the pager's viewport clamp and wrap-default state; batched as one cleanup. 2026-07-07 audit, runtime-VERIFIED except where noted. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>render()</code> clamps scroll to <code>rows.length - 1</code> (pager.js:349), not <code>max(0, rows.length - viewRows)</code>: <code>G</code>, page-down past end, and wheel-down at the bottom all land showing a SINGLE row atop a blank screen (VERIFIED: 13 rows, 10-row screen → scroll 12, want 4). <code>less</code> semantics: bottom line rests at screen bottom.</li>
+<li><code>W</code> writes <code>be.wrap[...]</code> unguarded (pager.js:480): with the <code>be</code> global absent it throws ReferenceError, with <code>be.wrap</code> missing TypeError — the throw escapes the key loop and KILLS the pager (VERIFIED); <code>wrapFor</code> (pager.js:49) and <code>_composeCall</code> both guard.</li>
+<li>Verb-less views (a bro FILE view: hunk uri = bare path; transport <code>be://…</code> views) decode verb &quot;&quot; — they open with <code>wrapFor(&quot;&quot;)</code> (ignoring e.g. the cat default they visually are) and <code>W</code> mints a junk <code>be.wrap[&quot;&quot;]</code> key with the message <code>wrap default ?: soft</code> (VERIFIED).</li>
+<li><code>_fit</code>/<code>_banner</code> truncate/pad by UTF-16 <code>.length</code>, not display columns (pager.js:427, :384): CJK banners overflow the inverse band; <code>slice(0, cols)</code> can split a surrogate pair → an unpaired surrogate through utf8.Encode (arithmetic-certain; width helper shared with <a href="BRO-020.html">BRO-020</a>).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Bottom clamp keeps a full last page; <code>W</code> never throws; a verb-less view maps to a REAL type key (or <code>W</code> refuses politely); banner/status truncation is column-accurate.</li>
+<li>Driver repros per case.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>views/bro/pager.js</code> only; the width helper lands with <a href="BRO-020.html">BRO-020</a> — depend, don't duplicate.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> Repros: G clamp, W-throw, wrap<a href="./&quot;&quot;.html">&quot;&quot;</a> pollution, CJK banner width.</li>
+<li><a href="./ .html"> </a> Fix; suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

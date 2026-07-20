@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-007</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-007 <a href="./C/JS.html">JS</a> <a href="./HIGH.html">HIGH</a>: Buf cursor <code>| 0</code> int32 coercion caps every mapped view at 2^31-1 — io.mmap of a &gt;2GB file returns a silently WRONG view, git.pack.mmap ABORTS on multi-GB keeper logs</h1>
+<p>
+jab's JS <code>Buf</code> class (the buf.cpp prelude) coerces its <code>_data</code>/<code>_idle</code> cursors with <code>| 0</code> (signed int32).  <code>io.mmap</code> wraps every file mapping in <code>Buf.over(u8)</code> which seeds <code>_idle = u8.length | 0</code> — for any file ≥ 2 GiB that wraps NEGATIVE, and <code>.data()</code>'s <code>subarray(0, _idle)</code> then reinterprets the negative end END-RELATIVE, silently returning a short/garbled view (no throw).  <code>git.pack.mmap</code> rides the same wrapper, so scanning a multi-GB keeper log feeds nonsense windows to the native pack scanner and the (ASAN) process ABORTS.  This is the wall that blocks <a href="../GET/GET-044.html">GET-044</a>'s linux-scale clone AFTER the streamed pack lands: a 6.4 GB <code>0000000001.keeper</code> is durable on disk but can be neither indexed nor read.  The C and JSC layers are NOT at fault (verified — see Context).  Method: <a href="../../meta/work.html">work</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Probed 2026-07-14 on the deployed jab (Jul 12 build, <code>libjavascriptcoregtk-4.1</code>):<ul>
+<li><code>io._mmap(&quot;3GB-file&quot;,&quot;r&quot;).length</code> → *<strong>3000000000 CORRECT</strong>* (C + JSC handle big lengths fine);</li>
+<li><code>io._ram(3000000000).length</code> → 3000000000 CORRECT (same <code>JSObjectMakeTypedArrayWithBytesNoCopy</code> path);</li>
+<li><code>new Uint8Array(3000000000)</code> heap → CORRECT;</li>
+<li><code>io.mmap(&quot;3GB-file&quot;,&quot;r&quot;).data().length</code> → *<strong>1705032704 WRONG</strong>* = 3e9 + (3e9|0) — the Buf wrap;</li>
+<li>boundary exact: size 2147483647 → correct; 2147483648 → length 0; above → <code>2*(size mod 2^31)</code>.</li>
+</ul>
+</li>
+<li>Root cause (jab/buf.cpp JS prelude, Buf constructor):<div>
+<p>
+this.<em>data = data | 0; this.</em>idle = (idle === undefined ? data : idle) | 0;
+</p>
+</div>
+<p>
+<code>Buf.over(u8)</code> passes <code>idle = u8.length</code>; <code>3e9 | 0 = -1294967296</code>; <code>subarray(0, negative)</code> counts from the END → the observed 1705032704.  At exactly 2^31 the negative end lands on 0 → empty view.
+</p>
+</li>
+<li><code>git.pack.mmap</code> on a &gt;2^31-1 file: native ABORT (ASAN) — reproduced with a sparse 3 GB file, <code>git.pack.mmap(path, &quot;r&quot;)</code> → <code>Aborted</code> (the pack scan walks a garbled window).</li>
+<li>Live impact: <a href="../GET/GET-044.html">GET-044</a> now streams a linux clone's 6.4 GB pack to the shard with ~14 MB heap and lands it verified; <code>ingest.buildIndex</code>/<code>store.open</code> then CANNOT read the log — be/shared/ingest.js ships an <code>MMAP_CAP = 2147483647</code> guard that refuses cleanly instead of crashing (<code>ingest: … landed OK but exceeds the jab 2^31-1 mmap cap</code>).  Every multi-GB repo clone stays blocked until this lands.</li>
+<li>Fix sketch: drop the <code>| 0</code> on the cursor fields (JS doubles are exact to 2^53; the cursors only ever hold byte offsets), audit the other <code>| 0</code>/<code>int</code> narrowings in the Buf prelude + cont.cpp watermark plumbing, and add a &gt;2GB sparse-file regression (map, .data().length, pack.mmap scan) to jab's tests.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>io.mmap</code> of a &gt;2GB file yields a full-length, correct <code>.data()</code> view; <code>git.pack.mmap</code> + <code>pack.scan</code> work on a multi-GB keeper log (no abort).</li>
+<li>A regression test pins the 2^31 boundary (sparse files are cheap — no big fixture needed).</li>
+<li>be/ side: once landed, drop the <a href="../GET/GET-044.html">GET-044</a> <code>MMAP_CAP</code> refuse (or raise it to the real engine bound) so linux-scale index/checkout proceeds.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>jab repo (<code>~/src/jab</code>), not be/; the be/-side guard lands with <a href="../GET/GET-044.html">GET-044</a> and stays until this ships.</li>
+<li>Watch the JSC ArrayBuffer cap separately: heap <code>Uint8Array(3e9)</code> works, but the engine's true max should be probed and documented while at it (the <a href="../GET/GET-044.html">GET-044</a> RangeError at ~2.7 GB concat suggests a lower ceiling for some alloc paths).</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled>  Drop <code>| 0</code> on Buf <code>_data</code>/<code>_idle</code> (+ audit <code>size</code>/<code>room</code>/<code>feed</code>/<code>take</code> arithmetic for other 32-bit narrowings).</li>
+<li class="open"><input type="checkbox" disabled>  Audit cont.cpp <code>buffer.watermark</code> plumbing for the same narrowing.</li>
+<li class="open"><input type="checkbox" disabled>  Sparse-file regression: 2^31-1 / 2^31 / 3e9 map lengths + a pack.mmap scan over a &gt;2GB synthetic log.</li>
+<li class="open"><input type="checkbox" disabled>  Then GET-044 follow-up: lift the be/ MMAP_CAP guard, rerun the linux gate end-to-end.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

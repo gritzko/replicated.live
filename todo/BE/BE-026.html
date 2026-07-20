@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-026</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-026 <a href="./DONE.html">DONE</a>: recurse submodule paths from <code>.gitmodules</code> escape the wt (unvalidated <code>path=</code>)</h1>
+<p>
+<code>core/recurse.js</code> composes a worktree path from an UNVALIDATED <code>.gitmodules</code> <code>path=</code> value: <code>isMount(wtRoot, subpath)</code> builds <code>wtRoot + &quot;/&quot; + subpath</code> then <code>+ &quot;/.be&quot;</code> (raw concat, no <code>safeRel</code>), and <code>walk</code>/<code>resolveRepoForPath</code> feed the same <code>subpath</code> through <code>subs.mountWtDir</code> = <code>join(repo.wt, subPath)</code> into <code>be.find</code>. <code>shared/gitmodules.js parse</code> validates nothing (<code>curPath = line.slice(eq+1).trim()</code>), so a crafted checked-out <code>.gitmodules</code> declaring <code>path = ../../../etc</code> escapes the worktree via <code>lstat</code>/<code>stat</code>/<code>be.find</code>. Same class as <a href="BE-011.html">BE-011</a> (lexical/concat path build defeated by <code>..</code>); found in the BE-011 follow-up wt-open audit. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Audit (2026-07-08): <code>core/recurse.js:35</code> <code>base = (wtRoot.endsWith(&quot;/&quot;)?…)+subpath</code>; <code>:37</code> <code>p = base + &quot;/.be&quot;</code>; <code>:71</code>/<code>:95</code> <code>be.find(subs.mountWtDir(repo, subPath))</code> — <code>subPath</code> from <code>gitmodulesOrder(repo.wt)</code>, unconfined.</li>
+<li>Source is attacker-reachable: a repo can ship a <code>.gitmodules</code> whose <code>path=</code> holds <code>..</code>/absolute segments; nothing rejects it at parse or use.</li>
+<li><code>path.js</code> now offers <code>wtJoin</code>/<code>resolveInTree</code> (throw NAVESCAPE) + <code>safeRel</code>; recurse routes through none.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A <code>.gitmodules</code> <code>path=</code> that resolves outside the worktree is REFUSED (NAVESCAPE / dropped), never stat'd or <code>be.find</code>'d.</li>
+<li>Confine <code>subpath</code>/<code>subPath</code> in <code>isMount</code>, <code>walk</code>, <code>resolveRepoForPath</code> via <code>wtJoin</code>/<code>resolveInTree</code> before any concat or <code>mountWtDir</code>.</li>
+<li>Harden <code>shared/gitmodules.js parse</code> to drop non-<code>safeRel</code> <code>path</code> entries at the source.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first: a crafted <code>.gitmodules</code> (<code>path = ../../x</code>) → refusal, not escape.</li>
+<li>No hand-rolled normalization beyond <code>shared/util/path.js</code>. Same tree (no worktree).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Gate at BOTH ends (defense in depth): (1) SOURCE — <code>shared/gitmodules.js parse</code> DROPS-and-continues any <code>[submodule]</code> block whose <code>path</code> fails <code>safeRel</code> (absolute/<code>..</code>/<code>.git</code>/<code>.be</code>/reserved). A poisoned entry never reaches the walk; a bad sub is SKIPPED, the walk of the legit subs is NOT aborted. Chose drop-and-continue over throw so one crafted <code>.gitmodules</code> line can't DoS status/log/diff of an honest tree.</li>
+<li>USE — <code>core/recurse.js</code> <code>isMount</code>/<code>walk</code>/<code>resolveRepoForPath</code> route every <code>subpath</code>/<code>sub</code> through <code>path.wtJoin(wtRoot, rel)</code> before any <code>lstat</code>/<code>stat</code>/<code>be.find</code>. <code>wtJoin</code> throws <code>NAVESCAPE</code> on a climb above the wt root; <code>isMount</code> catches it → refused as NO-MOUNT (never stats outside), <code>walk</code>/<code>resolveRepoForPath</code> catch it → skip/stop. No hand-rolled normalization; all via <code>shared/util/path.js</code>.</li>
+<li>Fixed a latent shadow while wiring the module alias: <code>resolveRepoForPath(repo, path)</code>'s param <code>path</code> shadowed the new <code>const path = require(...)</code>; renamed the param to <code>relPath</code> so <code>path.wtJoin</code> binds the module (else a TypeError on every sub descent — the log suites would have gone red).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled>  Repro: crafted <code>.gitmodules path=../outside</code> escapes today (RED). <code>test/sub/mount-escape/run.sh</code> — drives <code>recurse.isMount</code> + <code>gitmodules.paths</code> directly; RED against original (<code>MOUNT_esc=true</code>, reached <code>&lt;wt&gt;/../outside/.be</code>), GREEN after.</li>
+<li class="done"><input type="checkbox" checked disabled>  Confine recurse subpaths via <code>wtJoin</code> (isMount/walk/resolveRepoForPath); harden <code>gitmodules.parse</code> (safeRel drop).</li>
+<li class="done"><input type="checkbox" checked disabled>  Suite green: sub/{selfloop,symlink}, ls/submount, spot/submount, log/{sub,subnav} all PASS.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>ls/submount + spot/submount need scratch under <code>$HOME</code> (git-over-ssh fixture); they SKIP when <code>$TMP</code> is <code>/tmp</code> — ran both with <code>TMP=$HOME/tmp/...</code> to get real GREEN, not SKIP.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><code>core/recurse.js</code>: <code>isMount</code> builds <code>base</code> via <code>path.wtJoin</code> (was raw <code>wtRoot+&quot;/&quot;+subpath</code>); <code>walk</code> + <code>resolveRepoForPath</code> compose <code>subWt</code> via <code>wtJoin</code> before <code>be.find</code> (was <code>subs.mountWtDir</code>); dropped the now-unused <code>subs</code> require, added the <code>path</code> require; renamed the <code>resolveRepoForPath</code> param <code>path</code>→<code>relPath</code> (shadow fix).</li>
+<li><code>shared/gitmodules.js</code>: <code>parse</code> requires <code>safeRel</code> and gates <code>flush()</code> so non-<code>safeRel</code> <code>path=</code> blocks are dropped at the source.</li>
+<li>New test <code>test/sub/mount-escape/run.sh</code> (RED→GREEN repro). Nothing committed — working tree left dirty for review.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STATUS-007</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>STATUS-007 <a href="./HIGH.html">HIGH</a>: a declared sub with a live gitlink but no anchor buckets as <code>ok</code> — an unmounted sub is invisible</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Found 2026-07-14 on <code>journal/be</code>: <code>jab status</code> printed <code>91 ok</code> and no <code>status test</code> hunk while <code>be/test</code> had lost its <code>.be</code> anchor (<a href="/todo/SUBS/SUBS-053.html">SUBS-053</a>). A whole submodule had silently dropped out of the status view and the summary still read all-clean.
+</p>
+<ul>
+<li><code>views/status/status.js:308-322</code> — <code>const mounted = isMount(repo.wt, gl.path)</code>; an unmounted gitlink takes the <code>else</code> and lands in <code>res.counts.ok++</code>, indistinguishable from a clean file.</li>
+<li><code>views/status/status.js:432</code> — the recursion gate <code>if (!s || !s.mounted) continue;</code> drops the sub's own hunk, so nothing else hints at the loss.</li>
+<li>Net effect: a declared sub whose mount is gone reads EXACTLY like a healthy one — <code>jab status test</code> even answers <code>1 ok</code>.</li>
+<li>A sub declared in <code>.gitmodules</code> WITH a live <code>160000</code> gitlink but NO anchor is a broken tree state, not an <code>ok</code> one.</li>
+<li>Confirmed end-to-end: deleting only <code>test/.be</code> in a clean clone reproduces the exact symptom (<code>91 ok</code>, no sub hunk); restoring the anchor brings the hunk back.</li>
+<li>The <code>isMount</code> gate itself is correct (SUBS-049 shape, <code>status.js:480-488</code>) — the bug is the BUCKET an unmounted sub falls into, not the detection.</li>
+<li>Native parity: check what C <code>be status</code> reports for a declared-but-unmounted sub before picking the verb.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A declared sub with a live gitlink and no anchor emits a LOUD row (e.g. a <code>mis</code>-class verb), never a silent <code>ok</code> tally.</li>
+<li>The summary line reflects the broken sub so a bare <code>jab status</code> can't read all-clean over a lost mount.</li>
+<li>A clean unmounted-by-design case (if any exists) stays distinguishable from a LOST mount.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro test first (<a href="/meta/work.html">work</a>); fix in beagle-ext (JS), no C changes.</li>
+<li>Do not change the <code>isMount</code> detection shape (SUBS-049).</li>
+<li>Keep status byte-parity with native for every case that is NOT a broken sub; confirm the native verb first.</li>
+<li>Minimal diff; no edits to unrelated tests.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Sketch: in the <code>else</code> at <code>status.js:310-311</code>, split &quot;declared + gitlink + no anchor&quot; out of the <code>ok</code> bucket into its own row + counter; keep the recursion skip (there is no shard to recurse into).</li>
+<li>Verb choice is open — <code>mis</code> reads naturally (the mount is missing) but must be checked against native <code>be status</code> and the <a href="/meta/todo.html">todo</a> bucket table first.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> check native C <code>be status</code> output for a declared-but-unmounted sub (parity target)</li>
+<li><a href="./ .html"> </a> repro test: clone with a sub, <code>rm</code> the sub's <code>.be</code>, assert status does NOT report all-<code>ok</code></li>
+<li><a href="./ .html"> </a> fix: bucket the anchor-less declared sub into a loud row + counter</li>
+<li><a href="./ .html"> </a> verify: a healthy sub still tallies exactly as before (byte-parity)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

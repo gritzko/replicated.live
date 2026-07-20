@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-045</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-045 <a href="./HIGH.html">HIGH</a>: bare <code>//</code> resolves to the CELL, not the meta — ticket links die inside worktrees</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+In <code>work/ABC-006</code> the pager's ticket-key click composes <code>cat:///todo/ABC/ABC-006.mkd</code> and answers <code>no hunks:</code> — the file exists in the meta tree.
+</p>
+<ul>
+<li>shared/ticket.js ticketUri() composes the link from the todoRoot HIT root (the meta) via navCwd(root) → the bare <code>//</code> (BE-031: the meta has no <code>//name</code>).</li>
+<li>core/discover.js resolve() maps host &quot;&quot; → launchTop() (BE-037); topWt() treats a hive cell as its OWN top (the BE-031 hive boundary), so a cell launch resolves <code>///todo/…</code> INTO the cell, where todo/ is absent.</li>
+<li>navCwd() and resolve() thus DISAGREE on what <code>//</code> names exactly when jab runs inside a cell; navCwd never names a cell <code>//</code> (a cell always gets <code>//&lt;name&gt;</code>).</li>
+<li>Repro: <code>cd work/ABC-006 &amp;&amp; jab cat '///todo/ABC/ABC-006.mkd' --plain</code> → empty; the same spell from the meta root prints the page.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>the bare <code>//</code> means ONE tree everywhere: the tree navCwd names <code>//</code> — the hive's meta (srcRoot()'s parent) when it anchors, else the launch top (plain wt, BE-037 behavior kept).</li>
+<li>ticket links clicked inside any cell open the meta's todo/ page.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>fix in resolve()/wtdir() (the one chokepoint), not per-view; minimal diff, end-to-end verify (<a href="/meta/work.html">work</a>).</li>
+<li>flat-legacy $SRC_ROOT hives (no meta wt above the hive) keep the launchTop() fallback.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>rootTop() helper (memoized like launchTop): dirname(srcRoot()) when find() anchors EXACTLY there, else launchTop(); resolve() host &quot;&quot;/&quot;.&quot; and the wtdir() guard go through it.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> rootTop() + resolve()/wtdir() switch (be/core/discover.js)</li>
+<li><a href="./v.html">v</a> verify: cat <code>///todo/…</code> prints the page from work/ABC-006, work/BE-041 AND the meta; suite 172/173, the one red (be-js-get-oddname, JS-096 area) reproduced with the fix reverted — pre-existing.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>fix sits UNCOMMITTED in the main tree (no VC ops without an explicit order).</li>
+<li>BE-043's <code>[update]</code> spell <code>get ///&lt;path&gt;</code> now names the project root from inside a cell — this bug was half of that ticket's O-spell binding blocker.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

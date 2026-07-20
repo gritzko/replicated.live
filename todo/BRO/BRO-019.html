@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-019</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-019 <a href="./MED.html">MED</a>: address-bar input — arrow/function keys ERASE the bar, typed UTF-8 is dropped, pasted UTF-8 mojibakes, multi-line paste joins</h1>
+<p>
+The pager's key loop (pager.js <code>_feed</code>/<code>_keyCommand</code>) only understands SGR mouse and bracketed-paste escapes; every other escape sequence and every non-ASCII byte is mishandled. Runtime-VERIFIED (headless <code>_feed</code> byte traces), 2026-07-07 audit. The 1-2-byte split-escape leak at the read boundary is already ticketed as a <a href="../BE/BE-023.html">BE-023</a> bullet (its worst payloads, VERIFIED here: a straddled mouse RELEASE leaks <code>m</code> → mouse tracking silently OFF; a straddled paste-begin leaks the payload → a pasted <code>q</code> QUITS the pager) — fix them together. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>CSI leak: arrows/Home/End/Del/PgUp/F-keys arrive as <code>ESC [ …</code> and leak byte-by-byte into key(); in command mode the ESC hits the cancel branch (pager.js:502) and ERASES the whole typed command (VERIFIED: <code>:cat foo</code> + Right-arrow → mode=scroll, cmd=&quot;&quot;). In scroll mode the tail bytes hit live bindings by luck of the alphabet.</li>
+<li>Alt-keys: terminals send <code>ESC &lt;char&gt;</code>; the ESC is swallowed, the char FIRES its binding (VERIFIED: Alt-q quits).</li>
+<li>Typed non-ASCII is dropped (<code>b &gt;= 0x20 &amp;&amp; b &lt; 0x7f</code>, pager.js:508): a UTF-8 path char cannot be typed at all. Pasted non-ASCII is kept ONE CHAR PER BYTE via String.fromCharCode (pager.js:774) → Latin-1 mojibake (VERIFIED: paste <code>é</code> → cmd &quot;Ã©&quot;), then double-encoded at render.</li>
+<li>Multi-line paste: bytes &lt;0x20 are dropped inside a paste (pager.js:773) — lines silently JOIN into one spell (VERIFIED &quot;abncd&quot; → &quot;abcd&quot;); a paste in scroll mode is swallowed with no message.</li>
+<li>No cursor editing (append/backspace only) and <code>_fit</code> tail-truncates a long command, so the edit point can be off-screen — usability, fix opportunistically.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A CSI/SS3 sequence is consumed WHOLE (parse-and-ignore unknowns); arrows move the bar cursor (or at minimum do nothing); Alt-x never fires x; a 1-2-byte escape tail at the read boundary is carried to the next read (<a href="../BE/BE-023.html">BE-023</a> leg).</li>
+<li>The bar accepts UTF-8: typed and pasted bytes decode identically; a multi-line paste either submits line-by-line or inserts visibly, never silently joins.</li>
+<li>Repro tests: byte-level <code>_feed</code> traces per case (the headless driver pattern).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>views/bro/pager.js</code> <code>_feed</code>/<code>_keyCommand</code>/<code>_keyScroll</code>; keep the C bro's MAUS discipline as the reference; no new bindings/deps.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending) minimal CSI grammar: <code>ESC [ params final</code> + <code>ESC O final</code>, swallow-unknown.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> Repros: arrow-in-bar, Alt-q, typed é, pasted é, 2-line paste, split-release <code>m</code>, split-paste <code>q</code>.</li>
+<li><a href="./ .html"> </a> One escape-sequence reassembler + UTF-8 bar decode; suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

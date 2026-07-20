@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-018</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-018 <a href="./MED.html">MED</a>: mergeUri slot-edit semantics — a FILE context is joined as a DIR, the RESET rule eats <code>?ref</code>, <code>verb!</code> and schemed tokens mis-peel</h1>
+<p>
+shared/spell.js (<code>mergeUri</code>/<code>compose</code>/<code>buildSpell</code>) owns the typed-spell context edit; four defects break the &quot;navigate like a directory tree&quot; feel. All runtime-VERIFIED in the 2026-07-07 pager nav audit. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>FILE-as-DIR: <code>joinPath</code> treats the context path as a directory, but a <code>cat</code> view's context IS a file. VERIFIED: ctx <code>//WT/dir/file.c?br</code> + <code>./sib.c</code> → <code>//WT/dir/file.c/sib.c</code> (&quot;no hunks&quot;); <code>../x</code> → <code>//WT/dir/x</code> (shell intuition: <code>.</code> = the containing dir, so <code>./sib.c</code> should be <code>dir/sib.c</code>, <code>..</code> should be the PARENT of dir). Needs a file-vs-dir oracle (stat, or a view-kind flag) — the legacy follow resolver got this right (pager.js:318 takes dirOf(base) first).</li>
+<li>RESET eats <code>?ref</code>: mergeUri resets wholesale when the token has a scheme OR authority+path (spell.js:51-52). VERIFIED: ctx <code>//WT/d?feat</code> + <code>//OTHER/x</code> → <code>//OTHER/x</code> (ref gone) while <code>//OTHER</code> alone keeps <code>?feat</code>. Nav.mkd:25: a spell SETS the slots it names and INHERITS the unnamed. (Cross-repo refs are meaningless — but then dropping must be uniform, not dependent on whether a path tagged along.)</li>
+<li><code>verb!</code> unusable typed: the compose verb-peel regex (spell.js:93) lacks <code>!?</code>, so <code>:get! x</code> swallows <code>get!</code> as a wt-relative PATH → <code>cat(&quot;//WT/get!?feat&quot;,&quot;x&quot;)</code> (VERIFIED). The CLI (loop.js:277-281) and BOTH pager banner parsers (pager.js:282, :658) accept <code>verb!</code>.</li>
+<li>Schemed token keeps the stale verb: <code>:cat:foo.c</code> typed in a <code>log</code> view → verb stays <code>log</code>, spell <code>log cat:foo.c</code> (VERIFIED) — mergeUri RESETs to the token but compose never re-derives the verb; per <a href="../../wiki/Nav.html">Nav</a> views-are-verbs a projector scheme should become the verb (the follow path's <code>_splitSpell</code> bridge already does this).</li>
+<li>buildSpell nit: empty verb + non-empty rest emits <code>(&quot;//WT/dir&quot;,&quot;msg&quot;)</code> — unparseable by argline (VERIFIED); a composed-by-us spell must always drive or error loudly.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>./x</code>/<code>..</code>/<code>.</code> behave like a shell against a FILE context (<code>.</code> = containing dir); dir contexts unchanged.</li>
+<li>Slot inheritance uniform under RESET; <code>verb!</code> peels with force; a projector-schemed token re-verbs the call; buildSpell output always drivable.</li>
+<li>Unit repros in the pager driver (test/bro/pager/driver.js §4d style) per case.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>shared/spell.js</code> (+ the small compose call sites); the composer is SHARED with the CLI docs-wise — keep composeArgv semantics intact (CLI barewords stay REST, <a href="../URI/URI-011.html">URI-011</a> audit: injecting pager classification into the CLI was tried 3× and REVERTED — do not retry).</li>
+<li><a href="BRO-016.html">BRO-016</a> retargets follows onto this composer — land compatible semantics.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(moot for nav) file-vs-dir oracle: <a href="./BRO-024.html">BRO-024</a>'s reduced context is ALWAYS a dir (<code>_ctxFrom</code> stats and takes the file's dir), so the compose base needs no oracle on the nav path.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./x.html">x</a> file-ctx <code>./x</code>/<code>..</code> — superseded by <a href="./BRO-024.html">BRO-024</a> <code>5ebf0c8d</code>: the context is dir-only, <code>./sib.c</code> → <code>dir/sib.c</code> (residual: an un-nav'd initial view whose launch context is a FILE — runtime-check before closing)</li>
+<li><a href="./x.html">x</a> RESET eats <code>?ref</code> — symptom superseded: the context carries no query since <a href="./BRO-024.html">BRO-024</a> (RESET code itself unchanged, spell.js:51-52)</li>
+<li><a href="./x.html">x</a> <code>get! x</code> verb-peel — fixed en route in <a href="./BRO-024.html">BRO-024</a> iter 1 (compose peel regex includes <code>!?</code>, spell.js:99)</li>
+<li><a href="./ .html"> </a> Repros + fix, still live: <code>cat:foo.c</code> in a log view keeps verb <code>log</code> (compose never re-verbs a projector scheme); empty-verb buildSpell emits unparseable <code>(&quot;//WT/dir&quot;,&quot;msg&quot;)</code>.</li>
+<li><a href="./ .html"> </a> suite green over the two live fixes.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-117</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-117 <a href="./DONE.html">DONE</a>: every post/land opens a new .keeper log; PackLog spec wants tail-append</h1>
+<p>
+Spec-code discrepancy (filed off <a href="./JS-116.html">JS-116</a>). <a href="/wiki/PackLog.html">PackLog</a> rules: &quot;one log holds many packs back-to-back; a new log starts only past a size threshold, so a lone local commit appends to the tail rather than opening a file&quot;. The be JS writers never append: every event that lands objects books a complete standalone pack as the next-numbered <code>NNNNNNNNNN.keeper</code>. A working shard accumulates one tiny log per commit and per fetch — file_id is 20 bits (1M logs), each log costs a readdir entry, an mmap, and a fidMap slot (store.js), and the wire reframer loses the batch-sendfile shape the spec's back-to-back layout buys.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>New-log events today: <code>verbs/post/fold-commit.js:155</code> writePack() → nextLogName() per EVERY post; <code>shared/ingest.js:147-158</code> land() → logName(max+1) per EVERY fetched/pushed pack (patch/fetchleg per fetch); clone() → <code>0000000001.keeper</code>.</li>
+<li>All three ride <code>git.pack.book</code>/<code>.feed</code>/<code>.finish</code> (jab cont.cpp) + writeBytes() — create/truncate only; no tail-append path exists in be JS.</li>
+<li>The idx format already supports many packs per log: the 0xF bookmark row <code>key=(first_off&lt;&lt;20|file_id)&lt;&lt;4|0xF</code>, <code>val=count&lt;&lt;32|extent</code> marks each appended pack (ingest.js:47-49); object rows carry absolute in-file offsets (offset40).</li>
+<li>Extent comes from the INDEX, not the PACK header (<a href="/wiki/PackLog.html">PackLog</a> &quot;extent is its byte length, no trailer&quot;) — so a torn tail past the last bookmark is invisible to readers, making append crash-tolerant by construction.</li>
+</ul>
+<h3>Goals</h3>
+<ol>
+<li>Tail-append: post and land() append the new pack's records to the highest-numbered <code>.keeper</code> log while it is under the size threshold; a new log only past the threshold (and at clone).</li>
+<li>Each appended pack gets its 0xF bookmark row (first_off = pre-append length) and object rows with absolute offsets, in a fresh ron60 <code>.keeper.idx</code> run — same recipe as buildIndex, offsets rebased.</li>
+<li>Crash order: append records, sync, THEN write the idx run; on a torn append, recovery = truncate the log to the last indexed extent (or just leave it — unindexed bytes are dead).</li>
+<li>Wire reframing and locate() keep working on multi-pack logs (bookmark extents drive per-pack reconstruction, <a href="/wiki/PackLog.html">PackLog</a> &quot;no varint scan&quot;).</li>
+</ol>
+<h3>Constraints</h3>
+<ul>
+<li><code>git.pack.book</code> writes a 12-byte PACK header + finish; an append needs a records-only feed at an offset — likely a jab binding gap (cont.cpp append mode or a records-only book) — measure before building; if jab work is needed, split it out and link here.</li>
+<li><code>pk.scan</code> (PIDXScan) reads the header object count — it cannot index the appended tail; tail indexing must come from the writer (it knows its records) or a bookmark-driven scan, NOT from re-scanning the whole log (<a href="./JS-116.html">JS-116</a> goal 5 must stay compatible: its coverage check compares against bookmark extents, not header count).</li>
+<li>Existing logs are never mutated in place (<a href="/wiki/PackLog.html">PackLog</a> &quot;never mutated&quot;): append only at the tail, offsets stay stable.</li>
+<li>OFS_DELTA stays pack-local (the PackLog invariant): deltas in an appended pack must only reference records within that same appended pack.</li>
+<li>Size threshold: pick one (spec names none); offset40 allows 1 TiB/file — something like 64-512 MiB; make it one named const, not scattered.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Ruled 2026-07-10 (gritzko): new-log-count per op is 0 in most cases, 1 only on clone — the three goldens asserting a NEW <code>.keeper</code> per landing (patch-fetch-cross-store, patch-fetch-wt-cross-store, wire-ssh-update-secondary) are amended to detect landing positively and assert count-unchanged.</li>
+<li>Implemented: threshold KEEP_LOG_MAX = 64 MiB (one const, ingest.js); no jab binding needed — records composed in a RAM scratch pack, appended via io.resize + mapped tail-copy + msync.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled>  measure: can a multi-pack log be read end-to-end today (locate + readRecord on an object past the first pack)? repro test</li>
+<li class="open"><input type="checkbox" disabled>  writer: append path in fold-commit + ingest.land under threshold; bookmark row + rebased idx run</li>
+<li class="open"><input type="checkbox" disabled>  jab binding gap, if confirmed: records-only pack feed / append book (separate ticket, link here)</li>
+<li class="open"><input type="checkbox" disabled>  test: post twice → ONE log, two bookmark rows, both commits locatable; threshold crossing opens log 2</li>
+<li class="open"><input type="checkbox" disabled>  test: torn tail (truncate mid-append) leaves all indexed objects readable</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="./JS-116.html">JS-116</a> in flight touches the same files (ingest.js, fold-commit.js, store.js) — land JS-116 first, rebase this on top; its 0xF coverage check is a direct dependency of the torn-tail recovery here.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

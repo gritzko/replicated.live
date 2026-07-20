@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STATUS-014</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>STATUS-014 <a href="./OPEN.html">OPEN</a>: quad status recursion into subs — pin-derived columns</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The quad reporter (<a href="../../wiki/Status.html">/wiki/Status</a>, <a href="../BRO/BRO-030.html">/todo/BRO/BRO-030</a>) recurses mounted subs by opening each sub's OWN wtlog track — the DIS-072 self-referential pin — so a sub's track column mostly mirrors its base and the recursed hunk shows little beyond wt dirt. RULING (gritzko 2026-07-17): a recursed sub's quad columns derive from the PARENT's trees, not the sub's self-ref row.
+</p>
+<h3>Goals</h3>
+<p>
+Teach status recursion the pin-derived model, so a sub's quad reads consistently with the parent's gitlink row:
+</p>
+<ul>
+<li>base column: the BASE PIN — the gitlink sha at the sub's path in the parent's base tree.</li>
+<li>track column: the TRACK PIN — the gitlink sha at the sub's path in the parent's track tip tree.</li>
+<li>wt column: figured from the FILES — the sub's own classify (unchanged).</li>
+<li>patch column: figured from the sub's WTLOG — its in-scope patch rows (unchanged).</li>
+<li>root = LCA(track pin, base pin) in the sub's shard; commit rows = sub commits vs that root (an off-pin sub's own posts read <code>.o..</code>).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The pins resolve through the existing quad model inputs (quadOf/quadModel already take explicit base/track) — inject, don't re-derive; RULE ZERO for any URI resolution.</li>
+<li>Depth: a sub-of-sub takes its pins from ITS immediate parent's trees, recursively.</li>
+<li><a href="../../wiki/Status.html">/wiki/Status</a> needs a short Recursion section recording this once landed.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>quadModel is already pure over { base, track, patches, wtRows } — the recursion only changes WHERE emitRepo gets base/track for a sub: read the two pins from the parent's already-open tree ULOGs (the gitlink rows), pass them down.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./v.html">v</a> emitRepo sub relay harvests both pins once from the parent's already-resolved trees (gitlinkPins), threads {track, base, label} per level — depth works naturally -<a href="./v.html">v</a> sub summary label spells the parent-mount pin form <code>//WT/sub#&lt;basePin8&gt;</code> (submount.trackUri); top-level status of the sub keeps today's label -<a href="./v.html">v</a> e2e <code>test/status/subquad</code>: three columns light independently (track <code>o...</code> + behind commit, base <code>.v..</code> + <code>.o..</code> local commit, wt <code>...v</code>); RED pre-fix (wt-only + detached label), GREEN post -<a href="./ .html"> </a> wiki/Status Recursion section — HELD for the deviation ruling below
+</p>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>DEVIATION needing gritzko's ruling: the worker kept base = the SUB'S OWN CUR, not the base pin — with base = base-pin an off-pin sub's local posts collapse into root and show NOTHING (the <code>.o..</code> + base-side rows the fixture demands are unrenderable). The base pin is used for the LABEL hashlet only. Since sub cur descends the base pin, root = LCA(track pin, base pin) exactly as ruled — only the base COLUMN's reference differs. Confirm or overrule.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-041</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-041 <a href="./MED.html">MED</a>: <code>[put]</code> buttons on status rows — pager-visible O spells</h1>
+<p>
+Status rows name the actionable states (<code>unk</code>, <code>mod</code>, <code>new</code>) but acting on one still means typing <code>put &lt;path&gt;</code>. Wanted: a visible <code>[put]</code> button on those rows in the PAGER, clicking it runs the hidden O <code>put &lt;path&gt;</code> spell (<a href="../../wiki/Nav.html">Nav</a>); plain/CLI output stays byte-identical (buttons are pager-only chrome). Twin of the <code>[done]</code> button round in <a href="BE-040.html">BE-040</a>; requested by gritzko 2026-07-10.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>O click-targets are <code>verb args</code> spells followed token-precisely by <code>_uriAt</code> (<code>views/bro/pager.js</code>); the row's existing hidden <code>U</code> nav (<code>diff:</code>/<code>cat:</code>, BRO-006/DIS-057) keeps handling clicks on the filename — <code>_lineUri</code>'s lone-U fallback counts only <code>U</code> tags, so a stray row-click can never fire the button.</li>
+<li><code>test/status/links</code> asserts PLAIN output byte-identical to the retired native <code>be status --plain</code> — a visible <code>[put]</code> in plain would break it, so the button label must render in the pager ONLY (a hidden-in-plain, painted-in-pager tag pair, the U/O hiding precedent).</li>
+<li>Put/delete args stay RAW wt-relative and the pager never pre-merges — the O spell carries <code>put &lt;wt-relative-path&gt;</code> verbatim, the verb resolves (<a href="BE-039/README.html">BE-039</a> ruling, <a href="BE-030.html">BE-030</a>).</li>
+<li>Refresh UX v1 (the click pushes put's confirmation view, BACK refreshes) is SUPERSEDED — gritzko 2026-07-10 ruling: a button click shows NO result screen, the current view refreshes in place (<a href="../BRO/BRO-015.html">BRO-015</a>-kin, scoped to button O spells).</li>
+<li>Round 2 ruling (gritzko 2026-07-10): already-staged rows (<code>put</code>, <code>new</code>) carry NO button (re-stage is a no-op); <code>mod</code>/<code>unk</code> keep <code>[put]</code>; <code>mis</code> gains <code>[del]</code> (the delete verb unstages the gone file).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>In the pager, <code>unk</code>/<code>mod</code> file rows show a <code>[put]</code> button, <code>mis</code> rows a <code>[del]</code> button (verb palette colors); <code>put</code>/<code>new</code>/ok rows show none; a left-click runs the spell and the row re-buckets.</li>
+<li>A button click pushes NO result view: the mutation runs, then the CURRENT view re-renders in place (scroll kept); view-spell clicks (filename nav, WHY origin) keep the push-nav.</li>
+<li>Plain and TLV-to-CLI output are UNCHANGED — <code>test/status/links</code> native-parity stays green untouched.</li>
+<li>Clicks elsewhere on the row keep their current meaning: filename → <code>diff:</code>/<code>cat:</code> nav, row fallback unchanged.</li>
+<li>Keyboard parity is free: the same <code>put &lt;path&gt;</code> spell stays typable in the address bar.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>No existing test edited; new cases live in <code>test/status/buttons/</code> (fixture wt, the <code>test/status/links</code> runner pattern).</li>
+<li>Repro-first: red asserts the button token pair (visible label + O spell) in the TLV stream and its ABSENCE in plain; suite stays at baseline.</li>
+<li>Rendering via the existing hunk/token machinery — a tag the plain serializer skips and the pager paints; no new renderer.</li>
+<li>If pager-only visibility proves impossible without touching the shared serializer contract, STOP and report for a ruling — do not relax the parity test.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>As built (wt <code>work/BE-041</code>): NO pager/serializer change — pure <code>views/status/status.js</code> emission riding the WHY-001 machinery; button row layout <code>path</code> <code>U:nav</code> <code>&quot; &quot;</code> <code>Y:&quot;[put]&quot;</code> <code>O:&quot;put &lt;path&gt;&quot;</code> <code>S:&quot;\n&quot;</code> — the U stays byte-adjacent to the path (token-precise filename click), the Y label paints in the put theme slot, <code>_uriAt</code> follows the O verbatim (no <code>#</code> prefix).</li>
+<li>Plain stays byte-identical because <code>--plain</code>/piped takes the columnar path that never renders the button tokens; O toks route the hunk through the existing why paint passes (U+O hidden, label painted). Side effect: <code>--color | cat</code> shows the same <code>[put]</code> chrome + padded banner band — no test asserts color bytes.</li>
+<li>The O arg is <code>&quot;put &quot; + navPath</code> RAW — deliberately not <code>navLink</code> (it injects <code>//authority</code>; the <a href="BE-039/README.html">BE-039</a> law).</li>
+<li>This layout is the house button scheme: <a href="BE-040.html">BE-040</a>'s <code>[done]</code> round reuses it verbatim.</li>
+<li>Round 2: <code>act</code> is <code>{label, tag, spell}</code> — <code>ACT_PUT={unk,mod}</code> → <code>[put]</code>/'Y' (blue), <code>ACT_DEL={mis}</code> → <code>[del]</code>/'X' (del brown, the delete verb); the label paints in its verb's palette slot.</li>
+<li>Click gate: <code>loop._isMutation(w)</code> = <code>registry.verbFile(w, _, [&quot;verbs&quot;])</code> (the verbs/-tree probe, views/ excluded); pager <code>_mouse</code> routes a mutation O spell to <code>_actSpell</code> (drive, drop hunks, <code>_refresh</code> in place, no back-stack push) — WHY's <code>commit ?sha</code> O spell stays push-nav (a views/ verb).</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./v.html">v</a> Red tests (<code>test/status/buttons/{run.sh,assert_buttons.js}</code>): red <code>O button-spell set mismatch: got []</code>; green asserts 3 buttons (unk/mod/new) + 4 U navs, ok/mis clean, plain parity vs the pre-change golden (dates normalised), raw wt-relative O spells. -<a href="./v.html">v</a> <code>views/status/status.js</code>: <code>ACT_PUT={unk,mod,new}</code> buckets grow the button pair via <code>out.row(..., act)</code>; suite 167/165 = the 2 known bro reds only; <code>test/status/links</code> untouched, green. -<a href="./v.html">v</a> Pager smoke — worker (pty click staged unk, filename click still opens the diff, label painted blue) AND orchestrator-independent (scratch wt: plain shows zero <code>[put]</code> bytes, screen row <code>unk unk.txt [put]</code>, scripted SGR click flipped the row <code>unk</code> → <code>new</code>). -<a href="./v.html">v</a> Round 2 buckets: drop <code>new</code> from ACT_PUT, add <code>mis</code> → <code>[del]</code> <code>delete &lt;path&gt;</code>; tests updated (expect_o = put mod/unk + delete mis, <code>[del]</code> plain-leak guard, label↔verb pairing in assert_buttons.js). -<a href="./v.html">v</a> Round 2 in-place refresh: <code>_actSpell</code> + <code>_isMutation</code> gate (pager.js, loop.js, registry.js dirs param, bro.js wiring); new headless <code>test/status/buttons/click_refresh.js</code> (button click: drive + status re-drive + stack unchanged; nav click: push) — suite still 167/165 (same 2 bro reds, verified identical in the untouched BE-040 wt). -<a href="./v.html">v</a> Round 2 pty smoke (orchestrator): scratch wt, SGR click <code>[put]</code> on unk → screen stays status, row flips <code>unk</code>→<code>new</code> in place; click <code>[del]</code> on mis → <code>del mis.txt</code>; final <code>--plain</code> confirms both mutations.
+</p>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open — round 1 STAGED + round 2 UNSTAGED in wt <code>work/BE-041</code>: <code>views/status/status.js</code>, <code>views/bro/{pager,bro}.js</code>, <code>core/{loop,registry}.js</code> + <code>test/status/buttons/*</code> (tests in the beagle-ext-tests sub); orchestrator-verified red→green + independent pty click smoke both rounds; pending gritzko's review and land)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

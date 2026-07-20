@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-116</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-116 <a href="./DONE.html">DONE</a>: keeper.idx run lifecycle — compact, tail-index, ron60 run names</h1>
+<p>
+The shard's <code>.keeper.idx</code> LSM runs only ever accumulate: every <code>land()</code>/<code>post</code> adds a run, <code>patch</code> adds two (per-log + <code>reindexShard</code>), nothing ever compacts or unlinks, and the native leaves hard-cap queries at 64 runs (<code>jab/index.hpp</code> &quot;too many runs&quot;). Staleness is undetected: <code>store.js diskIndex()</code> checks only that ONE run exists, so a <code>.keeper</code> log landed without its run leaves objects silently unlocatable (<a href="./TEST-003.html">TEST-003</a> quirk, <a href="./PATCH-011.html">PATCH-011</a>'s motive). This ticket wires the maintenance loop into <code>be/</code> over the existing <code>abc.index</code> leaves (<a href="./JS-056.html">JS-056</a>).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>be/shared/store.js:206-217</code> diskIndex(): existence-only check; opens ALL runs; no compaction, no staleness check; a run present but short → silent misses (locate() only skips unknown-file_id rows, store.js:278).</li>
+<li><code>be/shared/ingest.js</code> buildIndex()/land()/reindexShard(): one run per landed pack, plus a combined run per patch fetch (<code>verbs/patch/fetchleg.js:57-58,96-97</code>); land() writes the log THEN the run (ingest.js:155-157) — a crash between leaves the exact stale state.</li>
+<li><code>jab/cont.cpp</code> abc.index: compact() exists (1/8 ladder via <code>_compact_wh128</code>) but names merged runs <code>String(seq).padStart(8)+ext</code> with <code>_seq = parseInt(name,10)</code> — NaN on ron-named runs, and <code>00000000.keeper.idx</code> sorts BEFORE ron64 names, corrupting oldest-first/newest-wins order.</li>
+<li>Run PACK summary rows already carry coverage: <code>key=(12&lt;&lt;20|file_id)&lt;&lt;4|0xF</code>, <code>val=count&lt;&lt;32|logBytes-12</code> (ingest.js:47-49,100-104) — last-indexed-file-and-length is recoverable by ranging the 0xF rows.</li>
+<li>Spec-code discrepancy filed off this ticket as <a href="./JS-117.html">JS-117</a>: writers open a NEW <code>.keeper</code> log per post/land where <a href="/wiki/PackLog.html">PackLog</a> wants tail-append — once that lands, goal 5's grown-last-file case becomes a local reality, not native-interop-only.</li>
+</ul>
+<h3>Goals</h3>
+<ol>
+<li>Compact on open when the shard has &gt;32 <code>.keeper.idx</code> runs (half the native 64-run cap).</li>
+<li>After adding a run (land/post/reindex): if the stack violates the 1/8 invariant, compact (the <code>_compact_</code> leaf returns m; loop while m&gt;=2, as abc.index.compact already does).</li>
+<li>The index exposes its run file list, so <code>be/</code> can unlink collapsed runs and report coverage.</li>
+<li>Maintenance triggers from any verb that opens the idx (the lazy diskIndex() path in store.locate()).</li>
+<li>On open: no run at all, OR the 0xF coverage rows short of <code>io.stat</code> over <code>NNNNNNNNNN.keeper</code> logs (unindexed file / grown last file) → build the tail run via buildIndex(), persisted, replacing today's ephemeral full in-RAM rebuild (store.js:223-252).</li>
+</ol>
+<h3>Constraints</h3>
+<ul>
+<li>Run naming scheme is ron60: merged/tail runs are <code>&lt;ron60&gt;.keeper.idx</code> like buildIndex's, so name-sort == age-sort; abc.index's <code>_seq</code>/padStart naming must not leak into shard dirs (fix in cont.cpp or override naming from be/).</li>
+<li>Read path stays native-leaf-only (<a href="./JS-056.html">JS-056</a> rule: no format logic in JS beyond marshalling); compaction reuses <code>HITwh128Compact</code> via the existing <code>_compact_wh128</code> leaf.</li>
+<li>Writers must stay crash-safe: temp + rename for merged runs (abc.index.compact already books <code>.tmp</code> + renames); sources unlinked only after the rename.</li>
+<li>Do not break the read-only open: a verb on a read-only store must still open a stale/overfull idx (skip maintenance on EROFS, warn or fall back).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Coverage check = range the 0xF PACK rows (newest-wins across runs), compare per-file logBytes against io.stat; both missing files and a grown tail fall out of the one comparison.</li>
+<li>reindexShard() becomes redundant once 2+5 land — patch's fetchleg drops to land() alone; delist after verifying.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled>  ron60 run naming for abc.index compact output (jab cont.cpp or be-side override); kill the parseInt(_seq) NaN</li>
+<li class="open"><input type="checkbox" disabled>  expose the run file list from abc.index (paths already held as <code>r._path</code>)</li>
+<li class="open"><input type="checkbox" disabled>  be/shared: coverage check on open (0xF rows vs io.stat) → tail buildIndex()</li>
+<li class="open"><input type="checkbox" disabled>  be/shared: compact-on-open when runs &gt; 32; compact-after-add hook in ingest.land()/fold-commit</li>
+<li class="open"><input type="checkbox" disabled>  unlink collapsed source runs post-rename</li>
+<li class="open"><input type="checkbox" disabled>  test: shard with stale idx (log landed, no run) locates the new objects after open</li>
+<li class="open"><input type="checkbox" disabled>  test: &gt;32 runs collapse on open; name-sort order preserved (ron60)</li>
+<li class="open"><input type="checkbox" disabled>  retire reindexShard() from patch/fetchleg.js once covered</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Native 64-run cap means a shard that ALREADY overflowed cannot even open its idx to compact it — the open path must batch below the cap or compact via file list without a full open.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

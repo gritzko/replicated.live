@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-053</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-053 <a href="./HIGH.html">HIGH</a>: mount()'s error rollback unlinks a PRE-EXISTING sub anchor — a transient throw silently unmounts a healthy sub</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Found 2026-07-14 on the journal repo (<code>journal/be</code>, jab): <code>jab status</code> reported <code>91 ok</code> and emitted NO <code>status test</code> hunk; <code>be/test/.be</code> was gone while all 301 sub files were byte-identical to the gitlink pin <code>a3b37c7b</code>. The sub was intact — only its anchor had been deleted.
+</p>
+<ul>
+<li><code>shared/submount.js:334</code> — <code>mount()</code>'s catch-all does <code>try { io.unlink(anchorPath); } catch (e2) {}</code> (the <a href="./GET-037.html">GET-037</a> atomicity rollback), deleting the anchor on ANY throw.</li>
+<li>The rollback assumes <code>mount()</code> OWNS the anchor; on a RE-mount of an already-mounted sub it deletes an anchor it found, not one it created — a healthy sub is demoted to unmounted.</li>
+<li><code>mount()</code> writes the anchor at <code>submount.js:319</code> BEFORE <code>store.open</code> (:326) and <code>checkout.apply</code> (:327), so the anchor is live during the steps most likely to throw; the same write-then-checkout order repeats in the local-source reuse branch (:277-280).</li>
+<li>The catch swallows EVERYTHING, incl. a raw <code>X is not a function</code> from a stale require cache in a live jab session (a known quirk) — any transient blip becomes permanent damage.</li>
+<li><code>get</code> re-runs <code>mount()</code> for every sub on a same-tip reconcile (<code>noPrune</code>, <code>verbs/get/get.js:351-352</code>) — verified: a bare re-get prints a <code>new test</code> row.</li>
+<li>Evidence in <code>be/.be</code>: line 53 <code>26714CGTBr get ?#33295788</code> is a same-tip reconcile; <code>be/test</code> mtime 13:26:16 precedes the line-54 FF get's own record (13:26:24).</li>
+<li>Damage is STICKY: a later FF get never re-mounts an unchanged gitlink (verified — no <code>new test</code> row on an FF), so the sub stays lost until a same-tip reconcile happens to re-mount it.</li>
+<li>The loss is SILENT because status buckets an unmounted declared sub as <code>ok</code>: <a href="/todo/STATUS/STATUS-007.html">STATUS-007</a>.</li>
+<li>The exact throw was NOT reproduced: today every input resolves clean (pin FOUND locally, <code>store.open(beDir,'beagle-ext-tests')</code> OK, and force / dirty-sub / FF re-gets all preserve the anchor). The failure was state-dependent; the rollback is what made it permanent.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A failing re-mount NEVER destroys an existing, healthy mount — worst case it leaves the sub at its prior pin, visible in status.</li>
+<li>Keep <a href="./GET-037.html">GET-037</a>'s original guarantee: a FRESH mount that dies part-way leaves no anchor for <code>be.find</code> to resolve.</li>
+<li>Any mount failure is LOUD (a friendly surfaced error), never a silently downgraded sub.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro test first (<a href="/meta/work.html">work</a>); fix in beagle-ext (JS), no C changes.</li>
+<li>Minimal diff; no edits to unrelated tests.</li>
+<li>Do not weaken the friendly-message wrapping at <code>submount.js:340-342</code>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Write the anchor LAST, as the commit point: reorder to <code>store.open</code> → <code>checkout.apply</code> → <code>ulog.write(anchorPath, …)</code>, then DROP the unlink from the catch entirely.</li>
+<li>Write-last satisfies <a href="./GET-037.html">GET-037</a> for free: a fresh mount that throws never wrote an anchor, so nothing stale can outlive it — no rollback needed.</li>
+<li>Write-last is safe: <code>checkout.apply</code> takes <code>k</code> explicitly and never reads the anchor, and <code>oldPin</code> is already read up-front at <code>submount.js:312</code> (GET-040).</li>
+<li>A re-mount that throws then leaves the old anchor at the old pin — the sub still lists in status (possibly <code>mod</code>/<code>adv</code>), which is the recoverable, visible failure we want.</li>
+<li>Apply the same reorder to the local-source reuse branch (<code>submount.js:277-280</code>).</li>
+<li>Rejected: &quot;unlink only if we created it&quot; (an entry-time existence check) — it keeps a destructive step on the error path for no gain over write-last.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro test: a mounted sub + a <code>mount()</code> that throws after the anchor write → anchor SURVIVES at its prior pin</li>
+<li><a href="./ .html"> </a> repro test: a FRESH mount that throws → no anchor left behind (GET-037 parity kept)</li>
+<li><a href="./ .html"> </a> fix: reorder to checkout-then-anchor in <code>mount()</code>; drop <code>io.unlink(anchorPath)</code> from the catch</li>
+<li><a href="./ .html"> </a> fix: same reorder in the local-source reuse branch (submount.js:277-280)</li>
+<li><a href="./ .html"> </a> verify: <code>jab status</code> in <code>journal/be</code> still emits the <code>status test</code> hunk after a same-tip reconcile</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Root-cause throw unreproduced — the fix is justified by the rollback's blast radius, not by the specific trigger.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><code>be/test/.be</code> restored 2026-07-14 by a same-tip <code>jab get</code> reconcile (re-mount); <code>status test</code> hunk renders again (<code>301 ok, behind 1</code>).</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

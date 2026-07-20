@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-061</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-061 <a href="./STALE.html">STALE</a>: be/ JS post advances the tracked branch on EVERY commit — superseded by <a href="DIS-071.html">DIS-071</a> (the track-URI model); live defects refiled as <a href="DIS-076.html">DIS-076</a> (the split + ref mis-keying), <a href="DIS-072.html">DIS-072</a> (pins), <a href="DIS-074.html">DIS-074</a> (bare post)</h1>
+<p>
+<a href="../../blog/trees.html">trees</a> (AUTHORITATIVE) separates the two motions, made UNIFORM by ruling 2026-07-13: a commit moves only the worktree (it goes &quot;ahead&quot;), fast-forwarding the tracked branch is a SEPARATE explicit <code>post ?branch</code> — no commit-time FF for any branch shape (supersedes the 2026-07-12 tip==base sub-ruling AND overrules the post's own example-6 line &quot;A regular branch would advance on commit&quot;, trees.mkd:211). The <code>be/</code> JS does the opposite, by prior ruling: <code>postOne</code> FF-advances cur's attached branch atomically with every commit (post.js:719-721, gated only on <code>!att.detached</code>), so a sub commit moves its pin-branch with no parent commit anywhere (submount.js:319-320, <a href="../SUBS/SUBS-040.html">SUBS-040</a> I2; wiki <a href="../../wiki/Worktree.html">Worktree</a>:12 &quot;post advances the tip&quot;). The post overturns that ruling; this ticket carries the flip plus the adjacent bare-<code>post</code>/own-branch/normalization defects.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Commit = branch advance today: post.js:719-721 <code>advanceRef(reader, reader.shard, branchKey, …)</code> on every commit; branchKey defaults to cur's attached branch (post.js:601-602, 624).</li>
+<li>Bare <code>post</code> has NO fast-forward arm: clean wt → <code>POSTNONE: no changes since base</code> (post.js:666-673); dirty-unnamed → <code>POSTNOMSG</code> (post.js:675-677). The advance arm needs an explicit Query slot (post.js:618-622).</li>
+<li><code>post ?&lt;cur's own branch&gt;</code> REFUSES (<code>POSTNONE: cur's own branch — nothing to advance</code>, post.js:263-264) — the exact inverse of the post's bare-post meaning.</li>
+<li>Normalization bug: resolveTarget keeps the raw absolute query <code>/jab/.beagle</code> (post.js:239-249) while wtlog's curBranch is the stripped key <code>.beagle</code> (wtlog.js:39-57); the own-branch guard misses, resolveRef misses (store.js:420-442), advanceRef store.set()s a bogus ref literally keyed <code>/jab/.beagle</code> (post.js:281). post's query path never routes through branchlib.parse/key.</li>
+<li>The overturned ruling lives in: <a href="../SUBS/SUBS-040.html">SUBS-040</a>:15,26,30 (I2 &quot;the sub's recursive postOne advances the CURRENT branch ref … which IS the dot-branch&quot;) and <a href="../../wiki/Worktree.html">Worktree</a>:12 (&quot;Branch is GET-owned … post advances the tip&quot;).</li>
+<li>What already matches <a href="../../blog/trees.html">trees</a>: post-order recursion, gitlink bump, recursive top commit (postSubs post.js:486-545); <code>post &quot;msg&quot;</code> commit path (post.js:97-158, 675-710); status ahead/behind divergence (status.js:463-475, 323-345).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Split commit from branch-advance: postOne moves only the wt cur row; the wt reads &quot;ahead&quot; in status until the branch catches up.</li>
+<li>Pin-branch ref advances at the PARENT's gitlink-bump commit (postSubs), never at the child's own commit — the reflection model per the ruling below.</li>
+<li>Route every post Query through branchlib.parse/key so <code>?/jab/.beagle</code> resolves to the stored <code>.beagle</code> key; repro for the bogus-ref mint first.</li>
+<li>Amend the overturned spec spots: <a href="../../wiki/Worktree.html">Worktree</a>:12, <a href="../../wiki/Submodules.html">Submodules</a>:28 (&quot;child worktree commits update the local synthetic branch&quot;), <a href="../../wiki/POST.html">POST</a> bare-row (POST.mkd:27 &quot;reuse absorbed msg&quot; narrows to under-an-active-PATCH only), <a href="../SUBS/SUBS-040.html">SUBS-040</a> ruling note.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>RULED (gritzko, 2026-07-13, SUPERSEDES the 2026-07-12 chain-anchor reading): a pin-branch tip IS the gitlink in the IMMEDIATE parent's BASE commit, refreshed by the parent on ANY move of its base (post, get) — level-by-level reflection, exactly trees.mkd:87-93 (&quot;commit the immediate parent … the problem may move one level up&quot;). Pin refs are materialized rows the parent maintains for its immediate children; pin-branches are synthetic and EXEMPT from the uniform explicit-<code>post ?branch</code> rule below. The only way OUT of a pin-chain is retracking (<code>get ?other</code>, e.g. <code>get ?</code> = trunk) or detaching — no put/post needed, the branch already exists.</li>
+<li>RULED (gritzko, 2026-07-13, recursion + scope): every op is SCOPED to the context repo (at <code>///jab/dog</code> it affects dog + its sub abc, NEVER the parent jab); clean recursion iff the sub is BASED ON the pin. <code>get</code>: a sub based BEHIND the pin that FFs cleanly is FF'd; ahead/diverged → skip, stays &quot;adv&quot; (post/patch territory). Bare <code>post</code>: commit ALL changes to make the tree clean — sub dirty files bottom-up, then the resulting gitlinks; an off-pin sub's advance is absorbed too. Explicit <code>post</code> (put/deletes present): commit exactly the staged set; a sub with put files gets a new commit whose gitlink is committed one level up, within scope. <code>post</code>-to-remote and <code>patch</code> are STORE-driven, independent of tree state; patch merges on all levels from each sub's de-facto base + local edits. Views recur always (if applicable); put/delete recur only on an explicit path, never bare. <code>status</code> must show each sub's base vs pin ahead/behind (counts + post/miss commit lists) and the &quot;adv&quot; dir entry in the parent.</li>
+<li>RULED (gritzko, 2026-07-13, UNIFORM — supersedes the 2026-07-12 tip==base sub-ruling): <code>post 'msg'</code> advances the WORKTREE only, for every branch shape; a plain branch advances ONLY by an explicit <code>post ?branch</code> (the POST.mkd:30 arm), never as a commit side-effect. RESOLVED 2026-07-13: pin-branches anchor at the immediate parent's WT base (bullet above), so trees example 6 needs no extra <code>post ?</code> for the pins — only the top's own plain branch lags until explicitly posted.</li>
+<li>Large behavioral change: every be/test/ leg that assumes commit==advance will move — inventory first, amend only with explicit permission per <a href="../../meta/work.html">/meta/work</a>.</li>
+<li>Repro-first per the norms; keep <a href="DIS-054.html">DIS-054</a>/<a href="DIS-058.html">DIS-058</a>/<a href="DIS-059.html">DIS-059</a> post.js changes reconciled at land time.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending the ruling above)</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> obtain the pin-advance ruling — RULED 2026-07-12: chain-anchored, moves only when the commits reach the chain root (top/recursive commit)</li>
+<li><a href="./v.html">v</a> obtain the plain-branch sub-ruling — re-RULED 2026-07-13 UNIFORM: no commit-time FF at all, advance = explicit <code>post ?branch</code></li>
+<li><a href="./v.html">v</a> obtain the root-anchor sub-ruling — RESOLVED 2026-07-13: neither root form; pin tip = immediate parent's base gitlink, refreshed on any parent move</li>
+<li><a href="./ .html"> </a> repro: commit on ANY tracked branch → wt ahead, ref UNMOVED; <code>post ?branch</code> → FF'ed; immediate-parent commit → child pin ref MOVES to the new base's gitlink, parent now ahead of ITS OWN pin; <code>post ?/jab/.beagle</code> → no bogus key</li>
+<li><a href="./ .html"> </a> repro, recursion legs: get FFs a behind sub to the pin, SKIPS a diverged one (&quot;adv&quot; stays); bare post absorbs an off-pin sub + dirty sub files bottom-up; explicit post bubbles a put sub's gitlink one level up; scope leg — run at the sub, the parent stays untouched</li>
+<li><a href="./ .html"> </a> postOne: DROP advanceRef from the commit path entirely; branch advance lives ONLY in the explicit Query arm</li>
+<li><a href="./ .html"> </a> recursive post: the parent refreshes its immediate children's pin refs on ANY base move (post, get) — materialized rows, no lazy chain derivation</li>
+<li><a href="./ .html"> </a> branchlib normalization in resolveTarget/advanceBranch</li>
+<li><a href="./ .html"> </a> test inventory: legs assuming commit==advance; request user for amendments</li>
+<li><a href="./v.html">v</a> spec sweep, wiki half — DONE 2026-07-13: Worktree.mkd:12 (uniform), Submodules.mkd intro+Recursion (pin=parent-base gitlink, gate, FF-behind, post forms, store-driven push/patch, views, scope), POST.mkd:5,9-10,13-15 (uniform + sub commit forms)</li>
+<li><a href="./ .html"> </a> spec sweep, remainder: POST.mkd:27 bare-row wording (narrow &quot;reuse absorbed msg&quot; to under-an-active-PATCH), SUBS-040 ruling note (I2 overturned)</li>
+<li><a href="./ .html"> </a> propose the post edits (user-owned): trees.mkd:211 &quot;A regular branch would advance on commit&quot; is the one line the uniform ruling overrules (:87-93 stands as written under the parent-base anchoring)</li>
+<li><a href="./ .html"> </a> verify <code>get ?</code> (bare query = trunk) retracks a mounted sub off its pin-branch — the <a href="../../blog/trees.html">trees</a> unpin example; add the leg to the repro set</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none — both rulings made 2026-07-12; the ticket is fully actionable)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FILED 2026-07-12 (trees.mkd audit, 4-agent sweep); nothing landed yet.</li>
+<li>STALE 2026-07-15: its authority is gone — <code>blog/trees.mkd</code> no longer exists (only <code>img/trees.jpg</code> survives), so every <code>[trees]</code> cite below dangles; <a href="../../blog/worktree.html">worktree</a> replaces it and RULED 2026-07-15 replaces the rulings frozen here.</li>
+<li>OVERRULED: the pin-branch exemption (pin refs as materialized rows the immediate parent refreshes) — RULED 2026-07-15 law #4: a sub tracks the parent's PIN URI <code>//WT/path/to/sub</code>, synthetic pin-branches are killed outright (<a href="DIS-072.html">DIS-072</a>).</li>
+<li>Refiled, nothing lost: the commit-vs-advance split + the <code>?/abs/branch</code> mis-keying → <a href="DIS-076.html">DIS-076</a>; the pin half → <a href="DIS-072.html">DIS-072</a>; the bare-post/own-branch half → <a href="DIS-074.html">DIS-074</a>; the model → <a href="DIS-071.html">DIS-071</a>.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

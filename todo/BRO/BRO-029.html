@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-029</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-029 <a href="./DONE.html">DONE</a>: <code>cat path?ref</code> prints NOTHING for a file absent from the worktree — <code>why</code> renders the same URI fine</h1>
+<p>
+Found 2026-07-17 recovering <code>test/EXIT.c</code> from commit <code>?467fb44b</code> (the GET-048 incident, work/ABC-016): the file exists in that commit's tree but not in the checkout. <code>jab cat 'test/EXIT.c?467fb44b'</code> exits silently with zero output — no hunk, no error; <code>--plain</code> and the <code>cat:</code> scheme form likewise. <code>jab why 'test/EXIT.c?467fb44b'</code> resolves the SAME URI and renders the full content, so ref resolution and the blob are fine — the cat view drops the rev'd read somewhere. Recovery had to go through awk over <code>jab commit</code> diff output.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Repro (any repo): commit a file, delete it from the checkout (or check out a rev that lacks it), then <code>jab cat 'path?rev'</code> for a rev that HAS it.
+</p>
+<ul>
+<li>Expected: the file content at that rev (spec <a href="/wiki/GET.html">GET</a> CLI table documents <code>file.c?feat</code> reads as rev-scoped; cat is the read view of the same URI shape).</li>
+<li>Actual: empty stdout, no error — silent-empty is the worst failure mode (scripts read it as an empty file).</li>
+<li><code>why:</code> with the identical URI renders content — compare <code>views/why</code> vs <code>views/cat</code> blob resolution; cat likely reads the WORKTREE path and ignores/half-applies <code>?ref</code>.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+<code>cat path?ref</code> reads the blob at the ref like why does; a missing path at that rev errs loudly (CATNOFILE-style), never silent-empty.
+</p>
+<ul>
+<li>Repro test first (rev'd cat of a file absent in the checkout; assert content + a loud error for a truly-absent path).</li>
+<li>Fix views/cat/cat.js resolution; keep plain worktree <code>cat path</code> behavior untouched.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>be/ JS only; resolution goes through the ONE composer/resolver (no reimplementation — resolve_hash law).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Root cause was a resolve_hash-law violation: cat's old readRefBytes used core/resolve.js resolveHex — a TIPS+REMOTES-ONLY twin resolver — so a historic commit hashlet resolved null, and null fell into <code>return;</code> → silent exit 0. <code>why</code> worked because it resolves via resolveHexAny. Fix routes <code>?ref</code> through core/resolve_hash.js (same path as views/blob), reads via k.getObject; absent-at-rev path → loud CATNOFILE. No-ref branch untouched.
+</p>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> repro <code>be-js-cat-rev</code> (test/cat/rev/run.sh): rev'd cat emits bytes (plain + --plain + cat: scheme), absent-at-rev → nonzero CATNOFILE, plain cat unchanged; RED pre-fix (empty, exit 0).</li>
+<li><a href="./v.html">v</a> fix views/cat/cat.js (+30/-24); suite 267/267 <code>-LE big</code>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<p>
+LANDED by gritzko 2026-07-17 as <code>?2ba6dad1</code> &quot;BRO-029: commit to use resolve_hash() like others&quot; (from work/BRO-029; orchestrator had re-verified resolve_hash routing + 267/267 suite pre-landing).
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

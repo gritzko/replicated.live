@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PATCH-011</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PATCH-011 <a href="./HIGH.html">HIGH</a>: the fetch leg — patch downloads the source's objects first, then resolves all-local</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The wt→orig merge is blocked when the two trees do NOT share a store: <code>work/ABC-008/abc</code> anchors <code>file:/home/gritzko/.be/?/libabc</code>, the orig <code>journal/libdog/abc</code> anchors <code>file:/home/gritzko/src/libdog/.be/?/libabc</code> — the wt's tip commit does not exist in the orig's shard, so even a fixed tree-URI source (PATCH-010) cannot resolve <code>theirs</code>.
+</p>
+<ul>
+<li>RULING 2026-07-10 (gritzko): patch should DOWNLOAD the objects first when it has the remote leg; then everything is present locally.</li>
+<li>get already owns the transfer machinery (wire/ingest/keeper fetch) — patch reuses that leg, it does not grow its own.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>patch &lt;transport-uri&gt;</code> (<code>file:/store?/proj</code>, <code>be://host/…</code>, ssh:/http(s):) fetches the source's objects/refs into the LOCAL shard first (the get leg, no wt touch), then runs the PATCH-010 all-local triple resolve + absorb.</li>
+<li>a fetch failure refuses loudly BEFORE any wt mutation; the absorb itself stays the ordinary local patch.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>reuse the existing get/wire/ingest transfer path — no second fetch implementation; URI class only.</li>
+<li>repro test first (two stores, diverged shards, fixture-built); existing tests untouched.</li>
+<li>depends on PATCH-010 (tree/transport source addressing) — land in that order.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>routing (resolveSource + verbs/patch/fetchleg.js): classic <code>?br</code>/<code>?br!</code>/<code>#sha</code>/bare-ref untouched; <code>//WT</code> → the PATCH-010 tree leg (local); <code>file:&lt;wt&gt;</code> (its <code>.be</code> a reg file) → theirs = that wt's CUR tip via wtlog, fetching that tip's closure from the wt's OWN redirect store first when foreign; <code>file:&lt;store&gt;[?/&lt;proj&gt;]</code> → fetch leg, tip = branch/pin off the store; ssh:/http(s):/hostless be: → wire fetch; else ONE PATCHFAIL line. Stopgap dropped — the local tip rides patchscope.resolveTree.</li>
+<li>shared/ingest.js grew land() (objects-only) + reindexShard() — the rolling per-log idx blinded the reader to the wt's own history (pre-fix SILENT DATA LOSS: theirs clobbered ours on absorb).</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> repro tests: fetch-cross-store (store-URI source) + fetch-wt-cross-store (the live case: wt A on store s1, tip on <code>?feat</code>; from tree B on s2, <code>patch file:&lt;wt-A&gt;</code> fetches + absorbs A's CUR tip)</li>
+<li><a href="./v.html">v</a> the fetch-first leg wired in (fetch BEFORE the reader opens, loud PATCHFETCH pre-mutation on a dead source)</li>
+<li><a href="./v.html">v</a> cross-link PATCH-010, POST-024, BE-043 (code messages/comments)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>change sits UNCOMMITTED in work/PATCH-011 (reconciled over the landed PATCH-010 after a real weave-conflict fence in patch.js broke the tree); suite 175/176, the 1 red = pre-existing be-js-get-oddname; orchestrator re-ran all 19 patch cases green.</li>
+<li>RULING 2026-07-10, DONE: <code>be://&lt;host&gt;</code> rides the wire fetch leg (fetchleg.js isFetchable); tree-uri's probe re-ruled <code>be://localhost/x/y</code> → <code>be://dead.invalid/x/y</code> (RFC 2606, deterministic ~0.07s failure — localhost genuinely ssh-connects on this box) asserting the loud pre-mutation PATCHFETCH + byte-intact tree; suite 175/176 three consecutive runs.</li>
+<li>INCIDENT 2026-07-10: the live hive shard ~/.be/beagle-ext hit 65 <code>.keeper.idx</code> runs — locate's 64-run seekrange cap — breaking every locate-backed verb; the 65 derived cache files were MOVED (not deleted) to the session scratchpad <code>hive-idx-backup/</code>, jab re-reads clean. THE KEEP-004 motivation, live.</li>
+<li>NOTE for whoever lands: five <code>put</code> rows appeared in this worktree's wtlog at ~17:56 (external staging incl. a <code>test#7735b3f6</code> gitlink pin) — the pin PREDATES the tree-uri re-rule edits; re-stage the test sub before posting.</li>
+<li>candidate ticket (agent finding): the local-keeper wire (<code>be:&lt;store&gt;</code>) fails for stock <code>jab get</code> too (WIRENOSHA, empty pack — keeper↔jab drift; get/be ctest cases silently SKIP).</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

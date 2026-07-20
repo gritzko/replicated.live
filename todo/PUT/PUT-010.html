@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PUT-010</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PUT-010 <a href="./HIGH.html">HIGH</a>: sub-crossing multi-path put is O(N²) — prep + wtlog rewrite PER ARG; batch repo-wise</h1>
+<p>
+<code>jab put html/todo/*/*.html</code> (733 sub-crossing args, journal root authority) took ~10s; the identical files staged as FLAT args in a scratch clone take 0.18s (~55x). <a href="/todo/PUT/PUT-007.html">PUT-007</a> hoisted the engine prep + made ONE wtlog write per batch — but only for flat args: <code>stageInSub</code> (<code>be/verbs/put/put.js:513</code>) still runs the whole cycle per arg. Fix = the same PUT-007 treatment, repo-wise: group args by their resolved repo (parent or sub), prep ONE engine and commit ONE wtlog write per repo.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Incident 2026-07-17, <code>:put html/todo/*/*.html</code> from the journal tree, ~10s wall-clock, ~13ms/arg. Per sub-crossing arg, <code>stageInSub</code> does:
+</p>
+<ul>
+<li><code>store.open(subRepo.storePath, ...)</code> — fresh reader per arg (maintain memoized per instance only).</li>
+<li><code>stage.prep(subRepo, wtlog.open(subRepo), subK)</code> — the whole-wt rescan PUT-007 hoisted for flat args, re-done per arg.</li>
+<li><code>commitOps</code> → <code>appendAndAssign</code> (<code>put.js:216</code>) — <code>ulog.each</code> reads the whole wtlog, <code>ulog.write</code> REWRITES it whole + unlinks the idx sidecar; the log grows 1 row per arg → quadratic bytes.</li>
+<li><code>putOne</code> already returns flat-arg rows for ONE batch commit; sub-crossing args bypass that return path (&quot;commit to the sub's own wtlog and return no parent ops&quot;).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+733 sub-crossing puts cost ~1 flat batch (sub-linear in args): one <code>stage.prep</code>, one <code>store.open</code>, one wtlog append per DISTINCT repo touched by the arg batch.
+</p>
+<ul>
+<li>Repro first: N sub-crossing puts vs N flat puts, assert bounded ratio (or count engine preps / wtlog writes via hook — must be per-repo, not per-arg).</li>
+<li>Group args by resolved (sub)repo — SUBS-051 nested-mount descent still decides the repo per arg; only the ENGINE and the COMMIT are shared.</li>
+<li>Output order/banner rows byte-parity with today (rows still print in arg order under the shared <code>put:</code> banner).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>BE-049 gitlink-bump rows (<code>put &lt;sub&gt;#&lt;tip&gt;</code>, arg names the sub itself) and SUBS-051 nested descent keep exact semantics; bump stays ONE row per sub per batch.</li>
+<li><code>appendAndAssign</code>'s ts policy (nowAfter(tail), +1 per row, restamp to row ts) is unchanged — one call per repo instead of per arg.</li>
+<li>PUTNONE stays a whole-batch decision (JAB-004 tallies on ctx); per-arg skip reporting unchanged.</li>
+<li>Minimal diff in <code>verbs/put/put.js</code> (+ <code>shared/stage.js</code> only if prep sharing needs it); no other verbs touched.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Per-repo groups ride ctx._putSubGroups (key subRepo.bePath): ONE store.open + stage.prep per sub; stageArg ops accumulate.</li>
+<li>putRun flushes ONE commitOps per group after the arg loop, before the parent batch commit (per-arg wtlog order kept).</li>
+<li>BE-049 bump stays INLINE, not at flush: the pin==tip guard already dedups per batch; flush would break arg-order output.</li>
+<li>RULING 2026-07-17: ms&gt;999 rons are VALID ts numbers; <code>ts+1n</code> cohort stepping stays (POST-029/GET-049 keep it in ulog.append).</li>
+<li>The ron-&gt;TIME conversion maxes ms at 999 (native RONToTime already clamps): ulog.ronMtime helper + ronToMs clamp; wtlog .has() also keys each row's MATERIALIZED (ms-maxed) stamp.</li>
+<li>ctx.T0 = the be.now precursor (RULING 2026-07-17: one per verb invocation): every group flush shares it, none samples its own.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> Repro/perf test: sub-crossing batch put counts ONE <code>stage.prep</code> + ONE wtlog write per repo (hook-based, RED on current code).</li>
+<li><a href="./v.html">v</a> Cache per-repo <code>{subRepo, wtlogReader, storeReader, engine, ops[]}</code> across args in putRun; flush commits repo-by-repo after the arg loop.</li>
+<li><a href="./v.html">v</a> Keep BE-049 stageSubBump once per repo (inline pin==tip guard, see Design); verify SUBS-051 nested mounts land in the right group.</li>
+<li><a href="./v.html">v</a> Full suite + end-to-end: repeat the incident shape (hundreds of sub-crossing args) and compare wall-clock + <code>.be</code> rows vs a pre-fix run.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Pre-existing pin loss on ms&gt;999 cohorts (PUT-007 era): 4/8 pre-fix flat 400-arg runs failed mtimeinv; 0/8 post-clamp.</li>
+<li>Native io.setMtime (RONToTime) already maxes ms at 999 — no C touched; test/put/mtimeinv.js amended per the ruling (flagged).</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

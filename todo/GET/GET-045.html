@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-045</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-045 <a href="./HIGH.html">HIGH</a>: <code>?/&lt;project&gt;/&lt;branch&gt;</code> — the branch form status prints does not resolve; get rejects its own display form</h1>
+<p>
+<code>status</code> renders a sub's branch project-qualified (<code>?/libdog/.jab/JS-101</code>) and the sub ANCHOR stores that same qualified string, but REFS only ever knows the bare <code>.jab/JS-101</code>. <code>get</code> hands the whole string to <code>resolveRef</code>, gets nothing, and dies with <code>cannot resolve</code>. Pasting back what <code>status</code> just printed is a hard error, and the qualified name in the anchor is unresolvable too — which is what leaves <a href="/todo/GET/GET-042.html">GET-042</a>'s no-op with no escape hatch.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Found 2026-07-14 on <code>journal/jab/dog</code>: the branch named in every display and in the anchor cannot be resolved by the verb that consumes it.
+</p>
+<ul>
+<li><code>jab get ?/libdog/.jab/JS-101</code> (quoted or not) -&gt; <code>be get: cannot resolve ?/libdog/.jab/JS-101</code>.</li>
+<li><code>jab status</code> prints exactly that name: <code>?/libdog/.jab/JS-101  367 ok (behind 1)</code>.</li>
+<li>Probed on the sub store: <code>resolveRef(&quot;/libdog/.jab/JS-101&quot;)</code> -&gt; nothing; <code>resolveRef(&quot;.jab/JS-101&quot;)</code> -&gt; <code>8ebbfd35</code>.</li>
+<li>Also unresolvable: <code>libdog/.jab/JS-101</code>, <code>/libdog/.jab</code>, <code>JS-101</code> — only the exact bare <code>.jab/JS-101</code> hits.</li>
+<li>The anchor tip row stores the QUALIFIED form <code>?/libdog/.jab/JS-101#79612854</code> — the stored branch is itself unresolvable.</li>
+<li><code>/libdog</code> is the PROJECT selector (as in <code>?/libdog</code>), not part of the ref — <code>?/&lt;project&gt;/&lt;branch&gt;</code> is never split.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+The branch name <code>status</code> prints round-trips: <code>get</code> accepts it, and the anchor stores a form that resolves.
+</p>
+<ul>
+<li>Split <code>?/&lt;project&gt;/&lt;branch&gt;</code> into project + branch before <code>resolveRef</code>, or stop qualifying the display.</li>
+<li>One canonical branch spelling shared by status, the anchor writer, and get's resolver.</li>
+<li>An unresolvable branch stays a LOUD error — this ticket removes the false negative, not the error.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Repro test first (<a href="/meta/work.html">work</a>); fix in beagle-ext (JS), no C changes; minimal diff.
+</p>
+<ul>
+<li>Never parse the URI by hand or with a regex (<a href="/meta/work.html">work</a> &quot;Things NOT TO DO&quot;) — go through the URI class.</li>
+<li>Sub-branch shape is <code>/&lt;title&gt;/.&lt;parent&gt;[/&lt;parent_branch&gt;]</code> (<code>shared/submount.js</code> header) — check vs what REFS stores.</li>
+<li>Check native C <code>be get</code>/<code>be status</code> spelling before settling the canonical form (parity).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Open — the ambiguity is real and needs a rule, since a branch name may itself contain <code>/</code>.
+</p>
+<ul>
+<li><code>?/libdog/.jab/JS-101</code> splits only if the FIRST segment is read as a project selector; no such rule exists today.</li>
+<li>Suspect the anchor writer and display share one qualifier while <code>resolveRef</code> wants the bare ref — find the ONE divergence.</li>
+<li>Fixing the display alone is not enough: the anchor's stored branch must resolve, or <a href="/todo/GET/GET-042.html">GET-042</a> stays broken.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro test: <code>get ?/&lt;project&gt;/&lt;branch&gt;</code> resolves the same ref as the bare <code>&lt;branch&gt;</code></li>
+<li><a href="./ .html"> </a> repro test: the branch string <code>status</code> prints is accepted by <code>get</code> verbatim</li>
+<li><a href="./ .html"> </a> locate where the <code>/&lt;project&gt;</code> qualifier is prepended (status render + anchor writer)</li>
+<li><a href="./ .html"> </a> decide the canonical spelling; check native parity first</li>
+<li><a href="./ .html"> </a> audit anchors already written with the unresolvable form (migration?)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<p>
+Existing anchors on disk already carry the unresolvable qualified form.
+</p>
+<ul>
+<li><code>journal/jab/dog/.be</code> stores <code>?/libdog/.jab/JS-101#79612854</code> — a fix may need to tolerate or migrate the old spelling.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+  -
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

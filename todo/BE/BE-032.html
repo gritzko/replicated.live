@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-032</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-032 <a href="./OPEN.html">OPEN</a>: CLI context drops the cwd sub-path — args resolve at the wt ROOT</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The model (<a href="../../wiki/Nav.html">Nav</a>, <a href="../../wiki/Worktree.html">Worktree</a>): the context URI is the <strong>versioned cwd</strong> <code>//worktree/path</code>, and relative args resolve against it in the verb via <code>resolve(context, base, rel)</code>. The code never threads the cwd sub-path: <code>core/loop.js:337-342</code> sets <code>be.repo</code>/<code>be.authority</code> but composes no <code>navCwd(io.cwd())</code> context PATH; every verb resolves relative args via <code>wtpath(repo.wt, rel)</code> (cat.js:163, status.js:109, ls.js:140, put.js:146, delete.js:171, get restorePath), and <code>wtpath</code> → <code>navCwd(wt)</code> always yields sub=&quot;&quot; (discover.js:329) — root-anchored by construction. Only the pager's <code>_composeCall</code> (views/bro/pager.js:705) sees the sub-path, so CLI and pager disagree on the same command.
+</p>
+<h3>Goals</h3>
+<ul>
+<li>d MAIN/src &amp;&amp; be cat main.c<code> resolves </code>//MAIN/src/main.c<code>, not </code>//MAIN/main.c` — repro first, then fix.</li>
+<li>e context composition (<code>navCwd(io.cwd())</code> incl. sub-path) threaded at CLI entry; pager and CLI converge on it.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>nfinement invariants stay: resolve()/wtpath NAVESCAPE guards byte-identical for the root case.</li>
+<li>-root-relative semantics that are CORRECT (e.g. <code>be put .</code> at root, whole-tree get) must not shift.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Verified 2026-07-09 AFTER a763a86a (BE-030 uniform wt path handling) + 2dcfc392: still repros — <code>cd be/core &amp;&amp; jab cat loop.js</code> exits 0 with EMPTY output (silently resolves <code>be/loop.js</code>); <code>jab cat core/loop.js</code> works. Silent-empty (no FILENONE) is an extra wart.</li>
+<li>Verb matrix 2026-07-10 (gritzko repro + probes, all from a subdir cwd, bare arg vs root-relative): delete &quot;0 row(s), 1 skipped&quot; vs deletes; cat EMPTY vs content; log banner-only vs history; why EMPTY vs blame; diff probe inconclusive (clean file) but same wtpath resolver; put/post/log already on <a href="../URI/URI-010.html">URI-010</a>'s 2026-07-07 list. Every path-taking verb is root-anchored.</li>
+<li>2026-07-10: what the context SHOULD be per cwd (tree root vs hive wt vs sub mount, e.g. <code>~/src/journal/wiki</code> → <code>//wiki</code>) is being pinned formally in <a href="BE-042.html">BE-042</a>; this ticket keeps the CLI thread-through + call-site sweep, sequenced after that model.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> Repro test: subdir cwd + cat/put/status/delete of a bare filename → today acts at the wt root.</li>
+<li><a href="./ .html"> </a> Thread <code>navCwd(io.cwd())</code> (with sub) into the minted context at loop.js <code>_cli</code>; verbs resolve against it.</li>
+<li><a href="./ .html"> </a> Sweep the wtpath(repo.wt, rel) call sites for base assumptions (cat/status/ls/put/delete/get).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

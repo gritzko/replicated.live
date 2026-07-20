@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-027</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>POST-027 <a href="./OPEN.html">OPEN</a>: post invocation matrix — uncovered test cells</h1>
+<p>
+Audit of every <a href="../../wiki/POST.html">/wiki/POST</a> &quot;Summary of invocation patterns&quot; bullet crossed with 5 target states (absent, at-tip, ahead, behind, diverged) against <code>be/test/</code>. 5 parallel workers read every relevant run.sh. Verdicts: ~14 cells covered, ~30 uncovered, 0 MISMATCH (no test asserts an outcome contradicting the spec). Two spec-code gaps surfaced (bare remote-track post, <code>ssh://host#msg</code>).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Only 4 call sites in all of <code>be/test/</code> run a truly bare <code>jab post</code>; most states are pinned via explicit <code>?branch</code>/<code>//X</code>/<code>ssh://</code> slots or not at all. Happy-path FF cells are green, the refusal ladders are mostly unasserted.
+</p>
+<ul>
+<li>Covered today: 1a at-tip/behind (post/bare-advance), 1b behind incl. file materialisation (post/wt-target-merge), 2b first-commit/POSTNONE (post/refuse, post/uniform), 2a transitive selection depth 1-2 (sub/nestedpost, sub/advput), adv-only sub left alone (sub/selective-adv), 3 absent-created/behind/diverged (post/slots, get/branch-bare, post/refuse), 5 FF ssh+http &amp; diverged ssh (test/wire/*).</li>
+<li>MISMATCH: none; but test/wire/push-nonff-msg asserts the refusal must NOT say &quot;diverged&quot; — it locks in the <a href="POST-025.html">POST-025</a> collapse and must be amended when POST-025 lands.</li>
+<li>SPEC-CODE GAP: bare post on a remote track (spec 1.d) is unimplemented — advanceTrack (post.js:399) has only <code>//X</code>/branch arms, a schemed track row falls into advanceBranch.</li>
+<li>SPEC-CODE GAP: <code>ssh://host#msg</code> commit-then-push is unimplemented — parseSlots drops a host-slot fragment, a <code>?</code>-less <code>ssh://host#msg</code> dies POSTNOREF.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Cover every cell below with a minimal repro-first test in <code>be/test/</code> (post/, sub/, wire/ house style); the two spec-code gaps need an implementation ruling first.
+</p>
+<h3>Constraints</h3>
+<p>
+No test edits beyond adding the missing cells; <a href="POST-025.html">POST-025</a> owns the wire verdict recode — crosslink, do not duplicate its cells here.
+</p>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Cells 1b-i/ii/iii/v and 4-i/ii/iii/v share advanceWorktree — one suite parameterised over bare-track vs explicit <code>//X</code> entry covers both rows.
+</p>
+<h3>TODOs</h3>
+<p>
+Tests landed 2026-07-16 in <code>test/post/</code> (26 new suites, CMake glob-registered); <code>[v]</code> = suite exists AND is green; RED = suite exists as a kept repro, bug open. -<a href="./v.html">v</a> 1a-iii branch track ahead (contains cur): <code>post/adv-contains</code> — RED repro, see BUG-1 below -<a href="./v.html">v</a> 1b/4-i <code>//X</code> target absent: <code>post/wt-target-none</code> (NAVNONE fires; post.js:324 WTNONE guard is shadowed dead code) -<a href="./v.html">v</a> 1b/4-ii <code>//X</code> target at cur's tip → POSTNONE: <code>post/wt-target-eq</code> -<a href="./v.html">v</a> 1b/4-iii <code>//X</code> target ahead → POSTNONE &quot;already contains&quot;: <code>post/wt-target-ahead</code> -<a href="./v.html">v</a> 1b/4-v <code>//X</code> target diverged/unrelated → POSTNOFF: <code>post/wt-target-nonff</code> -<a href="./v.html">v</a> 1c bare post on a detached wt refuses: <code>post/bare-detached</code> (message is still the commit-shaped &quot;no changes since base&quot;) -<a href="./v.html">v</a> 1c patch exception bare/<code>post '#'</code> msg reuse: <code>post/bare-patch-reuse</code> — RED repro, see BUG-2 -<a href="./ .html"> </a> 1d bare post on a remote track → FF-push, all 5 states: UNIMPLEMENTED (needs ruling + advanceTrack arm) -<a href="./v.html">v</a> 2a-i selective first-ever commit: <code>post/commit-selective-first</code> — RED repro, see BUG-4 -<a href="./v.html">v</a> 2b-iii commit-all <code>#msg</code> on an already-ahead wt: <code>post/commit-ahead</code> -<a href="./v.html">v</a> 2-v <code>#msg</code> commit on a diverged wt SUCCEEDS, no ref gate: <code>post/commit-diverged</code> -<a href="./v.html">v</a> 2x recursed sub commit message <code>[dog]</code> spice: <code>post/sub-msg-spice</code> — RED repro (verbatim today), see BUG-5 -<a href="./v.html">v</a> 3-ii explicit named <code>?name</code> at-tip → POSTNONE: <code>post/adv-named-attip</code> -<a href="./v.html">v</a> 3 <code>?..</code> parent FF + POSTQRY-on-trunk: <code>post/adv-parent</code> -<a href="./v.html">v</a> 3 literal <code>?.</code> own-branch FF + at-tip POSTNONE: <code>post/adv-dot</code> -<a href="./v.html">v</a> 3 <code>?</code> trunk at-tip/ahead/diverged: <code>post/adv-trunk-states</code> — ahead leg RED, same BUG-1 -<a href="./v.html">v</a> 4 dirty <code>//X</code> target 3-way merged, not clobbered: <code>post/wt-target-dirty</code> -<a href="./v.html">v</a> 4 conflict refuses BEFORE the target base moves (GETCONF): <code>post/wt-target-conflict</code> -<a href="./v.html">v</a> 4 explicit <code>post //self</code> → POSTNONE: <code>post/wt-target-self</code> — RED repro, see BUG-3 -<a href="./v.html">v</a> 4 detached target stays detached (<code>#tip</code> row shape): <code>post/wt-target-detached</code> -<a href="./v.html">v</a> 5-i create-on-push to an absent remote branch (ssh): <code>post/push-create</code> -<a href="./v.html">v</a> 5-ii remote at cur's tip → POSTNONE: <code>post/push-eq</code> -<a href="./ .html"> </a> 5-iii remote ahead → BEHIND-class refusal: <a href="POST-025.html">POST-025</a>'s recode owns it -<a href="./v.html">v</a> 5-v unrelated push → POSTNOFF: <code>post/push-unrelated</code>; diverged over http: <code>post/push-nonff-http</code> -<a href="./ .html"> </a> 5 https and be:// push transports: still zero tests -<a href="./v.html">v</a> 5 POSTNOREF <code>?</code>-less host URI: <code>post/push-noref</code> -<a href="./v.html">v</a> 5 POSTNONE push from a fresh never-committed wt: <code>post/push-fresh</code> -<a href="./ .html"> </a> 5 <code>ssh://host#msg</code> commit-then-push: UNIMPLEMENTED (needs ruling + parseSlots host fragment) -<a href="./v.html">v</a> 5 e2e push saves the remote-tracking row: <code>post/push-saveref</code>
+</p>
+<h3>Blockers and bummers</h3>
+<p>
+2026-07-16 fix round (uncommitted, this worktree): BUG-1/2/5 fixed in verbs/post/post.js, BUG-4 in core/discover.js; their repros are green. Open: BUG-3 (design law), BUG-6/8 + MISMATCH-1 (pre-existing test edits need permission), DIS-072 fork (ruling).
+</p>
+<ul>
+<li>BUG-1 FIXED advanceBranch order: &quot;already contains&quot; POSTNONE now precedes the POSTNOFF gate (post.js:286-293); adv-contains + adv-trunk-states green.</li>
+<li>MISMATCH-1: pre-existing post/refuse &quot;non-FF&quot; leg builds a target-CONTAINS-cur DAG (feat at cur's descendant) and asserts POSTNOFF where the spec says POSTNONE &quot;already contains&quot; — it and adv-contains cannot both be green (scratch-revert proven); leg needs a real divergence fixture or a POSTNONE assert; edit needs permission.</li>
+<li>BUG-2 FIXED patch msg-reuse: message-less post with in-scope theirs parents now reuses the absorbed commit's message on the commit path (post.js:786-789 + commitMessage helper); bare-patch-reuse green, patch-absorb/patch-pat unharmed.</li>
+<li>BUG-3 <code>post //self</code> unguarded: loop.js authorityRepo consumes the arg0 <code>//A</code> as the run anchor, post runs BARE and silently FFs trunk; the post.js:326 self-guard is unreachable — fix collides with the arg0-only design law, needs gritzko.</li>
+<li>BUG-4 FIXED discover.js anchor: row 0 must be <code>get</code>/<code>repo</code> to anchor a store (isAnchorRow, mirrors wtlog.anchor()); commit-selective-first green, full get/put/post/sub sweep clean.</li>
+<li>BUG-5 FIXED sub message spice: postSubs threads an accumulated <code>_spice</code> path, postOne appends <code> [dog]</code>/<code> [dog/abc]</code> (post.js:664-669, 717-719); sub-msg-spice green, sub/* unharmed.</li>
+<li>BUG-6 FIXED stale trunk-ref readers (permission 2026-07-16): colon-msg + wsmsg probes now read the wtlog cur tip per DIS-076; both green.</li>
+<li>BUG-7 wire.js fetch hang: the &quot;no usable ref&quot; throw fires before io.close(wfd) and the finally reaps without closing it — server never sees EOF, io.reap deadlocks (wire.js:416-455); get-be + serve-uploadpack &quot;timeouts&quot; are this hang, deterministic, present on trunk; each ctest kill leaks a stuck jab+keeper pair.</li>
+<li>BUG-8 FIXED refless serve seeding (permission 2026-07-16): get/be + serve/uploadpack seed now runs <code>post '?'</code> after each commit (DIS-076: a commit mints no ref); both green.</li>
+<li>DIS-072 FORK RESOLVED (ruling 2026-07-16: wiki was stale): pinref migrated to the child-wtlog re-attach row assert, branch.sub/syntheticBranch test legs deleted, all three green; wiki/POST.mkd:5 + Submodules.mkd rewritten to the self-pointing <code>//wt/path#hash</code> pin record.</li>
+<li>RULED 2026-07-16: refusals are plain text ≤64 chars, no C codes in JS (post.js POSTNONE/POSTNOFF throws rewritten); arg0 is the CALLER's context slot (bro ctx URI / CLI cwd-derived), typed args never promoted — loop.js fix in flight for <code>post //self</code>.</li>
+<li>1d and <code>ssh://host#msg</code> need gritzko's implementation ruling before their tests can assert anything.</li>
+<li>wire/push-nonff-msg will contradict the POST-025 fix by design; amending it needs explicit permission.</li>
+<li>test TIMEOUT lowered 90→10s in test/CMakeLists.txt (2026-07-16 order); wire-backed suites SKIP under a non-$HOME TMP (fixture constraint, pre-existing).</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+2026-07-16: full suite 238/238 green (10.6s; was 12 red of 236 at 96s). All work UNCOMMITTED in work/POST-026, awaiting gritzko's review + land.
+</p>
+<ul>
+<li>28 new test suites in test/post/ + test/get/be-update (matrix cells, repros, pins).</li>
+<li>Product fixes: post.js (advance order, patch msg reuse, sub <code>[dog]</code> spice, plain-text refusals), core/discover.js (row-0 anchor), shared/wire.js (fetch/push wfd-leak hang), shared/ingest.js (indexAppended stale header count, GET-046 tail-walk), core/loop.js (self-target <code>//X</code> operand gate — strict-descendant consume, deviation flagged for ruling), shared/relate.js + shared/branch.js (POST* code strings dropped, dead POST→PUT/HEAD shims removed).</li>
+<li>Migrations per rulings: pinref/unit-branch/unit-submount → DIS-072 pin URI; colon-msg/wsmsg readers → wtlog cur tip; refuse non-FF leg → genuine fork; get/be + serve/uploadpack seeding → <code>post '?'</code>; all POST*-code greps → plain-text messages.</li>
+<li>Still open above: 1d bare remote-track post + <code>ssh://host#msg</code> (need rulings), 5-iii (<a href="POST-025.html">POST-025</a>), https/be:// push transports, arg0 strict-descendant vs literal-prepend verdict.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

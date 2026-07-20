@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-075</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-075 <a href="./MED.html">MED</a>: detach is recorded as the INPUT URI, not as a record — <code>get</code> writes <code>?&lt;sha&gt;</code>, a detached <code>post</code> writes trunk-shaped <code>?#&lt;sha&gt;</code>; the record is <code>#&lt;sha&gt;</code></h1>
+<p>
+The canonical detached record is <code>#&lt;sha&gt;</code>: laws #1+#3 of <a href="DIS-071.html">DIS-071</a> settle it with no ruling needed — a bare hash is not a branch/remote/worktree, so there is nothing to TRACK, so the query slot is ABSENT and the fragment carries the base (a &quot;bare-hash record&quot;, law #4). URI-009's absent-vs-empty distinction then separates all three states byte-wise: <code>#&lt;sha&gt;</code> = no query = detached, <code>?#&lt;sha&gt;</code> = present-empty query = TRUNK, <code>?br#&lt;sha&gt;</code> = attached. Both records break it. (a) get's D2 detach writes the INPUT verbatim — <code>?&lt;sha&gt;</code>, sha in the QUERY, no fragment (get.js:491-496); <code>?abc1234</code> is what the user TYPES (<a href="./GET.html">GET</a>:11 &quot;a bare sha detaches&quot;), never what gets recorded. (b) A detached <code>post</code> writes <code>?#&lt;sha&gt;</code> — branchKey is <code>att.branch</code> = <code>&quot;&quot;</code> when detached, so post.js:726 emits a TRUNK record (post.js:573-580, 720-726). Only attachedBranch's get-ONLY scan (wtlog.js:141-156) keeps such a wt detached; any reader trusting post rows sees the trunk — views/refs/refs.js:22-28 does exactly that, labelling off <code>curTip().br</code>, so <code>jab refs</code> prints <code>?</code> for a detached wt. Precisely the disagreement <a href="DIS-059.html">DIS-059</a>'s DIS-057 comment swears is impossible. Law #4 makes a sub's own commit produce the same <code>#&lt;sha&gt;</code> (<a href="DIS-072.html">DIS-072</a>), so the shape is load-bearing, not cosmetic.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Detachment is encoded in the query on one path, lost on the other, and re-derived by a get-only scan that not every reader uses.
+</p>
+<ul>
+<li>get.js:491-496 (D2) records <code>?&lt;40hex&gt;</code> — sha in the query, no fragment; wtlog.js:99-101 and 146-149 read the detach back off exactly that shape.</li>
+<li>post.js:726 records <code>?&lt;branchKey&gt;#&lt;sha&gt;</code> with <code>branchKey = att.branch = &quot;&quot;</code> when detached → <code>?#&lt;sha&gt;</code>, byte-identical to a trunk post.</li>
+<li>post.js:720: the ref advance is correctly skipped when detached, so the STATE is right; only the RECORD lies.</li>
+<li>wtlog.js:141-156 attachedBranch scans GET rows only — the sole reason a detached wt survives its own post; including post rows would re-attach it to the trunk.</li>
+<li>views/refs/refs.js:22-28 takes the label from <code>curTip().br</code>, NOT attachedBranch → <code>jab refs</code> reports <code>?</code> for a detached wt while post's guard reports detached.</li>
+<li>The input-vs-record confusion is the root: <code>?&lt;sha&gt;</code> is a GET ARGUMENT (<a href="./GET.html">GET</a>:11, <a href="./GET.html">GET</a>:24), and get.js:494 records that argument's shape instead of composing a record.</li>
+<li>get.js:465 <code>u.query || &quot;&quot;</code> collapses the URI-009 absent-vs-empty slot that distinguishes <code>#&lt;sha&gt;</code> (detached) from <code>?#&lt;sha&gt;</code> (trunk) — the same collapse <a href="./DIS-073.html">DIS-073</a> hits.</li>
+<li><a href="DIS-068.html">DIS-068</a> wants URI.mkd to carry the <code>?sha</code> detach placement — the spec half of this ticket; it must say ARGUMENT <code>?&lt;sha&gt;</code> → RECORD <code>#&lt;sha&gt;</code>.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+One record shape per state, readable by every reader without a get-only special case.
+</p>
+<ul>
+<li>BOTH paths record <code>#&lt;sha&gt;</code> for a detached wt: query slot ABSENT (not empty), base in the fragment — laws #1+#3, no ruling outstanding.</li>
+<li>A detached <code>post</code> stops emitting a trunk-shaped <code>?#&lt;sha&gt;</code>; a sub's own commit yields the same bare-hash shape (<a href="DIS-072.html">DIS-072</a>).</li>
+<li>Every reader agrees: views/refs/refs.js labels off the ONE track reader, not off curTip.</li>
+<li>Repro: detach at a sha, commit, then <code>jab refs</code> + a post-detach guard read — both must say detached.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Read-compat and one reader; the ARGUMENT grammar does not change.
+</p>
+<ul>
+<li>Old rows keep parsing: <code>?&lt;sha&gt;</code> (D2 detach) and <code>?#&lt;sha&gt;</code> (today's detached post) must read back as they do now — no wtlog rewrite (<a href="DIS-071.html">DIS-071</a> law).</li>
+<li>The <code>?#&lt;sha&gt;</code> ambiguity is UNRESOLVABLE in old rows — a trunk post and a detached post are byte-identical; legacy resolution stays get-anchored. Document, do not guess.</li>
+<li><code>be get ?&lt;sha&gt;</code> stays the user-facing spelling (<a href="./GET.html">GET</a>:11,24) — this ticket changes what gets RECORDED, never what gets TYPED.</li>
+<li>Needs the URI-009 absent-vs-empty slot to survive composition AND parsing, or <code>#&lt;sha&gt;</code> and <code>?#&lt;sha&gt;</code> collapse again — coordinate with <a href="./DIS-073.html">DIS-073</a>.</li>
+<li>Minimal fix; do not re-open <a href="DIS-059.html">DIS-059</a>'s attach/detach ruling (recentmost GET record) — this ticket changes the RECORD, not the rule.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Detached record = <code>#&lt;sha&gt;</code> (query slot absent, base in fragment) — derived from laws #1+#3, 2026-07-15; no separate ruling needed.</li>
+<li>An argument is not a record: <code>?&lt;sha&gt;</code> is the detach COMMAND, <code>#&lt;sha&gt;</code> its recorded effect. get.js:494 conflates them today.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: detach + commit → <code>jab refs</code> says <code>?</code> (trunk) while post says detached</li>
+<li><a href="./ .html"> </a> post: record <code>#&lt;sha&gt;</code> when detached, never <code>?#&lt;sha&gt;</code>; get: record <code>#&lt;sha&gt;</code> for a <code>?&lt;sha&gt;</code> argument</li>
+<li><a href="./ .html"> </a> views/refs: label off the ONE track reader, not <code>curTip().br</code></li>
+<li><a href="./ .html"> </a> audit the other curTip-labelling readers (views/diff, verbs/head) for the same class</li>
+<li><a href="./ .html"> </a> <a href="../../wiki/URI.html">URI</a> detach placement clause — coordinate with <a href="DIS-068.html">DIS-068</a></li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The legacy <code>?#&lt;sha&gt;</code> ambiguity cannot be resolved from the record alone; any migration must stay get-anchored.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FILED 2026-07-15 (track/base audit); nothing landed yet.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

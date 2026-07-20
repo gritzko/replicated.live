@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-044</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-044 <a href="./JS.html">JS</a> <a href="./HIGH.html">HIGH</a>: wire.fetch buffers the WHOLE pack in RAM — stream to a tmp file in the shard</h1>
+<p>
+<code>jab get</code> of a big remote holds the entire packfile in process memory: <code>wire.js fetch</code> reads the raw pack to EOF into a <code>chunks[]</code> array and then CONCATENATES it into one <code>Uint8Array</code> — peak RSS ~2× pack size — and <code>ingest</code> writes that single buffer out afterwards. Observed live this session: <code>jab get ssh://git@github.com/torvalds/linux.git</code> (pid 14199) at RSS 2.78 GB after 2.7 GB received, fd table shows NO store file open (only the ssh pipe) — a Linux-scale pack (~3.5 GB) peaks at ~7 GB and OOMs modest boxes. Fix = git's own model: stream the pack into a <code>tmp_pack_*</code> file INSIDE the destination shard, hash as it streams, index/ingest off mmap, atomically rename into place on a verified trailer. Method: <a href="../../meta/work.html">work</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Live evidence 2026-07-14: <code>jab get ssh://git@github.com/torvalds/linux.git</code> from <code>~/tmp/try</code>; ssh child moving ~2.8 MB/s; jab RSS tracked received bytes 1:1 (2 785 424 kB RSS vs rchar 2.7 GB); <code>/proc/14199/fd</code> = tty, urandom, pipe, timerfd — no store fd, nothing durable until EOF.</li>
+<li>Locus: <code>be/shared/wire.js</code> &quot;read the raw pack to EOF&quot; (<code>fetch</code> ~L143-156, same shape in the second reader ~L174-191): <code>chunks.push(...)</code> then <code>out.set(c, off)</code> — chunks + out live simultaneously, so peak = 2× pack.</li>
+<li>Downstream <code>be/shared/ingest.js</code> (<code>clone</code>/<code>add</code> → <code>writeBytes</code>, e.g. <code>0000000001.keeper</code>) takes the whole buffer; <code>verbs/get/get.js</code> L208/L218/L230 passes <code>f.pack</code> around by value.</li>
+<li>An abort/OOM mid-fetch loses everything received; nothing is resumable and nothing partial ever touches disk for later salvage.</li>
+<li>CONFIRMED HARD FAIL 2026-07-14: the same clone DIED at EOF concat — <code>JS exception: RangeError: length too large / Uint8Array@[native code] / readToEof@ / fetch@ / seedRemote@ / handleSeed@ / get@</code> — the pack exceeds the engine's max Uint8Array length, so ANY large-repo clone deterministically crashes after the full download (~50 min discarded). Not just an OOM risk; bumped <a href="./MED.html">MED</a>→<a href="./HIGH.html">HIGH</a>.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>wire.fetch</code> streams the incoming pack to a tmp file (e.g. <code>tmp_pack_*</code>) in the DESTINATION shard dir, constant memory, hashing the trailer as it streams.</li>
+<li><code>ingest.clone</code>/<code>ingest.add</code> accept the tmp-file path (read/mmap), and land it by ATOMIC rename once the pack sha trailer verifies; abort = unlink the tmp file, store untouched.</li>
+<li>A Linux-scale clone (multi-GB pack) completes with bounded RSS (target: tens of MB, not pack-sized).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Tmp file lives in the shard's own dir (same filesystem → rename is atomic); NOT <code>/tmp</code> (often tmpfs = RAM again, and cross-device rename isn't atomic).</li>
+<li>JS only (<code>be/</code>, run via <code>jab</code>); keep the <code>fetch() -&gt; {pack, refs, ...}</code> callers working — the small local/<code>be://</code> paths may keep the in-memory shape if that simplifies, but the ssh/git wire path must stream.</li>
+<li>Repro-first per <a href="../../meta/work.html">work</a>: a test with a pack ≫ some artificial RSS cap (or an instrumented byte counter) proving bounded buffering; no editing unrelated tests.</li>
+<li>≤2-line <code>GET-044</code> comments; ticket-coded ≤64-char commits.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Follow git's quarantine pattern: stream → <code>tmp_pack_&lt;rand&gt;</code> in the shard, verify the 20-byte sha1 trailer, then rename into the keeper log name (or hand the verified file to ingest).</li>
+<li>Stretch (separate ticket if pursued): resumable fetch off a kept tmp file; ingest reading via mmap instead of a full read.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled>  T1 — repro test <code>test/wire_stream.js</code> (<code>be-js-unit-wire_stream</code>): RED on pristine wire/ingest, GREEN on fix; covers stream+head reassembly, verified-flag skip, corrupt-trailer abort, sha1s-vs-native.</li>
+<li class="done"><input type="checkbox" checked disabled>  T2 — <code>wire.js drainToFile</code> streams the spawn-path pack to <code>tmp_pack_*</code> in the destination shard; incremental pure-JS SHA-1 (<code>shared/util/sha1s.js</code>, 183 MB/s) trails 20 bytes behind, trailer verified at EOF.</li>
+<li class="done"><input type="checkbox" checked disabled>  T3 — <code>ingest.js</code> clone/add/land take <code>{packFile, packLen, verified}</code>; atomic rename + trailer strip; abort unlinks; 2^31-1 mmap-cap guards refuse cleanly. <code>get.js seedRemote</code> resolves the shard BEFORE fetching; <code>submount.js</code> streams child fetches. HTTP/small-local paths keep the in-memory shape.</li>
+<li class="done"><input type="checkbox" checked disabled>  T4 — gates: 698 MB pack 35 MB anon (pristine 1.48 GB); local 6.4 GB pack 48 MB peak; GitHub linux.git 6.45 GB streamed in 20 min at 46.7 MB VmRSS flat, trailer verified, atomic-landed as a durable 6.0 GB keeper. Suite 190 tests, failing set byte-identical to pristine baseline (7 env/network cases), no test amended.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Full linux CHECKOUT still blocked by two PRE-EXISTING bugs (both pristine-reproduced, own tickets): <a href="../JAB/JAB-007.html">JAB-007</a> (Buf <code>|0</code> int32 cursors cap io.mmap at 2^31-1 — the landed 6.4 GB keeper can't be indexed/read) and <a href="../GIT/GIT-021.html">GIT-021</a> (<code>git.tree: bad tree entry</code> mid-checkout at medium scale, stateful read bug). After <a href="../JAB/JAB-007.html">JAB-007</a> lands, lift the <code>MMAP_CAP</code> guard in <code>ingest.js</code>.</li>
+<li>Worker flagged for user eyeball: the shared-store sub ref <code>.beagle-ext</code> moved <code>73fc0c91</code> → <code>46af906f</code> across its posts (its rows all carry GET-044).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Worker branch <code>GET-044</code> (wt <code>/home/gritzko/src/GET-044</code>, store <code>~/.be</code>): parent commits <code>f9a9c781</code> + <code>68d3b802</code>, sub committed post-order, trunk untouched. PENDING user inspect/merge; fixtures (<code>linux-mirror.git</code>, <code>medium.git</code>, ~17 GB hardlinked) still in the wt.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

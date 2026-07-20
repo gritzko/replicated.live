@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-015</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-015 <a href="./HIGH.html">HIGH</a>: nav keys replay MUTATION verbs — back/<code>R</code> re-drive the tracked spell, with its rest args stripped</h1>
+<p>
+The pager's back key (<code>-</code>/BS → <code>popView</code>+<code>_refresh</code>, pager.js:471) and <code>R</code> refresh (pager.js:728-741) re-EXECUTE the view's tracked spell. Two compounding defects: (1) <code>_driveApply</code> (pager.js:713-722) tracks only <code>(verb, arg0)</code> and discards <code>rest</code>, so the re-driven spell loses the verb's real arguments; (2) <code>_refresh</code> re-drives ANY verb, including mutations. <code>:post ?feat 'msg'</code> then <code>-</code> re-drives <code>post //WT/x?feat</code> — post's DIS-054 bare-advance form (post.js:592-593, needs NO message) — a branch FF fired by a navigation key. Nav.mkd:33 wants an abandoned <code>post …</code> screen inert on back. Found in the 2026-07-07 pager nav audit, runtime-VERIFIED (headless Pager + driveSpell stub). Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>_applySpell</code> composes <code>{verb, arg0, rest}</code> (shared/spell.js compose) and drives <code>buildSpell(c)</code>, but <code>_driveApply</code> stores only <code>view.verb</code>+<code>view.uri</code> (= arg0); <code>rest</code> is gone.</li>
+<li>VERIFIED trace: <code>:grep &quot;needle&quot;</code> drives <code>grep(&quot;//WT/dir/file.c?br&quot;,&quot;needle&quot;)</code>; pressing <code>R</code> re-drives <code>grep //WT/dir/file.c?br</code> — the pattern is lost, the view silently becomes a different query. Quoting is the ONLY way to pass a grep pattern in the pager (barewords become paths), so EVERY pager grep view has a broken refresh.</li>
+<li>VERIFIED trace: <code>:post &quot;hello world&quot;</code> tracks <code>verb=post uri=//WT/dir</code>; navigate away, press <code>-</code> → drives <code>post //WT/dir</code> (message-less → POSTNOMSG err); with a tracked <code>?ref</code> the re-drive is the bare-advance REF MUTATION, no error, no confirmation.</li>
+<li>The same class hits the initial columnar view (bare <code>verb </code> re-fire) — that anchor loss is <a href="BRO-017.html">BRO-017</a>.</li>
+<li>LIVE SIGHTING 2026-07-17 (gritzko, BRO-030 session): after a real <code>post</code>, pager nav around <code>status //BRO-030[/test]</code> surfaced <code>err: \</code>?` can not be fast-forwarded` — post.js:326's bare-trunk advance re-driven by the replay; the status verb itself never calls post (clean CLI repro).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Back/<code>R</code> NEVER re-execute a mutation verb; a mutation-result view refreshes as an inert re-render (or refuses with a message).</li>
+<li>Refresh re-runs the EXACT call that produced the view: track the full <code>{verb, arg0, rest}</code> (or the built spell string) on the view object.</li>
+<li>Repro tests: grep-with-pattern refresh keeps the pattern; a post-result view's back/<code>R</code> fires no second post.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>views/bro/pager.js</code> (<code>_driveApply</code>/<code>_runSpell</code>/<code>_refresh</code>); a read-vs-mutation predicate may reuse loop.js SCHEME_ALLOW / the projector-vs-verb split (<a href="../DIS/DIS-060.html">DIS-060</a>).</li>
+<li>Repro-first; do not touch the working plain/tlv paths.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending) mutation gate: projector allowlist vs a verb-declared <code>readonly</code> flag.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> Repro: refresh drops rest args (grep pattern) — <a href="BRO-024.html">BRO-024</a> test/bro/context legs (g)-(j).</li>
+<li><a href="./v.html">v</a> Repro: back re-fires post bare-advance on a <code>?ref</code> view — verified live in the BRO-024 iter-3 session (<code>:put x</code> then <code>R</code> re-ran the put).</li>
+<li><a href="./v.html">v</a> Track the full call on the view; gate <code>_refresh</code> to read views; suite green — <code>view.call={verb,spell,context,disp}</code> + the <code>isMutation</code> refresh refusal.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Fixed as part of <a href="BRO-024.html">BRO-024</a> iter 3 (recorded invocations + mutation-replay guard), commit <code>5ebf0c8d</code> in work/BRO-024; flip to <a href="./DONE.html">DONE</a> when that branch merges to trunk.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

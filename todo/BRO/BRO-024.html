@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-024</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-024 <a href="./OPEN.html">OPEN</a>: reduce the context URI to <code>//WT/dir/</code> ($PWD); prompt-like address bar <code>//WT/dir/: verb args</code>; cd before verbs</h1>
+<p>
+The fat context URI (authority+path+?rev+#hash all mutable slots) is not working well; ruled 2026-07-12 to reduce context to worktree+path only, exactly <code>$PWD</code> for the verbs. The pager address bar becomes a shell-like invite: context left of <code>: </code>, verb invocation right of it. Verbs execute with the process actually cd'ed into the context dir so nothing is mistaken; the revision axis leaves context and goes explicit into spells and links. Rewrites the context part of <a href="../../wiki/Nav.html">Nav</a> (already flagged stale, <a href="BRO-023.html">BRO-023</a>, <a href="../BE/BE-030.html">BE-030</a>).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><a href="../../wiki/Nav.html">Nav</a> lets the context carry <code>?branch</code>/<code>#hash</code>; the slot-edit machinery around that bred bugs: mergeUri slot edits <a href="BRO-018.html">BRO-018</a>, the stale follow resolver <a href="BRO-016.html">BRO-016</a>, the empty initial context <a href="BRO-017.html">BRO-017</a>, completion context <a href="BRO-022.html">BRO-022</a>.</li>
+<li>Verbs already own resolution — <code>resolve(context, base, rel)</code> at the verb entry, the pager is arg-blind (<a href="../URI/URI-010.html">URI-010</a>, <a href="../URI/URI-011.html">URI-011</a>, <a href="../BE/BE-039/README.html">BE-039</a>).</li>
+<li>Ruling (gritzko, 2026-07-12): context = <code>//WT/rel/dir/</code>, nothing else; it is the <code>$PWD</code> of the nav framework, in the CLI it literally IS the pwd.</li>
+<li>LIVE SIGHTING 2026-07-17 (BRO-030 session): bare <code>:post</code> in a pager at context <code>//BRO-030/</code> ran against the LAUNCH tree (journal/be) — BE-039 threads context onto ARGS only, so an arg-less mutation verb keeps the launch ambient; post's implied <code>///be/</code> track then hit the POST-026 self fall-through → `<code> </code>?<code> can not be fast-forwarded </code>`. A MUTATION aimed at the wrong tree — the cd-before-verbs goal is the fix.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Pager address bar renders a prompt-like invite <code>//ABC-123/dog/: </code> and the typed spell after it, e.g. <code>//ABC-123/dog/: status</code>.</li>
+<li>Verbs and views run cd'ed into the context dir; execution is serialized (chdir is process-global), cwd restored on throw.</li>
+<li>Revision goes explicit: <code>?rev</code>/<code>#hash</code> appear in spells and in clickable links only; diff/status take the base of comparison as an arg, object-extraction views (blob, tree, commit) take it likewise; walking around a commit uses hash-carrying links.</li>
+<li>No jumping out of a worktree: <code>..</code> clamps at the <code>//WT</code> root; <code>//</code> addresses the main tree.</li>
+<li>A deleted context dir shows the invite red; the user cd's out of it; verbs report cleanly instead of raw ENOENT.</li>
+<li>CLI context derives from pwd; pwd must be under SRC_ROOT (the main tree root, aka <code>///</code>), outside it there is no context.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>resolve()</code> + absolute paths remain the law at verb entry; the cd is a backstop, not a substitute — cross-worktree args (<code>//OTHER-999/file</code>) still resolve explicitly.</li>
+<li>Remote browsing (a <code>be://</code> context) stays out of scope: TODO, remote resources reachable via explicit verb args only.</li>
+<li>Nav.mkd rewrite rides this ticket; wiki budgets per <a href="../../meta/wiki.html">/meta/wiki</a>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(gritzko, 2026-07-12) revision axis is meaningful for diff/status (comparison base) and object-extraction views — keep it explicit in spells and links, never in context.</li>
+<li>(gritzko) serialize verb execution around chdir; safe to keep resolve+abs paths as the primary mechanism.</li>
+<li>(gritzko) worktree escape forbidden; <code>//WT</code> or <code>//</code> for the main tree; pwd must sit under SRC_ROOT (<code>///</code>).</li>
+<li>(gritzko) rm'ed context dir: paint the invite red, let the user cd out.</li>
+<li>(gritzko, 2026-07-12, the ONE-VAR ruling) the context is tracked in ONLY ONE PLACE — the process cwd; the prompt invite must MATCH cwd by construction; navigation = io.chdir (landed in the jab runtime + installed); all other context carriers (pager this.ctx, launch this.context, session be.ctxDir) get DELETED, then tests made pass. Trigger: bare <code>:put</code> at <code>//BRO-024/</code> staged only <code>test/bro/context/*</code> — PUT-008's ctxSub read be.ctxDir, a THIRD context source diverging from the handed context (launch dir was the cell root, so the divergence is in the ctxDir mint, not launch-stale).</li>
+<li>(gritzko, 2026-07-12) bare verb after a single-file view takes THAT file as the implied arg: <code>:diff shared/spell.js</code> then <code>:vim</code> opens the file, because it was the only hunk open. The default arg comes from the VIEW's sole subject, never from the context (context stays dir-only); ambiguous multi-file views imply nothing.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> rewrite the <a href="../../wiki/Nav.html">Nav</a> context sections: <code>//WT/dir/</code>-only context, invite format, explicit-rev links; drop the <code>?rev</code>-context clauses</li>
+<li><a href="./v.html">v</a> pager: render the invite <code>//WT/dir/: </code>; keep the spell text right of the colon; red invite when the dir is gone (iter 1, work/BRO-024, test bro/context)</li>
+<li><a href="./v.html">v</a> pager context REDUCED to <code>//WT/dir</code> on every navigation (follow, slot-edit, back); <code>?rev</code>/<code>#hash</code> never enter it; verb word-calls (<code>call</code> flag) never move it (iter 1)</li>
+<li><a href="./v.html">v</a> bar shows the FULL command with its arguments, kin of <a href="BRO-015.html">BRO-015</a>; live repro (gritzko, 2026-07-12): <code>//BRO-024: diff shared/spell.js</code> renders the file diff but the bar read <code>//BRO-024/: diff</code>, and back/refresh re-ran the BARE verb (iter 3: <code>view.call={verb,spell,context,disp}</code> recorded; replay runs the RECORDED spell in ITS context; back re-anchors context from it)<ul>
+<li>iter 3 also fixed <a href="BRO-015.html">BRO-015</a>'s worst half live: back/R RE-EXECUTED mutation verbs (<code>:put x</code> then R re-ran the put) — <code>_refresh</code> now refuses mutation replay, restores saved hunks</li>
+<li>deferred to the normalization pass: recorded <code>disp</code> is never re-relativized after a later context move; O-click mutations still derive authority from <code>_verbUri()</code> not <code>view.call.context</code></li>
+</ul>
+</li>
+<li><a href="./v.html">v</a> ONE-VAR: context = process cwd, period — invite renders navCwd(cwd); follow/slot-edit/back = <code>_navTo</code>→io.chdir; replay chdir's to the recorded call.context, restores in finally; DELETED: pager this.ctx + <em>ctxFrom, launch this.context + </em>launchContext, be.ctxDir + mint sites (ctxSub/argRel read io.cwd()); regression legs: ctxsub-root-whole-tree (the bare-put mis-scope), nav-chdir-cwd, nav-invite-from-cwd<ul>
+<li>found en route: the 13:19 jab runtime NATIVELY strips a bare-<code>/</code> query in ULOGAppendAt (<code>.be/?/</code> → <code>.be/?</code>, broke sub-wtsrc) — verified by direct abc._ulog_append probe vs the Jul-10 binary; runtime ticket due (suspect: the JS-108 JABCStrOfSlice sniff, not the chdir binding)</li>
+<li>interim shim <code>_restoreQuerySlash</code> in shared/ulog.js repairs the strip post-write, self-neutralizes on a fixed runtime — DROP it once the C fix lands</li>
+<li>nit: two put.js comments still name the deleted be.ctxDir</li>
+</ul>
+</li>
+<li><a href="./-.html">-</a> pager/CLI: chdir into context before each verb/view, serialize, restore cwd on any exit path — UNBLOCKED 2026-07-12: <code>io.chdir</code> landed in the jab runtime (work/JS-108b) and is in the installed jab; subsumed by the ONE-VAR TODO above (cwd IS the context, no per-verb wrap needed except replay)<ul>
+<li>audits done meanwhile: CLI verbs provably run at invocation pwd (only divergence = pager driveSpell reentry); the drive path is fully synchronous, so post-binding a save/chdir/try-finally wrap needs no lock; sketch: one <code>_drive(spell, context)</code> helper over the 5 driveSpell sites, <code>_refresh</code> passes call.context</li>
+<li>related smell: <code>io.spawn</code>/<code>spawnFds</code> take no cwd arg — a child editor's cwd disagrees with the context (harmless today: vim absolutizes its file arg)</li>
+</ul>
+</li>
+<li><a href="./ .html"> </a> spells/links: extraction views mint <code>?rev</code>/<code>#hash</code>-carrying U tokens; commit-walk links carry hashes<ul>
+<li>once minted, &quot;sole subject&quot; of a many-hunks-one-file view needs a rev-agreement rule (iter-2 note)</li>
+</ul>
+</li>
+<li><a href="./v.html">v</a> clamp <code>..</code> at the <code>//WT</code> root — pager side (iter 1; mergeUri's silent-pop clamps once context is dir-only)</li>
+<li><a href="./ .html"> </a> map <code>//</code> to the main tree; CLI: reject pwd outside SRC_ROOT (<code>///</code>) with a defined no-context error</li>
+<li><a href="./v.html">v</a> live bug (gritzko, 2026-07-12): pager launched from a worktree invited <code>///work/JS-112/: status</code> instead of <code>//JS-112/: status</code> — iter 5: <code>navCwd</code> (core/discover.js) named the tree by slicing the top-wt's fs path under srcRoot(); now a hive cell (<code>*/work/&lt;name&gt;</code>) is named by its CELL name, and a tree directly under SRC_ROOT never climbs past the hive boundary (test leg k, nested fixture)<ul>
+<li>UNFIXED counterpart, own ticket FILED 2026-07-12 as <a href="../DIS/DIS-069.html">DIS-069</a>: <code>wtdir</code>/<code>resolve</code> lack the same nearest-hive awareness — <code>//CELL</code> from a nested hive does not round-trip (falls back to cwd scope; lossy after cross-tree nav), and with SRC_ROOT=~/src <code>//JS-112</code> ALIASES the flat <code>~/src/JS-112</code> vs the journal cell <code>~/src/journal/work/JS-112</code></li>
+</ul>
+</li>
+<li><a href="./v.html">v</a> bare-verb implied arg = the open view's ONLY file (replaces BE-047/48 file-in-context defaulting); <code>be-js-bro-vim</code> nav leg green again unedited (iter 2, <code>_viewSubject</code>)<ul>
+<li>drop the subject==context imply-suppression guard once the LAUNCH context is reduced too (iter-2 note)</li>
+</ul>
+</li>
+<li><a href="./v.html">v</a> live bug (gritzko, 2026-07-12): <code>diff discover.js</code> open at <code>//BRO-024/core/</code>, bare <code>:cat</code> → <code>no hunks: cat core/discover.js</code> — the implied subject rode in the hunks' ROOT-relative unprefixed form and the verb re-resolved it against the context dir; fixed at the subject source: <code>_viewSubject</code> anchors via <code>_fillAuth(subj, _context())</code> (test leg l; display stays relative)<ul>
+<li>residual (untested until ?rev tokens land): a typed <code>diff &lt;file&gt;</code> subject drops its ?query (v.uri = ctx dir, path never matches); <code>_ctxKind</code>'s dir-check still stats the UN-anchored subject</li>
+</ul>
+</li>
+<li><a href="./v.html">v</a> sweep <a href="BRO-016.html">BRO-016</a> <a href="BRO-017.html">BRO-017</a> <a href="BRO-018.html">BRO-018</a> <a href="BRO-022.html">BRO-022</a> for parts this supersedes (read-only audit vs <code>5ebf0c8d</code>, 2026-07-12)<ul>
+<li><a href="BRO-016.html">BRO-016</a> STILL OPEN: <code>_resolveSpell</code> (pager.js:329) survives on the follow path beside the new ctx tracking; retire-onto-one-composer still due</li>
+<li><a href="BRO-017.html">BRO-017</a> PARTIAL: launch context now anchors typed spells, but the initial view is call-less — R still re-fires the bare verb; the minted banner still drops args (loop.js:441)</li>
+<li><a href="BRO-018.html">BRO-018</a> PARTIAL: <code>verb!</code> peel + RESET-eats-?ref + FILE-as-DIR superseded (dir-only ctx); schemed-token verb re-derive + empty-verb buildSpell still open</li>
+<li><a href="BRO-022.html">BRO-022</a> STILL OPEN: <code>_fsCompletions</code> roots on the LAUNCH tree (pager.js:678) and <code>./</code> anchors on <code>_verbUri()</code>, not <code>_context()</code> — completion vs resolution anchors disagree</li>
+</ul>
+</li>
+<li><a href="./ .html"> </a> file the remote-browsing TODO as its own ticket when it becomes real</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none yet)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>iter 1+2+3 (context reduction, invite, <code>..</code> clamp, red-when-gone, bare-verb implied arg, recorded invocations + mutation-replay guard) committed <code>5ebf0c8d</code> &quot;BRO-024 working minimum&quot; in work/BRO-024 (gritzko, 2026-07-12); not yet merged to trunk</li>
+<li>suite at <code>5ebf0c8d</code>: 186/188, the 2 red are the pre-existing <code>get</code> <code>#</code>-framing pair (own ticket pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

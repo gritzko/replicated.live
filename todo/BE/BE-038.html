@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-038</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-038 <a href="./DONE.html">DONE</a>: <code>todo</code> view verb — browse the ticket board from the pager</h1>
+<p>
+The <a href="../../meta/todo.html">/meta/todo</a> board is a tree of StrictMark pages (<code>todo/README.mkd</code> → <code>todo/TOPIC/README.mkd</code> → <code>todo/TOPIC/TOPIC-123.mkd</code>) readable today only outside the pager. Wanted: a read-only <code>todo</code> verb so <code>:todo</code> lists open tickets, <code>:todo GET</code> scopes to one topic, <code>:todo GET-022</code> renders one ticket — ticket titles, ticket ids and wiki links all click-targets. Per <a href="../../wiki/Nav.html">Nav</a> the pager stays arg-blind; the verb routes its arg by SHAPE (bare / <code>TOPIC</code> / <code>TOPIC-123</code>), not by path resolution. Requested by gritzko 2026-07-09.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Ticket pages live in the meta tree (TODO_ROOT <code>~/src/journal</code>): board <code>todo/README.mkd</code>, topic <code>todo/TOPIC/README.mkd</code>, thin <code>todo/TOPIC/TOPIC-123.mkd</code>, fat <code>todo/TOPIC/TOPIC-123/README.mkd</code> (<a href="../../meta/todo.html">/meta/todo</a>); titles are greppable one-liners (<code>grep '^#   ' todo/*/*.mkd</code>).</li>
+<li>Hunk tokens already carry click-targets: URIs (U) and <code>verb args</code> spells (O) per <a href="../../wiki/Nav.html">Nav</a>; the pager's follow/click resolver dispatches them (<a href="../BRO/BRO-016.html">BRO-016</a>).</li>
+<li>Nav.mkd once spec'd <code>be.todo_root</code> machinery that was never built (<a href="../BRO/BRO-023.html">BRO-023</a>); the hive ruling (<a href="BE-031.html">BE-031</a>) puts wt cells under <code>&lt;meta&gt;/work/</code>, so the meta root (and its <code>todo/</code>) is discoverable from any cell.</li>
+<li>Requested by gritzko 2026-07-09: &quot;:todo — show list of open tickets; :todo URI — those in the topic; :todo URI-123 — one ticket; ticket titles in the list must be clickable; other tickets and wiki pages must be clickable too.&quot;</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>:todo</code> (pager) / <code>be todo</code> (CLI) renders the open-ticket board: topics with their one-liner ticket entries, each ticket title a click-target that opens <code>todo TOPIC-123</code>.</li>
+<li><code>todo TOPIC</code> renders that topic's open-ticket list; <code>todo TOPIC-123</code> renders the ticket page itself (thin or fat layout, fat = its <code>README.mkd</code>).</li>
+<li>Inside any rendered page, ticket ids (<code>[A-Z]+-[0-9]+</code> shape) and page links (reflinks like <code>[Nav]</code>, relative <code>.mkd</code> paths) become click-targets: ticket ids re-enter <code>todo</code>, wiki/meta pages open as file views.</li>
+<li>Arg shape picks the mode: bare → board, <code>TOPIC</code> → topic, <code>TOPIC-123</code> → one ticket; a miss errors ONE uniform line (<a href="BE-003.html">BE-003</a> spirit, e.g. <code>todo: GET-999: TODONONE</code>).</li>
+<li>Acceptance bar (gritzko 2026-07-09): iterate until tickets are shown NICELY in the pager.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Read-only view verb; no board mutation (open/close/edit stays an editor job for now).</li>
+<li>Todo root not hardcoded: discovered via the hive root (<a href="BE-031.html">BE-031</a> <code>&lt;meta&gt;/todo</code>) or configured; tests drive a FIXTURE todo tree, never the live journal.</li>
+<li>Render via the existing hunk/token machinery — no new renderer; StrictMark fidelity may start minimal (headers, bullets, links).</li>
+<li>Repro-first (<a href="../../rule/Issues.html">Issues</a>): red tests against the fixture for board/topic/ticket, then green; suite stays at baseline otherwise.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>As built (wt <code>work/BE-038</code>): root discovery = <code>be.todoRoot()</code>, probe order <code>$TODO_ROOT</code> (test override) → current wt → launch wt → hive meta root, first dir owning <code>todo/</code>; nothing hardcoded.</li>
+<li>OPEN = curated (orchestrator ruling 2026-07-09, gritzko may override): a ticket is open iff a topic-README BULLET line starts with its key (<code>^\s*-\s+\[?KEY\b</code>); footer refdefs and mid-bullet mentions don't count; <code>todo TOPIC-123</code> renders regardless; README-less topics fall back to all-files + a visible note.</li>
+<li>Wiki-link clicks (same ruling round): non-ticket <code>.mkd</code> targets splice a U <code>cat &lt;meta-root-relative-path&gt;</code> spell — works when the pager's context tree IS the meta root; cross-tree authority stays a punted ruling. Ticket-file targets splice <code>todo &lt;KEY&gt;</code>.</li>
+<li>Board/topic list rows and topic headers carry hidden U word spells (<code>todo KEY</code> / <code>todo TOPIC</code>); page bodies tokenize via the <code>mkd</code> grammar, key-shaped <code>F</code>/<code>G</code> tokens get the U spliced after.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> Fixture todo tree + red tests: board list, topic list, thin ticket, fat-ticket README, TODONONE miss (<code>test/todo/view/</code>, red-first, suite baseline 162/2 known reds + <code>be-js-todo-view</code> green).</li>
+<li><a href="./v.html">v</a> <code>todo</code> verb module: arg shape routing (bare/TOPIC/TOPIC-123), page load, hunk emit (<code>views/todo/todo.js</code>).</li>
+<li><a href="./v.html">v</a> Round 2: open-only filter per the curation ruling (<code>openSet</code>/<code>openTickets</code>, fallback note row); wiki/meta <code>.mkd</code> reflinks clickable (<code>refdefs</code>/<code>targetSpell</code>, NAVESCAPE-confined resolve); fixture legs for both (hidden-closed, README-less topic, wiki U pair). Suite 163/161, same 2 pre-existing reds.</li>
+<li><a href="./v.html">v</a> Click-targets: list titles + topic headers → <code>todo KEY/TOPIC</code> spells; body ticket keys (<code>F</code> + reflink <code>G</code>) → <code>todo KEY</code>; non-ticket <code>.mkd</code> targets → <code>cat &lt;meta-root-rel&gt;</code>; TLV U pairs asserted.</li>
+<li><a href="./v.html">v</a> Pager smoke (orchestrator, pty-driven 2026-07-09): <code>jab todo</code> paints the open-only board, mouse-click on the ABC-005 row navigates to the rendered ticket page (<code>todo ABC-005</code> in the address bar), <code>q</code> quits clean; <code>:todo</code> typed inside a <code>jab ls</code> view re-enters the board. CLI piped output sane for board/topic/page/miss.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The hive cell bootstrap (<a href="BE-031.html">BE-031</a> layout) hit the <a href="./BE-036.html">BE-036</a>-documented race verbatim; workaround (per-subtree gets, locator re-flip) completed it, BUT the finished cell reports the whole tree <code>mis</code> and <code>be put</code> refuses with PUTNONE — changes sit UNSTAGED in <code>work/BE-038</code>. Deserves its own ticket (GET-041/BE-036 kin, pending gritzko's say-so).</li>
+<li>Miss output stacks <code>todo: X: TODONONE</code> + the loop's <code>JS exception: TODONONE</code> trailer — the known <a href="BE-003.html">BE-003</a> class, left alone.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open — implemented + pager-smoked in wt <code>work/BE-038</code>, UNSTAGED/uncommitted: <code>views/todo/todo.js</code> + <code>test/todo/view/{run.sh,check.js}</code>; staging blocked by the cell's broken <code>put</code>/<code>status</code>; pending gritzko's review, the two rulings above, and land)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

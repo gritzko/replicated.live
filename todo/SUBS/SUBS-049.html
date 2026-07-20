@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-049</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-049 <a href="./HIGH.html">HIGH</a>: put/status treat a primary-anchored nested wt (<code>.be</code> DIR) as parent files — the <code>.gitmodules</code> sub boundary is missed</h1>
+<p>
+Report (gritzko, 2026-07-10): <code>jab get</code> into a subdir + listing it in <code>.gitmodules</code> — <code>jab put &lt;subdir&gt;</code> recurs into it like new files instead of recognizing a submodule boundary.  Root cause: BOTH boundary probes only accept the SECONDARY anchor form (<code>.be</code> regular FILE = the wtlog): <code>classify.js::wtScan</code> nested-repo detect (<code>be/shared/classify.js:77-79</code>) and <code>recurse.js::isMount</code> (<code>be/core/recurse.js:36-44</code>).  But a green-field <code>jab get</code> of a remote plants the PRIMARY form — a <code>.be</code> DIR holding <code>wtlog</code> + the shard (<code>be/verbs/get/get.js:217-228</code> seedRemote → <code>ingest.clone</code> + <code>writeWtlog(join(beDir,&quot;wtlog&quot;))</code>) — which <code>be.find</code> anchors on (<code>core/discover.js:128-134</code>) yet neither probe recognizes. So the sub's interior rides the parent's wtScan and <code>put &lt;dir&gt;</code> stages it as parent <code>put</code> rows; <code>status</code> floods <code>unk</code> the same way.  The <code>.gitmodules</code> declaration never enters this path (expandDir is gitmodules-blind; recurse.walk consults it but gates on isMount). Siblings <a href="SUBS-039.html">SUBS-039</a> <a href="SUBS-044.html">SUBS-044</a> <a href="SUBS-045.html">SUBS-045</a>; umbrella <a href="../DIS/DIS-058.html">DIS-058</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro (scratch): clone <code>file:~/.be/?/beagle-ext-tests</code> as parent; clone again into <code>parent/vendor2</code>; convert the anchor to the primary form (<code>.be/wtlog</code> DIR — what a remote-source green-field get plants); declare <code>vendor2</code> in <code>.gitmodules</code>.</li>
+<li>Pre-fix: <code>jab put vendor2</code> staged ALL 147 sub files as parent rows (<code>put vendor2/CMakeLists.txt</code> … in the PARENT <code>.be</code> wtlog); <code>jab status</code> listed the same 147 paths.</li>
+<li>The SECONDARY form (<code>.be</code> FILE, what a local <code>file:</code> get or submount.js::mount plants) is correctly firewalled: wtScan drops the prefix, <code>put vendor</code> → PUTNONE, <code>put vendor/</code> delegates via stageInSub.</li>
+<li><code>classify.js::wtScan:77-79</code>: nested prefix iff <code>&lt;dir&gt;/.git</code> exists OR <code>statKind(&lt;dir&gt;/.be) === &quot;reg&quot;</code> — a <code>.be</code> DIR fell through.</li>
+<li><code>core/recurse.js::isMount:36-44</code>: mount iff <code>io.stat(&lt;sub&gt;/.be).kind === &quot;reg&quot;</code> — same gap; so subMountPrefix/stageInSub/bareStageSubs and status/diff read-recursion all skip a primary-anchored sub.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A <code>.gitmodules</code>-declared nested worktree with a PRIMARY <code>.be</code> anchor is a repo boundary: never staged/classified as parent files (FIXED — see WIP), and treated as a mount by put's delegation + the read recursion (remaining).</li>
+<li>Parity between the FILE- and DIR-anchored sub forms for put/delete/status/diff.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Minimal line-count fixes at the two probes; no second sub-enumerator; keep BE-026 confinement (never stat outside the wt).</li>
+<li>Don't regress the shield / store-only <code>.be</code> dir cases: a multi-shard STORE dir is NOT a wt anchor (<code>be.find</code> walks past it) — mirror find's anchor rule, not a blanket &quot;any <code>.be</code> dir&quot;.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>wtScan boundary = find's primary-anchor rule (<code>.be</code> DIR holding a <code>wtlog</code> reg file); the empty shield-<code>.be</code> (no wtlog) stays undetected — it holds no baseline and mostly occurs in test scratch; note if it bites.</li>
+<li>isMount widening deferred to keep the landed fix 2 lines / 1 file (worker one-liner grant); the delegation arm is the follow-up below.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled>  wtScan: accept the primary anchor — <code>be/shared/classify.js:79-82</code> now: <code>beKind === &quot;reg&quot; || (beKind === &quot;dir&quot; &amp;&amp; statKind(join(full, &quot;.be/wtlog&quot;)) === &quot;reg&quot;)</code> (applied 2026-07-10, UNCOMMITTED; post-fix: <code>put vendor2</code> → PUTNONE, status/wtlog 0 sub rows; suite 171/173, the 2 fails pre-exist — see bummers).</li>
+<li class="open"><input type="checkbox" disabled>  isMount (<code>core/recurse.js:43</code>): same widening (<code>&quot;reg&quot; || dir-with-wtlog</code>) so a DIR-anchored declared sub delegates (<code>stageInSub</code>), descends (bareStageSubs, delete sweep) and read-recurses (status/diff) like a FILE-anchored one.</li>
+<li class="open"><input type="checkbox" disabled>  subMountPrefix (<code>be/verbs/put/put.js:465-473</code>) tests only PROPER prefixes (<code>i &lt; segs.length - 1</code>): <code>jab put &lt;sub&gt;</code> (no trailing slash) never probes <code>&lt;sub&gt;</code> itself → PUTNONE while <code>jab put &lt;sub&gt;/</code> stages inside the sub (repro'd on the FILE form).  Probe the full path too (dir-args only).</li>
+<li class="open"><input type="checkbox" disabled>  Tests: <code>test/sub/</code> case for a primary-anchored declared sub — put path-arg, bare put, status; plus the no-slash <code>put &lt;sub&gt;</code> delegation case.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Pre-existing suite failures (with AND without this fix): <code>be-js-get-be</code>, <code>be-js-get-oddname</code> — status reads all-<code>unk</code> right after a get (baseline unread); unrelated to this ticket, needs its own GET ticket.</li>
+<li>gitmodules declaration is consulted nowhere on this path — classify's declaredSubs (SUBS-045) gates only BASELINE gitlinks; an undeclared nested wt is equally invisible.  The anchor probe, not <code>.gitmodules</code>, is the effective boundary; spec ruling welcome.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open) wtScan one-liner applied to the working tree, uncommitted.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

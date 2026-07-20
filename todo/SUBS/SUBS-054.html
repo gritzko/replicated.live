@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-054</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-054 <a href="./OPEN.html">OPEN</a>: submodule pins as wtlog rows — the parent appends the gitlink to the CHILD's wtlog (no-slash = the external pin)</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+A worktree tracks whatever it was told to track. For submodules, the parent makes its own get/post, takes the gitlink hash, and appends it to the CHILD's wtlog as an external pin — the sub's local URI with NO trailing slash. The sub appends its own get/post records to the same log, with a trailing slash. Projects pin children, children pin grandchildren. Under the default course of events (full-depth commits, all changed subs) the two hashes are equal and the rows go in pairs — get/get, post/post. An unpinned sub makes them differ; that difference is what status renders. Supersedes <a href="/todo/SUBS/SUBS-040.html">SUBS-040</a>; implements <a href="/todo/URI/URI-016.html">URI-016</a> decisions 5/8/9/10/11.
+</p>
+<p>
+ONE CHANGE, THREE TICKETS (gritzko, 2026-07-15): <a href="/todo/DIS/DIS-061.html">DIS-061</a> + <a href="/todo/URI/URI-016.html">URI-016</a> + this are parts of the same change and land together — DIS-061 splits commit from branch-advance (the uniform flip), URI-016 removes the dot-branch and puts pins in wtlogs, SUBS-054 is the sub-side row scheme. Landing any one alone is what reddened 40 cases (<code>verbs/post/post.js:726-738</code> backs the flip out as &quot;unlanded WIP&quot;). DIS-061's 2026-07-13 pin-branch EXEMPTION from the uniform rule dissolves here: with no pin-branches there is nothing to exempt, and the rule becomes literally uniform.
+</p>
+<ul>
+<li>Pin rows, both in <code>&lt;wt&gt;/libdog/.be</code> — <code>ts get ///jab/libdog?proj_branch#pin</code> (parent, external) vs <code>ts get ///jab/libdog/?branch#base</code> (sub, own).</li>
+<li>The sub's OWN row carries the worktree's TWO parameters, which are different things: the ref it TRACKS (<code>?branch</code>) and its BASE commit (<code>#hash</code>) — see <a href="/blog/worktree.html">worktree</a>.</li>
+<li>A sub MAY track something other than the parent's pin (a remote, say); normally it tracks the pin, and then the URI structure is the same except the slash.</li>
+<li><code>?branch</code> is meaningful but not greatly useful here: only worktree check-out pins are tracked, never every branch.</li>
+<li>Current impl instead tracks sub tips by synthetic dot-branches <code>/&lt;sub&gt;/.&lt;parent&gt;/.&lt;grandparent&gt;/&lt;gp_branch&gt;</code> (<a href="/wiki/Submodules.html">Submodules</a> intro, &quot;Store layout&quot;), which <a href="/todo/URI/URI-016.html">URI-016</a> decision 5 removes.</li>
+<li>Current spec couples parent and child: &quot;the pin-branch tip IS the gitlink in the immediate parent's base commit; the parent refreshes the ref on any move of its base&quot; (<a href="/wiki/Submodules.html">Submodules</a>).</li>
+<li>That coupling is the one carve-out in the POST ruling — &quot;the two motions never couple (pin-branches are the exception)&quot; (<a href="/wiki/POST.html">POST</a>) — and it dies here.</li>
+<li>Established row shapes today: the parent's own wtlog carries gitlink rows in the no-slash form (<code>26625Ilq3d put beagle#f425d6a8…</code> in the meta-project <code>.be</code>), and a sub logs its own moves branch-relative (<code>267105jnCd get ?#ac3a6d3e…</code> in <code>be/.be</code>).</li>
+<li><a href="/todo/SUBS/SUBS-040.html">SUBS-040</a> filed the same ground 2026-06-29 against the dot-branch and was rescoped onto wtlog rows 2026-07-14; it is <a href="./STALE.html">STALE</a> in favour of this ticket — do not re-fix its I1-I3.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A sub's pin lives in the sub's own wtlog as rows, not as a synthetic branch ref anywhere.</li>
+<li>The parent writes ONLY the no-slash external-pin row, on the parent's own get/post; the sub writes ONLY the trailing-slash own row, on its own get/post.</li>
+<li>The sub's own row records track and base separately, so a sub tracking a remote instead of the pin is expressible without a new mechanism.</li>
+<li>Ahead/behind and the post/miss lists derive from last-no-slash vs last-slash in ONE log — no cross-log or cross-ref lookup.</li>
+<li>Existing dot-branch trees convert transparently on the switch: same hashes, only the authority/path part of the URI changes.</li>
+<li>The POST pin-branch exception is gone: a parent's base move no longer refreshes any ref the child owns.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro tests first (<a href="/meta/work.html">work</a>); fix in beagle-ext (JS), no C changes.</li>
+<li>Conversion must be transparent — no user-run migration step, no reclone, no hash churn.</li>
+<li>Spec pages are gritzko's (<a href="/wiki/Submodules.html">Submodules</a>, <a href="/wiki/POST.html">POST</a>, <a href="/wiki/Worktree.html">Worktree</a> carry his byline): request his edit, do not rewrite them.</li>
+<li>Minimal diff; no edits to unrelated tests.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<div>
+<p>
+-- gritzko (rulings, 2026-07-15)
+</p>
+</div>
+<ol>
+<li>Both row kinds live in the SUB's own wtlog <code>&lt;wt&gt;/&lt;sub&gt;/.be</code>, interleaved by timestamp, told apart by PATTERN not by log (<a href="/todo/URI/URI-016.html">URI-016</a> decision 9).</li>
+<li>The trailing slash is the discriminator: <code>///path/to/sub?proj_branch#pin</code> is the external pin (parent-written), <code>///path/to/sub/?branch#base</code> is the sub's own record.</li>
+<li>The parent, on its OWN get/post, reads its gitlink hash and appends the pin row to the child's wtlog — parents pin children, children pin grandchildren, one level each.</li>
+<li>The sub's own row is the <a href="/blog/worktree.html">worktree</a> pair: tracked ref in the query, base commit in the fragment — two different things, never conflated.</li>
+</ol>
+<p>
+ 4a. A URI maps worktree/branch -&gt; hash: the hash is ALWAYS the <code>#fragment</code>, the query is the tracked BRANCH. An empty query is not written at all (<code>?#sha</code> is a composer artifact of <code>URI.make(…, branchKey || &quot;&quot;, sha)</code>, not a tracked branch). 4b. Corner case (gritzko, 2026-07-15): in the DETACHED state the query may itself carry the hash (<code>?7d37f90f</code>, <a href="/wiki/URI.html">URI</a> L50-51) — the tracked ref IS a hash. Normal rows keep the hash in the fragment.
+</p>
+<ol>
+<li>Tracking the parent's pin is the normal case but not the only one (a sub may track a remote); same URI structure either way, the slash tells them apart.</li>
+<li>Pairs (get/get, post/post) are the default full-depth flow; divergence means the sub is unpinned, and status shows ahead/behind plus the post/miss lists.</li>
+<li>Conversion keeps the hashes and changes the authority/path only — a dot-branch pin becomes the no-slash URI form of the same hash.</li>
+<li>An off-pin sub is left ALONE: the parent does not recurse get/patch into it and reports <code>adv</code> from <code>gitlink != base</code> (<a href="/todo/URI/URI-016.html">URI-016</a> decision 11).</li>
+</ol>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro test: parent get/post appends the no-slash pin row to the sub's wtlog; sub get/post appends the slash row; default flow yields pairs</li>
+<li><a href="./ .html"> </a> repro test: an unpinned (advanced) sub — hashes differ, status shows ahead/behind counts plus the post/miss lists</li>
+<li><a href="./ .html"> </a> repro test: a sub tracking a NON-pin ref (remote) — track and base differ in its own row, parent's pin row unaffected</li>
+<li><a href="./ .html"> </a> repro test: a dot-branch-era tree converts on first touch — same hashes, no dot-branch ref read or written afterwards</li>
+<li><a href="./ .html"> </a> impl: write both row kinds; the parent's write goes into the SUB's log, never the parent's</li>
+<li><a href="./ .html"> </a> impl: status/ahead-behind reads the one log, drops the ref lookup</li>
+<li><a href="./ .html"> </a> impl: transparent conversion of existing dot-branch state (auth/path rewrite, hashes preserved)</li>
+<li><a href="./ .html"> </a> impl: stop refreshing the child's ref from the parent's base move (removes the <a href="/wiki/POST.html">POST</a> exception)</li>
+<li><a href="./ .html"> </a> rebase <a href="/todo/SUBS/SUBS-050.html">SUBS-050</a>'s shape inventory: <code>?/libdog/.jab/JS-101</code> stops being one of the three live shapes</li>
+<li><a href="./ .html"> </a> request gritzko: update <a href="/wiki/Submodules.html">Submodules</a> intro + &quot;Store layout&quot;, <a href="/wiki/POST.html">POST</a> pin-branch exception, <a href="/wiki/Worktree.html">Worktree</a> if the row shapes land</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Not investigated: whether the conversion can read every dot-branch shape in the wild, incl. sub-of-sub <code>/&lt;title&gt;/.&lt;parent&gt;/.&lt;grandparent&gt;</code> (<a href="/wiki/Submodules.html">Submodules</a> &quot;Store layout&quot;).</li>
+<li><code>test/sub/pinref</code> inspects the pin as a synthetic-branch REF; its assertions survive verbatim but the mechanism under them becomes a wtlog row — rewrite onto rows, do not retire (test edit needs gritzko's say-so per <a href="/meta/work.html">work</a> 4).</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-055</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-055 <a href="./DONE.html">DONE</a>: named <code>jab delete &lt;sub-interior-path&gt;</code> delegates into the mounted sub (the SUBS-039 put twin)</h1>
+<p>
+Requested by gritzko 2026-07-16 (chat, mid-<a href="../STATUS/STATUS-009.html">STATUS-009</a>): delete must recurse into submodules symmetrically with put and stage missing files. The BARE sweep already recursed (SUBS-044, tested in <code>test/sub/baredel{,-nested}</code>); the NAMED form did not delegate: the parent engine cannot see a sub-interior file, so an ON-DISK path refused with a false DELDIRTY and a MISSING one was silently &quot;skipped&quot; — no row anywhere (sandbox-verified both ways). Fixed in <code>work/STATUS-009</code>: <code>verbs/delete/delete.js</code> grows <code>subMountPrefix</code>/<code>delInSub</code> (put's stageInSub twin) — mount-by-mount descent, the sub's OWN delStage + wtlog rows, banner rows re-prefixed, DELDIRTY re-prefixed, no parent leak, no gitlink bump (POST's job).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Sandbox before the fix: <code>jab delete vendor/sub/helper.c</code> → <code>DELDIRTY</code> (file clean!); after <code>rm</code>, <code>jab delete vendor/sub/lib.c</code> → <code>deleted 0 file(s) (0 row(s), 1 skipped)</code>, no row in either wtlog.
+</p>
+<ul>
+<li>put's named form has delegated since SUBS-039; delete lacked the twin.</li>
+<li>BE-039 <code>test/sub/pagercross</code> had FROZEN the refusal as &quot;safe&quot; (pre-delegation the alternative was a destructive mis-target) — its delete arm + golden amended to the delegating semantics.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Named delete of a sub-interior path lands INSIDE the sub, both cases: on-disk (unlink + row) and missing (row-only).
+</p>
+<h3>Constraints</h3>
+<p>
+Naming the sub ITSELF is NOT delete-the-submodule — interior paths only delegate; deletions fold into the pin at POST time (no gitlink bump here).
+</p>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Delegate per arg via <code>delInSub</code> (descent as in put's stageInSub, SUBS-051); each arg's delStage runs on the sub repo, so the dirty-gate reads the SUB's stamps/baseline.</li>
+<li>Sub summaries prefix as <code>&lt;sub&gt;: deleted N file(s) …</code>; a sub-only run skips the parent delStage (an empty path list would bare-sweep).</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> repro+guard <code>test/sub/nameddel/run.sh</code>: both cases, no parent leak, no gitlink bump</li>
+<li><a href="./v.html">v</a> <code>delInSub</code>/<code>subMountPrefix</code> in delete.js; DELDIRTY path re-prefixed</li>
+<li><a href="./v.html">v</a> amend <code>test/sub/pagercross</code> (delete arm now delegates; golden regen, date column normalised inside the pager-prefixed lines)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Fix + tests ride the <a href="../STATUS/STATUS-009.html">STATUS-009</a> worktree (unposted); suite green 245/245 there.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

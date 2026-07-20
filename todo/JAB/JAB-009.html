@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-009</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-009 <a href="./MED.html">MED</a>: mkd tok32 ends drift 1 byte per backslash-escape — MKDTonEscape shrinks the token, HUNKTokCB accumulates lengths</h1>
+<p>
+Found via <a href="/todo/BRO/BRO-028.html">BRO-028</a> (gritzko's <code>jab cat todo/ABC/ABC-011.mkd</code> colour desync). Every markdown backslash-escape <code>\X</code> in prose sheds exactly 1 byte from every SUBSEQUENT tok32 end, so colour runs land mid-word with a shift that grows down the page. The desync is in the raw <code>tok.parse(bytes,&quot;mkd&quot;)</code> binding output — JS painting and the C <code>.color()</code> sink faithfully paint the wrong spans they are given.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Proof (BRO-028 worker, read-only on ~/src/jab): for <code>a \r b\n</code> (7 bytes) the mkd tok32 stream ends at 1,2,3,4,5,6 — total 6 of 7 bytes, with a <code>W</code> tag sitting on the letter bytes; expected: the <code>\r</code> span ends at 4, last end 7.
+</p>
+<ul>
+<li><code>dog/tok/MKDT.c:64-70</code> <code>MKDTonEscape</code> does <code>u8csUsed(lit, 1)</code> — drops the leading backslash from the callback token (an HTML-renderer convenience), so the emitted slice is 1 byte SHORTER than the source the grammar consumed (<code>MKDT.c.rl:94-96</code>).</li>
+<li><code>dog/HUNK.c:1548-1556</code> <code>HUNKTokCB</code> packs tok32 ends by ACCUMULATING callback token lengths (<code>end = c-&gt;off + $len(tok)</code>) — assumes callback slices tile the source; any shrinking callback desyncs everything after it.</li>
+<li>Em-dashes, <code>≥</code>, quotes alone are clean — multibyte was a red herring; only <code>\X</code> escapes shed bytes.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+tok32 ends tile the source for any mkd input; the BRO-028 xfail flips green.
+</p>
+<ul>
+<li>Fix in ONE place: compute <code>end</code> from the slice pointer (<code>tok[1] - sourceBase</code>) in HUNKTokCB — immune to any shrinking callback; or stop shrinking in MKDTonEscape for the tok32 path (HTML path may still want the shrink).</li>
+<li>The RED repro already exists: <code>be-js-cat-color</code> in the be/ tests (BRO-028, registered WILL_FAIL) — drop its WILL_FAIL entry when this lands, plus a jab-side unit if cheap.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The HTML renderer path relies on the shrunk escape token — don't regress it; prefer the HUNKTokCB pointer-based end.</li>
+<li>C side; ragel grammar untouched (the grammar consumes correctly — only the emit accounting lies).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Pointer-based end in HUNKTokCB: <code>end = tok[1] - base</code>, base added to HUNKTokCtx, the accumulator <code>off</code> field removed. Verified no lexer synthesizes tokens outside the source buffer ('U' nav tokens are packed by separate HUNK table code, never via this callback), so the pointer is always valid; fixes BOTH HUNKu32bTokenize consumers (tok.hpp binding + hunk.hpp) and leaves the HTML renderer's shrunk escape token untouched.
+</p>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> pointer-based end in HUNKTokCB (dog/HUNK.c:1543-1569, +5/-4); repro HUNKTestTokenizeEscape in dog/test/HUNK.c (<code>ctest -R HUNKtest</code>): <code>a \r b</code> was S1 W2 P3 W4 S5 W6 (RED), now S1 W2 P4 W5 S6 W7 — tiles.</li>
+<li><a href="./ .html"> </a> flip BRO-028's <code>be-js-cat-color</code> WILL_FAIL off once this MERGES and the installed jab is rebuilt.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<p>
+Suite 100/101: the one failure <code>JABCtty</code> (termios restore) is PRE-EXISTING — fails identically on pristine code in the sandbox (no tty).
+</p>
+<h2>Outcome</h2>
+<p>
+UNCOMMITTED in work/JAB-009 per the no-post rule: dog/HUNK.c +5/-4, dog/test/HUNK.c +48/-0. End-to-end with the worktree's own binary on ABC-011.mkd: 0 mid-word SGR starts, 1079 toks strictly increasing, last end 3060 == file bytes; orchestrator re-verified HUNKtest + the real-file render.
+</p>
+<p>
+Post-ABC-batch adaptation rode this worktree (abc sub updated to ?ab6947c2 mid-ticket):
+</p>
+<ul>
+<li>dog/abc/SHA.h:13 <code>= {}</code> — ABC-016's C-only zero-init broke every C++ includer of abc (jab failed to build); NEEDS THE SAME LINE ON THE ABC TRUNK.</li>
+<li>hit.hpp +15/-12 — ABC-015's HITx bounded-slice API: jab's HIT_RUN passed the old bare cursor, which COMPILES (slice decays to L**) but drains into garbage bounds → empty merges (JABChit/JABCindex/JABCpackidx). Ported to real bounded slices. TRAP CLASS: any other out-of-tree HITx caller compiles-but-breaks the same way.</li>
+<li>Suite 102/103; lone red JABCtty is pre-existing (no-tty sandbox, fails identically on pristine sources).</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

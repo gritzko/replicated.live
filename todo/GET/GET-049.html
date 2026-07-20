@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-049</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-049 <a href="./HIGH.html">HIGH</a>: get stamps NOTHING — every file it writes must get the get row's ts as mtime</h1>
+<p>
+INVARIANT (gritzko, 2026-07-17): every file affected by get/patch and every file undirtied by post carries that wtlog record's ts as its mtime, so the stamp-set fast path (<a href="/todo/STATUS/STATUS-011.html">STATUS-011</a>) confirms it clean with zero content reads. get is the outlier: NO <code>io.setMtime</code> site exists in the whole get path (put/patch/post all stamp, BE-011), so every fresh clone / checkout / update re-hashes wholesale on every status, forever. Sibling verify tickets: <a href="/todo/PATCH/PATCH-013.html">PATCH-013</a>, <a href="/todo/POST/POST-029.html">POST-029</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Found while profiling status (STATUS-011 Blockers): checkout mtimes are natural write times, not stamps, so <code>wtlogReader.has(mtime)</code> misses every get-written file.
+</p>
+<ul>
+<li><code>be/verbs/get/get.js</code> + its checkout path: zero setMtime calls; compare <code>put.js:235 trySetMtime</code>, <code>patch.js:417</code>, <code>post.js:942</code> (BE-011).</li>
+<li>The get row ts is the stamp value: wtlog stamp-set membership is exact (<code>wtlog.js has(ts)</code>), same policy as put's restamp-to-row-ts.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+After any get (fresh clone, update, fast-forward), every file get WROTE has mtime == the get row ts; an immediate <code>jab status</code> does zero content reads on them (the STATUS-011 observable).
+</p>
+<ul>
+<li>Verify first: a repro test asserting the invariant on a fresh clone + an update — RED today.</li>
+<li>Fix: stamp each checkout-written file to the get row ts (one shared helper with put's restamp preferred).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Stamp ONLY files whose written bytes == the new baseline blob. A GET-048 merge OUTPUT (weave of pending changes) differs from base — stamping it would lie <code>ok</code>; leave merge outputs unstamped (or route them to the DIS-057-style band as a follow-up ruling).</li>
+<li>The row must be appended BEFORE stamping (ULOGAppendAt refuses ts&lt;=tail; same ordering discipline as DIS-057's band-under-ceiling).</li>
+<li>Untouched-by-get files keep their mtimes; deletes need no stamp.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>REJECTED (gritzko): reading the assigned ts back off the log (tailTs) — no log read-back, ever; ts lives in the environment.</li>
+<li>be.now = the verb invocation's start ts, minted per run in loop.js mintBe (resident procs re-sample); ambient.now() reads it; get's ctx.T0 = ambient.now() — ONE ts for rows AND stamps, reused across subs when the sub-mount follow-up lands.</li>
+<li>ulog.append now honours an explicit MONOTONIC ts verbatim (bump only on use&lt;=tail/prev, no silent bump-to-now) and RETURNS the assigned ts per row — the collision-edge stamp. POST-029 owns the canonical hunk; duplicated here byte-close.</li>
+<li>fanoutWholeTree pins ctx._get.stampTs = the assigned row ts; null (restore/pick/mergeWorktreeTo: no row) = no stamp.</li>
+<li>Only the clean-overwrite leaf stamps (bytes == new blob); mrg/con weave outputs + symlinks (setMtime follows) unstamped.</li>
+<li>Repro = test/get/stamp (run.sh + assert.js): mtime==row ts + the statusfast io.open hook (0 reads), clone + update legs.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> Verify/repro test: fresh clone → all tracked mtimes == get row ts, status does 0 content reads; update-get → newly written files stamped, untouched files' mtimes intact.</li>
+<li><a href="./v.html">v</a> Fix get's checkout/update write path to restamp; merge outputs excluded.</li>
+<li><a href="./v.html">v</a> Full suite + end-to-end: clone, status timing before/after; DIS-023 idempotency intact (status writes no stamps).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Sub MOUNTS still unstamped: submount.mount/checkout.apply write the sub wt with natural mtimes — the sub re-hashes; follow-up (ruling: the SAME be.now stamps parent + every sub in one run).</li>
+<li>Same-tip re-get restamps nothing (leafUnchanged skips the write): an mtime-churned clean wt stays slow until re-written.</li>
+<li>shared/ulog.js append() hunk is DUPLICATED with POST-029 (they own the canonical one) — expect a weave dedup at merge time.</li>
+<li>Fresh-clone anchor row rides ronStepMs(T0,-1) (1ms before the tip row's T0) so the tip ts == be.now exactly; cosmetic only.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-073</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-073 <a href="./DONE.html">DONE</a>: bare <code>be get</code> fast-forwards the worktree to the TRUNK tip while recording the current branch</h1>
+<p>
+inRepoSeed's D3' arm resolves the tip from the RAW query, not from the branch it is about to record: <code>branch = query</code> is <code>&quot;&quot;</code> for a bare <code>get</code> (also for <code>!</code> and <code>?</code>), so <code>tip = k.resolveRef(branch || &quot;&quot;)</code> returns the TRUNK tip (store.js:420-442 keys <code>&quot;&quot;</code> to the trunk and has no &quot;current branch&quot; key), while <code>wantBranch = branch || curBranch</code> — and the appended row is <code>get ?&lt;curBranch&gt;#&lt;trunk-tip&gt;</code> (get.js:514-520). On any non-trunk worktree a bare <code>be get</code> therefore checks out the TRUNK and mislabels the base as the branch's, silently: post then takes its parent from that base (post.js:581), status computes divergence against it, and the classifier reads it as the ours baseline (classify.js:226). The comment two lines above states the intended behavior (&quot;an empty/absent query folds to the current branch&quot;, get.js:511-513) and <a href="../../blog/worktree.html">worktree</a>:44-48 + <a href="../../wiki/GET.html">GET</a>:32 agree (&quot;bare: FF the wt to cur's branch tip&quot;) — a plain defect, not a spec gap. Invisible on a trunk wt (curBranch <code>&quot;&quot;</code> → the trunk IS correct), which is why the test set misses it.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The resolve reads <code>branch</code>, the record writes <code>wantBranch</code>; the two differ exactly when the worktree is not on the trunk.
+</p>
+<ul>
+<li>get.js:514-517 resolves <code>resolveRef(branch)</code> but records <code>wantBranch = branch || curBranch</code> — and the curSha fallback only fires when the trunk ref is ABSENT.</li>
+<li>store.js:423-435: <code>resolveRef(&quot;&quot;)</code> matches the empty-query row = the trunk; there is no key meaning &quot;whatever cur tracks&quot;.</li>
+<li>get.js:520 records <code>?&lt;wantBranch&gt;#&lt;tip&gt;</code> — track says the branch, base is the trunk's tip; every later reader trusts the pair.</li>
+<li><code>?</code> (an explicit trunk switch) and a bare <code>be get</code> are INDISTINGUISHABLE: get.js:465 <code>u.query || &quot;&quot;</code> collapses the URI-009 absent-vs-empty slot the comment at get.js:459-462 relies on.</li>
+<li><a href="DIS-039.html">DIS-039</a> (DONE) settled the NATIVE bare-get story (status vs FF, GET-026/STATUS-001); this is the be/ JS D3' arm, a different defect on a different path.</li>
+<li>Under <a href="DIS-071.html">DIS-071</a> the resolve target becomes the TRACK URI; this ticket is the minimal today's-terms fix and must not block on it.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Resolve what you are about to record; keep <code>?</code> an explicit trunk switch.
+</p>
+<ul>
+<li>Bare <code>get</code> and <code>!</code> resolve the tip from the tracked branch (<code>resolveRef(wantBranch)</code> in today's terms; the track URI once <a href="DIS-071.html">DIS-071</a> lands).</li>
+<li>Preserve the absent-vs-empty query distinction (URI-009) so bare <code>get</code> and <code>?</code> stay separable without href string matching.</li>
+<li>Repro: a wt on <code>?feature</code> behind the trunk; bare <code>be get</code> FFs to feature's tip, and the record's track and base agree.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Minimal fix, D3' only — this arm is load-bearing for every other verb's baseline.
+</p>
+<ul>
+<li>Touch the D3' arm only (get.js:509-522); leave D1 (<code>?br#sha</code>), D2 (<code>?&lt;sha&gt;</code>), D3 (<code>#~N</code>) and D4 (restore) alone — minimal fix, end-to-end verify.</li>
+<li>URI-009 slot semantics via the URI class; no <code>href === &quot;?&quot;</code> string matching (the shape the old code carried).</li>
+<li>Repro-first; a fixture seeds with <code>jab get file:&lt;path&gt;</code> (the working wt-clone form).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(none yet)</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> repro: non-trunk wt + bare <code>be get</code> → trunk contamination (track/base disagree in the recorded row)</li>
+<li><a href="./v.html">v</a> fix the D3' resolve; preserve absent-vs-empty so <code>?</code> still switches to the trunk</li>
+<li><a href="./v.html">v</a> leg: <code>!</code> (force) FFs the tracked branch too, not the trunk</li>
+<li><a href="./ .html"> </a> audit restorePath's <code>?br</code> source resolve (get.js:540-543) for the same read-one-write-another class</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>LANDED 2026-07-15 as <code>cc531c5f</code> &quot;DIS-073: base/track unification&quot; — the D3' arm resolves <code>wantBranch</code> (the tracked branch), and <code>queryPresent</code> keeps URI-009's absent-vs-empty so <code>?</code> stays an explicit trunk switch.</li>
+<li>Repro landed with it: <code>test/get/branch-bare</code> (be-js-get-branch-bare) — a wt on <code>?feat</code> behind feat's tip (advanced by a sibling wt off the same store); verified RED before / GREEN after, so it pins the defect, not the fix.</li>
+<li>Suite unchanged otherwise: 3 pre-existing reds only (be-js-get-be, plus <a href="./DIS-076.html">DIS-076</a>'s and <a href="./DIS-072.html">DIS-072</a>'s own red repros).</li>
+<li>CARRIED OVER: the restorePath <code>?br</code> audit (TODO 4) was declined as out of the &quot;D3' arm only&quot; scope — no confirmed bug there, so no ticket; re-check when <a href="DIS-071.html">DIS-071</a> touches get's resolve paths.</li>
+<li>Precedent for <a href="./DIS-075.html">DIS-075</a>: the absent-vs-empty slot now survives composition in D3' — the same distinction <code>#&lt;sha&gt;</code> (detached) vs <code>?#&lt;sha&gt;</code> (trunk) needs.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

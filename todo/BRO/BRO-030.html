@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-030</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-030 <a href="./OPEN.html">OPEN</a>: unified quad status reporter (track·base·patch·wt vs root)</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+File status and divergence reporting is a per-verb zoo: <code>status</code> prints <a href="../../wiki/Dirty.html">/wiki/Dirty</a> nouns, PATCH prints <code>applied/merged/mod/conflict</code> (<a href="../../wiki/PATCH.html">/wiki/PATCH</a> §Reporting), GET/POST print their own rows, and ahead/behind is a separate <code>post</code>/<code>miss</code> listing. The unified model is specced in <a href="../../wiki/Status.html">/wiki/Status</a>: per path a quad of relations <code>.</code> <code>X</code> <code>+</code> <code>↑</code> — columns track/base/patch/wt, each vs root = LCA(track, base) — colored blue/green/yellow/orange; bold = staged, red = conflicted; commit ahead/behind uses the same relations one level up.
+</p>
+<h3>Goals</h3>
+<p>
+One reporter module renders quad rows; every verb report (<code>status</code>, get, post, patch) emits through it, and the old vocabularies retire everywhere at once.
+</p>
+<ul>
+<li><code>status</code> shows a quad for every non-<code>....</code> path plus commit divergence in the same vocabulary.</li>
+<li>get/post/patch reports are the transitions they produced — same table, same renderer.</li>
+<li>Position is authoritative, color/style decorative: the <code>| cat</code> path stays fully readable uncolored.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The spec is <a href="../../wiki/Status.html">/wiki/Status</a>; on any conflict the wiki wins.</li>
+<li>This ticket is the REPORTING side only; the classifier input side is DIS-057 / <a href="../STATUS/STATUS-013.html">/todo/STATUS/STATUS-013</a> ground.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Root = LCA(track, base); track/base/patch columns relate to ROOT.</li>
+<li>RULED 2026-07-17: the wt column relates to BASE (the local-dirt axis) — a committed change is <code>.v..</code>, never <code>.v.v</code>; only uncommitted work lights the 4th char.</li>
+<li>Chars <code>.</code> same, <code>X</code> removed, <code>+</code> created, <code>↑</code> advanced; columns blue/green/yellow/orange; bold staged, red conflicted.</li>
+<li>Detached wt: track = the pinned hash, root = LCA as usual; no common ancestor = broken tree, refuse — never rendered.</li>
+<li>Quad tok tags (2026-07-17, after the green-wt bug — I/J/O/K are diff-side BACKGROUNDS in the pager palette): the extension codes 26..31 (<code>[</code> <code>\</code> <code>]</code> <code>^</code> <code>_</code> &lt;backtick&gt;) = track/base/patch/wt glyph colors + staged-inverted + con-inverted.</li>
+<li>Render (ruled through 4 iterations 2026-07-17): tty glyphs <code>●</code> created / <code>∅</code> removed / <code>↑</code> advanced, and <code>✔</code> for a COMMIT row's <code>o</code> (&quot;present in this line&quot; — never the file <code>●</code>); the GLYPH carries the column truecolor (blue/green/amber/orange RGB — 256-cube orange too muddy); staged wt INVERTS (color bg, RGB-white fg — basic 97 is theme-remappable), con inverts to red; plain stays the <code>.xov</code> canon; no bold, digit-counts idea DROPPED.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./v.html">v</a> the reporter module: <code>shared/quad.js</code> (ULOG columns, k-way merge, LCA root, commit quads) + <code>view/quadrender.js</code> + <code>theme.QUAD_SGR</code>; unit test <code>test/quad/model.js</code> green (in <code>work/BRO-030</code>) -<a href="./v.html">v</a> collapse rule: patch column = newest-wins union over the absorbed theirs trees (later wtlog row shadows) -<a href="./v.html">v</a> mov/rmv pairing: the dst row's path column spells <code>src#dst</code> (quadrender.fileRow) -<a href="./v.html">v</a> degenerate roots: detached → track=pin; no-LCA → throw &quot;broken tree&quot;; track-less → track:=base -<a href="./v.html">v</a> ASCII canon RULED 2026-07-17: plain = <code>.xov</code>, staged wt char UPPERCASE, conflict <code>!</code>; tty may use Unicode (<code>✗ + ↑</code>) + bold/red — model+renderer+model-test converted -<a href="./v.html">v</a> wire the verbs behind <code>--quad</code>: status / patch / post / get all landed green, one e2e test each -<a href="./v.html">v</a> QUAD IS THE DEFAULT (ruled 2026-07-17): all four sweeps landed — ~40 cases converted, every quad derivation matched observation; the sweeps caught <a href="../PATCH/PATCH-014.html">/todo/PATCH/PATCH-014</a> and a stale-glyph behind/ahead miscount in status.js (fixed) -<a href="./v.html">v</a> row deban (RULED: wiki/PATCH, bangs retired): patchRowUri writes <code>?&lt;sha&gt;</code> (no <code>!</code>); 8 WHOLE goldens debanged; arg-side alignment split to <a href="/todo/PATCH/PATCH-015.html">PATCH-015</a> -<a href="./v.html">v</a> the default flip LANDED in all four verbs: gates dropped, legacy emission deleted (status ROW_ORDER/divergence/summary zoo, patch applied/merged banner, post legacy banner, get checkout rows + sub relay); status also landed the tok-span sink integration (per-char column tags Y/W/E + new I orange / J bold-orange / M red, U nav, <a href="./put.html">put</a>/<a href="./del.html">del</a> buttons) -<a href="./v.html">v</a> full suite: 71/75 run.sh green + all units; the 4 reds are pre-existing (bro/color, bro/view, dag/remoteindex fail identically in a pristine clone; get/http is a parallel-port flake, green serial) -<a href="./ .html"> </a> the detached-post report shows no <code>.o..</code> commit row (track=pin) — keep a fallback confirmation row? needs a ruling (pinned in test/post/file golden meanwhile) -<a href="./ .html"> </a> detached-wt post report has no commit row (track=pin) — legacy confirmation row gone; keep a fallback row? needs a ruling -<a href="./ .html"> </a> point <a href="../../wiki/Dirty.html">/wiki/Dirty</a> at <a href="../../wiki/Status.html">/wiki/Status</a> once the flip lands
+</p>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The patch sweep exposed <a href="../PATCH/PATCH-014.html">/todo/PATCH/PATCH-014</a>: WHOLE-scope <code>?&lt;sha&gt;!</code> rows were invisible to refOf/patchTheirs (blank patch column); read-side fix landed in the worktree, verified.</li>
+</ul>
+<ul>
+<li><a href="../STATUS/STATUS-009.html">/todo/STATUS/STATUS-009</a> (status ignores the track-vs-base split) and <a href="../STATUS/STATUS-012.html">/todo/STATUS/STATUS-012</a> (<code>miss</code> shown for an absorbed commit) sit on the classifier side and gate correct quads.</li>
+</ul>
+<ul>
+<li>Migration leftovers found by the work/PATCH sweep 2026-07-17 (fixed there): patchcase.sh <code>_jstatus</code> still parsed 3-char nouns (emptied every status golden section), 8 goldens never regenerated, report-arms asserted retired words; plus two PATCH.mkd rulings applied late — conflict exits non-zero, patch stages nothing (no sub gitlink put bump).</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+All work sits UNCOMMITTED in <code>work/BRO-030</code> (per the no-VC-ops rule) awaiting inspection/merge: new <code>shared/quad.js</code>, <code>view/quadrender.js</code>, <code>test/quad/model.js</code>; modified <code>shared/wtlog.js</code> (PATCH-014 read fix), <code>verbs/{get,patch,post}</code>, <code>views/status/status.js</code>, <code>view/theme.js</code>, <code>test/CMakeLists.txt</code> (+quad/model), ~45 test files converted to the quad default.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

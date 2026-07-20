@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-020</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-020 <a href="./MED.html">MED</a>: mouse→content mapping — status-row and past-EOF clicks NAVIGATE, clicks pierce the address bar, columns miscount wide/diff rows</h1>
+<p>
+The pager's click pipeline (<code>_mouse</code> → <code>_screenToByte</code>/<code>_followRow</code>, pager.js:813-927) maps screen cells to bytes with no viewport/mode guards and codepoint-not-column arithmetic. All VERIFIED headless (2026-07-07 audit) unless noted. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>No viewport bound: screen row maps to <code>scroll + row - 1</code> (pager.js:831); the STATUS BAR row maps to the first row BELOW the fold — a click on the status bar navigates via an off-screen hunk (VERIFIED). Clicks on blank rows past EOF clamp to the last row and navigate too (pager.js:749).</li>
+<li>No mode guard: <code>_mouse</code> ignores <code>this.mode</code> — a click while the address bar is open runs the spell UNDER the bar; the bar stays open with the stale half-typed command; the wheel scrolls behind it (VERIFIED).</li>
+<li>Codepoint-vs-column: <code>_screenToByte</code> counts emitted codepoints but the terminal reports COLUMNS — any click at/after a CJK/emoji (2-col) char maps to the wrong byte/target (VERIFIED: <code>汉字x</code>, col 3 → byte of <code>x</code>). Same root defect in view/bro.js rowEnd/rowEndPass: soft-wrap breaks after <code>cols</code> CODEPOINTS = up to 2×cols columns → the row overflows and hard-wraps the frame (arithmetic-certain, visually unverified).</li>
+<li>Diff rows: <code>_screenToByte</code> skips only U/O tags while the renderer also hides the other diff SIDE — hidden bytes consume click columns, so every click on a modified line mis-maps, possibly to a byte not on screen (VERIFIED: rm-side bytes shift the IN-pass mapping).</li>
+<li>Stale width: <code>_followRow</code>/<code>_screenToByte</code> fall back to <code>this.rows(80)</code> (pager.js:747, :841) — a click processed in the same <code>_feed</code> chunk as the view-swap indexes at 80 cols, not the real width (VERIFIED at 20 cols).</li>
+<li>Modifier mask: <code>(b &amp; 0x23)</code> ignores Shift/Meta/Ctrl bits — a modified click acts as a plain one (nit).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Clicks outside the content viewport (status row, past-EOF, command mode) are inert (or command-mode clicks cancel the bar first); wheel keeps scrolling.</li>
+<li>Column arithmetic is DISPLAY-width-aware (one shared wcwidth-ish helper for <code>_screenToByte</code>, rowEnd, <code>_fit</code>, <code>_banner</code>) and skips exactly what the renderer hides (diff side included).</li>
+<li>The row index used for hit-testing is ALWAYS the rendered one (current cols), never a stale-width fallback.</li>
+<li>Repro tests per case in the rowclick driver.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>views/bro/pager.js</code> + <code>view/bro.js</code>; mirror C bro's <code>bro_screen_to_byte</code> where it already solves this; the C twin may need the same audit (file a linked ticket if so).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending) wcwidth source: tok32 width bit vs a small range table.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> Repros: status-row click, bar-open click, CJK col map, diff-side col map, 80-col fallback.</li>
+<li><a href="./ .html"> </a> Guards + one width helper; suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

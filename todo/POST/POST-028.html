@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-028</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>POST-028 <a href="./HIGH.html">HIGH</a>: post cannot target a local <code>file:</code>/<code>be:</code> STORE — the URI never reaches the push arm, misparsing as narrow-commit or local branch advance</h1>
+<p>
+The wire layer fully supports a local store push: <code>shared/wire.js classify()</code> maps an authority-less <code>file:</code>/<code>be:</code> URI to a LOCAL <code>keeper receive-pack</code> exec, and <code>pushRemote</code>'s GIT-019 session (&quot;ssh/local push&quot;) rides it. But <code>verbs/post/post.js parseSlots()</code> (:119) routes to the Host/push slot ONLY on <code>u.host</code> (authority present + scheme), so an authority-less store URI CANNOT reach <code>pushRemote</code>. Live 2026-07-16, gritzko syncing the stale <code>~/src/jab.be</code> store from <code>~/src/journal/jab</code>: <code>jab post file:/home/gritzko/src/jab.be</code> → no host, no query → the path fell into the NARROW slot → a scoped commit over an unchanged tree → &quot;no changes since base&quot; (post.js:866); <code>jab post 'file:...jab.be?/jab'</code> → Query slot, the file: path DROPPED → local advanceBranch → &quot;<code>?</code> is already at cur's tip&quot;. Neither error hints the store target was ignored. <a href="POST-027.html">POST-027</a>'s matrix crossed ssh/https hosts + <code>//X</code> worktrees; a local-store target is not even a row in <a href="../../wiki/POST.html">/wiki/POST</a> &quot;invocation patterns&quot; (row 5 is <code>ssh://host</code> only) — spec gap AND code gap.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Every layer below post already speaks local-store push; only the arg parse (and the spec table) is blind to it.
+</p>
+<ul>
+<li><code>wire.classify</code> (shared/wire.js:35): <code>file:</code>/bare/<code>be:</code>-no-authority/<code>keeper:</code>-local → <code>{bin: keeper, argv: [keeper, verb, path?/proj]}</code> — the local exec twin of <code>ssh host keeper &lt;verb&gt;</code>.</li>
+<li><code>pushRemote</code> (post.js:455) is transport-agnostic past classify: session, advert, FF gate, thin pack, saveRemoteRef.</li>
+<li><code>parseSlots</code> (post.js:119): Host slot requires <code>u.host</code> truthy AND a scheme; <code>file:/path?/proj</code> has NO authority → <code>u.query</code>=<code>/proj</code> wins → Query slot (path dropped); query-less <code>file:/path</code> → Path/narrow slot.</li>
+<li>WORKAROUND (sandbox-verified 2026-07-16, <code>work/JAB-SYNC-TEST</code>): give the URI an authority — <code>DOG_REMOTE_PATH=/home/gritzko/bin jab post 'be://localhost/&lt;HOME-rel store&gt;?/proj'</code> → ssh-to-localhost exec; moved the peer trunk <code>b58be37a</code>→<code>016be1b3</code>, fresh clone off the peer confirms. DOG_REMOTE_PATH because a non-login ssh shell lacks <code>~/bin</code>. NB it rode the RETIRED native keeper binary still in <code>~/bin</code> — works today, dies with the leftover.</li>
+<li>Sub projects do NOT ride a parent push: each needs its own <code>?/libX</code> push from the mounted sub (bottom-up), or the target's later whole-tree get hits SUBFETCH on the bumped pins (one transient SUBFETCH seen; the retry ran clean — unexplained, may be its own bug).</li>
+<li>Related: <a href="POST-027.html">POST-027</a> gap 1d (bare post on a remote TRACK, advanceTrack has no schemed arm) is the tracking-flavored sibling; this ticket is the EXPLICIT store-target flavor.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+RULED by gritzko 2026-07-16: a <code>file:</code> target runs the SERVER-SIDE process, same as ssh — file: URIs address other projects on the same host, possibly backed by a DIFFERENT store, so they unify with the ssh transport rather than getting a direct-write special case. The server side is the jab JS daemon (native keeper is RETIRED — GIT-020 <code>shared/serve.js</code>, jab-to-jab wire).
+</p>
+<ul>
+<li><code>jab post file:/path?branch</code> (path = a wt or a store shard) FF-pushes cur's tip through a locally-exec'd server process — POST.mkd row 5 with a local transport; <code>wire.classify</code> already maps authority-less <code>file:</code>/<code>be:</code> to a local server exec, so the slot fix is ROUTING, not transport.</li>
+<li>KEEPER RETIREMENT GAP: <code>serve.js</code> implements only <code>uploadPack</code> (fetch); there is NO JS receive-pack serve yet, and <code>wire.classify</code> still spawns the <code>keeper</code> BINARY (KEEPER_BIN default). The push serve leg (<code>jab receive-pack &lt;sel&gt;</code>) + pointing classify at jab are prerequisites for this ticket's file: push (and for ssh push outliving the native keeper leftover in ~/bin).</li>
+<li>RULED (gritzko 2026-07-16): branch addressing is <code>file:/path?branch</code>, same as ssh. The <code>?/project</code> selector is RETIRED — the PATH does project selection by pointing at either a WORKTREE or a STORE SHARD (e.g. <code>file:/…/.be/jab?branch</code>); <code>wire.classify</code>'s servePath <code>?/&lt;sel&gt;</code> append and the <code>?/proj</code> clone idiom go with it.</li>
+<li><code>parseSlots</code>: a schemed authority-less URI routes to the Host/push slot; its query is the branch want, its path resolves wt-or-shard.</li>
+<li>Scheme presence (<code>file:</code>/<code>be:</code>) is the push-slot discriminator; a bare <code>/abs/path</code> or <code>./dir</code> stays a Path/narrow slot.</li>
+<li>Spec first: add the local-store row to <a href="../../wiki/POST.html">/wiki/POST</a> &quot;invocation patterns&quot; (needs gritzko's wording) and cross POST-027's matrix with it.</li>
+<li>Repro-first: two stores, one behind (the <code>work/JAB-SYNC-TEST</code> shape); assert trunk motion + FF refusals (at-tip, non-FF) mirror the ssh cells.</li>
+<li>Error honesty even pre-fix: a store-shaped URI falling into narrow/query must at least refuse loudly (&quot;store target not supported here&quot;), never a silent wrong-arm read.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Reuse the push spine; no second transport or parser.
+</p>
+<ul>
+<li><code>wire.classify</code> stays the ONE transport map; parseSlots only ROUTES — no URI hand-parsing (RULE ZERO / <a href="/meta">meta</a> resolve law applies to refs).</li>
+<li>POST-026/027 are OPEN on adjacent ground (recursion, matrix cells) — coordinate; don't fork advance/push arms.</li>
+<li>FF-only stands (POST.mkd: every tip motion is a fast-forward).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>receivePack(selector, rfd, wfd)</code> in shared/serve.js beside uploadPack: advert (branch codec, report-status ofs-delta caps), read <code>&lt;old&gt; &lt;new&gt; &lt;ref&gt;</code> commands, <code>wire.drainToFile</code> + <code>ingest.land</code> (objects-only), per-ref CAS + <code>dag.isAncestor</code> FF gate + <code>store.set</code>, <code>ok/ng</code> report. All framing/pack via pkt/wire/ingest — nothing forked; dispatch = core/loop.js pre-verb intercept mirroring GIT-020's upload-pack line.</li>
+<li><code>wire.classify</code> localish arm spawns <code>KEEPER_BIN || selfBin()</code> (<code>/proc/self/exe</code>, argv<a href="./0.html">0</a> fallback) — jab serves jab; upload-pack moved too, fetch tests green. The ssh remote arm still says <code>keeper</code> (follow-up below).</li>
+<li>parseSlots: schemed <code>file:</code> / authority-less <code>be:</code> → push slot; query = branch (<code>?</code>=trunk, none → the &quot;no remote branch selected&quot; refusal); bare <code>/abs</code>/<code>./dir</code> stay narrow. Server-side <code>serveStore()</code>: wt path (.be-is-a-FILE probe) → GET-038 redirect to backing store+project; else store root/.be/shard. Self-push refuses on shard equality (string compare — a symlinked alias slips to the at-tip refusal instead; no realpath binding).</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> repro <code>test/post/push-local/run.sh</code> (<code>be-js-post-push-local</code>): pre-fix <code>file:&lt;peer&gt;/.be</code> → &quot;no changes since base&quot;, <code>?main</code> → silently CREATED a local <code>main</code> in the pusher's store (rc=0, peer unmoved); post-fix FF-push + at-tip/non-FF refusals, peer byte-identical</li>
+<li><a href="./v.html">v</a> <code>jab receive-pack</code> server-side post (see design decisions)</li>
+<li><a href="./v.html">v</a> wire.classify local exec → jab itself (both verbs); ssh remote arm still execs native <code>keeper</code> — follow-up needed before the ~/bin leftover dies</li>
+<li><a href="./v.html">v</a> parseSlots push-slot routing; <code>file:...#msg</code> refuses &quot;commit first&quot; (POST-027 ground)</li>
+<li><a href="./ .html"> </a> wiki/POST.mkd: local-transport row + the path-addresses-project ruling (gritzko wording)</li>
+<li><a href="./ .html"> </a> sub-project story: document/decide per-sub pushes vs multi-project push</li>
+<li><a href="./ .html"> </a> SUBFETCH transient on the first post-push get: repro or file separately</li>
+<li><a href="./ .html"> </a> ssh be:/keeper: remote arm → <code>jab &lt;verb&gt;</code> (keeper retirement leg 2)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>A raced/hostile client's non-FF push lands OBJECTS (never refs) before the <code>ng</code> — normal clients gate client-side first; acceptable garbage or its own ticket?</li>
+<li><code>?/x</code> on a file: push now reads as an absolute branch address (trunk of <code>/x</code>) per the codec — the retired project-selector muscle memory gets a surprising arm, not an error.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FILED 2026-07-16 off gritzko's live sync attempt; workaround verified in <code>work/JAB-SYNC-TEST</code> (rm -rf-able).</li>
+<li>2026-07-16 fix + repro in <code>work/POST-028</code> (uncommitted, nothing staged): shared/serve.js + shared/wire.js + core/loop.js + verbs/post/post.js + new test; suite 242/242 (orchestrator re-ran). Awaiting review/land order.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

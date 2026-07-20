@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-026</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-026 <a href="./DONE.html">DONE</a>: <code>du</code> — store disk-usage view, one table row per shard</h1>
+<p>
+A disk-usage verb: <code>du</code> locates the STORE backing the current repo and tables EVERY shard in it (the per-project dirs a sharded store hosts, <a href="../../blog/git.html">/blog/git</a>). Motivation: tens of forked/rm-rf'd worktrees share one store; it accretes packs and indexes with zero visibility (&quot;has yet to show its limits of scalability&quot;). One row per shard: packs, indexes, refs, total — plus the store TOTAL row.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Store layout (<code>~/.be/&lt;shard&gt;/</code>, flat): <code>NNNNNNNNNN.keeper</code> pack logs; <code>*.keeper.idx</code> / <code>*.graf.idx</code> / <code>*.spot.idx</code> LSM indexes; <code>refs</code> + <code>.refs.idx</code>; <code>wtlog</code>; <code>.lock*</code> (zero-size).</li>
+<li>Live sample 2026-07-14: 15 shards, beagle 222M, beagle.new 44M, dogs 43M, journal 12M, beagle-ext 6M/95 files (87 keepers).</li>
+<li>A worktree resolves to its store via the <code>.be</code> redirect (be.find / the GET-038 resolveLocalSource kin) — <code>du</code> must reuse that resolution, never assume <code>$HOME/.be</code>.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Bare <code>du</code>: resolve the current repo's store, readdir the store root, tally every shard dir; unreadable/non-dir entries skip silently.</li>
+<li>Row = shard: name, pack count, pack bytes, index bytes, other bytes (refs/wtlog/misc), total; final TOTAL row across shards.</li>
+<li>Human-readable sizes (K/M/G) in the pager; plain mode (<code>.jab</code> plain format) emits tab-separated raw bytes for scripting.</li>
+<li>Rows sorted by total size, largest first; the current repo's own shard visibly marked.</li>
+<li>Read-only: io.readdir/io.stat only, one pass per shard, no recursion below shard dirs, never shell out to system <code>du</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Pure JS on the jab runtime (<code>io.*</code>, no node APIs); JAB-004 plain-verb shape; hunk emission via the shared span/feed model (see views/work/work.js, views/todo/todo.js).</li>
+<li>BE-003 miss discipline: ONE uniform line + throw; bare/<code>.</code> arg only, anything else is <code>du: &lt;arg&gt;: DUNONE</code>.</li>
+<li>Wiki: a Verbs.mkd one-liner rides this ticket; budgets per <a href="../../meta/wiki.html">/meta/wiki</a>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>sort = total size desc (name tie-break for stable/byte-exact output); the repo's own shard marked with <code>*</code>.</li>
+<li>columns = shard name, keeper (pack) count, keeper bytes, index bytes, other bytes, total; a final TOTAL row sums each.</li>
+<li>index bytes = <code>*.keeper.idx</code>/<code>*.graf.idx</code>/<code>*.spot.idx</code> ONLY; <code>.refs.idx</code> groups with <code>refs</code>/<code>wtlog</code> under OTHER (ticket <a href="../../blog/git.html">/blog/git</a> layout).</li>
+<li>PLAIN = one tab-separated raw-byte row per shard <code>name&lt;TAB&gt;packs&lt;TAB&gt;keeperB&lt;TAB&gt;idxB&lt;TAB&gt;otherB&lt;TAB&gt;total</code>; the current shard trails a 7th <code>&lt;TAB&gt;*</code> (data fields stay positionally stable for cut/awk).</li>
+<li>human sizes = raw bytes under 1K, else K/M/G/T with one decimal below 10 (<code>4.0K</code>, <code>5.4M</code>, <code>222M</code>) — the <code>du -h</code> feel.</li>
+<li>store root = PARENT of <code>store.shardDir(repo.storePath, repo.project)</code> — works for a colocated primary (<code>&lt;wt&gt;/.be</code>) AND a secondary-wt <code>.be</code> redirect; never hardcodes <code>$HOME/.be</code>.</li>
+<li>HOME: <code>du</code> lives at <code>views/du/du.js</code> (by-file registry, registry.js) and rides the shared hunkrows sink; wiki one-liner went to <a href="/wiki/View.html">View</a> (where sibling read-only views size:/log:/refs: live) plus a <code>git count-objects -vH → be du</code> line in <a href="/wiki/Verbs.html">Verbs</a>'s cheat sheet.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> store location: be.find(cwd) → the store dir off the <code>.be</code> redirect (shared with GET-038 resolution)</li>
+<li><a href="./v.html">v</a> shard scan: readdir the store root, per-shard tally {keepers, keeperBytes, idxBytes, otherBytes}</li>
+<li><a href="./v.html">v</a> table hunk: aligned columns, human sizes, TOTAL row; plain mode = tab-separated raw bytes</li>
+<li><a href="./v.html">v</a> tests: fixture store with two synthetic shards, byte-exact expected table (plain mode)</li>
+<li><a href="./v.html">v</a> wiki one-liner (View.mkd + Verbs.mkd cheat sheet); meta/index.mkd n/a (see Blockers)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>BRING-UP: <code>jab get file:/home/gritzko/.be/?/beagle-ext</code> SUCCEEDED — <code>jab status</code> works in the cell; the GET-041 self-locator/ASan fallback (<code>cp -a</code>) was NOT needed.</li>
+<li>io.readdir HIDES dotfiles (verified): the DOTTED store files <code>.refs.idx</code> and <code>.lock*</code> are invisible to a read-only scan, so they are NOT tallied into OTHER. Negligible (locks are 0 bytes, <code>.refs.idx</code> a few KB) and the only honest option — shelling out to system <code>du</code> is forbidden. Documented in du.js + the test asserts the exclusion.</li>
+<li>meta/index.mkd is the index-FORMAT SPEC, not a per-verb API list, and verbs register BY FILE (registry.js, no explicit list) — there is no views index file to add a <code>du</code> entry to, so the doc landed in wiki/View.mkd instead.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Landed (uncommitted, cell /work/BRO-026): <code>views/du/du.js</code> (+ exposed internals), <code>test/du/view/{run.sh,check.js}</code> (be-js-du-view via the test glob). <code>be du</code> on the live store: 13 shards, TOTAL 362M, own shard <code>* beagle-ext</code> marked; PLAIN tab-bytes and <code>--color</code> aligned/human both verified; <code>du &lt;arg&gt;</code> → <code>du: &lt;arg&gt;: DUNONE</code> + exit 1.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

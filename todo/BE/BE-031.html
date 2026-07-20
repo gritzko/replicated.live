@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-031</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-031 <a href="./OPEN.html">OPEN</a>: the hive — worktrees move under <code>&lt;meta&gt;/work/</code></h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Worktree switching is a PITA; worktrees live flat under <code>$SRC_ROOT</code> (default <code>$HOME</code>, in practice <code>~/src</code>), <code>//NAME</code> maps to <code>$SRC_ROOT/NAME</code>. Ruling 2026-07-09: all worktrees become cells of the <strong>hive</strong> — <code>&lt;meta&gt;/work/&lt;NAME&gt;/</code> under the meta-project (<code>~/src/journal</code>), gitignored by the meta; <code>//NAME</code> resolves to <code>work/NAME</code>, fixed convention, no registry (enumeration = <code>ls work/</code>); a scheme-less <code>//authority</code> is ALWAYS a worktree, remotes always carry a transport scheme. Wiki amended same day (<a href="../../wiki/URI.html">URI</a>, <a href="../../wiki/Worktree.html">Worktree</a>, <a href="../../wiki/Nav.html">Nav</a>, Store, Verbs, Invariants + verb pages). Code survey 2026-07-09: <code>srcRoot()</code> in <code>be/core/discover.js</code> is the single linchpin every <code>//NAME</code>→path decision flows through (<code>resolve()</code> :280, <code>wtdir()</code> :308, <code>navCwd()</code> :326).
+</p>
+<h3>Goals</h3>
+<ul>
+<li><code>//NAME</code> resolves to <code>&lt;meta&gt;/work/NAME</code> whether launched in the meta or inside any cell.</li>
+<li>Clone / <code>be get file:...</code> / ticket workflow create new worktrees as hive cells, not in cwd.</li>
+<li>The meta's own status/put/post/ls never see <code>work/</code> contents (no <code>unk</code> flood, no accidental staging).</li>
+<li>Seamless cell-to-cell hop keeping the nav context (open file), per <a href="../../wiki/Nav.html">Nav</a>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Confinement helpers (<code>be/shared/util/path.js</code> resolveInTree/wtJoin/safeRel) are tree-relative — must stay unchanged.</li>
+<li><code>SRC_ROOT</code> env override stays as the back-compat escape hatch for flat legacy worktrees (discover.js:191).</li>
+<li><code>.be</code> anchors carry absolute store paths — no data migration for existing cells/stores.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>srcRoot()</code> (discover.js:186-198) returns <code>join(metaRoot, &quot;work&quot;)</code>; meta root = the outermost enclosing worktree, converging from both the meta and a cell (parent-of-<code>work/</code> heuristic or an explicit meta marker).</li>
+<li><code>srcRoot()</code> must be exactly <code>&lt;meta&gt;/work</code>, not <code>&lt;meta&gt;</code> — <code>navCwd()</code> (:318-333) slices the name off it; <code>&lt;meta&gt;</code> would emit <code>//work/NAME</code> mis-authorities.</li>
+<li>CORRECTION 2026-07-09: journal/.be is a FILE, so <code>find(&lt;meta&gt;/work)</code> climbs INTO the meta — a cell reads as a SUBMODULE of the meta today; <code>topWt()</code> needs an explicit hive boundary: never climb across a <code>work/</code> path segment (cell = top).</li>
+<li>The meta wt itself loses its <code>//name</code> address under the hive (<code>//journal</code> ≠ <code>work/journal</code>); context <code>//</code> = launch wt covers the meta case; cross-cell meta addressing is a follow-up ruling.</li>
+<li>The meta gitignores <code>work/</code>: that alone keeps <code>wtScan</code> (shared/classify.js:57-104) out; the nested-repo prune (:68-83) backstops SECONDARY cells only (<code>.be</code> reg file) — a COLOCATED cell (<code>.be/</code> dir) is NOT pruned, so the gitignore line is load-bearing.</li>
+<li>Submodule recursion needs nothing: <code>core/recurse.js</code> walks <code>.gitmodules</code> entries only, hive cells are never declared there.</li>
+<li>Verb/require up-scan from a cell climbs <code>work/</code> → hits <code>&lt;meta&gt;/be</code> — cells inherit the meta's verbs by construction (registry.js:64-78, ceiling <code>$HOME</code>).</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> S1 (independent, ship first): add <code>work/</code> to journal <code>.gitignore</code> (done 2026-07-09).</li>
+<li><a href="./v.html">v</a> S2 (atomic pivot, done 2026-07-09, uncommitted): topWt hive boundary (never climb across <code>work/</code>), srcRoot cell→<code>dirname(t)</code> / meta→<code>join(t,&quot;work&quot;)</code>, navCwd meta = <code>//</code>, todoRoot probes the meta root; suite 159/1 = baseline, resolve_confine PASS, SRC_ROOT env reproduces flat layout exactly.</li>
+<li><a href="./v.html">v</a> S3 (done 2026-07-09, uncommitted): <code>seedDest()</code> in get.js — user-made cell cwd kept; at the hive dir or meta root, mints <code>&lt;hive&gt;/&lt;NAME&gt;</code> (NAME = <code>?/title</code> slot &gt; local source proj &gt; URL basename); <code>//peer</code>-as-SOURCE stays a follow-up (BE-034).</li>
+<li><a href="./v.html">v</a> Smoke 2026-07-09 (real meta): <code>jab get file:~/.be?/beagle-ext-tests</code> minted <code>work/beagle-ext-tests</code>; <code>//beagle-ext-tests/…</code> reads from the meta; <code>//bogus</code> → NAVNONE; meta <code>status</code> sees zero <code>work/</code> rows.</li>
+<li><a href="./ .html"> </a> S4: tests + prose — <code>test/bro/ticket/run.sh</code> (:49-66) models the flat layout (keep as SRC_ROOT back-compat demo or move to hive); audit <code>test/CMakeLists.txt</code>, <code>test/resolve.js:15</code>, <code>test/loop.js:21</code>, <code>test/barrier.js:12</code>; refresh stale <code>$SRC_ROOT</code>/<code>$HOME</code> comments (discover.js:174,182-198,265,285-290,350,362; loop.js:154-156,162,333; path.js:58).</li>
+<li><a href="./ .html"> </a> S5 (doc ruling): a cell that IS a beagle-ext checkout without its own <code>be/</code> silently runs the META's verbs — settle the self-hosting/dogfooding story (<a href="BE-029.html">BE-029</a> interplay).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Gitignoring <code>work/</code> hides cells from <code>be ls</code> of the meta root (classifyDir honors ignore, classify.js:513); enumeration is FS-level <code>ls work/</code> by design — needs a ruling only if <code>be ls work/</code> should list cells.</li>
+<li>The shell env still exports <code>SRC_ROOT=/home/gritzko/src</code> (pinned 2026-07-06) — it legitimately overrides the hive; drop or repoint the export for the hive to take effect in daily use (the GETOVRL guard caught the mis-seed into the dirty meta wt when set).</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

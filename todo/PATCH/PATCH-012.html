@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PATCH-012</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PATCH-012 <a href="./HIGH.html">HIGH</a>: <code>get</code>'s 3-way weave has NO grow-on-<code>out full</code> retry (the only weave without it) — a big file throws, silently stays at OURS, and the next commit REVERTS the incoming side</h1>
+<p>
+<code>verbs/get/get.js:926-943</code> hand-rolls <code>weave3</code> with FIXED caps — <code>abc.ram(&quot;WEAVE&quot;, 1&lt;&lt;18)</code> for each of the four folds, <code>1&lt;&lt;19</code> for the merge, <code>io.buf(1&lt;&lt;20)</code> for the render — and never catches the binding's <code>out full</code> throw. Every OTHER weave in the tree grows and replays (<a href="../DIFF/DIFF-010.html">DIFF-010</a>): <code>core/loop.js:71-85</code> doubles the cap and re-feeds the held records, <code>shared/weave.js</code> carries that retry for <a href="../../wiki/PATCH.html">PATCH</a>'s per-file merge (patch.js:44-46), and <code>views/diff/diff.js:29-30</code> mirrors it. So a <code>be get</code> that must 3-way merge a large dirty file throws <code>out full</code> mid-reconcile and the leaf is LEFT AT OURS — the update reports done, the incoming side is silently absent, and a <code>post</code> on top records a commit whose parent claims the incoming changes while its trees revert them. Hit live 2026-07-16: updating <code>work/DIS-072</code> from <code>af94f0ea</code> to <code>fec59ed5</code> left <code>verbs/post/post.js</code> (~35KB), <code>verbs/get/get.js</code>, <code>views/refs/refs.js</code> and <code>views/status/status.js</code> at ours; the resulting <code>e74ae263</code> (parent <code>fec59ed5</code>) carried DIS-074:0/DIS-075:0 markers where its own parent has 5/2 — it REVERTED two landed tickets while the log claimed them. gritzko rolled it back. Same failure CLASS as <a href="../DIS/DIS-041.html">DIS-041</a> (a weave that bails leaves the file UNMERGED); that one fixed the graf-index path, this one is the cap path.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+One weave out of four never got the retry, and its failure mode is silent data loss rather than a refusal.
+</p>
+<ul>
+<li>get.js:926-943 <code>weave3</code>: <code>wo0/wo1/wt0/wt1 = abc.ram(&quot;WEAVE&quot;, 1&lt;&lt;18)</code>, <code>wm = abc.ram(&quot;WEAVE&quot;, 1&lt;&lt;19)</code>, <code>out = io.buf(1&lt;&lt;20)</code> — all fixed, no try/catch, no grow.</li>
+<li>The retry exists and is proven three times over: loop.js:71-85 (<code>if (!(&quot;&quot; + e).includes(&quot;full&quot;)) throw e;</code> → double the cap, replay), shared/weave.js (patch's), views/diff/diff.js:29-30.</li>
+<li>patch.js:46 requires <code>shared/weave.js</code>; get.js requires nothing of the sort — it is the odd one out.</li>
+<li>The throw surfaces mid-reconcile, so the leaf silently keeps ours; get's own summary still prints and exits 0 (no <code>con</code> row, no refusal).</li>
+<li>A <code>post</code> on top then commits ours-over-theirs with the incoming commit as PARENT — the history lies, which is how <code>e74ae263</code> passed review by three separate green suites.</li>
+<li>gritzko also saw <code>idxmaint: Error: pack.scan: scan (out full? corrupt?)</code> on a big clone the same day (shared/idxmaint.js) — likely the same cap class in the pack scanner, needs its own repro.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Make get's merge grow like every other weave, and make a failed merge LOUD rather than silently ours.
+</p>
+<ul>
+<li>Route get's 3-way merge through the SHARED retry (<a href="../DIFF/DIFF-010.html">DIFF-010</a>) — reuse <code>shared/weave.js</code>, do not hand-roll a fifth weave.</li>
+<li>A weave that STILL cannot fit must refuse LOUDLY (a <code>con</code> row / non-zero exit), never leave the leaf at ours and exit 0.</li>
+<li>Repro: a wt with a dirty file bigger than the fold cap, <code>be get</code> to a tip that also changed it → the merge lands (or refuses); assert the leaf is NOT silently ours.</li>
+<li>Audit the OTHER fixed caps for the same class: <code>io.buf(1&lt;&lt;20)</code> render, and shared/idxmaint.js's pack.scan.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+The cap must not become a silent truncation, and the retry must stay in one place.
+</p>
+<ul>
+<li>Reuse <code>shared/weave.js</code> / the loop.js:71-85 idiom — ONE retry implementation, not a copy (<a href="../../meta/abc.html">/meta/abc</a>: reuse before you add).</li>
+<li>No silent truncation: growing is the fix; a partial render is worse than a refusal.</li>
+<li>Repro-first per the norms; the fixture needs a file over the cap, so mind the suite's runtime.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>shared/weave.js no longer grows: DIFF-010's retry evolved into the ONE source-size policy (&gt;4MB <code>MAX_SOURCE_SIZE</code> = BLOB, buffers sized once at <code>MAX_SOURCE_MARKED_UP</code> 16MB lazy mmap; <code>growOnFull</code> is gone tree-wide) — get.js adopts THAT, no grow-and-replay resurrected.</li>
+<li>Unweavable leaf (over-cap, or residual <code>out full</code>) → <code>merged=null</code> → <code>con</code> row + durable wtlog <code>con</code> + <code>g.conf++</code> → existing GETCONF throw → non-zero exit. Never silent-ours+0.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> repro: <code>test/get/dirty-big/run.sh</code> (<code>be-js-get-dirty-big</code>) — A: ~600KB dirty 3-way lands both sides; B: ~4.5MB refuses loudly (non-zero, ours intact, durable <code>con</code> row); pre-fix code fails A with <code>weave.fold: failed (out full?)</code></li>
+<li><a href="./v.html">v</a> weave3 routed through shared/weave.js <code>fold</code>/<code>merge</code>; render via <code>io.ram(MAX_SOURCE_MARKED_UP)</code> (patch.js:198's sink); all <code>abc.ram(&quot;WEAVE&quot;,…)</code> + <code>io.buf(1&lt;&lt;20)</code> caps deleted</li>
+<li><a href="./v.html">v</a> over-cap/still-full weave refuses LOUDLY (see design decisions)</li>
+<li><a href="./v.html">v</a> audit: get's render cap fixed by the fix itself; <code>verbs/patch/patch.js:366</code> <code>outBuf/aliveBuf io.buf(1&lt;&lt;20)</code> are DEAD (never referenced) — delete-worthy, own ticket; pack.scan (<code>jab.be/pack.hpp:289</code>) is a count-trusting class, <code>shared/ingest.js</code> buildIndex/indexAppended do NOT catch it — ticketed as <a href="/todo/PACK/PACK-003.html">PACK-003</a></li>
+<li><a href="./v.html">v</a> native <code>be get</code>: no fixed-cap defect (dynamic WEAVEInit + growable u8b) BUT shares the OUTCOME class — <code>sniff/GET.c:816-821</code> merge failure → stderr + <code>failed</code> count, leaf at ours, <code>:860</code> returns OK → exit 0, no con row (DIS-041 class, live natively) — needs own ticket</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><code>test/get/NEWCASE_mytest.txt</code> (&quot;SUB-UNTRACKED&quot;) is committed junk in the beagle-ext-tests tip (rode a salvage commit); not touched here, needs its own removal.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FILED 2026-07-16 off a live incident (the <code>e74ae263</code> silent revert, rolled back by gritzko).</li>
+<li>2026-07-16 fix + repro in <code>work/PATCH-012</code> (uncommitted): 3-hunk get.js diff + new <code>test/get/dirty-big/run.sh</code>; suite 242/242 green (orchestrator re-ran). Awaiting review/land order.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

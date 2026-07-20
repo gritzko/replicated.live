@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-026</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>POST-026 <a href="./OPEN.html">OPEN</a>: rebuild <code>be post</code> recursion — global mode + wt-target file merge</h1>
+<div>
+<p>
+-- gritzko (spec author)
+</p>
+</div>
+<p>
+The <code>post</code> recursion (submodules) is flawed and buggy: mode is decided per-repo, and a wt-target post never touches the target's files.  This reworks the whole descent to <a href="./gritzko.html">gritzko</a>'s plan against the recovered <code>be/verbs/post/post.js</code> + <code>be/shared/subs.js</code>.  Two axes: (1) the submodule recursion mode, (2) the <code>//WT</code> target post. See <a href="/blog/worktree.html">worktree</a> for the wt-post semantics.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The recursion was recovered from source and cross-checked with the plan; the code diverges on mode-scope and wt-materialization.
+</p>
+<ul>
+<li><code>postSubs</code> decides selective-vs-all per-repo via a local <code>anyStaged(wtl)</code> — no whole-tree scan.</li>
+<li><code>advanceWorktree</code> only appends a base-advance row to the target wtlog; it never materializes/merges the target files.</li>
+<li><code>s.bucket === &quot;adv&quot;</code> force-includes an out-of-band-advanced sub even with no <code>put</code> under it.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Post-order recursion with a globally-decided mode, plus a <code>get</code>-style file update on a <code>//WT</code> target.
+</p>
+<ul>
+<li>Global mode: scan the WHOLE mounted tree's wtlogs; ANY active <code>put</code>/<code>delete</code> ⇒ selective; zero ⇒ post-all.</li>
+<li>Post-all: recurse every dirty sub, commit, bump its gitlink (<code>adv</code>), then post-order commit the parent.</li>
+<li>Selective: a sub is posted iff its gitlink is <code>put</code> OR any file under it is <code>put</code>/<code>delete</code>d (transitive); else untouched.</li>
+<li><code>//WT</code> post: FF-only; materialize/merge the dirties into the target wt like <code>get</code>, THEN advance its base (retain track).</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+FF-only stays; refuse before the first store write (POST-017).
+</p>
+<ul>
+<li>Reuse the resolver + verdict spine (<code>resolve_hash</code>, <code>relate</code>) and the get merge path; no hand-rolled dag/checkout.</li>
+<li>A dirty <code>//WT</code> target must not be clobbered — merge or refuse.</li>
+<li>Minimal blast radius; end-to-end repro-first (a test each).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+The mode is a single tree-wide predicate computed once, then threaded into the recursion (not recomputed per level).
+</p>
+<ul>
+<li>New whole-tree scan <code>anyPutDeep(info)</code> over parent + every mounted descendant wtlog; result picks selective vs post-all.</li>
+<li>Selection predicate = <code>subInParentScope</code> (gitlink/file <code>put</code> or <code>delete</code> under the sub) transitively; drop the <code>adv</code> force-include in selective mode.</li>
+<li><code>advanceWorktree</code> grows a get-style merge stage before the base-advance row; dirty-target policy = merge, refuse on conflict.  See <a href="/todo/DIS/DIS-062.html">DIS-062</a> wt-target resolution.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: selective post bumps an unselected <code>adv</code> sub's gitlink</li>
+<li><a href="./ .html"> </a> repro: <code>//WT</code> post leaves target files stale (only base moves)</li>
+<li><a href="./ .html"> </a> <code>anyPutDeep</code> whole-tree scan + thread mode into <code>postSubs</code></li>
+<li><a href="./ .html"> </a> selective gate = transitive put/delete only; drop <code>adv</code> include</li>
+<li><a href="./ .html"> </a> <code>advanceWorktree</code> get-style materialize/merge + dirty policy</li>
+<li><a href="./ .html"> </a> refuse-on-conflict for a dirty <code>//WT</code> target</li>
+<li><a href="./ .html"> </a> BUG: bare <code>post</code> from a SUBDIR of a clean wt that is ahead of<div>
+<p>
+trunk misfires <code>POSTNONE: //WT is this worktree</code> — the context resolved to the wt-target self-post arm instead of the DIS-074 track-advance arm; must FF the tracked branch (trunk) to cur's tip.
+</p>
+</div>
+</li>
+<li><a href="./ .html"> </a> run <code>ctest -j16</code>; update <code>be/verbs/post</code> index if API shifts</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Dirty-target merge semantics for <code>//WT</code> may need a get helper not yet factored out of the get verb — confirm before wiring.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

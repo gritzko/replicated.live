@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-030</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>POST-030 <a href="./HIGH.html">HIGH</a>: bare <code>jab post</code> on a worktree track throws &quot;no changes since base&quot; instead of advancing the track</h1>
+<p>
+Incident 2026-07-17, work/PUT-010 (clean wt, <code>93 ok</code>, ahead 2 on its <code>///be/</code> track): bare <code>jab post</code> dies with <code>JS exception: no changes since base</code>. Per <a href="/wiki/POST.html">POST</a> §Summary item 1, a bare post NEVER commits — it advances the TRACK; for a worktree track row (<code>//X</code>/<code>///X</code>) that means a get-style merge of cur's tip into the target's files, then FF the target's base. The error is the COMMIT path's no-changes refusal, so bare post mis-dispatches to commit mode (or the wt-track advance leg is unimplemented in JS) exactly when there is nothing to commit and everything to push.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Verbatim: <code>status</code> = <code>///be/#6c7920f4  93 ok  (ahead 2)</code> (posts 6c7920f4, 08af543b pending), then <code>jab post</code> → <code>JS exception: no changes since base</code>. Blocks the standard worker merge-back flow (worktree → main tree).
+</p>
+<ul>
+<li>2026-07-17 (BRO-030 session): CLI bare <code>jab post</code> from work/BRO-030 (correct cwd, <code>///be/#&lt;sha&gt;</code> track, ahead 5) ALSO errs `<code> </code>?<code> can not be fast-forwarded </code><code> — the advanceBranch empty-target spelling, so the worktree-track arm is broken in the current code too (a pager sighting first blamed on [/todo/BRO/BRO-024] context loss; the CLI repro disproves that as the only cause). Worker running in work/BRO-030: repro test (</code>test/post/track-maintree`) + fix.</li>
+<li>RULING 2026-07-17 (gritzko): a bare post on a worktree track is &quot;not merge-and-ff but JUST FF&quot; — clean target: move its base to cur's tip (files follow as a clean checkout); dirty target: refuse, never weave. Note: <a href="/wiki/POST.html">POST</a> §Summary still says &quot;get-style merge cur's tip into the target's files, then FF its base&quot; for the worktree-track row — hand-written section, needs gritzko's own edit.</li>
+</ul>
+<ul>
+<li>Track = the recentmost get record: <code>get ///be/</code> (wt-track row).</li>
+<li>THE TRICK (gritzko): the track's tip had been PATCHed in and committed (<code>6c7920f4 PUT-010 merged with PATCH-013</code>), so the tip is reachable from cur via parent ∪ FOSTER, not the plain parent chain — divergence agrees (no <code>miss</code>, <code>ahead 2</code>); post's FF/no-changes test must use the same foster-aware reachability (<a href="/wiki/PATCH.html">PATCH</a> ancestor-skip).</li>
+<li>Spec: <a href="/wiki/POST.html">POST</a> &quot;tracking a worktree (a <code>//X</code> track row): get-style merge cur's tip into the target's files, then FF its base&quot;; also item 4, <code>post //wt/path</code> — same motion with an explicit arg.</li>
+<li>Expected refusals are plain-text (at/past cur, non-FF) — a JS exception is wrong shape even for a legit refusal.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Bare <code>jab post</code> on a clean, ahead wt with a worktree track merges cur's tip into the target tree and FFs the target's base; <code>ahead 2</code> clears; refusals (conflict, non-FF) are plain text, not exceptions.
+</p>
+<ul>
+<li>Repro first: two worktrees of one store, commit in A (tracking B), bare <code>post</code> in A → B's files updated + base FF'd.</li>
+<li>Check the explicit-arg twin <code>post ///be/</code> — if it works, the bug is bare-arg dispatch; if not, the wt-track advance leg itself.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>No commit is ever made by bare post (spec item 1); dispatch must not fall through to commit-all.</li>
+<li>Conflict in the target refuses BEFORE its base moves (spec item 4).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Root cause: the wt was AHEAD via a patch-merged commit made by a SELECTIVE post; wtlog's patch floor is get/commit-all-post only, so the consumed <code>patch</code> row read as still active — bare post took the reuse-message COMMIT path (POST-027) and hit the commit-shaped &quot;no changes since base&quot; instead of the DIS-074 advance arm.
+</p>
+<ul>
+<li>patchTheirs consumed-filter: skip a theirs reachable from cur.</li>
+<li>Reachability = dag.isAncestor — the divergence view's own walk.</li>
+<li>Explicit <code>post //B</code> was already correct; bare dispatch was not.</li>
+<li>Conflict keeps get's GETCONF refusal; target base never moves.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> Repro test: bare post, wt-track, clean+ahead → target merged + FF (test/post/bare-foster-track, RED <code>JS exception: no changes since base</code> pre-fix).</li>
+<li><a href="./v.html">v</a> Probe explicit form: <code>post //S</code> WORKS (merge+FF, foster-aware); a <code>///path/</code> track also advances on bare post — bug was bare-arg dispatch only.</li>
+<li><a href="./v.html">v</a> Fix (post.js theirsParents filter, +3 lines); full suite 276/276.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Refusals print with the loop's uniform <code>JS exception:</code> prefix (all verbs); the TEXT is plain (&quot;GETCONF … resolve the markers&quot;) — prefix shape left alone, out of this ticket's scope.</li>
+</ul>
+<h3>Root cause and fix (2026-07-17, work/BRO-030 working tree)</h3>
+<p>
+The `<code> </code>?<code> </code><code> refuse never came from the parent's </code>///be/<code> advance: bare post fans into MOUNTED SUBS first (postSubs pre-order), and a clean sub's message-less postOne hit advanceTrack on its SELF-referential submount track (</code>//WT/sub#…<code>, DIS-072) → selfWorktree=true → the POST-026 fall-through bare-advanced the sub's empty-named trunk, which diverges → advanceBranch:326 threw and aborted the (FF-able) parent advance. The </code>_sub` guard for exactly this was set (post.js:726) but never read.
+</p>
+<ul>
+<li>Fix 1: a <code>_sub</code> message-less non-narrow postOne returns instead of bare-advancing its self-ref track; the gitlink bump still rides postSubs' own tip compare.</li>
+<li>Fix 2 (the just-ff ruling): advanceWorktree gains a bareTrack arg — bare-track: dirty target REFUSES (&quot;uncommitted changes&quot;), clean target FFs via a clean checkout; explicit <code>post //X</code> unchanged.</li>
+<li>Repro <code>test/post/track-maintree/run.sh</code> (maintree + <code>///be/</code>-shaped track + divergent self-ref sub): RED pre-fix with the live error, GREEN after; all test/post/* green; unregistered in ctest yet.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

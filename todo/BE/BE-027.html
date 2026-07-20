@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-027</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-027 <a href="./DONE.html">DONE</a>: pager Tab-completion (<code>_fsCompletions</code>) escapes the wt via uncollapsed <code>../</code></h1>
+<p>
+<code>views/bro/pager.js _fsCompletions(stem)</code> builds <code>dir = wt_root[/viewPath] + &quot;/&quot; + sub</code> by RAW concatenation from a user-typed Tab-completion stem, stripping only a leading <code>./</code> and trailing <code>/</code> — <code>..</code> segments pass straight into <code>io.readdir</code> / <code>io.lstat</code>. So Tab-completing <code>../../…</code> enumerates directories ABOVE the worktree / SRC_ROOT. Same class as <a href="BE-011.html">BE-011</a> (concat + uncollapsed <code>..</code>), in the readdir path; found in the BE-011 follow-up wt-open audit. The sibling ad-hoc <code>..</code> calculators <code>joinPath</code> (<code>:228</code>, silently CLAMPS with <code>segs.pop()</code>) and <code>_resolveSpell</code> (<code>:271</code>, keeps <code>../x</code> VERBATIM) feed the same surface with inconsistent semantics. Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Audit (2026-07-08): <code>pager.js:612-613</code> <code>dir = base + &quot;/&quot; + sub</code>, <code>:619</code> <code>io.lstat(dir + &quot;/&quot; + nm)</code>; <code>sub</code> = completion stem with only <code>^\./</code> and <code>/+$</code> stripped, NOT <code>..</code>-collapsed.</li>
+<li><code>joinPath</code> (<code>:228</code>) collapses <code>.</code>/<code>..</code> but silently clamps at root (no refusal); <code>_resolveSpell</code> (<code>:309</code>) passes <code>../x</code> through verbatim — both diverge from <code>resolveInTree</code>'s throw-on-escape.</li>
+<li>Downstream spell → <code>driveSpell</code> → <code>discover.resolve()</code> DOES throw NAVESCAPE, but <code>_fsCompletions</code> opens the fs DIRECTLY, before any of that.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A Tab-completion stem with <code>..</code> that would climb above the wt yields NO completions (catch NAVESCAPE → <code>[]</code>), never a readdir/lstat outside the tree.</li>
+<li>Route <code>_fsCompletions</code> through <code>resolveInTree(viewPath, sub)</code> / <code>wtJoin</code> under <code>wt_root</code>.</li>
+<li>Unify <code>joinPath</code>/<code>_resolveSpell</code> <code>..</code> handling onto <code>resolveInTree</code> (one semantics).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first (a <code>../../</code> completion stem must not enumerate outside the wt).</li>
+<li>No hand-rolled normalization beyond <code>shared/util/path.js</code>. Same tree (no worktree).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>_fsCompletions</code>: <code>dir = wtJoin(root, resolveInTree(viewPath, sub))</code>.  The stem's <code>sub</code> is resolved against the VIEW path (base = viewPath, not &quot;&quot;) so a <code>./</code>-relative completion climbs from the on-screen dir; resolveInTree THROWS NAVESCAPE on any climb above the wt root → caught → <code>[]</code> (NO readdir/lstat outside the tree).  <code>io.lstat</code> on an entry now goes through <code>path.join(dir, nm)</code>, no raw concat.</li>
+<li><code>joinPath</code> now delegates to <code>resolveInTree</code> (ONE <code>..</code> semantics): it collapses <code>.</code>/<code>..</code>, PRESERVES a leading &quot;/&quot;, and THROWS on a climb above root — no more silent clamp.</li>
+<li><code>_resolveSpell</code>'s view-dir branch routes <code>.</code>/<code>./x</code>/<code>../x</code> through <code>joinPath</code>, so <code>../x</code> is COLLAPSED (was kept verbatim).  Spells THROW rather than clamp — consistent with the downstream <code>discover.resolve()</code> NAVESCAPE (a <code>_runSpell</code> try/catch shows it in the addr bar).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled>  Repro: a <code>../</code> completion stem escapes today (RED).  <code>test/bro/navescape/navescape.js</code>.</li>
+<li class="done"><input type="checkbox" checked disabled>  Confine <code>_fsCompletions</code> via <code>resolveInTree</code>/<code>wtJoin</code>; unify <code>joinPath</code>/<code>_resolveSpell</code>.</li>
+<li class="done"><input type="checkbox" checked disabled>  Suite green (pager, ticket, uri, navescape).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Interactive-pager repro may need a unit-level drive of <code>_fsCompletions</code>.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Fixed in <code>views/bro/pager.js</code> (uncommitted — working tree left dirty for review): <code>require(&quot;shared/util/path.js&quot;)</code>; <code>_fsCompletions</code> path composition confined via <code>resolveInTree</code>/<code>wtJoin</code> (NAVESCAPE → <code>[]</code>); <code>joinPath</code> + <code>_resolveSpell</code> <code>..</code> handling unified onto <code>resolveInTree</code> (collapse + throw, no clamp / no verbatim <code>../x</code>).</li>
+<li>Repro <code>test/bro/navescape/navescape.js</code>: RED before (returned <code>../OUTSIDE/secret_outside</code>), GREEN after.  Regression green: <code>test/bro/pager</code>, <code>test/bro/ticket</code>, <code>test/uri.js</code>.</li>
+<li>Pre-existing UNRELATED reds (NOT this ticket): <code>test/bro/color</code> + <code>test/bro/view</code> golden mismatches are readdir-ORDER diffs in the non-interactive dir sink (functions untouched here are not on that path).</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

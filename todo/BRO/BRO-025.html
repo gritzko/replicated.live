@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-025</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-025 <a href="./OPEN.html">OPEN</a>: three-part O-link spells — context · verb · args</h1>
+<p>
+O click-spells encode only <code>verb args</code>; the context is inherited from wherever the pager happens to sit, so a board row cannot say &quot;run this verb OVER THERE&quot;. Live incident 2026-07-14: the :work board's <a href="./update.html">update</a> minted <code>get ///be</code> for every row — authorityRepo hoisted <code>///be</code> as the run scope and refreshed the LANDED journal/be mount; the row's worktree was never addressed, and the status shown after was the pager CONTEXT tree (//BRO-024), read by the user as the update result. Ruling: an O spell carries all three parts; the <a href="BRO-024.html">BRO-024</a> invite <code>//WT/dir/: verb args</code> IS the wire form; an absent context part means &quot;here&quot; (pager cwd).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>BE-043's :work board buttons must target the ROW's worktree; today all rows mint the byte-identical <code>get ///be</code> (views/work/work.js, uncommitted in work/BE-043); see <a href="../BE/BE-043.html">BE-043</a>.</li>
+<li>Evidence 2026-07-14: the click appended <code>26714CGTBr get ?#33295788</code> to journal/be/.be (a no-op refresh of the landed mount); work/BE-043 and work/BRO-024 untouched.</li>
+<li>authorityRepo (core/loop.js:189, BE-032) hoists a <code>//</code>-carrying arg0 of a MUTATION verb into the run scope — one arg0 cannot be both the scope and an operand; get.js:284-291 defers the explicit-<code>//X</code>-source vs injected-context split as a named follow-up.</li>
+<li><a href="BRO-024.html">BRO-024</a> groundwork: context = process cwd (ONE-VAR), the invite is <code>//WT/dir/: verb args</code>, and replay already chdir's into the RECORDED <code>view.call.context</code> — the third part exists on the replay path.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>O token wire form = the invite line <code>//WT/dir/: verb args</code>; a context-less O token keeps meaning &quot;here&quot;.</li>
+<li>The pager drives an O spell IN the spell's own context (the BRO-024 chdir/serialize/restore path), never pre-merging context into args.</li>
+<li>Spell-driven verb runs see <code>(context, RAW args)</code>; an explicit <code>//X</code> arg is a plain operand for the verb, not a rescope.</li>
+<li>:work board rows mint <code>//KEY/: get ///be</code> — update = FF the KEY tree to the landed mount's commit, local changes preserved (weave only where dirty).</li>
+<li>U nav tokens unaffected (already full addresses).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Verbs-resolve-args law intact: pager arg-blind, <code>resolve(context, base, rel)</code> at verb entry; the cd is the backstop (<a href="BRO-024.html">BRO-024</a>).</li>
+<li>CLI-typed <code>jab &lt;verb&gt; //X …</code> keeps the BE-032 arg0-scope convention until ruled otherwise; the change here covers SPELL-driven runs.</li>
+<li>get's source-form (<code>get ///be</code> = FF to that tree's commit) is GET-side; split into its own GET ticket if it grows past the seed.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(gritzko, 2026-07-14) O-links are three-part: context, verb, arguments.</li>
+<li>(impl, 2026-07-14) the wire codec is <code>SPELL.parseOspell</code>/<code>mintOspell</code> (shared/spell.js): a leading <code>//</code> ARMS the split at the FIRST <code>: </code>, so a <code>: </code> inside a quoted arg (<code>post 'a: b'</code>) is safe; a context-less token (<code>verb args</code>) parses to context &quot;&quot; = &quot;here&quot; (the pager context).</li>
+<li>(impl) the pager drives an O click through <code>_actSpell(spell, ctxOverride)</code> / <code>_runSpell(spell, ctxOverride)</code> — the CONTEXT comes from the parsed O token, threaded to driveSpell (opts2.context), NEVER pre-merged into an arg; <code>_actSpell</code> then <code>_refresh</code>es the pager's CURRENT view IN PLACE, so the pager's own context is left UNMOVED (the &quot;restore&quot;); a throwing drive is caught, context still stands.  There is no literal io.chdir on the reentry path — the context scopes the run via loop.contextRepo (be.repo/ctxDir), the mechanism replay already uses.</li>
+<li>(impl) loop.cli scopes CONTEXT-FIRST: a threaded context (contextRepo) wins and keeps args RAW — NO authorityRepo arg0 hoist on the spell-driven path; the BE-032 arg0-authority hoist stays for CLI-typed <code>jab &lt;verb&gt; //X …</code> (no threaded context).  uri011 legs stay green (CLI convention intact).</li>
+<li>(impl) <code>//KEY/: rm .</code> per gritzko's spec — the context <code>//KEY</code> fully targets the row, <code>.</code> is the whole-worktree operand (rm verb not landed in this tree; token-text only asserted).</li>
+<li>(impl) get.sourceGet: a scheme-less <code>//X</code>/<code>///path</code> operand routes through the GET-038 local-source machinery (<code>parseRemote(&quot;file:&quot;+wtdir) → resolveLocalSource → seedLocal → fanoutWholeTree</code>) — a clean FF fast-path, a dirty baselined file weave-merges (the same leaf).  This reaches get ONLY on the spell-driven RAW-arg path; a CLI <code>jab get //X</code> still hoists arg0 to the run SCOPE (whole-tree FF), unchanged.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> spell codec: parse/mint the <code>//WT/dir/: verb args</code> O token form (shared/spell.js parseOspell/mintOspell); absent context = &quot;&quot; (&quot;here&quot;); round-trip + quoted-<code>: </code> safety proven (test/bro/ospell, work/view)</li>
+<li><a href="./v.html">v</a> pager: drive an O spell in ITS context (<code>_actSpell</code>/<code>_runSpell</code> ctxOverride → driveSpell context), pager context UNMOVED on success / mutation / throw (test/bro/ospell)</li>
+<li><a href="./v.html">v</a> work.js: mint per-row <code>//KEY/: get ///&lt;mount&gt;</code>, <code>//KEY/: post '&lt;title&gt;'</code>, <code>//KEY/: rm .</code> via SPELL.mintOspell (test/work/view updated + green)</li>
+<li><a href="./v.html">v</a> loop: spell-driven runs pass <code>(context, RAW args)</code> — contextRepo wins first, no arg0 authority hoist on that path (core/loop.js _cli; uri011 + status/put/post/delete/patch all green)</li>
+<li><a href="./v.html">v</a> get seed: an explicit <code>//X</code>/<code>///path</code> operand = SOURCE worktree (get.js isSourceWorktree/sourceGet, GET-038 resolveLocalSource), dest = the run context; FF fast path, weave-leaf when dirty</li>
+<li><a href="./v.html">v</a> tests: board <a href="./update.html">update</a> advances the ROW tree — not the landed mount, not the pager context tree (test/get/source-worktree, END-TO-END through the real driveSpell: cwd SITS IN a LAND tree, context //DEST, only DEST advances)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>cross-STORE source-get (dest store lacks the source tip's objects) needs an INGEST — deferred as a GET follow-up; the hive's shared-store cells (the :work board case) need none (source <code>k</code> materialises directly, dest <code>.be</code> tip appended).  Filed nowhere yet — raise a GET ticket if a cross-store update is ever wanted.</li>
+<li>Nav.mkd's three-part-O-link spec rides <a href="BRO-024.html">BRO-024</a>'s still-open &quot;rewrite the <a href="./Nav.html">Nav</a> context sections&quot; TODO (Nav.mkd is flagged STALE); not expanded here to avoid double-writing the pending rewrite.</li>
+<li>pre-existing baseline reds unrelated to BRO-025 (each fails identically in the landed tree / is documented): get/oddname (the <code>#</code>-framing pair), sub/wtsrc (the runtime <code>.be/?/</code> query-slash strip, BRO-024 <code>_restoreQuerySlash</code> shim), bro/color + bro/view (stale goldens), bro/vim (fails even with the BRO-025 pager edits reverted).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>iter 1 (all six TODOs) implemented in work/BE-043 (UNCOMMITTED, per order): shared/spell.js (+parseOspell/mintOspell), views/bro/pager.js (<em>mouse O-parse + </em>actSpell/_runSpell ctxOverride), views/work/work.js (three-part mint), core/loop.js (context-first RAW-arg scoping), verbs/get/get.js (isSourceWorktree/sourceGet).</li>
+<li>new tests: test/bro/ospell (15 headless pager checks), test/get/source-worktree (real shared-store FF, cwd-vs-context control); test/work/view updated to the three-part O tokens.</li>
+<li>local suite 2026-07-14: 144 PASS / 5 FAIL over test/<strong>/</strong>/ (network dirs excluded); all 5 are the pre-existing baseline reds above.  Command: <code>for run in test/*/*/run.sh; do timeout 90 sh &quot;$run&quot;; done</code> with JABC=~/bin/jab, BIN=~/bin, ASAN_OPTIONS=detect_leaks=0, TMP=/tmp/claude-1000.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

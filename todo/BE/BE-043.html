@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-043</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-043 <a href="./OPEN.html">OPEN</a>: <code>work</code> view — the ticket-worktree board under work/</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The project root's <code>work/</code> dir holds one worktree per ticket (<a href="/wiki/Project.html">Project</a> item 5); no view lists them today, so tending the fleet means raw <code>ls work/</code> plus hand-typed spells.
+</p>
+<ul>
+<li>A worktree's ORIGIN rides its <code>.be</code> FIRST line: <code>&lt;stamp&gt; get &lt;uri&gt;</code>, e.g. <code>work/BE-041/.be</code> → <code>file:/home/gritzko/.be/?/beagle-ext</code>, <code>work/JS-115/.be</code> → <code>file:/home/gritzko/src/jab.be/.be/?/repo</code>.</li>
+<li><code>//TIKT-123</code> is the worktree authority in context URIs (<a href="/wiki/Project.html">Project</a> §Addressing).</li>
+<li>Models: BE-038 <code>todo</code> board (shape-routed rows, hidden <code>U</code> spells), BE-040 r3 / BE-041 button pairs (visible <code>Y</code> label + hidden <code>O</code> click spell), views/status/status.js sinkOut.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+<code>work</code> lists all ticket worktrees under <code>work/</code>, one row each:
+</p>
+<ul>
+<li>the key <code>TIKT-123</code> navigates — hidden <code>U</code> spell <code>status //TIKT-123</code>;</li>
+<li><code>[update]</code> button — get-update from the orig tree (<code>O</code> spell; origin = <code>.be</code> line 1);</li>
+<li><code>[merge]</code> button — merge into the orig tree as mounted under the current project (origin detected from the worktree's <code>.be</code> line 1);</li>
+<li><code>[diff]</code> link — the worktree diff (<code>diff //TIKT-123</code>);</li>
+<li>a SAFETY GAP, then <code>[rm -rf]</code> — discard the worktree; needs a worktree-only remove verb, see BE-044.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Work-root discovery mirrors be.todoRoot(): the project root owning <code>work/</code>; NOTHING hardcoded.</li>
+<li>No absolute fs path ever reaches a token — word spells only (the BE-038 rule).</li>
+<li><code>.be</code> line 1 parses via uri._parse, never regex/string surgery (<a href="/meta/work.html">work</a> §NOT TO DO).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>RULING 2026-07-10: <code>[update]</code> <code>O</code> spell = <code>get ///&lt;orig-path&gt;</code> — the origin tree's mount path under the project root (<code>//</code>), detected from <code>.be</code> line 1.</li>
+<li>RULING 2026-07-10: <code>[merge]</code> <code>O</code> spell = <code>post '&lt;ticket title&gt;'</code> — the ticket page's own title as the one-line message (title via the shared ticket/todo page lookup).</li>
+<li>(pending) row extras: show the origin project and/or dirty/ahead state per worktree?</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> work-root discovery (workDir() mirrors todo.js boardDir() over be.todoRoot())</li>
+<li><a href="./v.html">v</a> board rows: key + <code>U</code> nav + <code>Y</code>/<code>O</code> buttons + safety gap; rows = <code>work/</code> subdirs owning a <code>.be</code> (the BE-044 gate), name-sorted; plain mode = bare keys, chrome pager-only</li>
+<li><a href="./v.html">v</a> <code>.be</code> first-line origin parse — reused wtlog.open({bePath}).anchor(), no new helper; project → mount path via a depth-first gitmodules.paths() walk (nested mounts join, e.g. <code>be/test</code>)</li>
+<li><a href="./v.html">v</a> <code>[update]</code> spell <code>get ///&lt;mount&gt;</code>; omitted when the origin mount doesn't resolve</li>
+<li><a href="./v.html">v</a> <code>[merge]</code> spell <code>post '&lt;title&gt;'</code> (title via todo.js pageFile/pageTitle, now exported); omitted when the ticket page doesn't resolve</li>
+<li><a href="./v.html">v</a> <code>[diff]</code> spell (<code>F</code>+<code>U</code> nav link)</li>
+<li><a href="./ .html"> </a> BE-044 worktree-only remove verb; the <code>[rm -rf]</code> button emits <code>rm //KEY</code> already</li>
+<li><a href="./v.html">v</a> repro test test/work/view/ (red-first; 3 fixture worktrees: direct mount, nested mount, orphan origin) → be-js-work-view green</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>worktree work/BE-043 holds the UNCOMMITTED change (views/work/work.js + a 2-line todo.js export + the test); suite there 170/174, all 4 reds reproduced on the pristine main tree.</li>
+<li>O-spell context binding: <code>post '&lt;title&gt;'</code> carries NO authority — it posts wherever the pager context sits at click time, not the row's worktree; needs a ruling.</li>
+<li><code>get ///&lt;path&gt;</code>'s <code>//</code> used to name the LAUNCH tree (a cell) — fixed in the main tree by BE-045 (<code>//</code> = the project/meta root everywhere).</li>
+<li>review nits (2026-07-10): key column now FIXED 16 chars (test-pinned); <a href="./update.html">update</a>'s <code>err: no such path be in source</code> was the pre-BE-045 binding — verified working on current main, view spell unchanged; <a href="./diff.html">diff</a> missing new files is a diff-verb gap (diff.js:279 skips no-base-side paths), NOT the view.</li>
+<li>proposed tickets awaiting gritzko's go: GET-xxx (a <code>//</code>-authority arg that anchors no worktree falls into get's D4 path-restore slot → misleading <code>no such path X in source</code>; must refuse loudly) and DIFF-xxx (render wholly-new files as base-vs-empty additions so <code>diff</code> shows them).</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

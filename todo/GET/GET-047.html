@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-047</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-047 <a href="./OPEN.html">OPEN</a>: get invocation matrix — cover every <a href="../../wiki/GET.html">/wiki/GET</a> patterns cell with tests</h1>
+<p>
+Audit + coverage ticket along the lines of <a href="../POST/POST-027.html">POST-027</a>: cross every bullet of <a href="../../wiki/GET.html">/wiki/GET</a> &quot;Summary of invocation patterns&quot; (rewritten by gritzko 2026-07-16) with the section's own axes and verify each meaningful cell has a test in <code>test/</code>; fill the gaps. The axes: FORM 1.1-1.5 (bare/tracked, <code>?branch</code>+relative, <code>#hash</code> detach, <code>#~1</code> rewind, schemed network leg — the only store-writing pattern), MODE 2.0-2.5 (bootstrap clone, normal weave, <code>get!</code> force, narrowed recover, narrowed force, cross-ref cherry-pick), HISTORY 3.1-3.4 (ahead/behind/same/divergent-weave-errs-out), SUBS 4.0-4.2 (<code>--nosub</code>, pin-attached recursion ignoring differently-attached subs, <code>get!</code> recursion). Also the ruled corners: detached bare get = full-tree recovery at BASE (target=base, missing files restored — gritzko 2026-07-16), track/base record semantics (recentmost get = track + base), unweavable divergent leaf errs out loudly (<a href="../PATCH/PATCH-012.html">PATCH-012</a>).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Parallel workers read every <code>test/get/</code>, <code>test/wire/</code>, <code>test/sub*</code> run.sh and verdict each cell: covered (test name), uncovered, or MISMATCH (test contradicts the spec).
+</p>
+<ul>
+<li>Method per <a href="../POST/POST-027.html">POST-027</a>: workers read run.sh files, no guessing from test names; verdicts land in the matrix below.</li>
+<li>Tests live in the <code>test/</code> sub (beagle-ext-tests project); get tests under <code>test/get/</code>, wire legs under <code>test/wire/</code>, sub recursion under <code>test/sub*/</code>.</li>
+<li>Spec is <a href="../../wiki/GET.html">/wiki/GET</a> as of 2026-07-16 (post-rewrite); on any spec-code contradiction, the SPEC wins and the finding is a MISMATCH + its own ticket.</li>
+<li>Fresh worktree <code>work/GET-047</code> (tip <code>cfb712d5</code>) is the audit + test-writing home.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Every meaningful cell covered; impossible/degenerate cells explicitly marked so.
+</p>
+<ul>
+<li>The matrix below filled with verdicts + test names.</li>
+<li>New tests for uncovered cells (repro-style, one run.sh per cell or sensibly grouped), following <code>test/get/</code> conventions.</li>
+<li>MISMATCHes reported, not &quot;fixed&quot; by editing old tests (amendments need explicit permission).</li>
+<li>Ruled corners covered: detached bare get full-tree recovery; divergent + unweavable → loud error; schemed get as the ONLY store-writing pattern.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Audit first, write second; the write phase needs the audit's uncovered list ratified.</li>
+<li>No product-code changes ride this ticket — pure test coverage; product bugs found become their own tickets.</li>
+<li>Suite runtime matters: prefer small fixtures; mind the 10s ctest timeout.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Audit method held: 4 parallel workers read all 18 test/get run.sh + test/wire + test/sub* + libs/goldens at tip fe042740; verdicts below. Zero spec-contradicting MISMATCHes found.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> audit: FORM axis — covered: bare-branch FF (get/branch-bare), ?branch, //wt operand (wt-operand, gitlink-fork, nav-submod), #hash detach (detach, detach-record — via <code>?&lt;sha&gt;</code> spelling only), #~1 (rewind), file:/ssh:/http:/be: legs incl. golden parity</li>
+<li><a href="./v.html">v</a> audit: MODE axis — covered: bootstrap clone all transports (2.0), dirty weave + loud conflict (2.1: get/dirty A+A2, confdrop), get! whole-tree (2.2 half), narrowed recover (2.3: get/restore)</li>
+<li><a href="./v.html">v</a> audit: HISTORY axis — covered: AHEAD × {bare-branch, bare-remote, ?branch, schemed}; BEHIND via #hash/#~1 (pin, rewind); DIVERGENT-by-dirty weave + conflict refusal (dirty, confdrop)</li>
+<li><a href="./v.html">v</a> audit: SUBS axis — covered: clone recursion depth 1 (sub/cycle) + depth 2 (sub/pinuri-nested), get! into an attached sub (sub/untracked), same-source URIs + .gitmodules fallback units (submount.js), NAVESCAPE guard</li>
+<li><a href="./v.html">v</a> write phase (3 workers, one clone <code>work/GET-047</code>): 10 tests GREEN + registered, suite 256/256 — trunk-switch, tag-local, store-readonly, force-narrow, restore-deleted, behind-branch, behind-remote, noop-same, sub/pin-advance, sub/force-sub-attach</li>
+<li>RULED (gritzko 2026-07-16): NO tickets for red cells — fix the impl in place, one worker per cluster; 10 red repros sit unregistered as <code>run.sh.broken</code>:</li>
+<li><a href="./v.html">v</a> FIX FORM cluster: inRepoSeed now consults <code>attachedBranch()</code> — detached bare get recovers at BASE (deleted restored, dirty kept, record stays <code>#&lt;base&gt;</code>); pure <code>#&lt;sha&gt;</code> detaches; <code>?./</code>/<code>?../</code> via new <code>branchlib.resolveRel</code> (post's resolveTarget delegates to it); wt/remote tracks re-resolve/re-fetch on bare get; every append preserves the track (decay gone). Touched get.js, branch.js, store.js (additive origin row on eachRemote), post.js.</li>
+<li><a href="./v.html">v</a> FIX SUBS cluster: <code>nosub</code> gates both gitlink leaf branches (mount + unmount) off be.flags; <code>subAttachedElsewhere</code> (the ONE attach reader vs the ONE track writer, force short-circuit first) gates mountGitlink + recurseSubMounts — differently-attached subs untouched by normal get, <code>get!</code> overrides, fresh/unmounted subs still mount.</li>
+<li><a href="./v.html">v</a> FIX MODE cluster: force-only <code>sweepUntracked</code> (classify.wtScan = status's unk set); <code>cherryPick</code> for blob-rpath <code>//WT/path/file</code> (scoped force-overwrite, NO wtlog record — D4 restore precedent); DAG-diverged get weaves each write leaf off <code>dag.mergeBase</code> (new in shared/dag.js), unweavable stays the PATCH-012 loud refusal. DEVIATION suite-pinned: the diverged DELETE leaf stays tree-driven (branch-relative pins that <code>?../sib</code> removes child-only files); only write leaves weave.</li>
+<li><a href="./ .html"> </a> deferred cells: wire+subs recursion (needs ruling), https:// literal (low risk), over-cap unweavable rides work/PATCH-012</li>
+<li>Decisions to ratify: cherry-pick writes NO record; <code>get!</code> keeps gitignored files (unk-set semantics, no <code>-x</code>); post's <code>//WT</code> advance with force now sweeps untracked in the target; old buggy <code>//X/file#sha</code> track rows now bare-get into a scoped re-pick, not a whole-tree switch; ssh clones still record <code>?master#&lt;sha&gt;</code> (schemed-URI-as-track is plumbed, needs a ruling).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>test/get/NEWCASE_mytest.txt is committed junk (no run.sh) — delete-worthy, rides whatever cleanup change.</li>
+<li>The history worker misread PATCH-012 as still-broken-at-tip: the fix + dirty-big test exist in work/PATCH-012 (uncommitted, suite-green), awaiting land — the cell is uncovered AT TIP only.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FILED 2026-07-16 on gritzko's order, off the GET.mkd patterns rewrite.</li>
+<li>2026-07-16 audit (4 workers) + 10 new green tests + 10 red repros + 3 fix clusters (in-place per gritzko's no-tickets ruling), all in <code>work/GET-047</code> (uncommitted): suite 266/266 (orchestrator re-ran); product diff = get.js, branch.js, dag.js, store.js, post.js. Awaiting review/land order.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

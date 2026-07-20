@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-048</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-048 <a href="./HIGH.html">HIGH</a>: get weaves COMMITTED deltas as if dirty — divergent+clean must be a plain reset (spec <a href="/wiki/GET.html">GET</a> §intro+§4)</h1>
+<p>
+Incident 2026-07-17, work/ABC-016: tree CLEAN at local head <code>?467fb44b</code> (ahead 1, behind 5); <code>jab get</code> dissolved the committed delta into 11 <code>mod</code> rows AND <code>del</code>-ed <code>test/EXIT.c</code> (a file the local commit ADDED — the merge used the local head as diff base, so a local add read as an upstream deletion; data loss). gritzko clarified <a href="/wiki/GET.html">GET</a> the same day: get &quot;never changes history — it only resets the worktree to a chosen version, maybe re-applying uncommitted changes&quot;; §4: ONLY uncommitted changes are carried by weave. get.js classifies per-file &quot;differs from base&quot; as dirty without asking whether the delta is committed.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+<code>be/verbs/get/get.js</code> (weave path ~:485-530): dirty-vs-clean is judged against the BASE; a committed local head's files all &quot;differ from base&quot; and get weaved. Spec-conforming behavior for ABC-016's case: plain reset to the target, tracking re-pointed, <code>?467fb44b</code> left intact in the store for an explicit <code>patch '#467fb44b'</code> + post (the Verbs.mkd cheat-sheet route).
+</p>
+<ul>
+<li>The four cases to differentiate (spec §3 x §4): target ahead/behind/same/divergent CROSS tree clean/dirty; committed-ness of the base→head delta is NOT dirtiness.</li>
+<li>Add-side evidence: with base = local head, target lacking a locally-added file → <code>del</code> (wrong under ANY reading; a true 3-way base keeps a local add of uncommitted files).</li>
+<li>Recovery of the incident file was manual (extracted from the commit diff; <code>cat path?ref</code> printing empty is separate, needs own ticket).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+get tests differentiate the case matrix; code complies with the clarified spec.
+</p>
+<ul>
+<li>Tests FIRST (test/get/, follow the existing case-dir layout): (a) divergent + CLEAN tree → plain reset to target, no mod rows, local head still resolvable by hash, wtlog tracks target; (b) divergent + DIRTY tree → only the uncommitted edits weave, committed delta does NOT reappear as mods; (c) locally-committed ADD + divergent get → file must NOT be deleted; (d) existing ahead/behind/dirty cases stay green.</li>
+<li>Fix get.js: dirtiness = checkout vs LOCAL HEAD (cur), not vs merge base; divergent committed history is never replayed — the worktree resets to the target (uncommitted edits still weave on top).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>GET verb only; <code>patch</code> stays the merge verb (no auto-merge of divergent heads).</li>
+<li>Existing test/get/ cases are the contract for ahead/behind/dirty — do not edit them; new cases only.</li>
+<li><a href="/wiki/GET.html">GET</a> is the spec as edited 2026-07-17; if code and spec still disagree somewhere, report — don't improvise spec.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Fix is 3 spots in verbs/get/get.js: leaf weave base = cur (oldSha), never the merge base (~:986) — a committed delta reads clean and clean-overwrites to target; in diverged mode a path absent from the merge-base tree is a locally-committed add — unlinked by the reset but NO <code>del</code> row (~:951); basePaths demoted to del-row classifier (~:559). No auto-merge — divergent heads stay <code>patch</code>'s job.
+</p>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> new cases (all RED pre-fix, green post): divergent-clean-reset (zero mrg/mod, wtlog tracks target, old head hash-resolvable), divergent-dirty-weave (only the uncommitted edit weaves), divergent-committed-add (no false <code>del</code> row; blob intact in store).</li>
+<li><a href="./v.html">v</a> get.js: dirtiness vs cur; no committed-delta replay; false-del gate.</li>
+<li><a href="./v.html">v</a> suite 268/269 <code>-LE big</code>; ABC-016 scenario re-run end-to-end (upd+post rows, one mrg for the real edit, head recoverable).</li>
+<li><a href="./v.html">v</a> RULED by gritzko 2026-07-17: <code>test/get/dag-diverge</code> DELETED as superseded (asserted the old §3.4 weave-of-committed-edits, spec text removed the same day; divergent-clean-reset covers the scenario spec-correctly). Suite 269/269 after re-glob; deletion pending as <code>mis</code> in the test subrepo.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<p>
+The dag-diverge contradiction above is the only red; its header also stale-claims the case is unregistered.
+</p>
+<h2>Outcome</h2>
+<p>
+UNCOMMITTED in work/GET-048: mod verbs/get/get.js (3 hunks); test subrepo: 3 unk run.sh (test/get/divergent-*). Orchestrator re-verified the 3 new cases green + dag-diverge red. Suggested commit: <code>GET-048: divergent get resets, never replays commits</code>.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

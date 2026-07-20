@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-048</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-048 <a href="./OPEN.html">OPEN</a>: fold the launch arg's PATH into the initial pager context — <code>jab cat f</code> + <code>:vim</code> works</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+RULING 2026-07-10 (extends BE-046 &quot;context = cwd AND the argument&quot;): the launch argument's PATH counts too, not just its worktree — <code>jab cat f</code> then <code>:vim</code> must open <code>f</code>, no navigation required.
+</p>
+<ul>
+<li>Today the pager edge (core/loop.js, BE-046) threads navCwd(ctxDir) — a DIR/worktree context; the CLI arg's file never enters the tracked context, so a bare <code>:vim</code> on the launch view refuses VIMNONE (<a href="/todo/BE/BE-047.html">BE-047</a> nuance).</li>
+<li>A nav'd view already carries its file (view.uri via _driveApply); ONLY the launch view lacks it.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>the initial pager context = navCwd(ctxDir) + the FIRST path-bearing launch arg's wt-relative path (the same context shape a nav to that file would set); authority-only args (<code>//WT</code>) stay authority-only.</li>
+<li><code>jab cat some/file</code> + <code>:vim</code> opens the file; likewise a bare <code>:diff</code> or <code>:why</code> applies to THAT file — any bare view verb composes over the launch file context (no per-verb plumbing).</li>
+<li><code>jab status //WT</code> + <code>:diff</code> keeps the BE-046 behavior (no phantom path on authority-only launches).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>compose via the URI class off the run's resolved slots (argRel/navCwd) — no string surgery; context still NEVER scavenged from rendered hunks (<a href="./Nav.html">Nav</a> law).</li>
+<li>builds on the BE-047 worktree's loop.js changes (be.context threading) — same worktree, same agent.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>_launchContext (core/loop.js): context = navCwd(ctxDir); a path-bearing first arg (non-transport, must stat — a <code>grep pattern</code> word never folds) resolves argRel→wtpath and the context becomes navCwd(&lt;that path&gt;) — byte-identical to navigating there; <code>//WT</code> args stay path-less (authorityRepo already stripped them) — BE-046 preserved.</li>
+<li>the fold alone can't deliver &quot;:diff applies to that file&quot; (diff no-args is whole-wt BY DESIGN, why no-args emits nothing) — so at the context reentry a NO-ARG VIEW verb (never a mutation; vim reads be.context itself) whose context names a regular FILE gets that file pushed as its subject (<code>/sub/f</code> rooted form).</li>
+<li>side effect of the generic subject rule: EVERY no-arg view from a file-bearing context is file-scoped now (<code>:log</code> after <code>jab cat f</code> = f's history); reverting to fold-only is deleting one args.push block in _cli.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> pager-edge context: fold arg0's resolved wt-relative path (_launchContext)</li>
+<li><a href="./v.html">v</a> test: launch/nav/auth pty legs in be-js-bro-vim (bare <code>:vim</code>/<code>:diff</code>/<code>:why</code> on the cat'd file; nav'd context wins; <code>//wt</code> launch stays path-less + tree-wide <code>:diff</code>)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>change sits UNCOMMITTED in work/BE-047 (with BE-047); suite 173/174 = baseline (the 1 red = pre-existing be-js-get-oddname), orchestrator re-ran the 6 context-sensitive cases green.</li>
+<li>NEEDS gritzko's nod: the no-arg-view subject rule generalizes past :diff/:why — any bare view verb after <code>jab cat f</code> is f-scoped; one-block revert if unwanted.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOG-018</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG-018 <a href="./OPEN.html">OPEN</a>: fuzz the repo-supplied config parsers (CFG / SUBS / IGNO)</h1>
+<p>
+<code>dog/git/CFG.c</code> (gitconfig-family ragel), <code>dog/git/SUBS.c</code> (<code>.gitmodules</code>) and <code>dog/git/IGNO.c</code> (<code>.gitignore</code> chain) all parse files that arrive verbatim from a cloned, untrusted repository, yet <code>dog/fuzz/</code> has no target for any of them — they only get happy-path unit tests (<code>test/CFG.c</code>, <code>test/IGNO.c</code>). <a href="DOG-015.html">DOG-015</a> (IGNOGlob ReDoS) is exactly the class a fuzzer would have caught. Method: <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Untrusted inputs: <code>.git/config</code>-family via <code>CFGu8sFeed</code>/<code>CFGu8sDrain</code>, <code>.gitmodules</code> via <code>SUBSu8sParse</code>/<code>SUBSu8sFind</code>, <code>.gitignore</code> via <code>IGNOLoad</code>/<code>IGNOMatch</code>/<code>IGNOFree</code> — every clone/status walks these.</li>
+<li><code>dog/fuzz/PACKRESOLVE.c</code> is the house pattern: bounded input, BASS carves in a per-probe <code>call()</code> frame, errors expected, only faults surface.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Three targets in <code>dog/fuzz/</code>: <code>CFGfuzz</code>, <code>SUBSfuzz</code>, <code>IGNOfuzz</code>, wired into <code>dog/fuzz/CMakeLists.txt</code>, built with <code>WITH_FUZZ</code> + ASan.</li>
+<li>Invariants: no crash/OOB/leak; all yielded slices in-bounds of the input; <code>CFGu8sFeed</code> terminates and consumes monotonically; SUBS cb gets <code>$ok</code> path/url slices; <code>IGNOMatch</code> returns within a step budget (libFuzzer <code>-timeout</code> as the hang oracle until <a href="DOG-015.html">DOG-015</a> lands the budget).</li>
+<li>A short local run (≥1M execs or 10 min each) comes back clean, seeded from <code>test/data</code> + real-world config/gitmodules/gitignore samples.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Harness-only ticket: no parser edits; any crash/hang found is filed as its own ticket and linked here (per <a href="../../meta/todo.html">todo.mkd</a>), not silently fixed.</li>
+<li>ABC style throughout; input caps like the existing fuzzers (≤64 KiB).</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled>  T1 <code>CFGfuzz</code>: drive <code>CFGstate</code> feed/drain to exhaustion, slice bounds checks.</li>
+<li class="open"><input type="checkbox" disabled>  T2 <code>SUBSfuzz</code>: parse + <code>SUBSu8sFind</code> a fuzzed name; cb slice invariants.</li>
+<li class="open"><input type="checkbox" disabled>  T3 <code>IGNOfuzz</code>: split input into chain files + a path; Load/Match/Free cycle.</li>
+<li class="open"><input type="checkbox" disabled>  T4 CMakeLists wiring + seed corpus dirs; note run commands in this ticket.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>2026-07-12: T1-T4 implemented in worktree <code>~/src/DOG-018</code> (<code>fuzz/CFG.c</code>, <code>fuzz/SUBS.c</code>, <code>fuzz/IGNO.c</code>, CMake wiring, seeded corpora), UNLANDED. Orchestrator-verified: only <code>fuzz/CMakeLists.txt</code> modified among tracked files; CFGfuzz/SUBSfuzz re-run clean (7.9M/3.0M execs per 60 s).</li>
+<li>FOUND a real fd leak: <code>IGNOFree</code> (<code>git/IGNO.c:297</code>) frees a <code>FILEMapRO</code> mapping with <code>u8bUnMap</code> (munmap only) instead of <code>FILEUnMap</code> (unmap + close of the booked fd) — one fd leaked per mapped <code>.gitignore</code>; verified at source + empirically (run dies &quot;No file descriptors available&quot;). Candidate ticket, NOT fixed here (harness-only rule).</li>
+<li>A sustained ≥5 min IGNOfuzz run is impossible until that leak lands a fix; CFG/SUBS ran the full 300 s clean (18.8M / 8.8M execs).</li>
+<li>LSan is unavailable under this sandbox (ptrace/proc limits) — fd leak was caught by exhaustion, heap leaks not machine-checked.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>OPEN — filed 2026-07-12, fuzz-coverage review of dog/fuzz.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

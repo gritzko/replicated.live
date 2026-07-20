@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABC-019</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ABC-019 <a href="./MED.html">MED</a>: bracketed IPv6 host never resolves — NET feeds <code>[::1]</code> to getaddrinfo verbatim</h1>
+<p>
+Found by the JS-110 worker (2026-07-10) while fixing the jab net bundle's URI composition: the URI grammar accepts an IP_literal and hands <code>host = &quot;[::1]&quot;</code> with the brackets kept, and <code>NETResolve</code> passes that token verbatim to <code>getaddrinfo</code>, which rejects bracket framing — so every bracketed-IPv6 URI fails <code>Invalid argument</code> and IPv6 is unusable end-to-end even with correctly composed URIs. Adjacent to (not covered by) the <a href="ABC-012.html">ABC-012</a> socket-layer batch.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro: <code>net._listen(&quot;tcp://[::1]:19377&quot;)</code> in a jab tree throws <code>Invalid argument</code>; probe evidence in the JS-110 worktree (<code>work/JS-110b</code>, test/net.js JS-110 block).</li>
+<li><code>URIonHost</code> moves the full IP_literal token, brackets included, so the authority component carries <code>[::1]</code>, per RFC 3986.</li>
+<li><code>NET.c:32</code> <code>NETResolve</code> feeds the host slice to <code>getaddrinfo</code> unmodified; getaddrinfo wants the bare <code>::1</code> (no framing).</li>
+<li><a href="../JS/JS-110.html">JS-110</a> fixed the jab bundle to COMPOSE bracketed URIs correctly (reparse-verified); this ticket is the resolve side — until it lands, those correct URIs are rejected at the C layer.</li>
+<li>Adjacent gap, needs a ruling: the URI grammar has no RFC 6874 zone-id form (<code>[fe80::1%25eth0]</code>), so scoped literals cannot be expressed at all; Node accepts them. Possibly WONTFIX.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Repro first: a <code>WITH_INET</code>-gated loopback test resolving and binding <code>[::1]</code> via the public NET surface.</li>
+<li>Bracketed IPv6 resolves: strip the framing at the NET boundary (or have the lexer expose the bare address via <code>URIonIPv6address</code>) — one chokepoint, no per-caller peeling.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>No manual URI parsing at call sites; the lexer/canon chokepoint owns the token shape (meta/work.mkd &quot;Things NOT TO DO&quot;).</li>
+<li>CI cannot exercise this until <a href="ABC-017.html">ABC-017</a>'s WITH_INET lane lands; same blocker as <a href="ABC-012.html">ABC-012</a>.</li>
+<li>Don't collide with <a href="ABC-012.html">ABC-012</a>'s NETResolve/bind-walk edits — coordinate if both are in flight.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) strip in NETResolve vs expose bare host in the lexer.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled>  repro test (WITH_INET, loopback <code>[::1]</code> listen+connect)</li>
+<li class="open"><input type="checkbox" disabled>  unbracket at the chosen chokepoint; dual-stack sanity</li>
+<li class="open"><input type="checkbox" disabled>  zone-id (RFC 6874): support or record a WONTFIX ruling</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Untestable in CI until WITH_INET exists there (<a href="ABC-017.html">ABC-017</a>).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>

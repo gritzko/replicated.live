@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-025</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>POST-025 <a href="./MED.html">MED</a>: post to a remote collapses eq/behind/diverged into POSTNONE + a blind POSTNOFF</h1>
+<p>
+<code>post</code>'s remote path has no ahead/behind calc: it asks only &quot;is the remote tip an ancestor of cur?&quot;, so <code>eq</code> becomes POSTNONE (&quot;already at cur's tip&quot;) and every other case — behind, diverged, unrelated — becomes one blind POSTNOFF (&quot;not an ancestor of cur&quot;). The user cannot tell &quot;nothing to do&quot; from &quot;run get first&quot; from &quot;you diverged, merge&quot;. The full verdict already exists (<code>relate.verdict</code> / <code>dag.aheadBehind</code>, rel = eq/ahead/behind/diverged/unrelated) but only the PULL side calls it.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Hit 2026-07-14: a <code>post</code> answered &quot;nothing to post&quot; over two trees that had genuinely DIVERGED (<code>work/DOG-021/dog</code> at <code>63cb570e</code> vs <code>journal/jab/dog</code> at <code>8ebbfd35</code>, forked at <code>79612854</code>).
+</p>
+<ul>
+<li><code>post.js:330</code> — <code>if (rel.verdict.eq) throw &quot;POSTNONE: remote ... already at cur's tip&quot;</code>; eq is the ONLY named case.</li>
+<li><code>post.js:336</code> — <code>if (!rel.verdict.ff) throw &quot;POSTNOFF: not an ancestor of cur&quot;</code>; behind/diverged/unrelated all land here.</li>
+<li><code>shared/relate.js:15-16</code> states the gap outright: push-side verdict is <code>{ eq, ff }</code> and &quot;behind is UNKNOWN&quot;.</li>
+<li><code>post.js:333-334</code> concedes it too: &quot;the remote ancestry is unknown here (no fetch) so no diverged/unrelated guess&quot;.</li>
+<li>Siblings collapse the same way: <code>advanceBranch</code> throws POSTNONE at :270 (already at tip) and :277 (already contains cur).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+<code>post</code> to a remote names WHICH relation refused it, and says what to run next.
+</p>
+<ul>
+<li><code>eq</code> → nothing to do (not an error worth a stack; the current POSTNONE text is right).</li>
+<li><code>behind</code> → &quot;the remote is ahead of cur — <code>get</code> first&quot;; the user's next move is a pull, not a force.</li>
+<li><code>diverged</code> → &quot;both moved since &lt;base&gt; — <code>get</code> then re-post&quot;; name the merge base and the counts.</li>
+<li><code>unrelated</code> → no common base; a distinct, loud refusal (never phrased as behind).</li>
+<li>Report ahead/behind COUNTS, as <code>status</code> already does for branches.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Fix in beagle-ext (JS); reuse the existing spine, do not fork a second verdict.
+</p>
+<ul>
+<li><code>relate.verdict(keeper, cur, tip, remoteIx)</code> already returns eq/ahead/behind/diverged/unrelated — call it, don't refork.</li>
+<li><code>dag.aheadBehind</code> yields the row shape (sha/hashlet/ts/subject) for the counts.</li>
+<li>Keep post FF-only: this ticket changes the DIAGNOSIS, not what post accepts.</li>
+<li>Error codes are RON60 (<code>abc/ok64</code>); new codes need real names, not POSTNOFF overloading.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+The push side must LEARN the remote's ancestry — it currently refuses on a local-only parent walk.
+</p>
+<ul>
+<li><code>relate.verdict</code> needs <code>remoteIx</code> (a <code>wh128</code> of commit-&gt;parent edges) to see the remote side; the push path builds none.</li>
+<li>The advert in hand (<code>rel.adv</code>) gives remote TIPS not edges — a behind/diverged split needs the remote's commit closure.</li>
+<li>Open question: fetch remote commit edges before refusing (a round-trip on the refusal path), or report a reduced verdict.</li>
+<li>Reduced verdict is an acceptable step 1: eq / ff / &quot;non-FF (ancestry unknown)&quot; beats today IF the text stops implying ahead.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro test: a diverged remote asserts a DIVERGED-class refusal, not POSTNOFF</li>
+<li><a href="./ .html"> </a> repro test: a behind remote asserts a BEHIND-class refusal naming <code>get</code></li>
+<li><a href="./ .html"> </a> decide: fetch remote commit edges on the refusal path, or ship the reduced verdict</li>
+<li><a href="./ .html"> </a> wire <code>relate.verdict</code> into <code>pushRemote</code> (post.js:295-338), keep FF-only</li>
+<li><a href="./ .html"> </a> ahead/behind counts in the message, <code>status</code>-style</li>
+<li><a href="./ .html"> </a> check native C <code>be post</code> wording before fixing the strings (parity)</li>
+<li><a href="./ .html"> </a> consider the <code>advanceBranch</code> siblings (post.js:270/:277) — same collapse, local refs</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<p>
+The behind/diverged split is not computable from what the push path holds today.
+</p>
+<ul>
+<li>No fetch on the push path: the advert carries tips only, so the remote's closure is absent and <code>dag.aheadBehind</code> can't walk.</li>
+<li>Adding a fetch to a REFUSAL path costs a round-trip on the error case — needs gritzko's call before implementing.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+  -
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> ❧
+<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
+<a href="https://github.com/gritzko/jab">JAB</a>
+❧
+</div>
+</body>
+</html>
