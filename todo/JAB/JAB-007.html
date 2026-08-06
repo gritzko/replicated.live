@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JAB-007</title>
+<title>JAB-007 C/JS: Buf cursor | 0 int32 coercion caps every mapped view at 2^31-1 — io.mmap of a &gt;2GB file returns a silently WRONG view, git.pack.mmap ABORTS on multi-GB keeper logs</title>
+<meta property="og:title" content="JAB-007 C/JS: Buf cursor | 0 int32 coercion caps every mapped view at 2^31-1 — io.mmap of a &gt;2GB file returns a silently WRONG view, git.pack.mmap ABORTS on multi-GB keeper logs">
+<meta property="og:description" content="jab's JS Buf class (the buf.cpp prelude) coerces its data/idle cursors with | 0 (signed int32). io.mmap wraps every file mapping in Buf.over(u8) which seeds idle = u8.length | 0 — for any file ≥ 2 GiB that wraps NEGATIVE, and .data()'s subarray(0, idle) then reinterprets the negative end END-RELATIVE, silently returning a short/garbled view (no throw). git.pack.mmap rides the same wrapper, so scanning a multi-GB keeper log feeds nonsense windows to the native pack scanner and the (ASAN) process ABORTS. This is the wall that blocks GET-044's linux-scale clone AFTER the streamed pack lands: a 6.4 GB 0000000001.keeper is durable on disk but can be neither indexed nor read. The C and JSC layers are NOT at fault (verified — see Context). Method: work.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-007.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JAB-007 <a href="./C/JS.html">JS</a> <a href="./HIGH.html">HIGH</a>: Buf cursor <code>| 0</code> int32 coercion caps every mapped view at 2^31-1 — io.mmap of a &gt;2GB file returns a silently WRONG view, git.pack.mmap ABORTS on multi-GB keeper logs</h1>
+<h1>JAB-007 <a href="./C/JS.html">JS</a>: Buf cursor <code>| 0</code> int32 coercion caps every mapped view at 2^31-1 — io.mmap of a &gt;2GB file returns a silently WRONG view, git.pack.mmap ABORTS on multi-GB keeper logs</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
 <p>
 jab's JS <code>Buf</code> class (the buf.cpp prelude) coerces its <code>_data</code>/<code>_idle</code> cursors with <code>| 0</code> (signed int32).  <code>io.mmap</code> wraps every file mapping in <code>Buf.over(u8)</code> which seeds <code>_idle = u8.length | 0</code> — for any file ≥ 2 GiB that wraps NEGATIVE, and <code>.data()</code>'s <code>subarray(0, _idle)</code> then reinterprets the negative end END-RELATIVE, silently returning a short/garbled view (no throw).  <code>git.pack.mmap</code> rides the same wrapper, so scanning a multi-GB keeper log feeds nonsense windows to the native pack scanner and the (ASAN) process ABORTS.  This is the wall that blocks <a href="../GET/GET-044.html">GET-044</a>'s linux-scale clone AFTER the streamed pack lands: a 6.4 GB <code>0000000001.keeper</code> is durable on disk but can be neither indexed nor read.  The C and JSC layers are NOT at fault (verified — see Context).  Method: <a href="../../meta/work.html">work</a>.
 </p>
@@ -53,10 +62,10 @@ this.<em>data = data | 0; this.</em>idle = (idle === undefined ? data : idle) | 
 <h2>WIP</h2>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled>  Drop <code>| 0</code> on Buf <code>_data</code>/<code>_idle</code> (+ audit <code>size</code>/<code>room</code>/<code>feed</code>/<code>take</code> arithmetic for other 32-bit narrowings).</li>
-<li class="open"><input type="checkbox" disabled>  Audit cont.cpp <code>buffer.watermark</code> plumbing for the same narrowing.</li>
-<li class="open"><input type="checkbox" disabled>  Sparse-file regression: 2^31-1 / 2^31 / 3e9 map lengths + a pack.mmap scan over a &gt;2GB synthetic log.</li>
-<li class="open"><input type="checkbox" disabled>  Then GET-044 follow-up: lift the be/ MMAP_CAP guard, rerun the linux gate end-to-end.</li>
+<li class="open"><input type="checkbox" disabled> Drop <code>| 0</code> on Buf <code>_data</code>/<code>_idle</code> (+ audit <code>size</code>/<code>room</code>/<code>feed</code>/<code>take</code> arithmetic for other 32-bit narrowings).</li>
+<li class="open"><input type="checkbox" disabled> Audit cont.cpp <code>buffer.watermark</code> plumbing for the same narrowing.</li>
+<li class="open"><input type="checkbox" disabled> Sparse-file regression: 2^31-1 / 2^31 / 3e9 map lengths + a pack.mmap scan over a &gt;2GB synthetic log.</li>
+<li class="open"><input type="checkbox" disabled> Then GET-044 follow-up: lift the be/ MMAP_CAP guard, rerun the linux gate end-to-end.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
@@ -64,9 +73,13 @@ this.<em>data = data | 0; this.</em>idle = (idle === undefined ? data : idle) | 
 </ul>
 <div class="footer">
 ❧
-<a href="/feed.rss">RSS feed</a> ❧
-<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
-<a href="https://github.com/gritzko/jab">JAB</a>
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
 ❧
 </div>
 </body>

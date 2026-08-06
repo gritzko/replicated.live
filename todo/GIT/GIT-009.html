@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GIT-009</title>
+<title>GIT-009: push to a fresh git remote omits the .be blob → fsck fails</title>
+<meta property="og:title" content="GIT-009: push to a fresh git remote omits the .be blob → fsck fails">
+<meta property="og:description" content="Pushing a beagle history to a BRAND-NEW / empty git remote produces an inconsistent pack: the committed root trees carry a .be entry (the store anchor — gitignored yet recorded in the tree object), but the pack walk (keeper/WALK.c DPATHVerify) deliberately SKIPS .be, so the blob the tree entry points at is never written. A fresh remote has no copy, so git fsck / git-receive-pack rejects the push with missing blob object. Against any remote that already holds the blob (every incremental fast-forward — the normal path) it is harmless, so it only bites a fresh or empty remote. Found while fixing POST-021 (the push BNOROOM); isolated there by using a .be-free synthetic history for the regression test, so it is unrelated to that fix and gets its own ticket.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GIT/GIT-009.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>GIT-009: push to a fresh git remote omits the <code>.be</code> blob → fsck fails</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 Pushing a beagle history to a BRAND-NEW / empty git remote produces an inconsistent pack: the committed root trees carry a <code>.be</code> entry (the store anchor — gitignored yet recorded in the tree object), but the pack walk (<code>keeper/WALK.c</code> <code>DPATHVerify</code>) deliberately SKIPS <code>.be</code>, so the blob the tree entry points at is never written. A fresh remote has no copy, so <code>git fsck</code> / <code>git-receive-pack</code> rejects the push with <code>missing blob object</code>. Against any remote that already holds the blob (every incremental fast-forward — the normal path) it is harmless, so it only bites a fresh or empty remote. Found while fixing <a href="../POST/POST-021.html">POST-021</a> (the push BNOROOM); isolated there by using a <code>.be</code>-free synthetic history for the regression test, so it is unrelated to that fix and gets its own ticket.
 </p>
@@ -21,39 +30,21 @@ Pushing a beagle history to a BRAND-NEW / empty git remote produces an inconsist
 The tree references a blob the pack refuses to ship.
 </p>
 <ul>
-<li>Root trees contain a <code>.be</code> entry (store anchor). It is gitignored but present in<p>
-the committed tree object, so the tree has a dangling reference once the walk drops it.
-</p>
-</li>
-<li>The pack-build walk (<code>keeper/WALK.c</code> <code>DPATHVerify</code>) skips <code>.be</code>, so its blob is<p>
-omitted from the generated pack.
-</p>
-</li>
-<li>Fresh remote → <code>git fsck</code>/<code>git-receive-pack</code>: <code>missing blob object</code>. Existing<p>
-remote (already has the blob) → harmless; hence only fresh/empty remotes fail.
-</p>
-</li>
+<li>Root trees contain a <code>.be</code> entry (store anchor). It is gitignored but present in the committed tree object, so the tree has a dangling reference once the walk drops it.</li>
+<li>The pack-build walk (<code>keeper/WALK.c</code> <code>DPATHVerify</code>) skips <code>.be</code>, so its blob is omitted from the generated pack.</li>
+<li>Fresh remote → <code>git fsck</code>/<code>git-receive-pack</code>: <code>missing blob object</code>. Existing remote (already has the blob) → harmless; hence only fresh/empty remotes fail.</li>
 </ul>
 <h3>Goals</h3>
 <p>
 A fresh-remote push yields an fsck-clean pack — no dangling tree references.
 </p>
 <ul>
-<li>Either DON'T record <code>.be</code> in the committed tree (it is the gitignored store<p>
-anchor; arguably never belongs in a tree), OR include its blob in the pack when the tree references it. Pick one and make tree-vs-pack consistent.
-</p>
-</li>
-<li>Repro test: push a <code>.be</code>-bearing history to a FRESH bare git remote, assert<p>
-exit 0 + <code>git fsck</code> clean + remote advances.
-</p>
-</li>
+<li>Either DON'T record <code>.be</code> in the committed tree (it is the gitignored store anchor; arguably never belongs in a tree), OR include its blob in the pack when the tree references it. Pick one and make tree-vs-pack consistent.</li>
+<li>Repro test: push a <code>.be</code>-bearing history to a FRESH bare git remote, assert exit 0 + <code>git fsck</code> clean + remote advances.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>ABC idioms. Must NOT regress the incremental fast-forward push path nor the<p>
-gitignore semantics for <code>.be</code> in the working tree. Couples to the store-anchor layout (<a href="../SUBS/README.html">SUBS</a> <code>.be</code>/<code>.dogs</code> handling).
-</p>
-</li>
+<li>ABC idioms. Must NOT regress the incremental fast-forward push path nor the gitignore semantics for <code>.be</code> in the working tree. Couples to the store-anchor layout (<a href="../SUBS/README.html">SUBS</a> <code>.be</code>/<code>.dogs</code> handling).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
@@ -62,26 +53,28 @@ gitignore semantics for <code>.be</code> in the working tree. Couples to the sto
 </p>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Find where <code>.be</code> becomes a tree entry (the commit/tree builder; keeper POST /<p>
-  DPATH) and why <code>DPATHVerify</code> skips it on the pack walk.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Find where <code>.be</code> becomes a tree entry (the commit/tree builder; keeper POST / DPATH) and why <code>DPATHVerify</code> skips it on the pack walk.</li>
 <li class="open"><input type="checkbox" disabled> Decide the consistent rule (no <code>.be</code> tree entry, OR pack-include it) and apply.</li>
-<li class="open"><input type="checkbox" disabled> Repro-first (CLAUDE.md §17): fresh-bare-remote push + <code>git fsck</code> test, confirm<p>
-  failing pre-fix.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first (CLAUDE.md §17): fresh-bare-remote push + <code>git fsck</code> test, confirm failing pre-fix.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Couples to <a href="../SUBS/README.html">SUBS</a> store-anchor layout; confirm the chosen rule doesn't break sub<p>
-mounts. Independent of <a href="../POST/POST-021.html">POST-021</a>'s BASS/BNOROOM fix.
-</p>
-</li>
+<li>Couples to <a href="../SUBS/README.html">SUBS</a> store-anchor layout; confirm the chosen rule doesn't break sub mounts. Independent of <a href="../POST/POST-021.html">POST-021</a>'s BASS/BNOROOM fix.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>(open)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

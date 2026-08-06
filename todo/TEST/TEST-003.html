@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TEST-003</title>
+<title>TEST-003: de-nativify the native-oracle tests — native be LAGS jab, so jab-vs-native byte-parity now tests against a STALE oracle</title>
+<meta property="og:title" content="TEST-003: de-nativify the native-oracle tests — native be LAGS jab, so jab-vs-native byte-parity now tests against a STALE oracle">
+<meta property="og:description" content="Eleven be/ ctest cases assert jab's output is BYTE-IDENTICAL to native be &lt;view&gt; (the C keeper as an oracle). The C impl now LAGS the JS (jab) impl — jab has view features native lacks (e.g. COMMIT-007 human dates) — so those comparisons fail on real, intended jab improvements, not bugs. Drop every native-VIEW-ORACLE comparison; assert jab INTRINSICALLY instead (self-contained golden / structural, like test/commit/ticket). COMMIT-007 already de-nativifies the four commit/ oracle cases as its necessary slice; this ticket owns the rest + the policy. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/TEST/TEST-003.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,103 +16,68 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>TEST-003: de-nativify the native-oracle tests — native <code>be</code> LAGS jab, so jab-vs-native byte-parity now tests against a STALE oracle</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 Eleven be/ ctest cases assert jab's output is BYTE-IDENTICAL to native <code>be &lt;view&gt;</code> (the C keeper as an oracle).  The C impl now LAGS the JS (jab) impl — jab has view features native lacks (e.g. <a href="../COMMIT/COMMIT-007.html">COMMIT-007</a> human dates) — so those comparisons fail on real, intended jab improvements, not bugs.  Drop every native-VIEW-ORACLE comparison; assert jab INTRINSICALLY instead (self-contained golden / structural, like <code>test/commit/ticket</code>).  <a href="../COMMIT/COMMIT-007.html">COMMIT-007</a> already de-nativifies the four <code>commit/*</code> oracle cases as its necessary slice; this ticket owns the rest + the policy. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Native <code>be</code> (the C <code>beagle/</code>) is BEHIND jab (the JS <code>be/</code>): jab views gained<p>
-behaviour the C keeper has not (human commit dates, word-URI links, <code>F</code> ticket codes, …).  A jab-vs-native byte <code>cmp</code> therefore red-flags a jab IMPROVEMENT as a regression — the oracle is stale, not jab.
-</p>
-</li>
-<li>The native-VIEW-ORACLE cases (jab output <code>cmp</code>'d against <code>&quot;$BE&quot; &lt;read-verb&gt;</code>):<p>
-<code>bro/rowclick</code>, <code>commit/{diff,links,render,resolve}</code>, <code>diff/08-sub-pin-bump- gitlink</code>, <code>diff/11-file-scope-full</code>, <code>log/links</code>, <code>log/sub</code>, <code>sub/wtsrc</code>, <code>why/range</code> — 11 dirs (grep <code>&quot;$BE&quot; +(commit|log|diff|status|…)</code> in <code>test/</code>).
-</p>
-</li>
-<li>Surfaced by <a href="../COMMIT/COMMIT-007.html">COMMIT-007</a>: its human-date change broke `commit/{render,links,<p>
-resolve,diff}` — all four FAIL only on the date line (mask it → jab == native exactly), proving the oracle, not jab, is wrong.
-</p>
-</li>
-<li>SECONDARY axis (NOT the focus): most other cases only SEED fixtures with<p>
-native <code>&quot;$BE&quot; post/put</code> (the on-disk git object format is stable, so seeding is lower-risk).  Converting seeds to <code>jab post/put</code> is optional cleanup.
-</p>
-</li>
+<li>Native <code>be</code> (the C <code>beagle/</code>) is BEHIND jab (the JS <code>be/</code>): jab views gained behaviour the C keeper has not (human commit dates, word-URI links, <code>F</code> ticket codes, …).  A jab-vs-native byte <code>cmp</code> therefore red-flags a jab IMPROVEMENT as a regression — the oracle is stale, not jab.</li>
+<li>The native-VIEW-ORACLE cases (jab output <code>cmp</code>'d against <code>&quot;$BE&quot; &lt;read-verb&gt;</code>): <code>bro/rowclick</code>, <code>commit/{diff,links,render,resolve}</code>, <code>diff/08-sub-pin-bump- gitlink</code>, <code>diff/11-file-scope-full</code>, <code>log/links</code>, <code>log/sub</code>, <code>sub/wtsrc</code>, <code>why/range</code> — 11 dirs (grep <code>&quot;$BE&quot; +(commit|log|diff|status|…)</code> in <code>test/</code>).</li>
+<li>Surfaced by <a href="../COMMIT/COMMIT-007.html">COMMIT-007</a>: its human-date change broke <code>commit/{render,links, resolve,diff}</code> — all four FAIL only on the date line (mask it → jab == native exactly), proving the oracle, not jab, is wrong.</li>
+<li>SECONDARY axis (NOT the focus): most other cases only SEED fixtures with native <code>&quot;$BE&quot; post/put</code> (the on-disk git object format is stable, so seeding is lower-risk).  Converting seeds to <code>jab post/put</code> is optional cleanup.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Every native-VIEW-ORACLE case drops the <code>cmp jab vs &quot;$BE&quot; &lt;view&gt;</code> and asserts<p>
-jab intrinsically: the invariant the test actually cares about (structure, the resolved sha, the <code>U</code>/<code>F</code> targets, a self-contained golden), not sameness to a lagging C oracle.
-</p>
-</li>
-<li>The four <code>commit/*</code> oracle cases are OWNED by <a href="../COMMIT/COMMIT-007.html">COMMIT-007</a> (its necessary<p>
-slice); this ticket covers the remaining seven and sets the policy: NO NEW native-parity view test — assert jab intrinsically.
-</p>
-</li>
+<li>Every native-VIEW-ORACLE case drops the <code>cmp jab vs &quot;$BE&quot; &lt;view&gt;</code> and asserts jab intrinsically: the invariant the test actually cares about (structure, the resolved sha, the <code>U</code>/<code>F</code> targets, a self-contained golden), not sameness to a lagging C oracle.</li>
+<li>The four <code>commit/*</code> oracle cases are OWNED by <a href="../COMMIT/COMMIT-007.html">COMMIT-007</a> (its necessary slice); this ticket covers the remaining seven and sets the policy: NO NEW native-parity view test — assert jab intrinsically.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Preserve each test's REAL intent (the U-target/resolve/structure asserts stay);<p>
-only the native-sameness <code>cmp</code> goes.  Seed with jab where practical so a case needs no native <code>be</code> at all; a case that still only SEEDS with native is acceptable (secondary axis).
-</p>
-</li>
-<li>New/edited test files under <code>test/</code> (a submodule) MUST be staged (<code>jab put</code>)<p>
-or a <code>jab get</code> recursion sweeps them (<a href="../../meta/work.html">test-dir-is-submodule</a>).  Repro-first where a golden is introduced; keep the be/ suite green.  Method: <a href="../../meta/work.html">Issues</a>.
-</p>
-</li>
+<li>Preserve each test's REAL intent (the U-target/resolve/structure asserts stay); only the native-sameness <code>cmp</code> goes.  Seed with jab where practical so a case needs no native <code>be</code> at all; a case that still only SEEDS with native is acceptable (secondary axis).</li>
+<li>New/edited test files under <code>test/</code> (a submodule) MUST be staged (<code>jab put</code>) or a <code>jab get</code> recursion sweeps them (<a href="../../meta/work.html">test-dir-is-submodule</a>).  Repro-first where a golden is introduced; keep the be/ suite green.  Method: <a href="../../meta/work.html">Issues</a>.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>ORACLE, not SEED, is the problem: target the 11 <code>oracle&gt;0</code> dirs first.  A<p>
-jab-intrinsic assert = what the case verifies WITHOUT native: <code>commit/*</code> structure + human date + <code>U</code>/<code>F</code>; <code>diff/*</code> the <code>@@</code>/<code>+++</code> hunks + changed paths; <code>log/*</code> the row shape + <code>commit:?&lt;sha&gt;</code> <code>U</code>; <code>why/*</code> the blame spans; <code>bro/rowclick</code> the click→spell; <code>sub/wtsrc</code> the sub view rows.
-</p>
-</li>
-<li><a href="../COMMIT/COMMIT-007.html">COMMIT-007</a> is the first landed slice (the 4 <code>commit/*</code>); mirror its pattern<p>
-(drop the <code>&quot;$BE&quot; commit</code> capture + <code>cmp</code>, keep the check.js/structure asserts, seed via jab) for the other seven.
-</p>
-</li>
+<li>ORACLE, not SEED, is the problem: target the 11 <code>oracle&gt;0</code> dirs first.  A jab-intrinsic assert = what the case verifies WITHOUT native: <code>commit/*</code> structure + human date + <code>U</code>/<code>F</code>; <code>diff/*</code> the <code>@@</code>/<code>+++</code> hunks + changed paths; <code>log/*</code> the row shape + <code>commit:?&lt;sha&gt;</code> <code>U</code>; <code>why/*</code> the blame spans; <code>bro/rowclick</code> the click→spell; <code>sub/wtsrc</code> the sub view rows.</li>
+<li><a href="../COMMIT/COMMIT-007.html">COMMIT-007</a> is the first landed slice (the 4 <code>commit/*</code>); mirror its pattern (drop the <code>&quot;$BE&quot; commit</code> capture + <code>cmp</code>, keep the check.js/structure asserts, seed via jab) for the other seven.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> <code>commit/{render,links,resolve,diff}</code> — de-nativified under <a href="../COMMIT/COMMIT-007.html">COMMIT-007</a><p>
- (dropped the native <code>cmp</code>, assert jab intrinsically; all 5 commit/* GREEN);  landed <code>ae6ac86f</code>.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> <code>diff/08-sub-pin-bump-gitlink</code>, <code>diff/11-file-scope-full</code> — jab-intrinsic<p>
- (TEST-003 markers in run.sh: &quot;no oracle cmp&quot;); landed <code>d80bdb5c</code>.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> <code>log/links</code>, <code>log/sub</code> — jab-only, BE=$JABC alias + intrinsic targets;<p>
- landed <code>d80bdb5c</code>.
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> <code>commit/{render,links,resolve,diff}</code> — de-nativified under <a href="../COMMIT/COMMIT-007.html">COMMIT-007</a> (dropped the native <code>cmp</code>, assert jab intrinsically; all 5 commit/* GREEN); landed <code>ae6ac86f</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> <code>diff/08-sub-pin-bump-gitlink</code>, <code>diff/11-file-scope-full</code> — jab-intrinsic (TEST-003 markers in run.sh: &quot;no oracle cmp&quot;); landed <code>d80bdb5c</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> <code>log/links</code>, <code>log/sub</code> — jab-only, BE=$JABC alias + intrinsic targets; landed <code>d80bdb5c</code>.</li>
 <li class="done"><input type="checkbox" checked disabled> <code>why/range</code> — jab-only (&quot;native be is RETIRED&quot; header); landed <code>d80bdb5c</code>.</li>
-<li class="done"><input type="checkbox" checked disabled> <code>bro/rowclick</code> — jab-only; expected rows derived from jab's own log+sha1:;<p>
- landed <code>d80bdb5c</code>.
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> <code>bro/rowclick</code> — jab-only; expected rows derived from jab's own log+sha1:; landed <code>d80bdb5c</code>.</li>
 <li class="done"><input type="checkbox" checked disabled> <code>sub/wtsrc</code> — project-less local file: clone, no native; landed <code>d80bdb5c</code>.</li>
 <li class="done"><input type="checkbox" checked disabled> Policy note added to the topic README: no new jab-vs-native view-parity test.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Some cases both seed AND oracle with native; de-nativifying the oracle may<p>
-still leave a native SEED (acceptable — secondary axis, tracked here).
-</p>
-</li>
+<li>Some cases both seed AND oracle with native; de-nativifying the oracle may still leave a native SEED (acceptable — secondary axis, tracked here).</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED: the 4 <code>commit/*</code> oracle cases under <a href="../COMMIT/COMMIT-007.html">COMMIT-007</a> (<code>ae6ac86f</code>); the<p>
-remaining 7 dirs (bro/rowclick, diff/{08,11}, log/{links,sub}, sub/wtsrc, why/range) under <code>d80bdb5c</code> (&quot;TEST-003,JS-099,SUBS-046: js tests pass, no native use&quot;).
-</p>
-</li>
-<li>Verified in-tree 2026-07-07 (ticket audit): every one of the 11 dirs carries<p>
-TEST-003 jab-intrinsic asserts; <code>&quot;$BE&quot;</code> occurrences in <code>be/test</code> are jab- aliased seeds only (lib/{parity,getcase,postcase,patchcase,getrepro}.sh set <code>BE=$JABC</code>); be/ wt + test/ sub clean.
-</p>
-</li>
+<li>LANDED: the 4 <code>commit/*</code> oracle cases under <a href="../COMMIT/COMMIT-007.html">COMMIT-007</a> (<code>ae6ac86f</code>); the remaining 7 dirs (bro/rowclick, diff/{08,11}, log/{links,sub}, sub/wtsrc, why/range) under <code>d80bdb5c</code> (&quot;TEST-003,JS-099,SUBS-046: js tests pass, no native use&quot;).</li>
+<li>Verified in-tree 2026-07-07 (ticket audit): every one of the 11 dirs carries TEST-003 jab-intrinsic asserts; <code>&quot;$BE&quot;</code> occurrences in <code>be/test</code> are jab- aliased seeds only (lib/{parity,getcase,postcase,patchcase,getrepro}.sh set <code>BE=$JABC</code>); be/ wt + test/ sub clean.</li>
 <li>Policy recorded in the topic README: no new jab-vs-native view-parity test.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

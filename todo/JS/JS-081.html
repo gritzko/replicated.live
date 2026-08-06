@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-081</title>
+<title>JS-081: views/bro/bro.js fd-1 capture monkey-patch is re-entry-fragile</title>
+<meta property="og:title" content="JS-081: views/bro/bro.js fd-1 capture monkey-patch is re-entry-fragile">
+<meta property="og:description" content="driveSpell captures the re-entrant loop.cli's fd-1 'H'-record stream by swapping the GLOBAL io.writeAll for the duration of the call (restored in a finally). The loop EDGE is correctly gated (core/loop.js:318 checks both mode!==&quot;tlv&quot; AND !opts2.queuePath), but the bro VERB handler's wantPager check (bro.js:130) is NOT gated on mode===&quot;tlv&quot;. So a :bro:foo spell re-enters the handler, which re-evaluates wantPager true, re-patches the already-patched io.writeAll, and tries to launch a NESTED pager; under a /dev/tty-open failure fallthrough (:143-145 falls to fd 1) this can pollute the outer capture. Self-flagged interim (JAB-029). Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-081.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,91 +15,66 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-081 <a href="./MED.html">MED</a>: <code>views/bro/bro.js</code> fd-1 capture monkey-patch is re-entry-fragile</h1>
+<h1>JS-081: <code>views/bro/bro.js</code> fd-1 capture monkey-patch is re-entry-fragile</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
 <p>
 <code>driveSpell</code> captures the re-entrant <code>loop.cli</code>'s fd-1 'H'-record stream by swapping the GLOBAL <code>io.writeAll</code> for the duration of the call (restored in a <code>finally</code>). The loop EDGE is correctly gated (<code>core/loop.js:318</code> checks both <code>mode!==&quot;tlv&quot;</code> AND <code>!opts2.queuePath</code>), but the bro VERB handler's <code>wantPager</code> check (<code>bro.js:130</code>) is NOT gated on <code>mode===&quot;tlv&quot;</code>. So a <code>:bro:foo</code> spell re-enters the handler, which re-evaluates <code>wantPager</code> true, re-patches the already-patched <code>io.writeAll</code>, and tries to launch a NESTED pager; under a <code>/dev/tty</code>-open failure fallthrough (<code>:143-145</code> falls to fd 1) this can pollute the outer capture. Self-flagged interim (JAB-029). Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>views/bro/bro.js:84</code> <code>const orig = io.writeAll;</code> then <code>:86-89</code> swaps the<p>
-GLOBAL <code>io.writeAll</code> to push fd-1 chunks; <code>:96</code> restores it in <code>finally</code>.
-</p>
-</li>
-<li><code>:94-95</code> re-enters <code>loop.cli([…, spell, &quot;--tlv&quot;], { queuePath })</code> — the<p>
-<code>--tlv</code> + per-call queue suppress the loop EDGE pager (<code>core/loop.js:318</code>).
-</p>
-</li>
-<li><code>:130</code> `const wantPager = io.isatty(1) &amp;&amp; (ctx.flags||[]).indexOf(&quot;--plain&quot;)<p>
-&lt; 0;<code> — NOT gated on </code>ctx.mode!==&quot;tlv&quot;`, unlike the edge.
-</p>
-</li>
-<li><code>core/loop.js:306</code> sets <code>ctx.mode</code> from the run flags, so the handler CAN<p>
-see <code>--tlv</code>; the gate is just missing here.
-</p>
-</li>
-<li><code>:131-151</code> the <code>wantPager</code> branch opens <code>pager.Pager</code>; <code>:143-145</code> the<p>
-<code>/dev/tty</code> open can fail and fall through to <code>fd=1</code>, the fd <code>driveSpell</code> is mid-patching — a nested pager would write into the capture.
-</p>
-</li>
+<li><code>views/bro/bro.js:84</code> <code>const orig = io.writeAll;</code> then <code>:86-89</code> swaps the GLOBAL <code>io.writeAll</code> to push fd-1 chunks; <code>:96</code> restores it in <code>finally</code>.</li>
+<li><code>:94-95</code> re-enters <code>loop.cli([…, spell, &quot;--tlv&quot;], { queuePath })</code> — the <code>--tlv</code> + per-call queue suppress the loop EDGE pager (<code>core/loop.js:318</code>).</li>
+<li><code>:130</code> <code>const wantPager = io.isatty(1) &amp;&amp; (ctx.flags||[]).indexOf(&quot;--plain&quot;) &lt; 0;</code> — NOT gated on <code>ctx.mode!==&quot;tlv&quot;</code>, unlike the edge.</li>
+<li><code>core/loop.js:306</code> sets <code>ctx.mode</code> from the run flags, so the handler CAN see <code>--tlv</code>; the gate is just missing here.</li>
+<li><code>:131-151</code> the <code>wantPager</code> branch opens <code>pager.Pager</code>; <code>:143-145</code> the <code>/dev/tty</code> open can fail and fall through to <code>fd=1</code>, the fd <code>driveSpell</code> is mid-patching — a nested pager would write into the capture.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>A <code>:bro:&lt;spell&gt;</code> re-entry takes the plain/tlv dump path (the captured<p>
-branch), NEVER the nested-pager branch — matching the loop edge.
-</p>
-</li>
-<li>A repro: drive <code>bro</code> with a <code>bro:</code>-prefixed spell and assert no nested<p>
-pager / no fd-1 capture pollution.
-</p>
-</li>
+<li>A <code>:bro:&lt;spell&gt;</code> re-entry takes the plain/tlv dump path (the captured branch), NEVER the nested-pager branch — matching the loop edge.</li>
+<li>A repro: drive <code>bro</code> with a <code>bro:</code>-prefixed spell and assert no nested pager / no fd-1 capture pollution.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li><code>views/bro/bro.js</code>; keep the tty pager behaviour for the OUTER (non-tlv)<p>
-run byte-identical. The fd-1 monkey-patch stays interim (JAB-029).
-</p>
-</li>
+<li><code>views/bro/bro.js</code>; keep the tty pager behaviour for the OUTER (non-tlv) run byte-identical. The fd-1 monkey-patch stays interim (JAB-029).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Short fix: add <code>&amp;&amp; ctx.mode!==&quot;tlv&quot;</code> to the <code>:130</code> <code>wantPager</code> (mirror the<p>
-edge gate), so a re-entrant tlv run never re-pages; a re-entry marker on ctx is the alternative if mode is not reliably tlv.
-</p>
-</li>
-<li>Long-term (JAB-029): pass an explicit out-sink into <code>loop.cli</code> so the<p>
-capture is a parameter, not a mutation of global <code>io.writeAll</code>.
-</p>
-</li>
+<li>Short fix: add <code>&amp;&amp; ctx.mode!==&quot;tlv&quot;</code> to the <code>:130</code> <code>wantPager</code> (mirror the edge gate), so a re-entrant tlv run never re-pages; a re-entry marker on ctx is the alternative if mode is not reliably tlv.</li>
+<li>Long-term (JAB-029): pass an explicit out-sink into <code>loop.cli</code> so the capture is a parameter, not a mutation of global <code>io.writeAll</code>.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/bro/*</code>: a <code>bro</code> drive whose spell is <code>bro:&lt;x&gt;</code><p>
- asserts NO nested pager opens and the outer capture is intact.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Gate <code>:130</code> <code>wantPager</code> on <code>ctx.mode!==&quot;tlv&quot;</code> (+ note JAB-029 for the<p>
- sink-injection follow-up).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/bro/*</code>: a <code>bro</code> drive whose spell is <code>bro:&lt;x&gt;</code> asserts NO nested pager opens and the outer capture is intact.</li>
+<li class="open"><input type="checkbox" disabled> Gate <code>:130</code> <code>wantPager</code> on <code>ctx.mode!==&quot;tlv&quot;</code> (+ note JAB-029 for the sink-injection follow-up).</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> The explicit-sink refactor is JAB-029-scoped; this ticket is the gate<p>
- only, keep it 1-2 LoC.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> The explicit-sink refactor is JAB-029-scoped; this ticket is the gate only, keep it 1-2 LoC.</li>
 </ul>
 <ul>
-<li>2026-07-07 audit: STILL OPEN (line refs shifted; partial mitigation added). <a href="./JSQUE-020.html">JSQUE-020</a><p>
-<code>928aaad5</code> added an <code>opts2.reentry</code> marker: <code>driveSpell</code> calls <code>loop.cli(argv,{reentry:true})</code> (<code>views/bro/bro.js:117</code>) and the LOOP edge gates its pager on <code>!opts2.reentry</code> (<code>core/loop.js:353</code>). BUT the bro VERB handler's own gate <code>broRun</code> <code>wantPager = io.isatty(1) &amp;&amp; flags.indexOf(&quot;--plain&quot;)&lt;0</code> (<code>bro.js:153</code>) is STILL not gated on reentry/<code>mode===&quot;tlv&quot;</code>, and the fd-1 <code>io.writeAll</code> global monkey-patch persists (<code>bro.js:106-118</code>). Re-target the fix to <code>bro.js:153</code> (add the reentry/tlv gate).
-</p>
-</li>
+<li>2026-07-07 audit: STILL OPEN (line refs shifted; partial mitigation added). <a href="./JSQUE-020.html">JSQUE-020</a> <code>928aaad5</code> added an <code>opts2.reentry</code> marker: <code>driveSpell</code> calls <code>loop.cli(argv,{reentry:true})</code> (<code>views/bro/bro.js:117</code>) and the LOOP edge gates its pager on <code>!opts2.reentry</code> (<code>core/loop.js:353</code>). BUT the bro VERB handler's own gate <code>broRun</code> <code>wantPager = io.isatty(1) &amp;&amp; flags.indexOf(&quot;--plain&quot;)&lt;0</code> (<code>bro.js:153</code>) is STILL not gated on reentry/<code>mode===&quot;tlv&quot;</code>, and the fd-1 <code>io.writeAll</code> global monkey-patch persists (<code>bro.js:106-118</code>). Re-target the fix to <code>bro.js:153</code> (add the reentry/tlv gate).</li>
+<li>2026-07-10 revision: still OPEN — broRun wantPager ungated at views/bro/bro.js:158 (io.isatty(1)&amp;&amp;!--plain, no reentry/tlv gate); fd-1 io.writeAll monkey-patch at bro.js:109-114.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>(pending)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

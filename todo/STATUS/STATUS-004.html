@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>STATUS-004</title>
+<title>STATUS-004: classifier reports del for a staged delete of an UNTRACKED path — status shows 1 del, post says POSTNONE</title>
+<meta property="og:title" content="STATUS-004: classifier reports del for a staged delete of an UNTRACKED path — status shows 1 del, post says POSTNONE">
+<meta property="og:description" content="be delete of an untracked path writes a delete row that the classifier buckets as del, so be status shows a pending deletion (139 ok, 1 del) — but the path was never in the baseline tree, so the committed tree is unchanged and be post refuses POSTNONE: no changes since base. status and post DISAGREE: a phantom del. The classifier must not bucket a delete row whose path is absent from the baseline as del (a no-op delete changes no tree). Reproduces in BOTH native be and jab — a shared classifier fault. be/ JS shared/classify.js. Spec Dirty / DELETE; method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/STATUS/STATUS-004.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,109 +15,71 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>STATUS-004 <a href="./MED.html">MED</a>: classifier reports <code>del</code> for a staged delete of an UNTRACKED path — status shows <code>1 del</code>, post says POSTNONE</h1>
+<h1>STATUS-004: classifier reports <code>del</code> for a staged delete of an UNTRACKED path — status shows <code>1 del</code>, post says POSTNONE</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
 <p>
 <code>be delete</code> of an untracked path writes a <code>delete</code> row that the classifier buckets as <code>del</code>, so <code>be status</code> shows a pending deletion (<code>139 ok, 1 del</code>) — but the path was never in the baseline tree, so the committed tree is unchanged and <code>be post</code> refuses <code>POSTNONE: no changes since base</code>. status and post DISAGREE: a phantom <code>del</code>. The classifier must not bucket a delete row whose path is absent from the baseline as <code>del</code> (a no-op delete changes no tree). Reproduces in BOTH native <code>be</code> and <code>jab</code> — a shared classifier fault. <code>be/</code> JS <code>shared/classify.js</code>. Spec <a href="../../wiki/Dirty.html">Dirty</a> / <a href="../../wiki/DELETE.html">DELETE</a>; method <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Repro (in <code>~/todo/GET-037/test</code>, the beagle-ext-tests sub): <code>sub/selflink/run.sh</code><p>
-is UNTRACKED — absent from the baseline tree (<code>be tree:?&lt;tip&gt;</code> has no <code>sub/selflink</code>).
-</p>
-</li>
+<li>Repro (in <code>~/todo/GET-037/test</code>, the beagle-ext-tests sub): <code>sub/selflink/run.sh</code> is UNTRACKED — absent from the baseline tree (<code>be tree:?&lt;tip&gt;</code> has no <code>sub/selflink</code>).</li>
 <li><code>be delete sub/selflink/</code> unlinked it and wrote <code>delete sub/selflink/run.sh</code> rows.</li>
 <li><code>be status</code> → <code> del sub/selflink/run.sh</code> / <code>139 ok, 1 del</code>; <code>jab status</code> identical.</li>
-<li><code>be post '…'</code> → <code>POSTNONE: no changes since base</code> (<code>Error: POSTNONE</code> + <code>Error: NONE</code>);<p>
-<code>jab post</code> → same <code>POSTNONE</code>. The deleted file was never in baseline, so the committed tree == baseline → genuinely no change.
-</p>
-</li>
-<li>DISAGREEMENT: status reports <code>1 del</code> (a pending change) while post finds none — the<p>
-<code>del</code> is a phantom.
-</p>
-</li>
-<li>Root cause: <code>shared/classify.js::classifyMerge</code> — the `if (d) { push({ bucket:<p>
-&quot;del&quot;, … }) }<code> branch buckets a delete row </code>del<code> REGARDLESS of baseline presence. A delete row whose path is NOT in the baseline (</code>!b<code>) is a no-op (post's tree == baseline) and must not surface as </code>del`.
-</p>
-</li>
-<li>Native <code>be status</code>/<code>be post</code> show the SAME disagreement, so it is a shared<p>
-classifier fault, not JS-only.
-</p>
-</li>
+<li><code>be post '…'</code> → <code>POSTNONE: no changes since base</code> (<code>Error: POSTNONE</code> + <code>Error: NONE</code>); <code>jab post</code> → same <code>POSTNONE</code>. The deleted file was never in baseline, so the committed tree == baseline → genuinely no change.</li>
+<li>DISAGREEMENT: status reports <code>1 del</code> (a pending change) while post finds none — the <code>del</code> is a phantom.</li>
+<li>Root cause: <code>shared/classify.js::classifyMerge</code> — the <code>if (d) { push({ bucket: &quot;del&quot;, … }) }</code> branch buckets a delete row <code>del</code> REGARDLESS of baseline presence. A delete row whose path is NOT in the baseline (<code>!b</code>) is a no-op (post's tree == baseline) and must not surface as <code>del</code>.</li>
+<li>Native <code>be status</code>/<code>be post</code> show the SAME disagreement, so it is a shared classifier fault, not JS-only.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>The classifier (status) must NOT report <code>del</code> for a delete row whose path is absent<p>
-from the baseline — status agrees with post (no phantom <code>del</code>, no surprise POSTNONE).
-</p>
-</li>
-<li>A <code>be delete</code> of an untracked path leaves a clean status (nothing staged), matching<p>
-that post sees no change.
-</p>
-</li>
+<li>The classifier (status) must NOT report <code>del</code> for a delete row whose path is absent from the baseline — status agrees with post (no phantom <code>del</code>, no surprise POSTNONE).</li>
+<li>A <code>be delete</code> of an untracked path leaves a clean status (nothing staged), matching that post sees no change.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li><code>be/</code> JS <code>shared/classify.js</code>. REUSE the existing base-tree lookup (<code>b</code>) — a delete<p>
-is real only when the path is in baseline. Keep <code>classifyDir</code> (ls/lsr) consistent.
-</p>
-</li>
-<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): <code>be delete &lt;untracked&gt;</code> → status shows <code>del</code> but post<p>
-POSTNONEs (RED); after the fix status is clean and matches post.
-</p>
-</li>
-<li>Do NOT regress a real tracked-file delete: a baseline path deleted still shows <code>del</code><p>
-AND commits.
-</p>
-</li>
+<li><code>be/</code> JS <code>shared/classify.js</code>. REUSE the existing base-tree lookup (<code>b</code>) — a delete is real only when the path is in baseline. Keep <code>classifyDir</code> (ls/lsr) consistent.</li>
+<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): <code>be delete &lt;untracked&gt;</code> → status shows <code>del</code> but post POSTNONEs (RED); after the fix status is clean and matches post.</li>
+<li>Do NOT regress a real tracked-file delete: a baseline path deleted still shows <code>del</code> AND commits.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>In <code>classifyMerge</code>'s <code>if (d)</code> branch, bucket <code>del</code> ONLY when the path is in baseline<p>
-(<code>b</code> present); a delete row for a non-baseline path is dropped (no row), so status matches post's POSTNONE.
-</p>
-</li>
-<li>Secondary (separate, link): <code>be delete &lt;untracked&gt;</code> arguably should not WRITE a<p>
-delete row at all (nothing tracked to stage; <a href="../../wiki/DELETE.html">DELETE</a>: &quot;an already-absent path is an OK no-op&quot;) — but the classifier must be robust regardless.
-</p>
-</li>
+<li>In <code>classifyMerge</code>'s <code>if (d)</code> branch, bucket <code>del</code> ONLY when the path is in baseline (<code>b</code> present); a delete row for a non-baseline path is dropped (no row), so status matches post's POSTNONE.</li>
+<li>Secondary (separate, link): <code>be delete &lt;untracked&gt;</code> arguably should not WRITE a delete row at all (nothing tracked to stage; <a href="../../wiki/DELETE.html">DELETE</a>: &quot;an already-absent path is an OK no-op&quot;) — but the classifier must be robust regardless.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
 <li class="open"><input type="checkbox" disabled> Repro: <code>be delete &lt;untracked&gt;</code> → status <code>1 del</code> but post <code>POSTNONE</code>. RED.</li>
-<li class="open"><input type="checkbox" disabled> <code>classify.js:327</code> (classifyMerge staged-del branch) already computes<p>
- <code>inBase: !!b</code> — status must DROP the row when <code>!b</code> (today only  <code>fold-decide.js:131</code> consumes the flag, for unlink); keep the gitlink-del  branch (:318, inBase:true) as-is.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Mirror in <code>classifyDir</code> (<code>classify.js:548</code> — the ls/lsr <code>if (d)</code> bucket<p>
- lacks even the baseline lookup).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> <code>classify.js:327</code> (classifyMerge staged-del branch) already computes <code>inBase: !!b</code> — status must DROP the row when <code>!b</code> (today only <code>fold-decide.js:131</code> consumes the flag, for unlink); keep the gitlink-del branch (:318, inBase:true) as-is.</li>
+<li class="open"><input type="checkbox" disabled> Mirror in <code>classifyDir</code> (<code>classify.js:548</code> — the ls/lsr <code>if (d)</code> bucket lacks even the baseline lookup).</li>
 <li class="open"><input type="checkbox" disabled> (consider) DELETE: skip writing a delete row for an untracked path — separate.</li>
 <li class="open"><input type="checkbox" disabled> Green: real tracked-file delete still <code>del</code> + commits; phantom gone; native parity.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Native exhibits the same disagreement — decide whether to also fix native or only<p>
-align the <code>be/</code> JS classifier (the working scope here).
-</p>
-</li>
-<li>Overlaps the DELETE-side question (write-the-row vs not) — keep the classifier fix<p>
-self-contained.
-</p>
-</li>
+<li>Native exhibits the same disagreement — decide whether to also fix native or only align the <code>be/</code> JS classifier (the working scope here).</li>
+<li>Overlaps the DELETE-side question (write-the-row vs not) — keep the classifier fix self-contained.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>OPEN — filed 2026-06-30 (reported by user; repro <code>~/todo/GET-037/test</code>). Deliverable:<p>
-a non-baseline delete row is never classified <code>del</code>; status agrees with post.
-</p>
-</li>
-<li>Audit 2026-07-07: still present — <code>classify.js:327</code> pushes <code>bucket:&quot;del&quot;</code> for any<p>
-delete row (tags <code>inBase:!!b</code> but never gates on it); no fixing commit in the logs.
-</p>
-</li>
+<li>OPEN — filed 2026-06-30 (reported by user; repro <code>~/todo/GET-037/test</code>). Deliverable: a non-baseline delete row is never classified <code>del</code>; status agrees with post.</li>
+<li>Audit 2026-07-07: still present — <code>classify.js:327</code> pushes <code>bucket:&quot;del&quot;</code> for any delete row (tags <code>inBase:!!b</code> but never gates on it); no fixing commit in the logs.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

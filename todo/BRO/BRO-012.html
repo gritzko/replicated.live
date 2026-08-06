@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BRO-012</title>
+<title>BRO-012: one-click ticket codes — an F issue-key opens its ABC-123.{md,txt,mkd}; log-view commit summaries mint the same F token</title>
+<meta property="og:title" content="BRO-012: one-click ticket codes — an F issue-key opens its ABC-123.{md,txt,mkd}; log-view commit summaries mint the same F token">
+<meta property="og:description" content="The tokenizers already fuse an issue key (ABC-123) into ONE F-tagged token — MKDTonKey/MDTonKey (dog/tok/MKDT.c:41, MDT.c.rl) and FREEonKey (sticky through the D comment overlay, dog/tok/FREE.c.rl:71 rule uc ucnum &quot;-&quot; dgt+ =&gt; onkey), asserted by MKDTIssueKeyTest/MDTIssueKeyTest (dog/test/TOK01.c:1227,1259 — &quot;ABC-123&quot; → &quot;F&quot;). The tag exists SO the pager can navigate it (MKDT.c:41 comment: &quot;one filename-tagged token so the pager can navigate it (BRO-012)&quot;), but no consumer resolves it: a left-click on an F cell is DEAD because BRO-005's uriAt only follows a token's adjacent hidden U target (be/views/bro/pager.js:414), and an F issue key carries none. Goal: (1) a click on an F issue-key token OPENS the ticket file named for it — ABC-123.{md,txt,mkd} — located under $TODOROOT, a NEW env var naming the ticket tree ON PAR with SRCROOT (default: the root of the FIRST worktree opened, i.e. the launch tree — tickets live in ONE tree, e.g. journal/todo/, not in the code worktree being browsed); (2) the log: view detects ticket codes in commit summaries and mints the SAME F token, so those are clickable too. JS (jab) side. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BRO/BRO-012.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,127 +16,60 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>BRO-012: one-click ticket codes — an <code>F</code> issue-key opens its <code>ABC-123.{md,txt,mkd}</code>; log-view commit summaries mint the same <code>F</code> token</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The tokenizers already fuse an issue key (<code>ABC-123</code>) into ONE <code>F</code>-tagged token — <code>MKDTonKey</code>/<code>MDTonKey</code> (<code>dog/tok/MKDT.c:41</code>, <code>MDT.c.rl</code>) and <code>FREEonKey</code> (sticky through the <code>D</code> comment overlay, <code>dog/tok/FREE.c.rl:71</code> rule <code>uc ucnum* &quot;-&quot; dgt+ =&gt; on_key</code>), asserted by <code>MKDTIssueKeyTest</code>/<code>MDTIssueKeyTest</code> (<code>dog/test/TOK01.c:1227,1259</code> — <code>&quot;ABC-123&quot; → &quot;F&quot;</code>). The tag exists SO the pager can navigate it (<code>MKDT.c:41</code> comment: &quot;one filename-tagged token so the pager can navigate it (BRO-012)&quot;), but no consumer resolves it: a left-click on an <code>F</code> cell is DEAD because BRO-005's <code>_uriAt</code> only follows a token's adjacent hidden <code>U</code> target (<code>be/views/bro/pager.js:414</code>), and an <code>F</code> issue key carries none. Goal: (1) a click on an <code>F</code> issue-key token OPENS the ticket file named for it — <code>ABC-123.{md,txt,mkd}</code> — located under <code>$TODO_ROOT</code>, a NEW env var naming the ticket tree ON PAR with <code>SRC_ROOT</code> (default: the root of the FIRST worktree opened, i.e. the launch tree — tickets live in ONE tree, e.g. <code>journal/todo/</code>, not in the code worktree being browsed); (2) the <code>log:</code> view detects ticket codes in commit summaries and mints the SAME <code>F</code> token, so those are clickable too. JS (jab) side. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Tokenizer side is DONE: <code>F</code> is emitted for issue keys by FREE (all langs,<p>
-sticky through the <code>D</code> comment overlay), MKDT (<code>.mkd</code>), MDT (<code>.md</code>) — see <code>dog/tok/{FREE,MKDT,MDT}*</code> and <code>dog/test/TOK01.c</code> (<code>ABC-123 → F</code>, decorated refs like `<code> </code>ABC-123<code> </code><code> stay </code>H<code>/</code>G`). The CONSUMER is the whole gap.
-</p>
-</li>
-<li>Pager click machinery landed in <a href="BRO-005.html">BRO-005</a>: <code>_mouse</code> → <code>_uriAt(hunk,off)</code> →<p>
-<code>_runSpell</code> push (<code>be/views/bro/pager.js:346,414</code>). <code>_uriAt</code> resolves a click to the NEXT token's hidden <code>U</code> bytes, or the line's lone <code>U</code> (<code>_lineUri:432</code>). An <code>F</code> issue-key token in a file body (cat/blob/tree of code or a wiki page) has NO adjacent <code>U</code>, so the click returns null — a dead link.
-</p>
-</li>
-<li>Log rows already prove the pattern: <a href="BRO-006.html">BRO-006</a> splices a hidden <code>U</code><p>
-<code>commit:?&lt;sha&gt;</code> right after the sha8 token (<code>be/views/log/log.js:368,392,397</code> via <code>navlib.navUri</code>), and the pager hides it + follows it on click. But the commit SUMMARY is emitted as a single flat <code>TAG_S</code> span (<code>log.js:401</code>), so a <code>ABC-123</code> inside a commit message is plain text, not an <code>F</code>, not clickable.
-</p>
-</li>
-<li><code>//TREE</code> vs <code>//</code> are the two nav roots: <code>be.wtdir</code> (<code>be/core/discover.js:200</code>)<p>
-maps <code>//name[/sub]</code> → <code>$SRC_ROOT/name/sub</code> and <code>//</code>/<code>//.</code> → the LAUNCH tree (<code>find(cwd).wt</code>, &quot;where jab started&quot;); <code>be.navCwd</code> (<code>discover.js:~220</code>) gives the CURRENT view's <code>//name/path</code> context. <a href="../URI/URI-011.html">URI-011</a>/<a href="../../wiki/Nav.html">Nav</a> scope a <code>//</code> authority through <code>authorityRepo</code> (<code>be/core/loop.js:180</code>).
-</p>
-</li>
+<li>Tokenizer side is DONE: <code>F</code> is emitted for issue keys by FREE (all langs, sticky through the <code>D</code> comment overlay), MKDT (<code>.mkd</code>), MDT (<code>.md</code>) — see <code>dog/tok/{FREE,MKDT,MDT}*</code> and <code>dog/test/TOK01.c</code> (<code>ABC-123 → F</code>, decorated refs like `<code> </code>ABC-123<code> </code><code> stay </code>H<code>/</code>G`). The CONSUMER is the whole gap.</li>
+<li>Pager click machinery landed in <a href="BRO-005.html">BRO-005</a>: <code>_mouse</code> → <code>_uriAt(hunk,off)</code> → <code>_runSpell</code> push (<code>be/views/bro/pager.js:346,414</code>). <code>_uriAt</code> resolves a click to the NEXT token's hidden <code>U</code> bytes, or the line's lone <code>U</code> (<code>_lineUri:432</code>). An <code>F</code> issue-key token in a file body (cat/blob/tree of code or a wiki page) has NO adjacent <code>U</code>, so the click returns null — a dead link.</li>
+<li>Log rows already prove the pattern: <a href="BRO-006.html">BRO-006</a> splices a hidden <code>U</code> <code>commit:?&lt;sha&gt;</code> right after the sha8 token (<code>be/views/log/log.js:368,392,397</code> via <code>navlib.navUri</code>), and the pager hides it + follows it on click. But the commit SUMMARY is emitted as a single flat <code>TAG_S</code> span (<code>log.js:401</code>), so a <code>ABC-123</code> inside a commit message is plain text, not an <code>F</code>, not clickable.</li>
+<li><code>//TREE</code> vs <code>//</code> are the two nav roots: <code>be.wtdir</code> (<code>be/core/discover.js:200</code>) maps <code>//name[/sub]</code> → <code>$SRC_ROOT/name/sub</code> and <code>//</code>/<code>//.</code> → the LAUNCH tree (<code>find(cwd).wt</code>, &quot;where jab started&quot;); <code>be.navCwd</code> (<code>discover.js:~220</code>) gives the CURRENT view's <code>//name/path</code> context. <a href="../URI/URI-011.html">URI-011</a>/<a href="../../wiki/Nav.html">Nav</a> scope a <code>//</code> authority through <code>authorityRepo</code> (<code>be/core/loop.js:180</code>).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>A left-click (and the keyboard follow) on an <code>F</code>-tagged issue-key token opens<p>
-the ticket file whose basename is the key with a <code>.md</code>/<code>.txt</code>/<code>.mkd</code> extension — <code>ABC-123</code> → <code>ABC-123.mkd</code> — via a view-stack push, like any <code>U</code>.
-</p>
-</li>
-<li>Resolution root, tried IN ORDER: (1) explicit <code>$TODO_ROOT</code> (a new env var,<p>
-mirror of <code>SRC_ROOT</code>); (2) the CURRENT wt root (the view's nav authority); (3) the OPEN wt root (the first/launch wt). First root whose <code>todo/&lt;TOPIC&gt;/&lt;KEY&gt;.&lt;ext&gt;</code> exists wins; a total miss is a quiet no-op.
-</p>
-</li>
-<li>The <code>log:</code> view scans each commit summary, fuses any ticket code into the<p>
-SAME <code>F</code> token the tokenizers mint, and makes it open the ticket — a click on <code>ABC-123</code> in a commit message opens <code>ABC-123.{md,txt,mkd}</code>.
-</p>
-</li>
+<li>A left-click (and the keyboard follow) on an <code>F</code>-tagged issue-key token opens the ticket file whose basename is the key with a <code>.md</code>/<code>.txt</code>/<code>.mkd</code> extension — <code>ABC-123</code> → <code>ABC-123.mkd</code> — via a view-stack push, like any <code>U</code>.</li>
+<li>Resolution root, tried IN ORDER: (1) explicit <code>$TODO_ROOT</code> (a new env var, mirror of <code>SRC_ROOT</code>); (2) the CURRENT wt root (the view's nav authority); (3) the OPEN wt root (the first/launch wt). First root whose <code>todo/&lt;TOPIC&gt;/&lt;KEY&gt;.&lt;ext&gt;</code> exists wins; a total miss is a quiet no-op.</li>
+<li>The <code>log:</code> view scans each commit summary, fuses any ticket code into the SAME <code>F</code> token the tokenizers mint, and makes it open the ticket — a click on <code>ABC-123</code> in a commit message opens <code>ABC-123.{md,txt,mkd}</code>.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Same <code>F</code> tag/token the tokenizers already emit — NO new tag, NO new hunk<p>
-format. Reuse BRO-005 <code>_uriAt</code>/<code>_screenToByte</code> and BRO-006's hidden-<code>U</code> splice; producers otherwise unchanged.
-</p>
-</li>
-<li>Resolve ONLY through <code>be.wtdir</code>/<code>be.navCwd</code> and the URI class (<a href="../URI/URI-011.html">URI-011</a>);<p>
-never hand-compose a path or regex-parse a URI (<a href="../../meta/work.html">work</a> §&quot;Things NOT TO DO&quot;).
-</p>
-</li>
-<li>Try ONLY the three extensions <code>md</code>/<code>txt</code>/<code>mkd</code> under <code>&lt;root&gt;/todo/</code>; open the<p>
-first hit. <code>todoRoot()</code> (new <code>core/discover.js</code> helper, mirror of <code>srcRoot()</code> <code>:185</code>) yields the ordered roots: <code>TODO_ROOT</code> env, then current wt, then open wt.
-</p>
-</li>
+<li>Same <code>F</code> tag/token the tokenizers already emit — NO new tag, NO new hunk format. Reuse BRO-005 <code>_uriAt</code>/<code>_screenToByte</code> and BRO-006's hidden-<code>U</code> splice; producers otherwise unchanged.</li>
+<li>Resolve ONLY through <code>be.wtdir</code>/<code>be.navCwd</code> and the URI class (<a href="../URI/URI-011.html">URI-011</a>); never hand-compose a path or regex-parse a URI (<a href="../../meta/work.html">work</a> §&quot;Things NOT TO DO&quot;).</li>
+<li>Try ONLY the three extensions <code>md</code>/<code>txt</code>/<code>mkd</code> under <code>&lt;root&gt;/todo/</code>; open the first hit. <code>todoRoot()</code> (new <code>core/discover.js</code> helper, mirror of <code>srcRoot()</code> <code>:185</code>) yields the ordered roots: <code>TODO_ROOT</code> env, then current wt, then open wt.</li>
 <li>JS (jab) only; C bro (<code>bro/MAUS</code>) parity may follow as its own ticket.</li>
 <li>Repro-first, no other tests edited without leave (<a href="../../meta/work.html">Issues</a>).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>CROSS-REPO ref (found in diff-view testing): a ticket link is `cat://journal/<p>
-…<code> but tickets live in a DIFFERENT repo, so the [URI-012] follow-inheritance grafting the current view's </code>?ref<code> (a diff hash) onto it yields </code>cat://journal/…?&lt;hash&gt;<code> → the hash is absent there → &quot;no hunks&quot;. Fix in </code>_resolveSpell<code> (</code>views/bro/pager.js<code>): inherit the context </code>?ref<code> ONLY for a RELATIVE click (target OMITS its authority); an own-</code>//authority<code> (absolute, maybe cross-repo) target keeps its own (usually absent) ref. Diff-view ticket codes then resolve via the pager </code>F`-fallback with no stale ref.
-</p>
-</li>
-<li>CAT-VIEW shadow (found in review): <code>views/cat</code> <code>withLinks</code> (BRO-006's port of<p>
-C <code>bro_word_around</code>, <code>BRO.c:2968</code>) blankets EVERY grepable token with a <code>grep:#&lt;word&gt;</code> <code>U</code> — the <code>F</code> issue key included (<code>grepable()</code> is byte-level, tag-blind) — so <code>_uriAt</code>'s adjacent-<code>U</code> check opened grep BEFORE the ticket. Fix at the PRODUCER: <code>withLinks</code> emits a ticket <code>U</code> (<code>ticketUri</code>) for an <code>F</code> token, grep for the rest (unresolved <code>F</code> falls to grep). Not a C behavior — C emits no per-token <code>U</code>; it greps the word under the cursor on right-click.
-</p>
-</li>
-<li>TWO click paths, ONE resolver. A body <code>F</code> (FREE/MKDT/MDT tokens, no producer<p>
-<code>U</code>) is resolved by the PAGER from the token TEXT at click time; a log <code>F</code> is resolved by the PRODUCER, which splices a hidden <code>U</code> after it (BRO-006 style) so the existing <code>_uriAt</code> just works. Both converge on: key → <code>ABC-123.{md,txt,mkd}</code> under a wt root → a <code>cat:</code>/<code>blob:</code> nav URI.
-</p>
-</li>
-<li>Resolver <code>ticketUri(key)</code>: <code>todoRoot()</code> (new <code>core/discover.js</code> helper,<p>
-mirror of <code>srcRoot()</code>) yields roots IN ORDER — <code>getenv(&quot;TODO_ROOT&quot;)</code>, the current wt root, the open/launch wt root — and the resolver probes each for <code>todo/&lt;TOPIC&gt;/&lt;KEY&gt;.&lt;ext&gt;</code>, composing the open URI via the URI class + <code>be.navCwd(root)</code> so it OPENS in the pager. TOPIC = chars before the <code>-</code> (<code>ABC-123</code> → <code>todo/ABC/ABC-123.mkd</code>). The ordered roots cover both the common case (tickets in one tree via <code>TODO_ROOT</code>) and browsing within the ticket tree.
-</p>
-</li>
-<li>Log view: teach <code>appendRow</code> (<code>log.js:357</code>) to scan <code>summary</code> for the key<p>
-shape and split the one <code>TAG_S</code> span into <code>S</code>/<code>F</code>/<code>S</code>, splicing a hidden <code>U</code> ticket-file URI after each <code>F</code> (mirrors the sha8+<code>U</code> splice at <code>log.js:392</code>). Detect the key with the SHARED tokenizer grammar (FREE/MKDT <code>uc ucnum* &quot;-&quot; dgt+</code>), NOT a fresh JS regex, so the log's <code>F</code> can't drift from the body's.
-</p>
-</li>
+<li>CROSS-REPO ref (found in diff-view testing): a ticket link is <code>cat://journal/ …</code> but tickets live in a DIFFERENT repo, so the <a href="./URI-012.html">URI-012</a> follow-inheritance grafting the current view's <code>?ref</code> (a diff hash) onto it yields <code>cat://journal/…?&lt;hash&gt;</code> → the hash is absent there → &quot;no hunks&quot;. Fix in <code>_resolveSpell</code> (<code>views/bro/pager.js</code>): inherit the context <code>?ref</code> ONLY for a RELATIVE click (target OMITS its authority); an own-<code>//authority</code> (absolute, maybe cross-repo) target keeps its own (usually absent) ref. Diff-view ticket codes then resolve via the pager <code>F</code>-fallback with no stale ref.</li>
+<li>CAT-VIEW shadow (found in review): <code>views/cat</code> <code>withLinks</code> (BRO-006's port of C <code>bro_word_around</code>, <code>BRO.c:2968</code>) blankets EVERY grepable token with a <code>grep:#&lt;word&gt;</code> <code>U</code> — the <code>F</code> issue key included (<code>grepable()</code> is byte-level, tag-blind) — so <code>_uriAt</code>'s adjacent-<code>U</code> check opened grep BEFORE the ticket. Fix at the PRODUCER: <code>withLinks</code> emits a ticket <code>U</code> (<code>ticketUri</code>) for an <code>F</code> token, grep for the rest (unresolved <code>F</code> falls to grep). Not a C behavior — C emits no per-token <code>U</code>; it greps the word under the cursor on right-click.</li>
+<li>TWO click paths, ONE resolver. A body <code>F</code> (FREE/MKDT/MDT tokens, no producer <code>U</code>) is resolved by the PAGER from the token TEXT at click time; a log <code>F</code> is resolved by the PRODUCER, which splices a hidden <code>U</code> after it (BRO-006 style) so the existing <code>_uriAt</code> just works. Both converge on: key → <code>ABC-123.{md,txt,mkd}</code> under a wt root → a <code>cat:</code>/<code>blob:</code> nav URI.</li>
+<li>Resolver <code>ticketUri(key)</code>: <code>todoRoot()</code> (new <code>core/discover.js</code> helper, mirror of <code>srcRoot()</code>) yields roots IN ORDER — <code>getenv(&quot;TODO_ROOT&quot;)</code>, the current wt root, the open/launch wt root — and the resolver probes each for <code>todo/&lt;TOPIC&gt;/&lt;KEY&gt;.&lt;ext&gt;</code>, composing the open URI via the URI class + <code>be.navCwd(root)</code> so it OPENS in the pager. TOPIC = chars before the <code>-</code> (<code>ABC-123</code> → <code>todo/ABC/ABC-123.mkd</code>). The ordered roots cover both the common case (tickets in one tree via <code>TODO_ROOT</code>) and browsing within the ticket tree.</li>
+<li>Log view: teach <code>appendRow</code> (<code>log.js:357</code>) to scan <code>summary</code> for the key shape and split the one <code>TAG_S</code> span into <code>S</code>/<code>F</code>/<code>S</code>, splicing a hidden <code>U</code> ticket-file URI after each <code>F</code> (mirrors the sha8+<code>U</code> splice at <code>log.js:392</code>). Detect the key with the SHARED tokenizer grammar (FREE/MKDT <code>uc ucnum* &quot;-&quot; dgt+</code>), NOT a fresh JS regex, so the log's <code>F</code> can't drift from the body's.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
 <li class="done"><input type="checkbox" checked disabled> Repro-first pager test — <code>be/test/bro/ticket/</code> (check.js + run.sh) — landed <code>9e33f053</code>.</li>
-<li class="done"><input type="checkbox" checked disabled> Pager: <code>F</code>-cell click with no <code>U</code> derives the target from the token text via<p>
- <code>TICKET.ticketUri(key)</code> then follows (<code>views/bro/pager.js:900</code>) — landed <code>9e33f053</code>.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> <code>todoRoot()</code> in <code>core/discover.js:198</code> (mirror of <code>srcRoot()</code>, BRO-012 comment<p>
- at <code>:193</code>), exported via <code>be</code> (<code>:271</code>) — landed <code>9e33f053</code>.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Resolver <code>shared/ticket.js</code> — <code>scanKeys</code>/<code>ticketUri</code>/<code>ticketDir</code> (<code>:37,:69,:87</code>),<p>
- roots via <code>be.todoRoot()</code>+<code>be.navCwd</code>, no hand-composed path — landed <code>9e33f053</code>;  reused by COMMIT-007 (<code>ae6ac86f</code>) as designed.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Log view: <code>appendRow</code> scans the summary with the SHARED <code>ticket.scanKeys</code><p>
- grammar and splices the hidden <code>U</code> ticket URI per key (<code>views/log/log.js:424-436</code>)  — landed <code>9e33f053</code>.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Tokenizer twin: StrictMark parser recognizes ticket codes — dog <code>9f15c6c8</code><p>
- (beagle pin <code>3293eaf9</code>); tests ride <code>be/test/bro/ticket/</code>.
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Pager: <code>F</code>-cell click with no <code>U</code> derives the target from the token text via <code>TICKET.ticketUri(key)</code> then follows (<code>views/bro/pager.js:900</code>) — landed <code>9e33f053</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> <code>todoRoot()</code> in <code>core/discover.js:198</code> (mirror of <code>srcRoot()</code>, BRO-012 comment at <code>:193</code>), exported via <code>be</code> (<code>:271</code>) — landed <code>9e33f053</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Resolver <code>shared/ticket.js</code> — <code>scanKeys</code>/<code>ticketUri</code>/<code>ticketDir</code> (<code>:37,:69,:87</code>), roots via <code>be.todoRoot()</code>+<code>be.navCwd</code>, no hand-composed path — landed <code>9e33f053</code>; reused by COMMIT-007 (<code>ae6ac86f</code>) as designed.</li>
+<li class="done"><input type="checkbox" checked disabled> Log view: <code>appendRow</code> scans the summary with the SHARED <code>ticket.scanKeys</code> grammar and splices the hidden <code>U</code> ticket URI per key (<code>views/log/log.js:424-436</code>) — landed <code>9e33f053</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Tokenizer twin: StrictMark parser recognizes ticket codes — dog <code>9f15c6c8</code> (beagle pin <code>3293eaf9</code>); tests ride <code>be/test/bro/ticket/</code>.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li><a href="../COMMIT/COMMIT-007.html">COMMIT-007</a> (sibling) is the <code>commit:</code>-view producer twin (the metadata<p>
-message is a log-summary analogue): it REUSES this ticket's shipped <code>shared/ticket.js</code> (<code>scanKeys</code>/<code>ticketUri</code>) + <code>be.todoRoot()</code> to splice an <code>F</code> + hidden <code>U</code> per message key.  This ticket still owns the pager body-token <code>F</code>-fallback path + the <code>log:</code> splice.
-</p>
-</li>
-<li>be/ is a detached sub; committing the fix needs the <a href="../SUBS/SUBS-035.html">SUBS-035</a> bootstrap<p>
-binary (same gate as BRO-005).
-</p>
-</li>
-<li>Ticket-file layout is <code>$TODO_ROOT/todo/&lt;TOPIC&gt;/&lt;KEY&gt;.mkd</code> — NOT a flat<p>
-<code>&lt;KEY&gt;.mkd</code>; TOPIC is derived from the chars before the <code>-</code>.
-</p>
-</li>
-<li>The running pager loads its JS at LAUNCH from the launch tree's <code>be/</code> (jab<p>
-upward <code>be/</code>-scan, <code>jab:__main</code>) — navigating <code>//other</code> does NOT swap code. So the fix only shows once it is the RUNNING tree: launch jab from the fixed worktree (set <code>TODO_ROOT</code> to the ticket tree) or land it into <code>journal/be</code>.
-</p>
-</li>
+<li><a href="../COMMIT/COMMIT-007.html">COMMIT-007</a> (sibling) is the <code>commit:</code>-view producer twin (the metadata message is a log-summary analogue): it REUSES this ticket's shipped <code>shared/ticket.js</code> (<code>scanKeys</code>/<code>ticketUri</code>) + <code>be.todoRoot()</code> to splice an <code>F</code> + hidden <code>U</code> per message key.  This ticket still owns the pager body-token <code>F</code>-fallback path + the <code>log:</code> splice.</li>
+<li>be/ is a detached sub; committing the fix needs the <a href="../SUBS/SUBS-035.html">SUBS-035</a> bootstrap binary (same gate as BRO-005).</li>
+<li>Ticket-file layout is <code>$TODO_ROOT/todo/&lt;TOPIC&gt;/&lt;KEY&gt;.mkd</code> — NOT a flat <code>&lt;KEY&gt;.mkd</code>; TOPIC is derived from the chars before the <code>-</code>.</li>
+<li>The running pager loads its JS at LAUNCH from the launch tree's <code>be/</code> (jab upward <code>be/</code>-scan, <code>jab:__main</code>) — navigating <code>//other</code> does NOT swap code. So the fix only shows once it is the RUNNING tree: launch jab from the fixed worktree (set <code>TODO_ROOT</code> to the ticket tree) or land it into <code>journal/be</code>.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
@@ -140,5 +77,16 @@ upward <code>be/</code>-scan, <code>jab:__main</code>) — navigating <code>//ot
 <li>LANDED dog <code>9f15c6c8</code> / beagle <code>3293eaf9</code> (&quot;BRO-012: make the StrictMark parser recognize ticket codes&quot;, 2026-07-03): the tokenizer half.</li>
 <li>Sibling COMMIT-007 (<code>ae6ac86f</code>) reuses the shipped <code>shared/ticket.js</code> + <code>be.todoRoot()</code> for <code>commit:</code>-view message keys, per plan.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

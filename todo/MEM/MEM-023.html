@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-023</title>
+<title>MEM-023 DONT: tree-walk recursion holds a 1MB buffer per level (keeper/KEEP.c, keeper/WALK.c)</title>
+<meta property="og:title" content="MEM-023 DONT: tree-walk recursion holds a 1MB buffer per level (keeper/KEEP.c, keeper/WALK.c)">
+<meta property="og:description" content="Two tree walkers recurse per nesting level while each frame holds a live ~1MB buffer with no depth cap: keepwalktree maps u8bMap(tbuf, 1&lt;&lt;20) per level and recurses before unmapping; walktreedive carves acarve(u8, tbuf, 1&lt;&lt;20) and recurses bare so each BASS carve survives across the child fetch. A pathologically deep directory chain (a legal git tree shape) drives recursion to the SHA cap (~65536) for keepwalktree → C-stack overflow, or exhausts the per-thread BASS arena for walktreedive (graceful WALKNOROOM). The goal is to bound depth and stop stacking one big buffer per level.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-023.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,9 +15,14 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>MEM-023: tree-walk recursion holds a 1MB buffer per level (keeper/KEEP.c, keeper/WALK.c)</h1>
+<h1>MEM-023 <a href="./DONT.html">DONT</a>: tree-walk recursion holds a 1MB buffer per level (keeper/KEEP.c, keeper/WALK.c)</h1>
+<div>
 <p>
-Two tree walkers recurse per nesting level while each frame holds a live ~1MB buffer with no depth cap: <code>keep_walk_tree</code> maps <code>u8bMap(tbuf, 1&lt;&lt;20)</code> per level and recurses before unmapping; <code>walk_tree_dive</code> carves <code>a_carve(u8, tbuf, 1&lt;&lt;20)</code> and recurses bare so each BASS carve survives across the child fetch. A pathologically deep directory chain (a legal git tree shape) drives recursion to the SHA cap (~65536) for <code>keep_walk_tree</code> → C-stack overflow, or exhausts the per-thread BASS arena for <code>walk_tree_dive</code> (graceful WALKNOROOM). The goal is to bound depth and stop stacking one big buffer per level.
+Now: DONT
+</p>
+</div>
+<p>
+Two tree walkers recurse per nesting level while each frame holds a live <del>1MB buffer with no depth cap: <code>keep_walk_tree</code> maps <code>u8bMap(tbuf, 1&lt;&lt;20)</code> per level and recurses before unmapping; <code>walk_tree_dive</code> carves <code>a_carve(u8, tbuf, 1&lt;&lt;20)</code> and recurses bare so each BASS carve survives across the child fetch. A pathologically deep directory chain (a legal git tree shape) drives recursion to the SHA cap (</del>65536) for <code>keep_walk_tree</code> → C-stack overflow, or exhausts the per-thread BASS arena for <code>walk_tree_dive</code> (graceful WALKNOROOM). The goal is to bound depth and stop stacking one big buffer per level.
 </p>
 <h2>Issues</h2>
 <p>
@@ -31,7 +40,7 @@ None.
 <h2>WIP</h2>
 <h3>TODOs</h3>
 <p>
- -<a href="./v.html">v</a> Depth cap: <code>walk_tree_dive</code> returns WALKBADFMT at <code>WALK_MAX_DEPTH</code> (4096) — keeper/WALK.c:50, WALK.h:56 (<code>0eb0afab</code> KEEP-001).  -<a href="./v.html">v</a> Per-level buffer shrunk 1MB→64KiB (keeper/WALK.c:60) and subtree recursion goes through <code>try()</code> so each child's BASS scratch rewinds on return (WALK.c:142-144) — <code>0eb0afab</code> + <code>49039f36</code> GET-020.  -<a href="./v.html">v</a> <code>keep_walk_tree</code> (KEEP.c) no longer exists — converged with 3 other walkers into <code>KEEPWalkTree</code> (<code>0eb0afab</code> KEEP-001).  -<a href="./v.html">v</a> Repro: keeper/test/WALK.c Test 7 &quot;deep tree terminates cleanly, cap holds (KEEP-001)&quot;.
+ -<a href="./v.html">v</a> Depth cap: <code>walk_tree_dive</code> returns WALKBADFMT at <code>WALK_MAX_DEPTH</code> (4096) — keeper/WALK.c:50, WALK.h:56 (<code>0eb0afab</code> KEEP-001). -<a href="./v.html">v</a> Per-level buffer shrunk 1MB→64KiB (keeper/WALK.c:60) and subtree recursion goes through <code>try()</code> so each child's BASS scratch rewinds on return (WALK.c:142-144) — <code>0eb0afab</code> + <code>49039f36</code> GET-020. -<a href="./v.html">v</a> <code>keep_walk_tree</code> (KEEP.c) no longer exists — converged with 3 other walkers into <code>KEEPWalkTree</code> (<code>0eb0afab</code> KEEP-001). -<a href="./v.html">v</a> Repro: keeper/test/WALK.c Test 7 &quot;deep tree terminates cleanly, cap holds (KEEP-001)&quot;.
 </p>
 <h2>Outcome</h2>
 <ul>
@@ -39,5 +48,16 @@ None.
 <li><code>49039f36</code> GET-020: try()-wraps the tree-walk recursion so per-subtree BASS scratch is rewound (no more one-live-carve-per-level).</li>
 <li>No MEM-023-tagged commit — the fixes landed under KEEP-001/GET-020; verified in code 2026-07-07 (WALK.c:50,60,142).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

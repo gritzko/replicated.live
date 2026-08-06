@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SUBS-047</title>
+<title>SUBS-047: same-source sub fetch broken (ssh:////), worktree sources unserved, nested fallback empty</title>
+<meta property="og:title" content="SUBS-047: same-source sub fetch broken (ssh:////), worktree sources unserved, nested fallback empty">
+<meta property="og:description" content="jab get ssh://localhost/src/beagle died SUBFETCH cannot fetch sub dog/abc (abc) from ssh:////localhost/src/beagle?/abc — child unreachable. Three compounding defects in the be/ JS GET sub-mount path: (A) submount.sameSourceUri hand-concatenated &quot;//&quot; + u.authority where the URI binding's u.authority already carries the // (the known URI-013 latent bug), so every authority-bearing same-source URI was ssh:////host/… and never reached the peer; (B) a git source WITH a worktree (path not ending .git) serves each sub's own checkout at &lt;path&gt;/&lt;subpath&gt;, but no such same-source form existed — only the beagle ?/&lt;proj&gt; swap; (C) a NESTED sub (dog/abc) is declared in dog/.gitmodules as abc, yet mount read only the ROOT .gitmodules with the full subpath, so the official-url fallback (and the Title) came up empty and the whole mount threw. Spec: same source first, official .gitmodules url only as fallback (Submodules §1, Title retrieval preference).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/SUBS/SUBS-047.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>SUBS-047 <a href="./HIGH.html">HIGH</a>: same-source sub fetch broken (<code>ssh:////</code>), worktree sources unserved, nested fallback empty</h1>
+<h1>SUBS-047: same-source sub fetch broken (<code>ssh:////</code>), worktree sources unserved, nested fallback empty</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
 <p>
 <code>jab get ssh://localhost/src/beagle</code> died <code>SUBFETCH cannot fetch sub dog/abc (abc) from ssh:////localhost/src/beagle?/abc — child unreachable</code>. Three compounding defects in the be/ JS GET sub-mount path: (A) <code>submount.sameSourceUri</code> hand-concatenated <code>&quot;//&quot; + u.authority</code> where the URI binding's <code>u.authority</code> already carries the <code>//</code> (the known URI-013 latent bug), so every authority-bearing same-source URI was <code>ssh:////host/…</code> and never reached the peer; (B) a git source WITH a worktree (path not ending <code>.git</code>) serves each sub's own checkout at <code>&lt;path&gt;/&lt;subpath&gt;</code>, but no such same-source form existed — only the beagle <code>?/&lt;proj&gt;</code> swap; (C) a NESTED sub (<code>dog/abc</code>) is declared in <code>dog/.gitmodules</code> as <code>abc</code>, yet <code>mount</code> read only the ROOT <code>.gitmodules</code> with the full subpath, so the official-url fallback (and the <a href="./Title.html">Title</a>) came up empty and the whole mount threw. Spec: same source first, official <code>.gitmodules</code> url only as fallback (<a href="./Submodules.html">Submodules</a> §1, <a href="./Title.html">Title</a> retrieval preference).
 </p>
@@ -45,7 +54,7 @@
 </ul>
 <h3>TODOs</h3>
 <p>
- -<a href="./v.html">v</a> repro unit test <code>be/test/submount.js</code> (table-driven: source×sub candidates, <code>:////</code> guard, declaredUrl walk), registered as <code>be-js-unit-submount</code>.  -<a href="./v.html">v</a> fix <code>sameSourceUris</code> + <code>declaredUrl</code> + mount call sites.  -<a href="./v.html">v</a> fix the three update-path defects in <code>verbs/get/get.js</code>.  -<a href="./v.html">v</a> end-to-end: fresh clone (3 ssh fetches, 0 curl), old→HEAD update byte-identical to <code>git archive</code> (parent + both sub pins), idempotent re-get (2 re-mount rows only).  -<a href="./v.html">v</a> heal the live <code>~/src/journal/beagle</code> wt (stranded tip from the crashed run): re-pin <code>?#e5071f32</code>, then get → HEAD; byte-verified, 0 conflicts.  -<a href="./x.html">x</a> <code>be-js-bro-view</code> golden flake (dir hunk in raw readdir order, <code>view/bro.js buildDirHunk</code>) — pre-existing, unrelated to this ticket; spin its own ticket if wanted.
+ -<a href="./v.html">v</a> repro unit test <code>be/test/submount.js</code> (table-driven: source×sub candidates, <code>:////</code> guard, declaredUrl walk), registered as <code>be-js-unit-submount</code>. -<a href="./v.html">v</a> fix <code>sameSourceUris</code> + <code>declaredUrl</code> + mount call sites. -<a href="./v.html">v</a> fix the three update-path defects in <code>verbs/get/get.js</code>. -<a href="./v.html">v</a> end-to-end: fresh clone (3 ssh fetches, 0 curl), old→HEAD update byte-identical to <code>git archive</code> (parent + both sub pins), idempotent re-get (2 re-mount rows only). -<a href="./v.html">v</a> heal the live <code>~/src/journal/beagle</code> wt (stranded tip from the crashed run): re-pin <code>?#e5071f32</code>, then get → HEAD; byte-verified, 0 conflicts. -<a href="./x.html">x</a> <code>be-js-bro-view</code> golden flake (dir hunk in raw readdir order, <code>view/bro.js buildDirHunk</code>) — pre-existing, unrelated to this ticket; spin its own ticket if wanted.
 </p>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -57,5 +66,16 @@
 <li>Suite green: 145/145 (<code>-E bro-view</code>, the pre-existing flake); <code>be-js-unit-submount</code> added.</li>
 <li>LANDED <code>50e90012</code> (&quot;a multitude of fixes for GitHub remotes&quot;, be trunk 07Jul — the SUBS-047 changeset rode it: <code>sameSourceUris</code>/<code>declaredUrl</code> + the get.js update-path fixes + <code>test/submount.js</code> all first appear there); wt verified clean at <code>082b172c</code>.  CLOSED (audit 2026-07-07).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

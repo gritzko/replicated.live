@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SUBS-036</title>
+<title>SUBS-036: be post recursion into an ALREADY-ATTACHED sub tries to CREATE its synth dot-branch (PUTDUP) instead of FF — aborts the parent commit</title>
+<meta property="og:title" content="SUBS-036: be post recursion into an ALREADY-ATTACHED sub tries to CREATE its synth dot-branch (PUTDUP) instead of FF — aborts the parent commit">
+<meta property="og:description" content="A be post recursing into a submodule that is ALREADY on its synthetic dot-branch ?/&lt;sub&gt;/.&lt;parent&gt;/&lt;pbranch&gt; issues a CREATE (be put ?&lt;synth&gt;) for that branch — which already exists — and fails PUTDUP → BEDOGEXIT, aborting the whole parent commit. Per Submodules §&quot;Committing detached subs&quot; the create must be idempotent: &quot;later posts fast-forward it&quot; (exists → FF/attach, never re-create). SUBS-035 fixed the POSTDET / detached-commit half; this is the DISTINCT create-vs-FF half its hermetic test never exercised (there the sub was freshly created, not already attached). This is the ORIGINAL-session PUTDUP, still unfixed. Hit live 2026-06-26 committing COMMIT-004; worked around with be post --nosub. Will also block the journal-level gitlink bump (journal → be → be/test). Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/SUBS/SUBS-036.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,112 +16,68 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>SUBS-036: <code>be post</code> recursion into an ALREADY-ATTACHED sub tries to CREATE its synth dot-branch (PUTDUP) instead of FF — aborts the parent commit</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 A <code>be post</code> recursing into a submodule that is ALREADY on its synthetic dot-branch <code>?/&lt;sub&gt;/.&lt;parent&gt;/&lt;pbranch&gt;</code> issues a CREATE (<code>be put ?&lt;synth&gt;</code>) for that branch — which already exists — and fails <code>PUTDUP</code> → <code>BEDOGEXIT</code>, aborting the whole parent commit. Per <a href="../../wiki/Submodules.html">Submodules</a> §&quot;Committing detached subs&quot; the create must be idempotent: &quot;later posts fast-forward it&quot; (exists → FF/attach, never re-create). <a href="SUBS-035.html">SUBS-035</a> fixed the POSTDET / detached-commit half; this is the DISTINCT create-vs-FF half its hermetic test never exercised (there the sub was freshly created, not already attached). This is the ORIGINAL-session PUTDUP, still unfixed. Hit live 2026-06-26 committing <a href="../COMMIT/COMMIT-004.html">COMMIT-004</a>; worked around with <code>be post --nosub</code>. Will also block the journal-level gitlink bump (journal → be → be/test). Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Live: from <code>~/journal/be</code>, <code>be post</code> recursed <code>post test</code> into <code>be/test</code> (clean,<p>
-attached at <code>c47f767f</code> on <code>?/beagle-ext-tests/.beagle-ext/.journal</code>) → <code>sniff: put: ?/beagle-ext-tests/.beagle-ext/.journal already exists</code> / <code>PUTDUP</code> / <code>BEDOGEXIT</code> / &quot;aborting parent commit — sub recursion failed (worst=BEDOGEXIT)&quot;.
-</p>
-</li>
-<li>The sub was clean and ALREADY on its dot-branch; the recursion still issued a<p>
-CREATE rather than an FF/no-op. So <code>be post</code> on a sub already at its synth tip cannot be driven by the parent.
-</p>
-</li>
-<li>Distinct from <a href="SUBS-035.html">SUBS-035</a> (which made a DETACHED sub commit): here the sub is<p>
-ATTACHED and clean; the bug is the non-idempotent synth-branch CREATE.
-</p>
-</li>
-<li>Workaround that landed <a href="../COMMIT/COMMIT-004.html">COMMIT-004</a>: <code>be post --nosub</code> (skips recursion; the<p>
-gitlink bump was already correctly staged as <code>put test#c47f767f</code>).
-</p>
-</li>
+<li>Live: from <code>~/journal/be</code>, <code>be post</code> recursed <code>post test</code> into <code>be/test</code> (clean, attached at <code>c47f767f</code> on <code>?/beagle-ext-tests/.beagle-ext/.journal</code>) → <code>sniff: put: ?/beagle-ext-tests/.beagle-ext/.journal already exists</code> / <code>PUTDUP</code> / <code>BEDOGEXIT</code> / &quot;aborting parent commit — sub recursion failed (worst=BEDOGEXIT)&quot;.</li>
+<li>The sub was clean and ALREADY on its dot-branch; the recursion still issued a CREATE rather than an FF/no-op. So <code>be post</code> on a sub already at its synth tip cannot be driven by the parent.</li>
+<li>Distinct from <a href="SUBS-035.html">SUBS-035</a> (which made a DETACHED sub commit): here the sub is ATTACHED and clean; the bug is the non-idempotent synth-branch CREATE.</li>
+<li>Workaround that landed <a href="../COMMIT/COMMIT-004.html">COMMIT-004</a>: <code>be post --nosub</code> (skips recursion; the gitlink bump was already correctly staged as <code>put test#c47f767f</code>).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>A parent <code>be post</code> recursing into a sub already on <code>?/&lt;sub&gt;/.&lt;parent&gt;/&lt;pbranch&gt;</code><p>
-FF/attaches (or no-ops if already at tip), NEVER <code>PUTDUP</code>. Per <a href="../../wiki/Submodules.html">Submodules</a>: first post creates the branch, later posts fast-forward it.
-</p>
-</li>
-<li>A clean sub at its dot-branch tip is a no-op (no spurious create/commit) and the<p>
-parent still bumps the gitlink.
-</p>
-</li>
+<li>A parent <code>be post</code> recursing into a sub already on <code>?/&lt;sub&gt;/.&lt;parent&gt;/&lt;pbranch&gt;</code> FF/attaches (or no-ops if already at tip), NEVER <code>PUTDUP</code>. Per <a href="../../wiki/Submodules.html">Submodules</a>: first post creates the branch, later posts fast-forward it.</li>
+<li>A clean sub at its dot-branch tip is a no-op (no spurious create/commit) and the parent still bumps the gitlink.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Make the synth-branch step idempotent: exists → FF (skip if already == tip);<p>
-absent → create. Reuse <code>SUBSDirty</code> / the <a href="SUBS-027b.html">SUBS-027b</a> R2 emit; ragel/REFS only.
-</p>
-</li>
-<li>Do NOT regress <a href="SUBS-035.html">SUBS-035</a> (first-post create on a detached sub), <a href="SUBS-006.html">SUBS-006</a><p>
-(clean sub no-op), or <a href="SUBS-027b.html">SUBS-027b</a> (R2). Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17).
-</p>
-</li>
-<li>Localize: the recursion's synth-branch create that errs <code>PUTDUP</code> — likely<p>
-<code>sniff/PUT.c</code> (the <code>put ?&lt;synth&gt;</code> arm) and/or <code>beagle/SUBS.c</code> <code>bepost_bump_sub</code> / the recurse cb / <code>bepost_synth_child_uri</code>.
-</p>
-</li>
+<li>Make the synth-branch step idempotent: exists → FF (skip if already == tip); absent → create. Reuse <code>SUBSDirty</code> / the <a href="SUBS-027b.html">SUBS-027b</a> R2 emit; ragel/REFS only.</li>
+<li>Do NOT regress <a href="SUBS-035.html">SUBS-035</a> (first-post create on a detached sub), <a href="SUBS-006.html">SUBS-006</a> (clean sub no-op), or <a href="SUBS-027b.html">SUBS-027b</a> (R2). Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17).</li>
+<li>Localize: the recursion's synth-branch create that errs <code>PUTDUP</code> — likely <code>sniff/PUT.c</code> (the <code>put ?&lt;synth&gt;</code> arm) and/or <code>beagle/SUBS.c</code> <code>bepost_bump_sub</code> / the recurse cb / <code>bepost_synth_child_uri</code>.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>The create-vs-FF decision lives in <code>bepost_anchor_sub</code> (the R2 anchor): it issued<p>
-bare <code>be put ?&lt;synth&gt;</code> → <code>PUTCreateBranch</code> (create-ONLY, errs PUTDUP if present). FIX: read the sub tip (R4) via <code>SNIFFSubReadTip</code> and issue <code>be put ?&lt;synth&gt;#&lt;tip&gt;</code>, routing through <code>PUTSetBranch</code> (create-or-repoint) — idempotent: absent → create, present → re-point/FF to the tip. The forward-only bump gate (<code>bepost_bump_sub</code> returns OK only on a real advance) already guarantees the tip is forward.
-</p>
-</li>
-<li>User-facing <code>be put ?&lt;branch&gt;</code> keeps its strict create-only PUTDUP (<a href="./DIS-020.html">DIS-020</a>);<p>
-only the internal anchor switched to the tip-form. No <code>PUTCreateBranch</code> change.
-</p>
-</li>
+<li>The create-vs-FF decision lives in <code>bepost_anchor_sub</code> (the R2 anchor): it issued bare <code>be put ?&lt;synth&gt;</code> → <code>PUTCreateBranch</code> (create-ONLY, errs PUTDUP if present). FIX: read the sub tip (R4) via <code>SNIFFSubReadTip</code> and issue <code>be put ?&lt;synth&gt;#&lt;tip&gt;</code>, routing through <code>PUTSetBranch</code> (create-or-repoint) — idempotent: absent → create, present → re-point/FF to the tip. The forward-only bump gate (<code>bepost_bump_sub</code> returns OK only on a real advance) already guarantees the tip is forward.</li>
+<li>User-facing <code>be put ?&lt;branch&gt;</code> keeps its strict create-only PUTDUP (<a href="./DIS-020.html">DIS-020</a>); only the internal anchor switched to the tip-form. No <code>PUTCreateBranch</code> change.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Repro-first hermetic: parent + sub ALREADY on its dot-branch; <code>be post</code> →<p>
- assert FF, NO PUTDUP, the parent commit completes and the gitlink bumps.  <code>test/post/55-sub-attached-reanchor-idempotent</code> (RED bare-synth, GREEN tip-form).
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Make the synth-branch anchor idempotent (exists → FF; absent → create).<p>
- <code>beagle/BE.cli.c</code> <code>bepost_anchor_sub</code> → <code>?&lt;synth&gt;#&lt;tip&gt;</code> (PUTSetBranch).
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Regression: <a href="SUBS-035.html">SUBS-035</a> (post/54), <a href="SUBS-006.html">SUBS-006</a> (post/29), <a href="SUBS-027b.html">SUBS-027b</a> (post/49-52)<p>
- still pass; ctest 439/439 (WITH_SSH=ON, WITH_JS=OFF), 0 fail.
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Repro-first hermetic: parent + sub ALREADY on its dot-branch; <code>be post</code> → assert FF, NO PUTDUP, the parent commit completes and the gitlink bumps. <code>test/post/55-sub-attached-reanchor-idempotent</code> (RED bare-synth, GREEN tip-form).</li>
+<li class="done"><input type="checkbox" checked disabled> Make the synth-branch anchor idempotent (exists → FF; absent → create). <code>beagle/BE.cli.c</code> <code>bepost_anchor_sub</code> → <code>?&lt;synth&gt;#&lt;tip&gt;</code> (PUTSetBranch).</li>
+<li class="done"><input type="checkbox" checked disabled> Regression: <a href="SUBS-035.html">SUBS-035</a> (post/54), <a href="SUBS-006.html">SUBS-006</a> (post/29), <a href="SUBS-027b.html">SUBS-027b</a> (post/49-52) still pass; ctest 439/439 (WITH_SSH=ON, WITH_JS=OFF), 0 fail.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>None. Unblocks clean recursive <code>be post</code> (the journal-level gitlink bump uses it);<p>
-<code>--nosub</code> is no longer needed once this lands.
-</p>
-</li>
+<li>None. Unblocks clean recursive <code>be post</code> (the journal-level gitlink bump uses it); <code>--nosub</code> is no longer needed once this lands.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>LANDED <code>ae64dc7f</code> (&quot;SUBS-036 idempotent sub synth-branch anchor&quot;, beagle trunk 26Jun); <code>test/post/55-sub-attached-reanchor-idempotent</code> registered in <code>test/CMakeLists.txt</code>.  CLOSED (audit 2026-07-07).</li>
-<li>Root cause: <code>bepost_anchor_sub</code><p>
-(<code>beagle/BE.cli.c:3025</code>) anchored the SUBS-027b R2 keep-alive with bare <code>be put ?&lt;synth&gt;</code>, which dispatches (<code>sniff/SNIFF.exe.c:1156</code>) to <code>PUTCreateBranch</code> (<code>sniff/PUT.c:1220</code>) — a CREATE-ONLY writer that returns PUTDUP when the dot-branch already exists. On a LATER advance of an already-attached sub the branch IS present → PUTDUP → BEDOGEXIT, aborting the parent commit. SUBS-035/post-54 only exercised the FIRST anchor (branch absent), never the re-anchor; this is that create-vs-FF half.
-</p>
-</li>
-<li>Fix (file:line): <code>beagle/BE.cli.c</code> <code>bepost_anchor_sub</code> (~3025) — read the sub<p>
-tip (R4) via <code>SNIFFSubReadTip</code> and issue <code>be put ?&lt;synth&gt;#&lt;tip&gt;</code> instead of bare <code>?&lt;synth&gt;</code>. The <code>#&lt;tip&gt;</code> form routes through <code>PUTSetBranch</code> (create-or-repoint), idempotent: absent → create, present → FF to the tip. SUBSNOSEC (no tip yet) → no-op. ~16 LoC, single function; no other file changed in beagle/sniff.
-</p>
-</li>
-<li>Test: <code>test/post/55-sub-attached-reanchor-idempotent</code> (SSH-gated, registered in<p>
-<code>test/CMakeLists.txt</code>). RED pre-fix: <code>sniff: put: ?/sub/.parent already exists</code> / PUTDUP / BEDOGEXIT / &quot;aborting parent commit&quot;. GREEN post-fix: round-1 CREATEs the synth branch, round-2 FFs it to the new tip, parent commit completes, gitlink bumps.
-</p>
-</li>
-<li>Tests: build-debug 439/439 (WITH_SSH=ON, WITH_JS=OFF), 0 fail; SUBS-035 (post/54),<p>
-SUBS-006 (post/29), SUBS-027b (post/49/50/51/52) all green.
-</p>
-</li>
-<li>Files changed (relative to beagle root): <code>beagle/BE.cli.c</code>,<p>
-<code>test/post/55-sub-attached-reanchor-idempotent/run.sh</code> (new), <code>test/CMakeLists.txt</code> (register the case). STOPPED before committing.
-</p>
-</li>
+<li>Root cause: <code>bepost_anchor_sub</code> (<code>beagle/BE.cli.c:3025</code>) anchored the SUBS-027b R2 keep-alive with bare <code>be put ?&lt;synth&gt;</code>, which dispatches (<code>sniff/SNIFF.exe.c:1156</code>) to <code>PUTCreateBranch</code> (<code>sniff/PUT.c:1220</code>) — a CREATE-ONLY writer that returns PUTDUP when the dot-branch already exists. On a LATER advance of an already-attached sub the branch IS present → PUTDUP → BEDOGEXIT, aborting the parent commit. SUBS-035/post-54 only exercised the FIRST anchor (branch absent), never the re-anchor; this is that create-vs-FF half.</li>
+<li>Fix (file:line): <code>beagle/BE.cli.c</code> <code>bepost_anchor_sub</code> (<del>3025) — read the sub tip (R4) via <code>SNIFFSubReadTip</code> and issue <code>be put ?&lt;synth&gt;#&lt;tip&gt;</code> instead of bare <code>?&lt;synth&gt;</code>. The <code>#&lt;tip&gt;</code> form routes through <code>PUTSetBranch</code> (create-or-repoint), idempotent: absent → create, present → FF to the tip. SUBSNOSEC (no tip yet) → no-op. </del>16 LoC, single function; no other file changed in beagle/sniff.</li>
+<li>Test: <code>test/post/55-sub-attached-reanchor-idempotent</code> (SSH-gated, registered in <code>test/CMakeLists.txt</code>). RED pre-fix: <code>sniff: put: ?/sub/.parent already exists</code> / PUTDUP / BEDOGEXIT / &quot;aborting parent commit&quot;. GREEN post-fix: round-1 CREATEs the synth branch, round-2 FFs it to the new tip, parent commit completes, gitlink bumps.</li>
+<li>Tests: build-debug 439/439 (WITH_SSH=ON, WITH_JS=OFF), 0 fail; SUBS-035 (post/54), SUBS-006 (post/29), SUBS-027b (post/49/50/51/52) all green.</li>
+<li>Files changed (relative to beagle root): <code>beagle/BE.cli.c</code>, <code>test/post/55-sub-attached-reanchor-idempotent/run.sh</code> (new), <code>test/CMakeLists.txt</code> (register the case). STOPPED before committing.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

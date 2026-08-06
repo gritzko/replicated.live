@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOG-023: jab binds no read-only ULOG open, tail, or ts-seek — JS reads bypass the wh128 sidecar entirely</title>
+<meta property="og:title" content="DOG-023: jab binds no read-only ULOG open, tail, or ts-seek — JS reads bypass the wh128 sidecar entirely">
+<meta property="og:description" content="jab/ulog.hpp boxes a native ULOG as a handle and binds ulogopen/append/count/rowUri/rowTime/close (:347-361), but ulogopen is ULOGOpen — always RW/booked. There is no ULOGOpenRO, no ULOGHead/ULOGTail, no ULOGSeek/ULOGFind, and no ulogrowVerb, so a row cannot even be fully read through a handle. Consequently every JS reader (shared/ulog.js each/drain) skips the handle, raw-mmaps the file and walks it linearly — the wh128 sidecar index the log maintains is unused on every read. Bind the missing read leaves. Scope is jab ONLY; the JS consumer cut-over is a separate ticket in the be tree.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DOG/DOG-023.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG-023: jab binds no read-only ULOG open, tail, or ts-seek — JS reads bypass the wh128 sidecar entirely</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+<code>jab/ulog.hpp</code> boxes a native ULOG as a handle and binds <code>_ulog_open</code>/<code>_append</code>/<code>_count</code>/<code>_rowUri</code>/<code>_rowTime</code>/<code>_close</code> (:347-361), but <code>_ulog_open</code> is <code>ULOGOpen</code> — always RW/booked. There is no <code>ULOGOpenRO</code>, no <code>ULOGHead</code>/<code>ULOGTail</code>, no <code>ULOGSeek</code>/<code>ULOGFind</code>, and no <code>_ulog_rowVerb</code>, so a row cannot even be fully read through a handle. Consequently every JS reader (<code>shared/ulog.js each</code>/<code>drain</code>) skips the handle, raw-<code>mmap</code>s the file and walks it linearly — the <code>wh128</code> sidecar index the log maintains is unused on every read. Bind the missing read leaves. Scope is jab ONLY; the JS consumer cut-over is a separate ticket in the be tree.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Bound today (<code>jab/ulog.hpp:347-361</code>): <code>_ulog_open</code> (RW <code>ULOGOpen</code>, :271), <code>_ulog_append</code>, <code>_ulog_count</code> (:310), <code>_ulog_rowUri</code> (:320), <code>_ulog_rowTime</code> (:331), <code>_ulog_close</code>, plus the stateless codec family.</li>
+<li>The stateless leaves (<code>_ulog_feed/next/time/verb/uri/ seek{Verb,Time,URI}</code>) work over a JS buffer at an offset — NOT over a native handle.</li>
+<li>Unbound in <code>jab/dog/ULOG.h</code>: <code>ULOGOpenRO</code> (:184), <code>ULOGSeek</code> (:230), <code>ULOGFind</code> (:233), <code>ULOGHead</code> (:236), <code>ULOGTail</code> (:241).</li>
+<li>A reader must therefore open RW (booking + trim on close) or bypass the handle — <code>shared/ulog.js:42-56</code> picks the bypass.</li>
+<li>Cost downstream: <code>nowAfter(tail)</code> callers drain the WHOLE log to read one tail ts.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A JS reader can open a ULOG read-only, ask its row count, read any row's ts/verb/uri, and get head/tail in O(1) — without booking or trimming the file.</li>
+<li>A ts lookup goes through the wh128 sidecar (<code>ULOGSeek</code>/<code>ULOGFind</code>), not a linear scan.</li>
+<li>Open-read-close is the shape: a handle is acquired, read through, and closed — no map outlives the scope.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>jab tree ONLY (<code>jab/ulog.hpp</code>, <code>jab/test/</code>, <code>jab/INDEX.md</code>, <code>jab/API.md</code>). Do NOT touch the be JS tree or <code>dog/ULOG.c</code> — bindings, not new C.</li>
+<li>Pure marshalling leaves, matching the file's existing style (INDEX.md:91: &quot;pure-marshalling native leaves&quot;).</li>
+<li><code>ron60</code> crosses as a <code>BigInt</code> (API.md:328) — keep the existing ts marshalling, do not invent a second form.</li>
+<li>An RO handle must refuse append and must not trim on close; RO and RW handles share one box type.</li>
+<li>MEM-016 (DONE) fixed an unbook leak on the ULOGOpenRO scratch-alloc path — do not reintroduce it in the box.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>New leaves: <code>_ulog_openRO</code>, <code>_ulog_rowVerb</code>, <code>_ulog_head</code>, <code>_ulog_tail</code>, <code>_ulog_seek</code>, <code>_ulog_find</code>. Names mirror the ULOG.h entry points.</li>
+<li>Handle box carries an <code>ro</code> flag; <code>_ulog_append</code> on an RO box throws, <code>_ulog_close</code> skips the trim.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> red: <code>jab/test/ulog_ro.js</code> — open RO, count/read rows/head/tail/seek; assert the file's bytes and mtime are UNCHANGED after close (the trim proof).</li>
+<li class="open"><input type="checkbox" disabled> bind the six leaves in <code>jab/ulog.hpp</code>, register in the <code>JABC_API_FN</code> block.</li>
+<li class="open"><input type="checkbox" disabled> RO-append throws; RO-close does not trim.</li>
+<li class="open"><input type="checkbox" disabled> update <code>jab/INDEX.md:89-96</code> and <code>jab/API.md</code>.</li>
+<li class="open"><input type="checkbox" disabled> confirm no <code>FILEUnBook</code> leak on the new error paths (the MEM-016 shape).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None yet.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Pending.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

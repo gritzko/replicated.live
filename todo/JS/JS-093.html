@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-093</title>
+<title>JS-093: jab mis-routes a scheme:&lt;path&gt;.js URI to the script loader</title>
+<meta property="og:title" content="JS-093: jab mis-routes a scheme:&lt;path&gt;.js URI to the script loader">
+<meta property="og:description" content="jab diff:view/bro.js (and any scheme: URI whose path tail ends .js) threw require: cannot find 'be/diff:view/bro.js' — the C entry router (js/main.cpp) decided &quot;run as a script vs route to the loop&quot; purely on the .js suffix, so a diff:/cat:/blob: URI ending in .js was loaded as a file instead of dispatched. be diff:view/bro.js and jab diff diff:view/bro.js (explicit verb) worked, isolating it to the URI-shape entry route.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-093.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,21 +15,20 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-093 jab mis-routes a <code>scheme:&lt;path&gt;.js</code> URI to the script loader</h1>
+<h1>JS-093: jab mis-routes a <code>scheme:&lt;path&gt;.js</code> URI to the script loader</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>jab diff:view/bro.js</code> (and any <code>scheme:</code> URI whose path tail ends <code>.js</code>) threw <code>require: cannot find 'be/diff:view/bro.js'</code> — the C entry router (<code>js/main.cpp</code>) decided &quot;run as a script vs route to the loop&quot; purely on the <code>.js</code> suffix, so a <code>diff:</code>/<code>cat:</code>/<code>blob:</code> URI ending in <code>.js</code> was loaded as a file instead of dispatched. <code>be diff:view/bro.js</code> and <code>jab diff diff:view/bro.js</code> (explicit verb) worked, isolating it to the URI-shape entry route.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Repro: <code>cd ~/journal/be &amp;&amp; jab diff:view/bro.js</code> → require error;<p>
-<code>jab diff:main.js</code> same; <code>jab diff:small.c</code> (non-.js) OK; <code>jab diff &lt;uri&gt;</code> OK.
-</p>
-</li>
-<li><code>js/main.cpp:275</code> routed <code>JABCEndsWithJs(script_file)</code> first-args to the<p>
-script loader (<code>__runScript</code>/<code>JABCRunFile</code>); a <code>scheme:</code> token never excluded.
-</p>
-</li>
+<li>Repro: <code>cd ~/journal/be &amp;&amp; jab diff:view/bro.js</code> → require error; <code>jab diff:main.js</code> same; <code>jab diff:small.c</code> (non-.js) OK; <code>jab diff &lt;uri&gt;</code> OK.</li>
+<li><code>js/main.cpp:275</code> routed <code>JABCEndsWithJs(script_file)</code> first-args to the script loader (<code>__runScript</code>/<code>JABCRunFile</code>); a <code>scheme:</code> token never excluded.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
@@ -39,22 +42,27 @@ script loader (<code>__runScript</code>/<code>JABCRunFile</code>); a <code>schem
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Add <code>JABCHasScheme(s)</code> — YES iff <code>s</code> opens <code>&lt;alpha&gt;&lt;alnum|+|-|.&gt;*:</code> BEFORE any<p>
-<code>/</code> (a URI scheme). Guard the <code>.js</code> script route with <code>&amp;&amp; !JABCHasScheme</code>.
-</p>
-</li>
+<li>Add <code>JABCHasScheme(s)</code> — YES iff <code>s</code> opens <code>&lt;alpha&gt;&lt;alnum|+|-|.&gt;*:</code> BEFORE any <code>/</code> (a URI scheme). Guard the <code>.js</code> script route with <code>&amp;&amp; !JABCHasScheme</code>.</li>
 </ul>
 <h3>TODOs</h3>
 <ul>
 <li><a href="./v.html">v</a> <code>js/main.cpp</code>: <code>JABCHasScheme</code> + guard at the <code>.js</code>-suffix branch.</li>
-<li><a href="./v.html">v</a> Verified: <code>jab diff:view/bro.js</code>/<code>diff:main.js</code> now diff; <code>jab cat:main.js</code><p>
-routes to loop; bare <code>./probe.js</code> still hits the script route; 24 JS suites green.
-</p>
-</li>
+<li><a href="./v.html">v</a> Verified: <code>jab diff:view/bro.js</code>/<code>diff:main.js</code> now diff; <code>jab cat:main.js</code> routes to loop; bare <code>./probe.js</code> still hits the script route; 24 JS suites green.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>LANDED <code>842b342</code> (jab repo; rode the BRO-009,JS-093,JS-094 colored-diffs landing, be <code>e5cf0fdd</code> / beagle <code>b14b895d</code>, 26Jun).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

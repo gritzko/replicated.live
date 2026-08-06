@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PATCH-009</title>
+<title>PATCH-009: whole-tree be patch ?main! TAKE-THEIRS on a DIVERGED sub gitlink (drops our side) instead of a recursive 3-way sub-merge</title>
+<meta property="og:title" content="PATCH-009: whole-tree be patch ?main! TAKE-THEIRS on a DIVERGED sub gitlink (drops our side) instead of a recursive 3-way sub-merge">
+<meta property="og:description" content="A whole-tree be patch be://spot/journal?main! whose be / beagle sub gitlinks have DIVERGED (ours and theirs each carry commits the other lacks, sharing an LCA) resolves the sub by TAKE-THEIRS: it stages put &lt;sub&gt;#theirs and re-GETs the sub at theirs' pin, OVERWRITING ours and DROPPING our side's commits. It should instead RECURSIVELY 3-WAY MERGE the sub (base = LCA, ours = cur, theirs = pin), producing a sub-merge commit that carries BOTH sides, and pin the parent to that merge. The classifier already names the case — SUBSSTALEDIVERGED (&quot;R4.base and R1 pin are cousins … merge via patch, not a plain bump&quot;, sniff/SUBS.h:195) — but the recursion lumps DIVERGED in with BEHIND and treats both as a take-theirs GET. This is the live blocker for the treadmill goal (a genuine two-sided whole-tree merge with be://spot/journal). Method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PATCH/PATCH-009.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,123 +15,65 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>PATCH-009 <a href="./HIGH.html">HIGH</a>: whole-tree <code>be patch ?main!</code> TAKE-THEIRS on a DIVERGED sub gitlink (drops our side) instead of a recursive 3-way sub-merge</h1>
+<h1>PATCH-009: whole-tree <code>be patch ?main!</code> TAKE-THEIRS on a DIVERGED sub gitlink (drops our side) instead of a recursive 3-way sub-merge</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 A whole-tree <code>be patch be://spot/journal?main!</code> whose <code>be</code> / <code>beagle</code> sub gitlinks have DIVERGED (ours and theirs each carry commits the other lacks, sharing an LCA) resolves the sub by TAKE-THEIRS: it stages <code>put &lt;sub&gt;#theirs</code> and re-GETs the sub at theirs' pin, OVERWRITING ours and DROPPING our side's commits. It should instead RECURSIVELY 3-WAY MERGE the sub (base = LCA, ours = cur, theirs = pin), producing a sub-merge commit that carries BOTH sides, and pin the parent to that merge. The classifier already names the case — <code>SUBS_STALE_DIVERGED</code> (&quot;R4.base and R1 pin are cousins … merge via patch, not a plain bump&quot;, <code>sniff/SUBS.h:195</code>) — but the recursion lumps DIVERGED in with BEHIND and treats both as a take-theirs GET. This is the live blocker for the treadmill goal (a genuine two-sided whole-tree merge with be://spot/journal). Method <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Repro (live 2026-06-26, treadmill): fresh <code>be get be://localhost/journal</code> into<p>
-<code>~/treadmill/journal9</code> (our side: <code>be/test</code> = <code>e2b2a2fd</code>, the 7 JS-093/096 parity test dirs present). Then <code>be patch be://spot/journal?main!</code>:   <code>applied be</code> / <code>applied beagle</code> / <code>noop=204 take-theirs=7 … failed=0</code>   <code>be: patch html: ours ahead — keep ours (no sub re-get)</code>   ← PATCH-006 path, correct   <code>get be?ce4c8795</code> / <code>get be/test?aedbb0f5</code> / <code>get beagle?9721f532</code>  ← TAKE-THEIRS Result: <code>be/test</code> rewound <code>e2b2a2fd → aedbb0f5</code> (spot's), our 7 test dirs GONE (<code>put/ref-bang</code>, <code>post/sub-recurse-synth</code>, <code>get/ref-switch-inplace</code>, <code>delete/sub-nosub-suppress</code>, <code>get/branch-switch</code>, <code>patch/cur-behind</code>, <code>put/states</code>). Verified MISSING from the prior merge artifact <code>journal7/be/test</code> (cur <code>aedbb0f5</code>) and PRESENT in a fresh clone <code>journal8/be/test</code> (cur <code>e2b2a2fd</code>) — the merge dropped them.
-</p>
-</li>
-<li>The divergence is REAL and mergeable (shares an LCA):<p>
-  ours  be/test:  <code>e2b2a2fd ← b0ee92b1 ← </code>*<strong><code>c0b8ffed</code></strong><strong><code> ← b8dc7f52 ← 61c1facc</code>  (our JS-093/096 + JS-065/091)   spot  be/test:  <code>aedbb0f5 ← … ← </code></strong><strong><code>c0b8ffed</code></strong>*<code> ← b8dc7f52 ← 61c1facc</code>  (spot's BRO-005/008, COMMIT-003/006, DIFF-010, JS-065/071 — 13 commits)   LCA = <code>c0b8ffed</code> (&quot;JS-064: bugfixes&quot;). Ours adds 2, spot adds 13. take-theirs drops our 2.
-</p>
-</li>
-<li>KEY topology finding — there is NO manual sub-level workaround: spot's diverged sub<p>
-TIP (<code>aedbb0f5</code>) lives ONLY on the synthetic parent-tracked branch <code>?/beagle-ext-tests/.beagle-ext/.journal</code>; the sub's plain trunk (<code>be://spot/journal?/beagle-ext-tests</code>) sits at the LCA <code>c0b8ffed</code>. That dot-branch is NOT standalone wire-fetchable (<code>be get/head be://spot/journal?/beagle-ext-tests/.beagle-ext/.journal[#aedbb0f5]</code> → WIRECLFL). The engine DOES fetch it correctly during the whole-tree patch (parent- relative source + pin, <a href="PATCH-005.html">PATCH-005</a>/<a href="PATCH-008.html">PATCH-008</a>). So the recursive merge MUST happen inside the whole-tree patch — spot's sub work is reachable only through the parent gitlink recursion.
-</p>
-</li>
-<li>Code path: <code>beagle/BE.cli.c</code> <code>BEActSubsPatch</code> (~<code>:2332</code>) → <code>BEPatchSubsKeepAhead</code><p>
-(<code>beagle/SUBS.c:610</code>) drops only ours-AHEAD subs (<code>SUBS_STALE_NONE</code>); BEHIND *<strong>and</strong>* DIVERGED fall through to <code>BEGetDrainSubs</code> (<code>beagle/SUBS.c:665</code>) which <code>BEGetSubMount</code>s the sub at theirs' pin (checkout = take-theirs). <code>begetsubs_keep_ours</code> (<code>beagle/SUBS.c:586</code>) returns NO for DIVERGED with the comment &quot;let the sub merge reconcile&quot; — but no merge is ever run. The sniff side (<code>sniff/PATCH.c:657-704</code> gitlink arm) stages <code>put &lt;sub&gt;#theirs</code> for any <code>thr_moved &amp;&amp; !ours_ahead</code>, i.e. it pins theirs for a diverged sub too.
-</p>
-</li>
+<li>Repro (live 2026-06-26, treadmill): fresh <code>be get be://localhost/journal</code> into <code>~/treadmill/journal9</code> (our side: <code>be/test</code> = <code>e2b2a2fd</code>, the 7 JS-093/096 parity test dirs present). Then <code>be patch be://spot/journal?main!</code>: <code>applied be</code> / <code>applied beagle</code> / <code>noop=204 take-theirs=7 … failed=0</code> <code>be: patch html: ours ahead — keep ours (no sub re-get)</code>   ← PATCH-006 path, correct <code>get be?ce4c8795</code> / <code>get be/test?aedbb0f5</code> / <code>get beagle?9721f532</code>  ← TAKE-THEIRS Result: <code>be/test</code> rewound <code>e2b2a2fd → aedbb0f5</code> (spot's), our 7 test dirs GONE (<code>put/ref-bang</code>, <code>post/sub-recurse-synth</code>, <code>get/ref-switch-inplace</code>, <code>delete/sub-nosub-suppress</code>, <code>get/branch-switch</code>, <code>patch/cur-behind</code>, <code>put/states</code>). Verified MISSING from the prior merge artifact <code>journal7/be/test</code> (cur <code>aedbb0f5</code>) and PRESENT in a fresh clone <code>journal8/be/test</code> (cur <code>e2b2a2fd</code>) — the merge dropped them.</li>
+<li>The divergence is REAL and mergeable (shares an LCA): ours  be/test:  <code>e2b2a2fd ← b0ee92b1 ← </code>*<strong><code>c0b8ffed</code></strong><strong><code> ← b8dc7f52 ← 61c1facc</code>  (our JS-093/096 + JS-065/091) spot  be/test:  <code>aedbb0f5 ← … ← </code></strong><strong><code>c0b8ffed</code></strong>*<code> ← b8dc7f52 ← 61c1facc</code>  (spot's BRO-005/008, COMMIT-003/006, DIFF-010, JS-065/071 — 13 commits) LCA = <code>c0b8ffed</code> (&quot;JS-064: bugfixes&quot;). Ours adds 2, spot adds 13. take-theirs drops our 2.</li>
+<li>KEY topology finding — there is NO manual sub-level workaround: spot's diverged sub TIP (<code>aedbb0f5</code>) lives ONLY on the synthetic parent-tracked branch <code>?/beagle-ext-tests/.beagle-ext/.journal</code>; the sub's plain trunk (<code>be://spot/journal?/beagle-ext-tests</code>) sits at the LCA <code>c0b8ffed</code>. That dot-branch is NOT standalone wire-fetchable (<code>be get/head be://spot/journal?/beagle-ext-tests/.beagle-ext/.journal[#aedbb0f5]</code> → WIRECLFL). The engine DOES fetch it correctly during the whole-tree patch (parent- relative source + pin, <a href="PATCH-005.html">PATCH-005</a>/<a href="PATCH-008.html">PATCH-008</a>). So the recursive merge MUST happen inside the whole-tree patch — spot's sub work is reachable only through the parent gitlink recursion.</li>
+<li>Code path: <code>beagle/BE.cli.c</code> <code>BEActSubsPatch</code> (~<code>:2332</code>) → <code>BEPatchSubsKeepAhead</code> (<code>beagle/SUBS.c:610</code>) drops only ours-AHEAD subs (<code>SUBS_STALE_NONE</code>); BEHIND *<strong>and</strong>* DIVERGED fall through to <code>BEGetDrainSubs</code> (<code>beagle/SUBS.c:665</code>) which <code>BEGetSubMount</code>s the sub at theirs' pin (checkout = take-theirs). <code>begetsubs_keep_ours</code> (<code>beagle/SUBS.c:586</code>) returns NO for DIVERGED with the comment &quot;let the sub merge reconcile&quot; — but no merge is ever run. The sniff side (<code>sniff/PATCH.c:657-704</code> gitlink arm) stages <code>put &lt;sub&gt;#theirs</code> for any <code>thr_moved &amp;&amp; !ours_ahead</code>, i.e. it pins theirs for a diverged sub too.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>A whole-tree <code>be patch …?main!</code> over a DIVERGED sub gitlink RECURSES a 3-way merge<p>
-into the sub (LCA-based, the <code>?&lt;br&gt;!</code> whole-branch semantics already in PATCH), keeps BOTH sides' sub commits, and pins the parent to the resulting sub-merge commit — never a silent take-theirs that drops a side. BEHIND (ours strictly behind) stays a fast-forward take-theirs GET; ours-AHEAD stays keep-ours (<a href="PATCH-006.html">PATCH-006</a>); EQUAL noop.
-</p>
-</li>
-<li>Live: <code>be get be://localhost/journal</code> + <code>be patch be://spot/journal?main!</code> yields a<p>
-<code>be/test</code> whose log contains BOTH <code>e2b2a2fd</code> (our 7 tests) AND <code>aedbb0f5</code> (spot's BRO-008 line) under a merge commit; same for <code>be</code> and <code>beagle</code>. A genuine two-sided whole-tree merge.
-</p>
-</li>
+<li>A whole-tree <code>be patch …?main!</code> over a DIVERGED sub gitlink RECURSES a 3-way merge into the sub (LCA-based, the <code>?&lt;br&gt;!</code> whole-branch semantics already in PATCH), keeps BOTH sides' sub commits, and pins the parent to the resulting sub-merge commit — never a silent take-theirs that drops a side. BEHIND (ours strictly behind) stays a fast-forward take-theirs GET; ours-AHEAD stays keep-ours (<a href="PATCH-006.html">PATCH-006</a>); EQUAL noop.</li>
+<li>Live: <code>be get be://localhost/journal</code> + <code>be patch be://spot/journal?main!</code> yields a <code>be/test</code> whose log contains BOTH <code>e2b2a2fd</code> (our 7 tests) AND <code>aedbb0f5</code> (spot's BRO-008 line) under a merge commit; same for <code>be</code> and <code>beagle</code>. A genuine two-sided whole-tree merge.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Native sniff/beagle. The merge primitive is the existing local <code>?&lt;br&gt;!</code> whole-branch<p>
-auto-LCA merge — the engine already fetches theirs onto the sub's <code>?/&lt;sub&gt;/.&lt;parent&gt;/.&lt;branch&gt;</code> dot-branch; for a DIVERGED sub, MERGE that dot-branch into the sub's cur (keep ours) instead of posting cur = theirs. Then the parent gitlink advances to the sub-merge (record <code>put &lt;sub&gt;#&lt;submerge&gt;</code> — NOT <code>#theirs</code>).
-</p>
-</li>
-<li>Repro-first (CLAUDE.md §17): a HERMETIC 2-level be:// fixture whose sub gitlink<p>
-DIVERGES (sub shares an LCA; ours + theirs each add a distinct file). Assert the whole-tree merge's sub log contains BOTH sides under a merge commit (RED today = take-theirs drops ours). THEN verify against the LIVE spot merge. Don't regress BEHIND fast-forward, ours-ahead keep-ours (<a href="PATCH-006.html">PATCH-006</a>), or the single-project merge.
-</p>
-</li>
-<li>Reuse <code>SUBSDirty</code>'s <code>SUBS_STALE_DIVERGED</code> to split DIVERGED from BEHIND in the<p>
-recursion; reuse <code>SNIFFSubCandidateFromSource</code> (parent-relative source) for the fetch.
-</p>
-</li>
+<li>Native sniff/beagle. The merge primitive is the existing local <code>?&lt;br&gt;!</code> whole-branch auto-LCA merge — the engine already fetches theirs onto the sub's <code>?/&lt;sub&gt;/.&lt;parent&gt;/.&lt;branch&gt;</code> dot-branch; for a DIVERGED sub, MERGE that dot-branch into the sub's cur (keep ours) instead of posting cur = theirs. Then the parent gitlink advances to the sub-merge (record <code>put &lt;sub&gt;#&lt;submerge&gt;</code> — NOT <code>#theirs</code>).</li>
+<li>Repro-first (CLAUDE.md §17): a HERMETIC 2-level be:// fixture whose sub gitlink DIVERGES (sub shares an LCA; ours + theirs each add a distinct file). Assert the whole-tree merge's sub log contains BOTH sides under a merge commit (RED today = take-theirs drops ours). THEN verify against the LIVE spot merge. Don't regress BEHIND fast-forward, ours-ahead keep-ours (<a href="PATCH-006.html">PATCH-006</a>), or the single-project merge.</li>
+<li>Reuse <code>SUBSDirty</code>'s <code>SUBS_STALE_DIVERGED</code> to split DIVERGED from BEHIND in the recursion; reuse <code>SNIFFSubCandidateFromSource</code> (parent-relative source) for the fetch.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Split the <code>BEActSubsPatch</code> recursion target into BEHIND (→ <code>BEGetDrainSubs</code>,<p>
-take-theirs FF, unchanged) and DIVERGED (→ a new sub-merge arm). The sub-merge arm, per sub: fetch theirs onto the dot-branch (as GET already does, parent-relative), then run the sub-level <code>be patch ?&lt;dot-branch&gt;!</code> (auto-LCA, keep cur=ours) → a sub-merge commit S; the parent records <code>put &lt;sub&gt;#S</code>. Recurses naturally for sub-of-sub (be → be/test): the inner whole-tree patch handles its own diverged sub-subs.
-</p>
-</li>
-<li>sniff <code>patch_walk</code> gitlink arm: for a DIVERGED gitlink, DEFER (stage no <code>put #theirs</code>);<p>
-the parent pin is set to S after the sub-merge, not to theirs.
-</p>
-</li>
+<li>Split the <code>BEActSubsPatch</code> recursion target into BEHIND (→ <code>BEGetDrainSubs</code>, take-theirs FF, unchanged) and DIVERGED (→ a new sub-merge arm). The sub-merge arm, per sub: fetch theirs onto the dot-branch (as GET already does, parent-relative), then run the sub-level <code>be patch ?&lt;dot-branch&gt;!</code> (auto-LCA, keep cur=ours) → a sub-merge commit S; the parent records <code>put &lt;sub&gt;#S</code>. Recurses naturally for sub-of-sub (be → be/test): the inner whole-tree patch handles its own diverged sub-subs.</li>
+<li>sniff <code>patch_walk</code> gitlink arm: for a DIVERGED gitlink, DEFER (stage no <code>put #theirs</code>); the parent pin is set to S after the sub-merge, not to theirs.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="wontfix"><input type="checkbox" disabled> <del>Repro-first: hermetic 2-level be:// fixture, sub gitlink DIVERGED (shared LCA, each</del><p>
- side adds a file); assert whole-tree merge keeps BOTH sub sides (RED = take-theirs).
-</p>
-</li>
-<li class="wontfix"><input type="checkbox" disabled> <del>Split DIVERGED from BEHIND in <code>BEActSubsPatch</code>/<code>BEPatchSubsKeepAhead</code>; add the</del><p>
- sub-merge arm (fetch theirs branch → <code>?&lt;br&gt;!</code> merge → pin parent to S).
-</p>
-</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Repro-first: hermetic 2-level be:// fixture, sub gitlink DIVERGED (shared LCA, each side adds a file); assert whole-tree merge keeps BOTH sub sides (RED = take-theirs).</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Split DIVERGED from BEHIND in <code>BEActSubsPatch</code>/<code>BEPatchSubsKeepAhead</code>; add the sub-merge arm (fetch theirs branch → <code>?&lt;br&gt;!</code> merge → pin parent to S).</del></li>
 <li class="wontfix"><input type="checkbox" disabled> <del>sniff <code>patch_walk</code>: defer the gitlink <code>put</code> for a DIVERGED sub (pin S, not theirs).</del></li>
-<li class="wontfix"><input type="checkbox" disabled> <del>Rebuild (own build dir <code>build-merge</code>); RED→GREEN on the hermetic test 40; all 382</del><p>
- ctests green at j4.  (LIVE <code>be patch be://spot/journal?main!</code> verification is the  MAIN SESSION's job — STOPPED before commit/land/post.)
-</p>
-</li>
-<li class="wontfix"><input type="checkbox" disabled> <del>Regression: BEHIND FF, ours-ahead keep-ours (<a href="PATCH-006.html">PATCH-006</a> test 37), PATCH-005 (test</del><p>
- 36), multi-sub (38), single-project + all patch ctests green.
-</p>
-</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Rebuild (own build dir <code>build-merge</code>); RED→GREEN on the hermetic test 40; all 382 ctests green at j4.  (LIVE <code>be patch be://spot/journal?main!</code> verification is the MAIN SESSION's job — STOPPED before commit/land/post.)</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Regression: BEHIND FF, ours-ahead keep-ours (<a href="PATCH-006.html">PATCH-006</a> test 37), PATCH-005 (test 36), multi-sub (38), single-project + all patch ctests green.</del></li>
 </ul>
 <h3>What was proved / decided</h3>
 <ul>
-<li>The take-theirs <code>BEGetSubMount(sub, theirs)</code> ALREADY fetches theirs' closure (incl.<p>
-the LCA) AND theirs' BRANCH into the local sub shard (verified live: the diverged <code>ch</code> shard ended with remote refs <code>be:&lt;src&gt;?master#&lt;ours&gt;</code> AND <code>be:&lt;src&gt;?div#&lt;theirs&gt;</code>). But it also checks theirs OUT over ours — that's the one-sided drop.  A reset-then- local-merge after take-theirs is FRAGILE (cur lands detached on theirs; <code>be get ?master</code> → TITLECLSH; <code>be patch ?div!</code> → &quot;nothing absorbed&quot;).
-</p>
-</li>
-<li>The RELIABLE primitive (validated end-to-end by hand, then in code): keep ours, run a<p>
-TRANSPORT whole-branch merge in the sub mount — <code>be patch &lt;sub-src&gt;?/&lt;sub-base&gt;/&lt;theirs-branch&gt;!</code> + <code>be post</code> — which 3-way auto-LCA weaves theirs into ours' cur and commits a real MERGE commit S with parents <a href="./ours, theirs.html">ours, theirs</a>.  <code>&lt;sub-src&gt;</code> = <code>SNIFFSubCandidateFromSource(bepatch_src_uri, &lt;sub-base&gt;)</code> (the same parent-relative candidate GET/PATCH-005 use); <code>&lt;theirs-branch&gt;</code> is discovered from the sub shard's remote-tracking refs (the ref whose tip == theirs, non-empty branch query) after a <code>be head &lt;sub-src&gt;</code> populates them WITHOUT disturbing ours' checkout.
-</p>
-</li>
-<li>Note: <code>be sha1:?</code> in the sub mount reads the FIRST get-anchor row, not the latest<p>
-<code>post</code> — a pre-existing <code>sha1:?</code> quirk.  The authoritative reads (<code>be status</code>, the <code>.be</code> anchor's last <code>post ?&lt;S&gt;</code> row, and the parent's <code>put &lt;sub&gt;#&lt;S&gt;</code>) all agree on S; test 40 reads the sub tip from <code>be status</code>.
-</p>
-</li>
+<li>The take-theirs <code>BEGetSubMount(sub, theirs)</code> ALREADY fetches theirs' closure (incl. the LCA) AND theirs' BRANCH into the local sub shard (verified live: the diverged <code>ch</code> shard ended with remote refs <code>be:&lt;src&gt;?master#&lt;ours&gt;</code> AND <code>be:&lt;src&gt;?div#&lt;theirs&gt;</code>). But it also checks theirs OUT over ours — that's the one-sided drop.  A reset-then- local-merge after take-theirs is FRAGILE (cur lands detached on theirs; <code>be get ?master</code> → TITLECLSH; <code>be patch ?div!</code> → &quot;nothing absorbed&quot;).</li>
+<li>The RELIABLE primitive (validated end-to-end by hand, then in code): keep ours, run a TRANSPORT whole-branch merge in the sub mount — <code>be patch &lt;sub-src&gt;?/&lt;sub-base&gt;/&lt;theirs-branch&gt;!</code> + <code>be post</code> — which 3-way auto-LCA weaves theirs into ours' cur and commits a real MERGE commit S with parents <a href="./ours, theirs.html">ours, theirs</a>.  <code>&lt;sub-src&gt;</code> = <code>SNIFFSubCandidateFromSource(bepatch_src_uri, &lt;sub-base&gt;)</code> (the same parent-relative candidate GET/PATCH-005 use); <code>&lt;theirs-branch&gt;</code> is discovered from the sub shard's remote-tracking refs (the ref whose tip == theirs, non-empty branch query) after a <code>be head &lt;sub-src&gt;</code> populates them WITHOUT disturbing ours' checkout.</li>
+<li>Note: <code>be sha1:?</code> in the sub mount reads the FIRST get-anchor row, not the latest <code>post</code> — a pre-existing <code>sha1:?</code> quirk.  The authoritative reads (<code>be status</code>, the <code>.be</code> anchor's last <code>post ?&lt;S&gt;</code> row, and the parent's <code>put &lt;sub&gt;#&lt;S&gt;</code>) all agree on S; test 40 reads the sub tip from <code>be status</code>.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>THE live blocker for the treadmill goal (genuine two-sided whole-tree spot merge). The<p>
-<a href="./PATCH-005..008.html">PATCH-005..008</a> chain made the take-theirs recursion COMPLETE without error, but the result is one-sided for a diverged sub — this ticket is the actual two-sided merge.
-</p>
-</li>
+<li>THE live blocker for the treadmill goal (genuine two-sided whole-tree spot merge). The <a href="./PATCH-005..008.html">PATCH-005..008</a> chain made the take-theirs recursion COMPLETE without error, but the result is one-sided for a diverged sub — this ticket is the actual two-sided merge.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li><code>62b7c62a</code> (2026-06-27, fix-and-land loop) — LANDED, hermetic RED→GREEN.<p>
-The PIN-based recipe wired in cleanly WITHOUT the 3 documented bugs. sniff <code>PATCH.c</code> gitlink arm DEFERS a DIVERGED gitlink (stages no <code>put #theirs</code>; PATCH-006's SUBSDirty gate extended to skip DIVERGED). beagle NEW <code>BEPatchSubMergeDiverged</code> (SUBS.c): the take-theirs drain fetches theirs (sub shard holds ours+theirs); then per diverged sub — <code>be get ?#&lt;ours-beagle-sha&gt;</code> (re-attach), <code>be patch ?&lt;theirs-beagle- sha&gt;!</code> (LOCAL auto-LCA 3-way by bare pin, NO --source → avoids bug iii), <code>be post</code> (a real content-conflict → POSTCFLCT, fail LOUD, NO --force → avoids bugs i/ii; both sides marked <code>&lt;&lt;&lt;&lt;</code>/<code>&gt;&gt;&gt;&gt;</code>). BEActSubsPatch captures each diverged sub's PRE-drain ours-tip (SNIFFSubReadTip) then re-pins the parent to S via <code>bepost_bump_sub</code>. KEY: ours/theirs are the SUB SHARD's BEAGLE shas (the git pins aren't sub-shard-resolvable); SNIFFSubReadTip yields them.  Repro <code>test/patch/42-diverged-sub-merge</code> (COMMIT GATE): RED <code>put ch#theirs</code> (drops our.txt) → GREEN BOTH our.txt+their.txt under merge S, parent pins <code>ch#S</code> (S tree has both files), q.txt absorbed.  Conflicting diverged sub verified fail-loud (POSTCFLCT, both sides marked). ctest 353/353.  LIVE <code>be patch be://spot/journal?main!</code> DEFERRED (needs spot remote; robust hermetic GREEN per the ticket's gate).
-</p>
-</li>
+<li><code>62b7c62a</code> (2026-06-27, fix-and-land loop) — LANDED, hermetic RED→GREEN. The PIN-based recipe wired in cleanly WITHOUT the 3 documented bugs. sniff <code>PATCH.c</code> gitlink arm DEFERS a DIVERGED gitlink (stages no <code>put #theirs</code>; PATCH-006's SUBSDirty gate extended to skip DIVERGED). beagle NEW <code>BEPatchSubMergeDiverged</code> (SUBS.c): the take-theirs drain fetches theirs (sub shard holds ours+theirs); then per diverged sub — <code>be get ?#&lt;ours-beagle-sha&gt;</code> (re-attach), <code>be patch ?&lt;theirs-beagle- sha&gt;!</code> (LOCAL auto-LCA 3-way by bare pin, NO --source → avoids bug iii), <code>be post</code> (a real content-conflict → POSTCFLCT, fail LOUD, NO --force → avoids bugs i/ii; both sides marked <code>&lt;&lt;&lt;&lt;</code>/<code>&gt;&gt;&gt;&gt;</code>). BEActSubsPatch captures each diverged sub's PRE-drain ours-tip (SNIFFSubReadTip) then re-pins the parent to S via <code>bepost_bump_sub</code>. KEY: ours/theirs are the SUB SHARD's BEAGLE shas (the git pins aren't sub-shard-resolvable); SNIFFSubReadTip yields them.  Repro <code>test/patch/42-diverged-sub-merge</code> (COMMIT GATE): RED <code>put ch#theirs</code> (drops our.txt) → GREEN BOTH our.txt+their.txt under merge S, parent pins <code>ch#S</code> (S tree has both files), q.txt absorbed.  Conflicting diverged sub verified fail-loud (POSTCFLCT, both sides marked). ctest 353/353.  LIVE <code>be patch be://spot/journal?main!</code> DEFERRED (needs spot remote; robust hermetic GREEN per the ticket's gate).</li>
 </ul>
 <h3>Files + functions changed</h3>
 <ul>
-<li><code>beagle/sniff/PATCH.c</code>:<p>
-  * NEW <code>gitlink_diverged(childpath, ours, theirs)</code> — mirrors <code>gitlink_ours_ahead</code>;
-</p>
-<div>
+<li><code>beagle/sniff/PATCH.c</code>: * NEW <code>gitlink_diverged(childpath, ours, theirs)</code> — mirrors <code>gitlink_ours_ahead</code>;<div>
 <p>
 YES iff neither pin is an ancestor of the other (cousins), via the same sub-shard KEEPIsAncestor shard-switch frame.
 </p>
@@ -141,10 +87,7 @@ gitlink, DEFER — stage NO <code>put &lt;sub&gt;#theirs</code> (counted as a no
 </p>
 </div>
 </li>
-<li><code>beagle/beagle/SUBS.c</code>:<p>
-  * <code>begetsubs_keep_ours</code> — now keeps ours OUT of the take-theirs set for
-</p>
-<div>
+<li><code>beagle/beagle/SUBS.c</code>: * <code>begetsubs_keep_ours</code> — now keeps ours OUT of the take-theirs set for<div>
 <p>
 <code>SUBS_STALE_DIVERGED</code> too (was <code>SUBS_STALE_NONE</code> only); only strictly-BEHIND falls through to the take-theirs FF re-get. Doc updated.
 </p>
@@ -167,130 +110,66 @@ discovery via KEEPEachRemote in the switched sub shard), <code>subs_run_in_mount
 </div>
 </li>
 <li><code>beagle/beagle/SUBS.h</code>: declared <code>BEPatchSubsMergeDiverged</code>.</li>
-<li><code>beagle/beagle/BE.cli.c</code> <code>BEActSubsPatch</code>: after the take-theirs <code>BEGetDrainSubs</code>,<p>
-call <code>BEPatchSubsMergeDiverged</code>, then <code>bepost_bump_sub(&lt;sub&gt;)</code> for each merged sub → stages <code>put &lt;sub&gt;#S</code> so the parent gitlink pins the merge. Forward-declared <code>bepost_bump_sub</code> (shared with BEActSubsPost).
-</p>
-</li>
-<li><code>beagle/test/patch/40-diverged-sub-merge/run.sh</code>: NEW hermetic 2-level be:// repro<p>
-(auto-globbed by <code>test/CMakeLists.txt</code>; registered as <code>be-patch-40-diverged-sub-merge</code>).
-</p>
-</li>
+<li><code>beagle/beagle/BE.cli.c</code> <code>BEActSubsPatch</code>: after the take-theirs <code>BEGetDrainSubs</code>, call <code>BEPatchSubsMergeDiverged</code>, then <code>bepost_bump_sub(&lt;sub&gt;)</code> for each merged sub → stages <code>put &lt;sub&gt;#S</code> so the parent gitlink pins the merge. Forward-declared <code>bepost_bump_sub</code> (shared with BEActSubsPost).</li>
+<li><code>beagle/test/patch/40-diverged-sub-merge/run.sh</code>: NEW hermetic 2-level be:// repro (auto-globbed by <code>test/CMakeLists.txt</code>; registered as <code>be-patch-40-diverged-sub-merge</code>).</li>
 </ul>
 <h3>RED → GREEN evidence (hermetic repro: <code>beagle/test/patch/40-diverged-sub-merge</code>)</h3>
 <ul>
-<li>Topology: sub <code>ch</code> L→O (master, adds <code>our.txt</code>) and L→T (<code>div</code>, adds <code>their.txt</code>),<p>
-cousins sharing LCA L; parent <code>par</code> master pins ch@O, branch <code>beh</code> pins ch@T + adds <code>q.txt</code>. Dest B2 clones par@master (ours: ch@O, <code>our.txt</code>). THE TEST: <code>be patch be:B1?beh!</code>.
-</p>
-</li>
-<li>RED (<code>begetsubs_keep_ours</code> reverted to <code>SUBS_STALE_NONE</code> only → take-theirs for<p>
-DIVERGED): <code>FAIL: sub merge DROPPED our.txt (take-theirs regression)</code> — sub wt had only <code>base.txt</code>+<code>their.txt</code>, ours dropped; parent staged <code>put ch#&lt;T&gt;</code>.
-</p>
-</li>
-<li>GREEN (fix in place): test PASSES — sub wt carries BOTH <code>our.txt</code> AND <code>their.txt</code>; the<p>
-sub HEAD (<code>be status</code>) is a MERGE commit S whose body has <code>parent &lt;O&gt;</code> AND <code>parent &lt;T&gt;</code>; the parent wtlog has <code>put ch#&lt;S&gt;</code> (NOT <code>put ch#&lt;T&gt;</code>); <code>q.txt</code> still absorbed.
-</p>
-</li>
+<li>Topology: sub <code>ch</code> L→O (master, adds <code>our.txt</code>) and L→T (<code>div</code>, adds <code>their.txt</code>), cousins sharing LCA L; parent <code>par</code> master pins ch@O, branch <code>beh</code> pins ch@T + adds <code>q.txt</code>. Dest B2 clones par@master (ours: ch@O, <code>our.txt</code>). THE TEST: <code>be patch be:B1?beh!</code>.</li>
+<li>RED (<code>begetsubs_keep_ours</code> reverted to <code>SUBS_STALE_NONE</code> only → take-theirs for DIVERGED): <code>FAIL: sub merge DROPPED our.txt (take-theirs regression)</code> — sub wt had only <code>base.txt</code>+<code>their.txt</code>, ours dropped; parent staged <code>put ch#&lt;T&gt;</code>.</li>
+<li>GREEN (fix in place): test PASSES — sub wt carries BOTH <code>our.txt</code> AND <code>their.txt</code>; the sub HEAD (<code>be status</code>) is a MERGE commit S whose body has <code>parent &lt;O&gt;</code> AND <code>parent &lt;T&gt;</code>; the parent wtlog has <code>put ch#&lt;S&gt;</code> (NOT <code>put ch#&lt;T&gt;</code>); <code>q.txt</code> still absorbed.</li>
 </ul>
 <h3>ctest results (<code>beagle/build-merge</code>)</h3>
 <ul>
-<li><code>ctest -R patch -j8</code>: 33/33 passed — incl. 37 (ours-ahead keep-ours, PATCH-006, not<p>
-regressed), 36 (PATCH-005), 38 (multi-sub), 40 (new).
-</p>
-</li>
-<li><code>ctest -j4</code> (broad): 382/382 passed. (At j8 a couple of UNRELATED TTY/force tests —<p>
-<code>be-blob-projector</code>, <code>SNIFFdelforce</code> — flake under parallelism; each passes alone and at j4; not PATCH-009.)
-</p>
-</li>
+<li><code>ctest -R patch -j8</code>: 33/33 passed — incl. 37 (ours-ahead keep-ours, PATCH-006, not regressed), 36 (PATCH-005), 38 (multi-sub), 40 (new).</li>
+<li><code>ctest -j4</code> (broad): 382/382 passed. (At j8 a couple of UNRELATED TTY/force tests — <code>be-blob-projector</code>, <code>SNIFFdelforce</code> — flake under parallelism; each passes alone and at j4; not PATCH-009.)</li>
 </ul>
 <h3>Live verification (DEFERRED to the main session)</h3>
 <ul>
-<li>The sub's diverged tip is reachable only via the parent recursion; the hermetic test<p>
-uses a real <code>div</code> branch, the live tree the synthetic <code>?/&lt;sub&gt;/.&lt;parent&gt;/.&lt;branch&gt;</code> dot-branch.  The branch-discovery (<code>be head &lt;sub-src&gt;</code> then scan remote refs for tip==theirs) covers BOTH uniformly, but <code>be head</code> must reach the dot-branch parent-relative — to be confirmed by the live <code>be patch be://spot/journal?main!</code>.
-</p>
-</li>
+<li>The sub's diverged tip is reachable only via the parent recursion; the hermetic test uses a real <code>div</code> branch, the live tree the synthetic <code>?/&lt;sub&gt;/.&lt;parent&gt;/.&lt;branch&gt;</code> dot-branch.  The branch-discovery (<code>be head &lt;sub-src&gt;</code> then scan remote refs for tip==theirs) covers BOTH uniformly, but <code>be head</code> must reach the dot-branch parent-relative — to be confirmed by the live <code>be patch be://spot/journal?main!</code>.</li>
 </ul>
 <h3>MAIN-SESSION LIVE RESULT + RECIPE REVISION (2026-06-26)</h3>
 <ul>
-<li>The worker's hermetic test PASSED but the LIVE <code>be patch be://spot/journal?main!</code><p>
-FAILED: &quot;diverged sub — theirs' branch not found (cannot 3-way merge)&quot;. Root: the branch-discovery (<code>be head &lt;sub-src&gt;</code> = the sub TRUNK, then scan for a remote ref whose tip==theirs) cannot find theirs LIVE — theirs' tip lives ONLY on the synthetic dot- branch, which the wire does NOT advertise standalone (<code>be head/get &lt;dot-branch&gt;[#pin]</code> → WIRECLFL), and <code>be head &lt;sub-src&gt;</code> only fetches the trunk (= the LCA). The hermetic <code>div</code> branch hid this (it WAS wire-advertised). Good news: the fix correctly DETECTED divergence and REFUSED the silent take-theirs — no data loss.
-</p>
-</li>
-<li>PROVEN WORKING PRIMITIVE (main session, by hand on journal8): <code>be patch ?&lt;theirs-40hex&gt;!</code><p>
-is a LOCAL 3-way auto-LCA merge addressed by the bare PIN — <code>KEEPResolveRef</code> resolves a 40-hex sha, no branch name needed. (<code>?#&lt;sha&gt;!</code> is REJECTED; <code>?&lt;sha&gt;!</code> is the form. The dot-branch is neither wire-fetchable for a transport merge NOR a parseable local ref — <code>be patch ?/&lt;sub&gt;/.&lt;branch&gt;!</code> → &quot;bad ref&quot;.) <code>be/test</code> merged CLEAN by pin (content-conflict=0, posted <code>6d0b29bc</code>, both ours' 7 test dirs AND spot's log/nonspine+diff/links+commit/render present); <code>be</code> merged with REAL content-conflicts (both sides edited <code>views/*.js</code>).
-</p>
-</li>
-<li>RECIPE REVISED in <code>subs_merge_one_diverged</code> (PIN-only, no branch discovery): (1)<p>
-<code>BEGetSubMount(sub, theirs, src)</code> — fetch theirs' closure by pin (the take-theirs fetch, works in-recursion); (2) <code>be get ?#&lt;ours&gt;</code> — re-attach cur to ours (local); (3) <code>be patch ?&lt;theirs&gt;!</code> — LOCAL auto-LCA merge by pin; (4) <code>be post</code>. Caller now passes <code>ours_hex</code> (from <code>subs_baseline_pin</code>). The old <code>be head</code>+<code>subs_theirs_branch</code>+transport- merge path is removed (those helpers now dead).
-</p>
-</li>
-<li>LIVE RESULT (journal11, <code>beagle/build</code> rebuilt 19:02): *<strong>beagle FULLY MERGED</strong>* — posted<p>
-<code>f7c2cd42</code> (parent <code>9721f532</code> = spot's BRO-008-C + ours), <code>1335 ok</code>, spot's <code>test/get/66-staged-overlap-merge</code> present. *<strong>be</strong>* = genuine content-conflicts (<code>shared/checkout.js</code>, <code>views/{blob,commit,diff,size,type}.js</code>) → <code>be post</code> correctly refused (POSTCFLCT) — a real conflicting merge a human must resolve, NOT a bug.
-</p>
-</li>
-<li>RESIDUAL (open, file/continue): **be/test (depth-2, nested under the CONFLICTING be)<p>
-does not merge in the one-shot command** — its merge arm never fetched theirs (journal11 <code>.be/beagle-ext-tests/refs</code> has only ours), because <code>be</code>'s subprocess aborts on its own content-conflict (POSTCFLCT/BEDOGEXIT) before the nested be/test diverged arm runs. Fix direction: post-order (merge+post the DEEPEST clean sub first), and surface a conflicting sub WITHOUT aborting the whole recursion (collect+report conflicted subs, continue siblings/children). be/test merges CLEAN in isolation (proven <code>6d0b29bc</code>), so only the ordering/abort-robustness blocks it live.
-</p>
-</li>
+<li>The worker's hermetic test PASSED but the LIVE <code>be patch be://spot/journal?main!</code> FAILED: &quot;diverged sub — theirs' branch not found (cannot 3-way merge)&quot;. Root: the branch-discovery (<code>be head &lt;sub-src&gt;</code> = the sub TRUNK, then scan for a remote ref whose tip==theirs) cannot find theirs LIVE — theirs' tip lives ONLY on the synthetic dot- branch, which the wire does NOT advertise standalone (<code>be head/get &lt;dot-branch&gt;[#pin]</code> → WIRECLFL), and <code>be head &lt;sub-src&gt;</code> only fetches the trunk (= the LCA). The hermetic <code>div</code> branch hid this (it WAS wire-advertised). Good news: the fix correctly DETECTED divergence and REFUSED the silent take-theirs — no data loss.</li>
+<li>PROVEN WORKING PRIMITIVE (main session, by hand on journal8): <code>be patch ?&lt;theirs-40hex&gt;!</code> is a LOCAL 3-way auto-LCA merge addressed by the bare PIN — <code>KEEPResolveRef</code> resolves a 40-hex sha, no branch name needed. (<code>?#&lt;sha&gt;!</code> is REJECTED; <code>?&lt;sha&gt;!</code> is the form. The dot-branch is neither wire-fetchable for a transport merge NOR a parseable local ref — <code>be patch ?/&lt;sub&gt;/.&lt;branch&gt;!</code> → &quot;bad ref&quot;.) <code>be/test</code> merged CLEAN by pin (content-conflict=0, posted <code>6d0b29bc</code>, both ours' 7 test dirs AND spot's log/nonspine+diff/links+commit/render present); <code>be</code> merged with REAL content-conflicts (both sides edited <code>views/*.js</code>).</li>
+<li>RECIPE REVISED in <code>subs_merge_one_diverged</code> (PIN-only, no branch discovery): (1) <code>BEGetSubMount(sub, theirs, src)</code> — fetch theirs' closure by pin (the take-theirs fetch, works in-recursion); (2) <code>be get ?#&lt;ours&gt;</code> — re-attach cur to ours (local); (3) <code>be patch ?&lt;theirs&gt;!</code> — LOCAL auto-LCA merge by pin; (4) <code>be post</code>. Caller now passes <code>ours_hex</code> (from <code>subs_baseline_pin</code>). The old <code>be head</code>+<code>subs_theirs_branch</code>+transport- merge path is removed (those helpers now dead).</li>
+<li>LIVE RESULT (journal11, <code>beagle/build</code> rebuilt 19:02): *<strong>beagle FULLY MERGED</strong>* — posted <code>f7c2cd42</code> (parent <code>9721f532</code> = spot's BRO-008-C + ours), <code>1335 ok</code>, spot's <code>test/get/66-staged-overlap-merge</code> present. *<strong>be</strong>* = genuine content-conflicts (<code>shared/checkout.js</code>, <code>views/{blob,commit,diff,size,type}.js</code>) → <code>be post</code> correctly refused (POSTCFLCT) — a real conflicting merge a human must resolve, NOT a bug.</li>
+<li>RESIDUAL (open, file/continue): *<strong>be/test (depth-2, nested under the CONFLICTING be) does not merge in the one-shot command</strong>* — its merge arm never fetched theirs (journal11 <code>.be/beagle-ext-tests/refs</code> has only ours), because <code>be</code>'s subprocess aborts on its own content-conflict (POSTCFLCT/BEDOGEXIT) before the nested be/test diverged arm runs. Fix direction: post-order (merge+post the DEEPEST clean sub first), and surface a conflicting sub WITHOUT aborting the whole recursion (collect+report conflicted subs, continue siblings/children). be/test merges CLEAN in isolation (proven <code>6d0b29bc</code>), so only the ordering/abort-robustness blocks it live.</li>
 </ul>
 <h3>REVERTED — current tree state (2026-06-26, main session)</h3>
 <ul>
-<li>The PIN-based recipe above was wired in and tested live, but proved NOT robust and was<p>
-*<strong>REVERTED</strong>* (user-approved) to the worker's fail-loud version. Three bugs found while wiring it, all to fix BEFORE re-landing the pin recipe:
-</p>
-<ol>
-<li> *<strong>Hermetic test 40 REGRESSED</strong>* — the conflict-graceful <code>be post --force</code> path left<p>
- the sub at <code>base.txt</code> (LCA), LOSING BOTH sides, despite posting a merge commit. A  parent-gitlink / re-mount interaction resets the sub after the sub-merge posts.
-</p>
-</li>
-<li> *<strong><code>--force</code> conflict-marking is LOSSY</strong>* — live <code>be</code> reported <code>content-conflict=8</code><p>
- but the committed result had NO <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> markers and only one pin reachable; the  force-post did not preserve &quot;mark conflicts, keep both sides&quot; (the user's ask).
-</p>
-</li>
-<li> *<strong><code>--source</code> on the local <code>?&lt;sha&gt;!</code> merge BREAKS it</strong>* — flips target resolution to<p>
- the remote (bare sha not wire-resolvable → <code>REFSNONE</code> / &quot;rebase-one … nothing to  replay&quot;). So the depth-2 nested fetch cannot be threaded via <code>--source</code> on patch;  a separate deep-fetch pass (or journal-level deep sub enumeration) is needed.
-</p>
-</li>
+<li>The PIN-based recipe above was wired in and tested live, but proved NOT robust and was *<strong>REVERTED</strong>* (user-approved) to the worker's fail-loud version. Three bugs found while wiring it, all to fix BEFORE re-landing the pin recipe:<ol>
+<li>*<strong>Hermetic test 40 REGRESSED</strong>* — the conflict-graceful <code>be post --force</code> path left the sub at <code>base.txt</code> (LCA), LOSING BOTH sides, despite posting a merge commit. A parent-gitlink / re-mount interaction resets the sub after the sub-merge posts.</li>
+<li>*<strong><code>--force</code> conflict-marking is LOSSY</strong>* — live <code>be</code> reported <code>content-conflict=8</code> but the committed result had NO <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> markers and only one pin reachable; the force-post did not preserve &quot;mark conflicts, keep both sides&quot; (the user's ask).</li>
+<li>*<strong><code>--source</code> on the local <code>?&lt;sha&gt;!</code> merge BREAKS it</strong>* — flips target resolution to the remote (bare sha not wire-resolvable → <code>REFSNONE</code> / &quot;rebase-one … nothing to replay&quot;). So the depth-2 nested fetch cannot be threaded via <code>--source</code> on patch; a separate deep-fetch pass (or journal-level deep sub enumeration) is needed.</li>
 </ol>
 </li>
-<li>TREE NOW: worker's <code>be head</code>+<code>subs_theirs_branch</code>+transport-merge version restored;<p>
-<code>ctest -R patch</code> 41/41 GREEN; live behavior = fail-loud (&quot;theirs' branch not found&quot;), NO data loss. The pin-based recipe + these 3 bugs are the spec for the next attempt.
-</p>
-</li>
+<li>TREE NOW: worker's <code>be head</code>+<code>subs_theirs_branch</code>+transport-merge version restored; <code>ctest -R patch</code> 41/41 GREEN; live behavior = fail-loud (&quot;theirs' branch not found&quot;), NO data loss. The pin-based recipe + these 3 bugs are the spec for the next attempt.</li>
 </ul>
 <h3>MERGE ACHIEVED — manual <code>be</code>-command recipe (journal15, 2026-06-26)</h3>
 <ul>
-<li>The full two-sided recursive merge of bro+spot journal WAS ACHIEVED in<p>
-<code>~/treadmill/journal15</code> using only native <code>be</code> commands (the engine one-command automation is still PATCH-009-open, but the RESULT is done). Proven two-sided: be/test merge tree holds <code>put/ref-bang</code> (OURS-only) AND <code>log/nonspine.js</code> (SPOT-only) — a take-theirs cannot do that. Final: journal <code>2bf81e9d</code>, 522 ok clean; be/test 150 ok (7 bro tests + 5 spot files); beagle 1335 ok; be <code>084d727d</code> (both sides, 7 files conflict-MARKED <code>&lt;&lt;&lt;&lt;</code>/<code>&gt;&gt;&gt;&gt;</code> for human resolution); todo/* = ours' JS-093 + spot's BRO-006/7/8 COMMIT-006 DIFF-010 LOG-002.
-</p>
-</li>
+<li>The full two-sided recursive merge of bro+spot journal WAS ACHIEVED in <code>~/treadmill/journal15</code> using only native <code>be</code> commands (the engine one-command automation is still PATCH-009-open, but the RESULT is done). Proven two-sided: be/test merge tree holds <code>put/ref-bang</code> (OURS-only) AND <code>log/nonspine.js</code> (SPOT-only) — a take-theirs cannot do that. Final: journal <code>2bf81e9d</code>, 522 ok clean; be/test 150 ok (7 bro tests + 5 spot files); beagle 1335 ok; be <code>084d727d</code> (both sides, 7 files conflict-MARKED <code>&lt;&lt;&lt;&lt;</code>/<code>&gt;&gt;&gt;&gt;</code> for human resolution); todo/* = ours' JS-093 + spot's BRO-006/7/8 COMMIT-006 DIFF-010 LOG-002.</li>
 <li>THE RECIPE (deepest-first, pin-based local merge — no engine change needed):<ol>
-<li> <code>be get be://localhost/journal</code> (clone OURS) — env <code>DOG_REMOTE_PATH</code> +<p>
- <code>KEEPER_BIN</code> = the build/bin dir + keeper.
-</p>
-</li>
-<li> <code>be get --force be://spot/journal</code> — deep-fetches ALL theirs objects<p>
- (<code>get be?ce4c8795</code>, <code>get be/test?aedbb0f5</code>, <code>get beagle?9721f532</code>) into the SAME  shards while ours' objects remain in the pool. (<code>--force</code> overrides the SNIFFNOFF  non-fast-forward refusal; it checks out spot's tree but keeps ours' objects.)
-</p>
-</li>
-<li> <code>be get ?#&lt;ours-journal-tip&gt;</code> — re-attach to ours' tree.</li>
-<li> Per diverged sub, DEEPEST-FIRST, with BOTH pins now local:<p>
-   <code>cd &lt;sub&gt;; be patch ?&lt;theirs-40hex&gt;!</code> (LOCAL auto-LCA 3-way merge by pin);    resolve/keep markers; <code>be post [--force]</code>.  Order matters: merge be/test, then be (be's <code>be patch ?&lt;be-theirs&gt;!</code> sees the  merged be/test as ours-ahead → keeps it); beagle independently.
-</p>
-</li>
-<li> Journal: <code>be patch be://spot/journal?main!</code> — now every sub is ours-ahead (its<p>
- merge ⊇ theirs) → &quot;keep ours&quot;, todo/* 3-way merges; <code>be post --force</code>.
-</p>
-</li>
-<li> New files spot ADDED need <code>be put &lt;path&gt;</code> before <code>be post</code> (beagle <code>be post</code> does<p>
- NOT auto-add untracked files — do it at EACH level: journal todo + the be sub).
-</p>
-</li>
+<li><code>be get be://localhost/journal</code> (clone OURS) — env <code>DOG_REMOTE_PATH</code> + <code>KEEPER_BIN</code> = the build/bin dir + keeper.</li>
+<li><code>be get --force be://spot/journal</code> — deep-fetches ALL theirs objects (<code>get be?ce4c8795</code>, <code>get be/test?aedbb0f5</code>, <code>get beagle?9721f532</code>) into the SAME shards while ours' objects remain in the pool. (<code>--force</code> overrides the SNIFFNOFF non-fast-forward refusal; it checks out spot's tree but keeps ours' objects.)</li>
+<li><code>be get ?#&lt;ours-journal-tip&gt;</code> — re-attach to ours' tree.</li>
+<li>Per diverged sub, DEEPEST-FIRST, with BOTH pins now local: <code>cd &lt;sub&gt;; be patch ?&lt;theirs-40hex&gt;!</code> (LOCAL auto-LCA 3-way merge by pin); resolve/keep markers; <code>be post [--force]</code>. Order matters: merge be/test, then be (be's <code>be patch ?&lt;be-theirs&gt;!</code> sees the merged be/test as ours-ahead → keeps it); beagle independently.</li>
+<li>Journal: <code>be patch be://spot/journal?main!</code> — now every sub is ours-ahead (its merge ⊇ theirs) → &quot;keep ours&quot;, todo/* 3-way merges; <code>be post --force</code>.</li>
+<li>New files spot ADDED need <code>be put &lt;path&gt;</code> before <code>be post</code> (beagle <code>be post</code> does NOT auto-add untracked files — do it at EACH level: journal todo + the be sub).</li>
 </ol>
 </li>
-<li>CAVEAT: <code>be</code> has 7 genuinely-conflicting files (both sides edited the same<p>
-<code>views/*.js</code>/<code>shared/*.js</code>) — committed WITH <code>&lt;&lt;&lt;&lt;</code>/<code>&gt;&gt;&gt;&gt;</code> markers per the &quot;mark conflicts, no abort&quot; directive; a human resolves them. This is a correct merge outcome (git does the same), not a defect.
-</p>
-</li>
+<li>CAVEAT: <code>be</code> has 7 genuinely-conflicting files (both sides edited the same <code>views/*.js</code>/<code>shared/*.js</code>) — committed WITH <code>&lt;&lt;&lt;&lt;</code>/<code>&gt;&gt;&gt;&gt;</code> markers per the &quot;mark conflicts, no abort&quot; directive; a human resolves them. This is a correct merge outcome (git does the same), not a defect.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

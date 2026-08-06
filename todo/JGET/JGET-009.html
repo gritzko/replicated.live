@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JGET-009</title>
+<title>JGET-009: grandchild submodule title derived from the WRONG .gitmodules (depth-2 recursion → HOMENOPROJ)</title>
+<meta property="og:title" content="JGET-009: grandchild submodule title derived from the WRONG .gitmodules (depth-2 recursion → HOMENOPROJ)">
+<meta property="og:description" content="In a depth-2 submodule chain (par→ch→gc), jab get mis-derives the grandchild's project title: recurseSubMounts reads the PARENT's top-level .gitmodules keyed by the NESTED path chsub/gcsub, which only declares chsub — so the url comes back empty and the title falls to basename(&quot;chsub/gcsub&quot;)=&quot;gcsub&quot;, not the correct gc (declared by the depth-1 sub's own chsub/.gitmodules). jab fetches be:…?/gcsub, keeper returns HOMENOPROJ, the grandchild mount fails and the whole get exits 1. Single-level subs mount fine; only the grandchild level breaks. Part of JGET-001; method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JGET/JGET-009.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,44 +15,34 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JGET-009 <a href="./HIGH.html">HIGH</a>: grandchild submodule title derived from the WRONG <code>.gitmodules</code> (depth-2 recursion → HOMENOPROJ)</h1>
+<h1>JGET-009: grandchild submodule title derived from the WRONG <code>.gitmodules</code> (depth-2 recursion → HOMENOPROJ)</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
 <p>
 In a depth-2 submodule chain (par→ch→gc), <code>jab get</code> mis-derives the grandchild's project title: <code>recurseSubMounts</code> reads the PARENT's top-level <code>.gitmodules</code> keyed by the NESTED path <code>chsub/gcsub</code>, which only declares <code>chsub</code> — so the url comes back empty and the title falls to <code>basename(&quot;chsub/gcsub&quot;)=&quot;gcsub&quot;</code>, not the correct <code>gc</code> (declared by the depth-1 sub's own <code>chsub/.gitmodules</code>). jab fetches <code>be:…?/gcsub</code>, keeper returns <code>HOMENOPROJ</code>, the grandchild mount fails and the whole get exits 1. Single-level subs mount fine; only the grandchild level breaks. Part of <a href="JGET-001.html">JGET-001</a>; method <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Native <code>beagle/test/get/{31-file-subs-parent-source, 45-file-subs-inflight-source}</code><p>
-(be: parent, 3-level chain). Case 37 (single sub) is PARITY (rc=0).
-</p>
-</li>
-<li>Root: <code>recurseSubMounts</code> (<code>get.js:730</code>) calls `submount.mount({wt: g.wt, subpath:<p>
-&quot;chsub/gcsub&quot;, …})<code>; inside, </code>gitmodulesUrl(g.wt, &quot;chsub/gcsub&quot;)<code> reads the parent top-level </code>.gitmodules<code> (only declares </code>chsub<code>) → url=&quot;&quot; → wrong title </code>gcsub`.
-</p>
-</li>
+<li>Native <code>beagle/test/get/{31-file-subs-parent-source, 45-file-subs-inflight-source}</code> (be: parent, 3-level chain). Case 37 (single sub) is PARITY (rc=0).</li>
+<li>Root: <code>recurseSubMounts</code> (<code>get.js:730</code>) calls <code>submount.mount({wt: g.wt, subpath: &quot;chsub/gcsub&quot;, …})</code>; inside, <code>gitmodulesUrl(g.wt, &quot;chsub/gcsub&quot;)</code> reads the parent top-level <code>.gitmodules</code> (only declares <code>chsub</code>) → url=&quot;&quot; → wrong title <code>gcsub</code>.</li>
 <li>Evidence <code>~/todo/JSGET-cases/c31/wk/02.b2.err</code> (<code>HOMENOPROJ</code>, shard is <code>gc</code>).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Grandchild (and deeper) sub titles resolve from the ENCLOSING sub's own<p>
-<code>.gitmodules</code> (<code>&lt;wt&gt;/&lt;chsub&gt;/.gitmodules</code>, key <code>gcsub</code>), so the right shard (<code>gc</code>) is fetched; the full par→ch→gc chain mounts, matching native.
-</p>
-</li>
+<li>Grandchild (and deeper) sub titles resolve from the ENCLOSING sub's own <code>.gitmodules</code> (<code>&lt;wt&gt;/&lt;chsub&gt;/.gitmodules</code>, key <code>gcsub</code>), so the right shard (<code>gc</code>) is fetched; the full par→ch→gc chain mounts, matching native.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Read each level's <code>.gitmodules</code> relative to that level's mount, not the root.<p>
-Repro-first; sequence after <a href="./JGET-006.html">JGET-006</a>.
-</p>
-</li>
+<li>Read each level's <code>.gitmodules</code> relative to that level's mount, not the root. Repro-first; sequence after <a href="./JGET-006.html">JGET-006</a>.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>In recursion, resolve the sub's <code>.gitmodules</code> at the CHILD mount root and key by<p>
-the LEAF subpath segment (<code>gcsub</code>), not the root <code>.gitmodules</code> keyed by the full nested path. Carry the resolved title down rather than re-deriving from basename.
-</p>
-</li>
+<li>In recursion, resolve the sub's <code>.gitmodules</code> at the CHILD mount root and key by the LEAF subpath segment (<code>gcsub</code>), not the root <code>.gitmodules</code> keyed by the full nested path. Carry the resolved title down rather than re-deriving from basename.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -65,5 +59,16 @@ the LEAF subpath segment (<code>gcsub</code>), not the root <code>.gitmodules</c
 <li>RETIRED 2026-07-07 (audit): fixed as <a href="../SUBS/SUBS-047.html">SUBS-047</a> defect (C) — nested subs resolve url + <a href="./Title.html">Title</a> via the nearest enclosing <code>.gitmodules</code> (<code>declaredUrl</code>), so the grandchild fetches the RIGHT shard.</li>
 <li>Landed: the SUBS-047 changeset (in the d80bdb5c/50e90012 window; <code>be/test/submount.js</code> added then).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>COMMIT-003</title>
+<title>COMMIT-003: commit: view renders nothing in --plain (direct run)</title>
+<meta property="og:title" content="COMMIT-003: commit: view renders nothing in --plain (direct run)">
+<meta property="og:description" content="The JS commit: view resolves its target and FEEDS a correct metadata hunk to ctx.sink, yet a direct jab commit commit:#&lt;sha&gt; emits ZERO bytes (rc=0, no error) while native be commit prints the full commit &lt;sha40&gt; / tree / author / … metadata. Surfaced verifying JS-082 (the be-js-hexviews-full-sha repro). Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/COMMIT/COMMIT-003.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,79 +15,45 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>COMMIT-003 <a href="./MED.html">MED</a>: <code>commit:</code> view renders nothing in --plain (direct run)</h1>
+<h1>COMMIT-003: <code>commit:</code> view renders nothing in --plain (direct run)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The JS <code>commit:</code> view resolves its target and FEEDS a correct metadata hunk to <code>ctx.sink</code>, yet a direct <code>jab commit commit:#&lt;sha&gt;</code> emits ZERO bytes (rc=0, no error) while native <code>be commit</code> prints the full <code>commit &lt;sha40&gt;</code> / tree / author / … metadata.  Surfaced verifying <a href="../JS/JS-082.html">JS-082</a> (the <code>be-js-hexviews-full-sha</code> repro). Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Reproduce: in a one-commit worktree, <code>jab commit &quot;commit:#&lt;full-or-short-sha&gt;&quot;</code><p>
-(and bare <code>commit:</code>) → 0 bytes, exit 0; native <code>be commit &quot;commit:#&lt;sha&gt;&quot;</code> → <code>commit &lt;sha40&gt;\n</code> + the raw ordered headers + body.
-</p>
-</li>
-<li>Traced <code>views/commit/commit.js</code>: the handler DOES resolve the slot and build<p>
-the hunk — instrumentation shows <code>slot={sha,bannerHex}</code> then <code>feeding bytes=221 toks=15</code> into <code>ctx.sink.feed(&quot;&quot;, bytes, toks, &quot;&quot;, 0n)</code> — but nothing reaches stdout.  So resolution is fine; the RENDER is lost.
-</p>
-</li>
-<li>Contrast <code>views/blob/blob.js</code> (same <code>ctx.sink</code>): it feeds a NON-empty uri<p>
-(<code>blob &lt;key&gt;#L&lt;n&gt;</code>) and renders.  <code>commit.js</code> feeds an EMPTY uri (intentional, to match the C keeper eliding the <code>commit:?&lt;sha&gt;</code> U-span) — the loop edge appears to drop the empty-URI content hunk in --plain.
-</p>
-</li>
-<li>NOT caused by <a href="../JS/JS-082.html">JS-082</a>: the resolve fast-path works (full + short sha both<p>
-resolve); the loss is downstream in the sink→edge render of an empty-URI hunk.
-</p>
-</li>
+<li>Reproduce: in a one-commit worktree, <code>jab commit &quot;commit:#&lt;full-or-short-sha&gt;&quot;</code> (and bare <code>commit:</code>) → 0 bytes, exit 0; native <code>be commit &quot;commit:#&lt;sha&gt;&quot;</code> → <code>commit &lt;sha40&gt;\n</code> + the raw ordered headers + body.</li>
+<li>Traced <code>views/commit/commit.js</code>: the handler DOES resolve the slot and build the hunk — instrumentation shows <code>slot={sha,bannerHex}</code> then <code>feeding bytes=221 toks=15</code> into <code>ctx.sink.feed(&quot;&quot;, bytes, toks, &quot;&quot;, 0n)</code> — but nothing reaches stdout.  So resolution is fine; the RENDER is lost.</li>
+<li>Contrast <code>views/blob/blob.js</code> (same <code>ctx.sink</code>): it feeds a NON-empty uri (<code>blob &lt;key&gt;#L&lt;n&gt;</code>) and renders.  <code>commit.js</code> feeds an EMPTY uri (intentional, to match the C keeper eliding the <code>commit:?&lt;sha&gt;</code> U-span) — the loop edge appears to drop the empty-URI content hunk in --plain.</li>
+<li>NOT caused by <a href="../JS/JS-082.html">JS-082</a>: the resolve fast-path works (full + short sha both resolve); the loss is downstream in the sink→edge render of an empty-URI hunk.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>jab commit commit:#&lt;sha&gt;</code> (full/short/<code>?&lt;ref&gt;</code>/bare) emits the metadata hunk<p>
-(<code>commit &lt;sha40&gt;</code> + ordered headers + blank + body), matching native byte-wise.
-</p>
-</li>
-<li>A repro under <code>test/</code> (or fold into <code>be-js-hexviews-full-sha</code>, dropping the<p>
-JS-082 descope note) that asserts the <code>commit &lt;sha40&gt;</code> line is present.
-</p>
-</li>
+<li><code>jab commit commit:#&lt;sha&gt;</code> (full/short/<code>?&lt;ref&gt;</code>/bare) emits the metadata hunk (<code>commit &lt;sha40&gt;</code> + ordered headers + blank + body), matching native byte-wise.</li>
+<li>A repro under <code>test/</code> (or fold into <code>be-js-hexviews-full-sha</code>, dropping the JS-082 descope note) that asserts the <code>commit &lt;sha40&gt;</code> line is present.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Plain-mode content views must stay byte-exact with the C keeper; an empty-URI<p>
-content hunk must render its TEXT (native shows no banner line for <code>commit:</code>).
-</p>
-</li>
+<li>Plain-mode content views must stay byte-exact with the C keeper; an empty-URI content hunk must render its TEXT (native shows no banner line for <code>commit:</code>).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>ROOT CAUSE (not the empty URI): commit.js fed a HAND-BUILT 15-span tok32<p>
-table; the HUNK binding <code>hunk.feed</code> writes that TOK TLV at 1/4 its byte length (<a href="../JS/JS-092.html">JS-092</a>), so <code>HUNKu8sDrain</code>/<code>next()</code> REJECTS the record (<code>4 ∤ 15</code>) → renderHunkLog walks 0 records → 0 bytes. (cat/blob dodge this: they feed EMPTY toks in --plain.)
-</p>
-</li>
-<li>FIX (in scope, two leaves): (a) <code>commit.js</code> feeds EMPTY toks in --plain (the<p>
-cat/blob gate) so the record drains; (b) <code>view/bro.js renderHunkLog</code> guards the <code>log.uri.length</code> read — the empty-URI getter throws RangeError (the SECOND, ticket-predicted edge bug, only reachable once (a) lets next() pass).
-</p>
-</li>
-<li>Parity: plain output == native byte-for-byte + ONE trailing blank-line<p>
-separator — the documented content-hunk constant every view shares (native <code>be commit</code> uses the keeper's own proj_emit_hunk renderer, no separator).
-</p>
-</li>
+<li>ROOT CAUSE (not the empty URI): commit.js fed a HAND-BUILT 15-span tok32 table; the HUNK binding <code>hunk.feed</code> writes that TOK TLV at 1/4 its byte length (<a href="../JS/JS-092.html">JS-092</a>), so <code>HUNKu8sDrain</code>/<code>next()</code> REJECTS the record (<code>4 ∤ 15</code>) → renderHunkLog walks 0 records → 0 bytes. (cat/blob dodge this: they feed EMPTY toks in --plain.)</li>
+<li>FIX (in scope, two leaves): (a) <code>commit.js</code> feeds EMPTY toks in --plain (the cat/blob gate) so the record drains; (b) <code>view/bro.js renderHunkLog</code> guards the <code>log.uri.length</code> read — the empty-URI getter throws RangeError (the SECOND, ticket-predicted edge bug, only reachable once (a) lets next() pass).</li>
+<li>Parity: plain output == native byte-for-byte + ONE trailing blank-line separator — the documented content-hunk constant every view shares (native <code>be commit</code> uses the keeper's own proj_emit_hunk renderer, no separator).</li>
 <li>The underlying binding bug is filed as <a href="../JS/JS-092.html">JS-092</a> (own ticket, beagle C core).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Repro-first: failing <code>jab commit commit:#&lt;sha&gt;</code> (0 bytes) — `test/commit/<p>
- render/run.sh` asserts ZERO-bytes pre-fix; confirmed RED then GREEN.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Trace <code>_hunkSink</code> feed → loop-edge render: commit.js plain → EMPTY toks +<p>
- bro.js renderHunkLog uri-getter guard. Plain parity kept.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Add the <code>commit:</code> assertion under <code>be/test</code> (no <code>hexviews</code> tree here):<p>
- <code>be-js-commit-render</code> — asserts the <code>commit &lt;sha40&gt;</code> line + body + native  byte-parity (modulo the separator). Full suite 59/59 green.
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Repro-first: failing <code>jab commit commit:#&lt;sha&gt;</code> (0 bytes) — <code>test/commit/ render/run.sh</code> asserts ZERO-bytes pre-fix; confirmed RED then GREEN.</li>
+<li class="done"><input type="checkbox" checked disabled> Trace <code>_hunkSink</code> feed → loop-edge render: commit.js plain → EMPTY toks + bro.js renderHunkLog uri-getter guard. Plain parity kept.</li>
+<li class="done"><input type="checkbox" checked disabled> Add the <code>commit:</code> assertion under <code>be/test</code> (no <code>hexviews</code> tree here): <code>be-js-commit-render</code> — asserts the <code>commit &lt;sha40&gt;</code> line + body + native byte-parity (modulo the separator). Full suite 59/59 green.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -92,14 +62,19 @@ separator — the documented content-hunk constant every view shares (native <co
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED <code>b9315c6d</code> (&quot;COMMIT-003,004,005&quot;, be/).  Touches<p>
-<code>be/views/commit/commit.js</code>, <code>be/view/bro.js</code>, new <code>be/test/commit/render/ run.sh</code>.  Spawned <a href="../JS/JS-092.html">JS-092</a> (the HUNK-toks binding bug).
-</p>
-</li>
-<li>Verified in-tree 2026-07-07 (ticket audit): COMMIT-003 markers at<p>
-commit.js:296-299/:470 (plain = EMPTY toks) + view/bro.js:721 (empty-URI getter guard); test <code>commit/render</code> present; be/ wt clean.
-</p>
-</li>
+<li>LANDED <code>b9315c6d</code> (&quot;COMMIT-003,004,005&quot;, be/).  Touches <code>be/views/commit/commit.js</code>, <code>be/view/bro.js</code>, new <code>be/test/commit/render/ run.sh</code>.  Spawned <a href="../JS/JS-092.html">JS-092</a> (the HUNK-toks binding bug).</li>
+<li>Verified in-tree 2026-07-07 (ticket audit): COMMIT-003 markers at commit.js:296-299/:470 (plain = EMPTY toks) + view/bro.js:721 (empty-URI getter guard); test <code>commit/render</code> present; be/ wt clean.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

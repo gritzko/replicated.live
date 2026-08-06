@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ABC-006</title>
+<title>ABC-006: Bx.h buffer template: bSplice units, bReMap shrink, bAcquire math</title>
+<meta property="og:title" content="ABC-006: Bx.h buffer template: bSplice units, bReMap shrink, bAcquire math">
+<meta property="og:description" content="Three defects in the typed-buffer template (2026-07-07 review). All are latent-but-armed: the template instantiates for kv32, kv64, sha256, range32, u8cs, … and the only current bSplice caller happens to be u8.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/ABC/ABC-006.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,36 +15,26 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>ABC-006: <a href="./HIGH.html">HIGH</a> Bx.h buffer template: bSplice units, bReMap shrink, bAcquire math</h1>
+<h1>ABC-006: Bx.h buffer template: bSplice units, bReMap shrink, bAcquire math</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 Three defects in the typed-buffer template (2026-07-07 review). All are latent-but-armed: the template instantiates for <code>kv32</code>, <code>kv64</code>, <code>sha256</code>, <code>range32</code>, <code>u8cs</code>, … and the only current <code>bSplice</code> caller happens to be u8.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>Bx.h:435-438</code> <code>bSplice</code> mixes units: <code>off</code>, <code>cut</code>, <code>$len(paste)</code>,<p>
-<code>bDataLen</code> are ELEMENT counts but applied to <code>u8 *b</code> as BYTE offsets and memmove sizes. Correct only for <code>sizeof(T)==1</code>; any non-u8 instantiation splices garbage while still advancing <code>buf[2]</code> in elements. Sole caller today: <code>TLV.h:70</code> (u8) — works by accident.
-</p>
-</li>
-<li><code>Bx.h:388-393</code> <code>bReMap</code> non-mremap fallback memmoves <code>old_size</code> bytes<p>
-into a <code>new_size</code> mapping — OOB write on any shrink; this is the path macOS CI takes. Also <code>MAP_SHARED</code> vs the mremap path's private mapping. (Distinct from MEM-021's MMAP.c items.)
-</p>
-</li>
-<li><code>Bx.h:506-510</code> <code>bAcquire</code>: (1) aligns with <code>sizeof(T)</code> mask instead of<p>
-<code>alignof(T)</code> — garbage for non-power-of-2 T, and inconsistent with <code>bAlign</code>/<code>bAren</code> (Bx.h:451,483) which use alignof; (2) <code>cap * sizeof(T)</code> unchecked overflow → tiny sz passes the room check, child claims cap elements over a few bytes; (3) <code>base + sz &gt; arena[3]</code> pointer-overflow UB. Same <code>len * sizeof(T)</code> overflow in <code>bAllocate</code> (:202), <code>bMap</code> (:369).
-</p>
-</li>
+<li><code>Bx.h:435-438</code> <code>bSplice</code> mixes units: <code>off</code>, <code>cut</code>, <code>$len(paste)</code>, <code>bDataLen</code> are ELEMENT counts but applied to <code>u8 *b</code> as BYTE offsets and memmove sizes. Correct only for <code>sizeof(T)==1</code>; any non-u8 instantiation splices garbage while still advancing <code>buf[2]</code> in elements. Sole caller today: <code>TLV.h:70</code> (u8) — works by accident.</li>
+<li><code>Bx.h:388-393</code> <code>bReMap</code> non-mremap fallback memmoves <code>old_size</code> bytes into a <code>new_size</code> mapping — OOB write on any shrink; this is the path macOS CI takes. Also <code>MAP_SHARED</code> vs the mremap path's private mapping. (Distinct from MEM-021's MMAP.c items.)</li>
+<li><code>Bx.h:506-510</code> <code>bAcquire</code>: (1) aligns with <code>sizeof(T)</code> mask instead of <code>alignof(T)</code> — garbage for non-power-of-2 T, and inconsistent with <code>bAlign</code>/<code>bAren</code> (Bx.h:451,483) which use alignof; (2) <code>cap * sizeof(T)</code> unchecked overflow → tiny sz passes the room check, child claims cap elements over a few bytes; (3) <code>base + sz &gt; arena[3]</code> pointer-overflow UB. Same <code>len * sizeof(T)</code> overflow in <code>bAllocate</code> (:202), <code>bMap</code> (:369).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Repro: instantiate <code>bSplice</code> for a 4/8-byte T and splice mid-buffer;<p>
-a shrink <code>bReMap</code> under <code>#undef MREMAP</code> build; bAcquire with huge cap.
-</p>
-</li>
-<li>Fix units (scale by sizeof(T) or keep T* arithmetic), clamp the remap<p>
-copy to min(old,new), alignof + overflow-checked size math.
-</p>
-</li>
+<li>Repro: instantiate <code>bSplice</code> for a 4/8-byte T and splice mid-buffer; a shrink <code>bReMap</code> under <code>#undef MREMAP</code> build; bAcquire with huge cap.</li>
+<li>Fix units (scale by sizeof(T) or keep T* arithmetic), clamp the remap copy to min(old,new), alignof + overflow-checked size math.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
@@ -67,5 +61,16 @@ copy to min(old,new), alignof + overflow-checked size math.
 <ul>
 <li>(open)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

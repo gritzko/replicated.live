@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-016</title>
+<title>MEM-016: ULOGOpen leak the booked log map on scratch-alloc failure (dog/ULOG.c)</title>
+<meta property="og:title" content="MEM-016: ULOGOpen leak the booked log map on scratch-alloc failure (dog/ULOG.c)">
+<meta property="og:description" content="ULOGOpenBooked and ULOGOpenRO first FILEBook/FILEBookRO the log into data (mmap + fd held), then call(ulogidxallocanon, &amp;tmp, 1024); the call() macro returns immediately on failure without FILEUnBook(data), so when the 16 KB anon mmap (or 32-byte calloc) inside fails under memory pressure the booked map and its fd leak for the process lifetime. Every other error path in both functions unbooks data — only the call() skips it. The goal is to unbook before returning on that path.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-016.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>MEM-016: ULOGOpen* leak the booked log map on scratch-alloc failure (dog/ULOG.c)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>ULOGOpenBooked</code> and <code>ULOGOpenRO</code> first <code>FILEBook</code>/<code>FILEBookRO</code> the log into <code>*data</code> (mmap + fd held), then <code>call(ulog_idx_alloc_anon, &amp;tmp, 1024)</code>; the <code>call()</code> macro returns immediately on failure <strong>without</strong> <code>FILEUnBook(*data)</code>, so when the 16 KB anon mmap (or 32-byte calloc) inside fails under memory pressure the booked map and its fd leak for the process lifetime. Every other error path in both functions unbooks <code>*data</code> — only the <code>call()</code> skips it. The goal is to unbook before returning on that path.
 </p>
@@ -35,5 +44,16 @@ Expand the <code>call()</code> into a checked allocate-then-unbook.
 <li>Repro first: fault-inject the anon mmap/calloc failure after a successful book; assert no map/fd leak under ASan.</li>
 <li><code>ok64 ao = ulog_idx_alloc_anon(&amp;tmp,1024); if (ao!=OK) { if (*data &amp;&amp; (*data)[0]) FILEUnBook(*data); return ao; }</code>, mirroring the surrounding cleanup, in both functions.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-121 DONT: un-defer the kv64 abc.index lane — keyed compaction (newest-wins per key), get/range/seek</title>
+<meta property="og:title" content="JS-121 DONT: un-defer the kv64 abc.index lane — keyed compaction (newest-wins per key), get/range/seek">
+<meta property="og:description" content="kv64 (dog/abc/KV.h: (u64 key, u64 val), KEY-ONLY Z/hashEq) is already registered in jab's container bindings — HEAPREG/ HASHREG/HITREG(kv64) (heap.hpp, hash.hpp, hit.hpp) — but the LSM surface abc.index serves only u64 and wh128: kv64 is explicitly DEFERRED (index.hpp ~28, API.md ~396) because compaction and .seek dedup are FULL-ELEMENT newest-wins, which a key-only comparator breaks. Build the keyed variant: one live val per key, newest wins, older same-key rows collapse. This is the true-map twin of wh128's multimap — the LWW lane ANNO-001's status atoms want.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-121.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-121 <a href="./DONT.html">DONT</a>: un-defer the kv64 abc.index lane — keyed compaction (newest-wins per key), get/range/seek</h1>
+<div>
+<p>
+Now: DONT
+</p>
+</div>
+<p>
+<code>kv64</code> (dog/abc/KV.h: (u64 key, u64 val), KEY-ONLY <code>Z</code>/<code>hashEq</code>) is already registered in jab's container bindings — <code>HEAP_REG</code>/ <code>HASH_REG</code>/<code>HIT_REG(kv64)</code> (heap.hpp, hash.hpp, hit.hpp) — but the LSM surface <code>abc.index</code> serves only <code>u64</code> and <code>wh128</code>: kv64 is explicitly DEFERRED (index.hpp <del>28, API.md </del>396) because compaction and <code>.seek</code> dedup are FULL-ELEMENT newest-wins, which a key-only comparator breaks. Build the keyed variant: one live val per key, newest wins, older same-key rows collapse. This is the true-map twin of wh128's multimap — the LWW lane <a href="../ANNO/ANNO-001.html">ANNO-001</a>'s status atoms want.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>kv64Z compares keys only, so same-key rows are Z-equal ties; the HIT ladder's &quot;newest in the stream wins on a tie&quot; already picks a winner — it just doesn't DROP the losers (full-element dedup).</li>
+<li>Query today: <code>get</code> scans runs newest-first (shadowing at query time); <code>.seek</code> merges via a min-heap with full-element dedup — both are one keyed-equality rule away from map semantics.</li>
+<li>v1 deletes (API.md): a newer run shadows an older at query time, compaction never drops — the tombstone mechanism is being ruled in <a href="../ANNO/ANNO-001.html">ANNO-001</a> TODO-1 (negative runs vs sidecar mask).</li>
+<li><a href="../ANNO/ANNO-001.html">ANNO-001</a>'s multimap rides wh128 (full-pair Z); single-val-per- key annos (a ticket's ONE status atom, LWW) fit a keyed lane.</li>
+<li><a href="/todo/TODO/TODO-003.html">TODO-003</a> is the second driver: its board query <code>Sta: OPEN</code> streams a prefix block, and with overwrites never collapsed it returns every ticket EVER opened — i.e. all of them.</li>
+<li>kv64 and wh128 are byte-identical 16-byte pairs (KV.h:19, WHIFF.h:53) differing only in Z/hashEq, so an existing wh128 run re-reads as kv64 — adopting the lane costs no data migration.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>abc.index</code> kv64 lane: put/get/range/seek returning ONE live val per key (newest wins); keyed compaction collapses shadowed rows.</li>
+<li>Same run/mmap machinery: ron60 run names, alignment check, idxmaint-style ladder — a lane, not a fork.</li>
+<li>Query-time overwrite collapse on <code>.range</code>/<code>.prefix</code> too, not just <code>get</code>/<code>seek</code>: the streaming fast-drain is the board's query shape and today it deliberately skips cross-run dedup.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>wh128 and u64 lane behavior stays byte-identical; keyed dedup is a per-lane property, never a global switch.</li>
+<li>Rule #4: all state in JS, native leaves are marshalling only; extend HITx.h with a keyed-collapse variant, no second LSM impl.</li>
+<li>Don't paint the tombstone ruling into a corner: a keyed lane makes key-wide kills natural (newest tombstone per key wins, evaporates at the bottom run) — keep the merge shaped for that.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Keyed collapse = dedup on Z-equality instead of full-element equality; kv64Z's key-only ordering makes same-key rows adjacent in the merge, so the collapse is a comparator swap, not new flow.</li>
+<li>Memtable put replaces the same key (HASHkv64 exists); <code>get</code> = per-run <code>sFindGE</code> newest-first, first hit wins — today's shadowing shape, now also the compaction rule.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> 1. Table-driven C tests FIRST for the keyed HITkv64Compact: same-key rows across runs (newest wins), ties inside one run, torn/misaligned run rejection.</li>
+<li class="open"><input type="checkbox" disabled> 2. HITx.h keyed-collapse variant instantiated for kv64; prove wh128/u64 ladders unchanged (existing tests stay green).</li>
+<li class="open"><input type="checkbox" disabled> 3. index.hpp: wire the kv64 lane — put crosses (key,val) as two BigInts, get/needles/lo/hi as the key BigInt, val returned; per-run alignment check (16-byte slot, same as wh128).</li>
+<li class="open"><input type="checkbox" disabled> 4. JS surface: <code>abc.index({lane:'kv64'})</code> put/get/range/seek; seek exposes .key/.val/.entry like the wh128 lane.</li>
+<li class="open"><input type="checkbox" disabled> 4b. Query-time collapse for <code>.range</code>/<code>.prefix</code> on the keyed lane: keyed dedup in the seekrange drain, newest run wins; test a key overwritten in a younger run AND within one run.</li>
+<li class="open"><input type="checkbox" disabled> 5. Maintenance: generalize idxmaint.js (EXT/SLOT/lane param) or add the kv64 twin; ladder-compaction test through JS.</li>
+<li class="open"><input type="checkbox" disabled> 6. Docs: API.md kv64 section (deferral note removed), jab INDEX.md; note the lane choice rule (map=kv64, multimap=wh128).</li>
+<li class="blocked"><input type="checkbox" disabled> 7. Deletes: adopt the tombstone mechanism once <a href="../ANNO/ANNO-001.html">ANNO-001</a> TODO-1 is ruled; key-wide kill = newest-tombstone-per-key, dropped when the merge reaches the bottom run.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Only TODO-7 is gated (the tombstone ruling); 1–6 are unblocked.</li>
+<li>Run-age ordering is load-bearing for keyed ties: the ladder must keep the oldest-first stack invariant or LWW silently inverts.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Open. Filed 2026-07-24, split from the <a href="../ANNO/ANNO-001.html">ANNO-001</a> design chat (kv64 deferral found while checking jab index lanes).</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

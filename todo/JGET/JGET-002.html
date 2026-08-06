@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JGET-002</title>
+<title>JGET-002: jab get has no fast-forward/ancestry gate — silently clobbers committed local commits</title>
+<meta property="og:title" content="JGET-002: jab get has no fast-forward/ancestry gate — silently clobbers committed local commits">
+<meta property="og:description" content="A jab get re-syncing from a remote that is BEHIND or DIVERGENT from the local tip silently discards committed local history: it unconditionally appends the incoming tip to the wtlog and resets the worktree, with NO ancestor/fast-forward check anywhere in the seed. Native be get refuses a non-fast-forward (local tip not an ancestor of the incoming tip) and keeps local work. VERIFIED from evidence: case 28 jab wt regressed version B→version A (local commit dropped); case 58 jab wt = peer sibling peer-D (local clone-C clobbered). Part of JGET-001; method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JGET/JGET-002.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,56 +15,37 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JGET-002 <a href="./CRIT.html">CRIT</a>: <code>jab get</code> has no fast-forward/ancestry gate — silently clobbers committed local commits</h1>
+<h1>JGET-002: <code>jab get</code> has no fast-forward/ancestry gate — silently clobbers committed local commits</h1>
+<div>
+<p>
+Now: OPEN Sev: CRIT
+</p>
+</div>
 <p>
 A <code>jab get</code> re-syncing from a remote that is BEHIND or DIVERGENT from the local tip silently discards committed local history: it unconditionally appends the incoming tip to the wtlog and resets the worktree, with NO ancestor/fast-forward check anywhere in the seed. Native <code>be get</code> refuses a non-fast-forward (local tip not an ancestor of the incoming tip) and keeps local work. VERIFIED from evidence: case 28 jab wt regressed <code>version B</code>→<code>version A</code> (local commit dropped); case 58 jab wt = peer sibling <code>peer-D</code> (local <code>clone-C</code> clobbered). Part of <a href="JGET-001.html">JGET-001</a>; method <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Native cases `beagle/test/get/{27-ff-refuse, 28-linear-ahead-preserved,<p>
-58-divergent-refused-trunk}`; spec wiki/GET.mkd &quot;FF-only on the local tip&quot;.
-</p>
-</li>
-<li>Repro (28): clone @A via <code>jab get be:$SRC/.be?/src</code>; <code>be post B</code> locally<p>
-(remote stays @A); <code>jab get be:$SRC/.be?/src</code> → jab prints <code>upd hello.c</code>, resets wt B→A, trunk regresses. Evidence <code>~/todo/JS096-probe1/ff_ahead/{wt_j,wt_n}</code>.
-</p>
-</li>
-<li>Repro (58): clone + peer both commit siblings C/D off A; <code>jab get</code> of the peer<p>
-overwrites C with D. Evidence <code>~/todo/JS096-probe1/c58final/{wt_j,wt_n}</code>.
-</p>
-</li>
-<li>Root: <code>get.js</code> <code>seedRemote</code>/<code>seedLocal</code>/<code>seedCached</code> (~121-196) + <code>fanoutWholeTree</code><p>
-(~278) append the new tip + reset with no <code>dag.aheadBehind</code>/ancestor refusal.
-</p>
-</li>
+<li>Native cases <code>beagle/test/get/{27-ff-refuse, 28-linear-ahead-preserved, 58-divergent-refused-trunk}</code>; spec wiki/GET.mkd &quot;FF-only on the local tip&quot;.</li>
+<li>Repro (28): clone @A via <code>jab get be:$SRC/.be?/src</code>; <code>be post B</code> locally (remote stays @A); <code>jab get be:$SRC/.be?/src</code> → jab prints <code>upd hello.c</code>, resets wt B→A, trunk regresses. Evidence <code>~/todo/JS096-probe1/ff_ahead/{wt_j,wt_n}</code>.</li>
+<li>Repro (58): clone + peer both commit siblings C/D off A; <code>jab get</code> of the peer overwrites C with D. Evidence <code>~/todo/JS096-probe1/c58final/{wt_j,wt_n}</code>.</li>
+<li>Root: <code>get.js</code> <code>seedRemote</code>/<code>seedLocal</code>/<code>seedCached</code> (<del>121-196) + <code>fanoutWholeTree</code> (</del>278) append the new tip + reset with no <code>dag.aheadBehind</code>/ancestor refusal.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>jab get</code> refuses when the local branch tip is NOT an ancestor of the incoming<p>
-tip (behind OR divergent), leaves the wt + wtlog + tip untouched, exits nonzero with a native-style &quot;not a fast-forward&quot; diagnostic.
-</p>
-</li>
+<li><code>jab get</code> refuses when the local branch tip is NOT an ancestor of the incoming tip (behind OR divergent), leaves the wt + wtlog + tip untouched, exits nonzero with a native-style &quot;not a fast-forward&quot; diagnostic.</li>
 <li>A genuine fast-forward (local tip IS an ancestor) still advances as today.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Use <code>dag</code>/graf ancestry already in <code>be/shared/dag.js</code>; no new DAG walk if one<p>
-exists. Repro-first; port cases 27/28/58 into <code>be/test/get</code> as the gate.
-</p>
-</li>
+<li>Use <code>dag</code>/graf ancestry already in <code>be/shared/dag.js</code>; no new DAG walk if one exists. Repro-first; port cases 27/28/58 into <code>be/test/get</code> as the gate.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Add the ancestor check at the seed commit-point (before <code>appendWtlog</code> + the<p>
-reset fan-out): if <code>oldTip</code> is set and <code>!dag.isAncestor(k, oldTip, tip)</code> → refuse. A fresh clone (no <code>oldTip</code>) and an exact-equal tip stay no-ops.
-</p>
-</li>
-<li>Decide the refusal taxonomy: behind → refuse; divergent → refuse (native may<p>
-offer a <code>?back</code> park — out of scope here, refuse is the safe floor).
-</p>
-</li>
+<li>Add the ancestor check at the seed commit-point (before <code>appendWtlog</code> + the reset fan-out): if <code>oldTip</code> is set and <code>!dag.isAncestor(k, oldTip, tip)</code> → refuse. A fresh clone (no <code>oldTip</code>) and an exact-equal tip stay no-ops.</li>
+<li>Decide the refusal taxonomy: behind → refuse; divergent → refuse (native may offer a <code>?back</code> park — out of scope here, refuse is the safe floor).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -70,14 +55,22 @@ offer a <code>?back</code> park — out of scope here, refuse is the safe floor)
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Most severe of <a href="JGET-001.html">JGET-001</a>: silently destroys committed work; fix before any<p>
-<code>jab get</code> is used against a shared remote.
-</p>
-</li>
+<li>Most severe of <a href="JGET-001.html">JGET-001</a>: silently destroys committed work; fix before any <code>jab get</code> is used against a shared remote.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>(open) Filed 2026-06-29.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

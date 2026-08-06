@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-031: refresh of the call-less launch view loses its scope</title>
+<meta property="og:title" content="BRO-031: refresh of the call-less launch view loses its scope">
+<meta property="og:description" content="Found 2026-07-18 while pty-verifying the runSpell context fix (status click composition, pager.js): the LAUNCH view — the one bro was started with, which has no recorded view.call — refreshes by re-deriving a bare verb with no context, so a scoped launch loses its scope on refresh.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BRO/BRO-031.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-031: refresh of the call-less launch view loses its scope</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Found 2026-07-18 while pty-verifying the <code>_runSpell</code> context fix (status click composition, pager.js): the LAUNCH view — the one bro was started with, which has no recorded <code>view.call</code> — refreshes by re-deriving a bare verb with no context, so a scoped launch loses its scope on refresh.
+</p>
+<ul>
+<li>Repro (pty): <code>jab status ///be/</code> from the journal root → click into a file → <code>-</code> back to the launch view → <code>R</code> refresh: content becomes the UNSCOPED launch-tree status while the bar still says <code>///be/: status</code>.</li>
+<li>Repro 2 (gritzko 2026-07-18, live): <code>jab status</code> in <code>be/</code>, then context-nav spells <code>:./verbs</code> → <code>:./post</code>: bar says <code>refreshed ///be/verbs/post/: status</code> but content is still the WHOLE-tree rows (<code>shared/…</code>, <code>views/…</code>) — the context-change refresh ran the launch verb with the launch scope, not the current context.</li>
+<li>Bar and content disagree either way — the bar carries the context, the hunks come from the launch scope.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Refresh must replay the launch view's actual invocation, scope included.
+</p>
+<ul>
+<li><code>R</code> on the launch view re-runs the launch verb IN the current context (<code>status</code> under <code>///be/verbs/post/</code> after <code>:./post</code>), matching the bar.</li>
+<li>Views navigated-to are already correct (the <code>_runSpell</code> fix records <code>view.call.context</code>); only the call-less launch view lacks a recorded call to replay.</li>
+<li>RULED (gritzko 2026-07-18): <code>status</code> scopes to a sub/dir like all other views — a no-arg <code>status</code> under <code>///be/verbs/post/</code> clips to that subtree. The all-views dir-scoping audit is <a href="./BRO-032.html">BRO-032</a>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Pager stays arg-blind: record and replay the launch invocation (args + context), don't re-derive or parse URIs in the pager; resolution stays with the verbs / resolve_hash.</li>
+<li>Minimal seam: likely popView/_refresh giving the launch view a synthetic <code>call</code> at startup, not a refresh-time special case.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> pty repro leg: launch scoped → back → refresh → content matches bar</li>
+<li><a href="./ .html"> </a> record the launch invocation as the launch view's <code>call</code> at startup</li>
+<li><a href="./ .html"> </a> verify unscoped launch refresh unchanged</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none yet)</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+(pending)
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

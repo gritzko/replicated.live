@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORK-016: work view dotted leaders break into blank gaps — the ┄ run must be continuous</title>
+<meta property="og:title" content="WORK-016: work view dotted leaders break into blank gaps — the ┄ run must be continuous">
+<meta property="og:description" content="Follow-up to /todo/WORK/WORK-006 (┄-padded slots). The pad is there, but each padded segment carries its OWN breathing space while the caller ALSO emits a separator space, so adjacent leader runs are cut by 1-2 blanks and the row reads as broken dashes, not one leader. Evidence (gritzko, chat 2026-07-20, pager work view):">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/WORK/WORK-016.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WORK-016: work view dotted leaders break into blank gaps — the ┄ run must be continuous</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Follow-up to <a href="/todo/WORK/WORK-006.html">WORK-006</a> (┄-padded slots).  The pad is there, but each padded segment carries its OWN breathing space while the caller ALSO emits a separator space, so adjacent leader runs are cut by 1-2 blanks and the row reads as broken dashes, not one leader.  Evidence (gritzko, chat 2026-07-20, pager <code>work</code> view):
+</p>
+<pre><code>│   ├┄┄ //URI-016-adv ┄┄┄┄┄┄┄┄┄┄ [?] [±]  ┄┄┄┄┄┄ ┄┄┄┄┄[-46] Tue14 #e7ae2927 ...
+│   └┄┄ //bro-why ┄┄┄┄┄┄┄┄┄┄┄┄┄┄  ┄┄┄[±]  ┄┄┄┄┄┄ ┄┄┄┄┄┄[-9] Sat18 #c32ddd17 ...
+├── jab ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄                 ┄┄┄┄┄┄┄┄+4 08:10 #2d968f00 ...
+</code></pre>
+<h3>Goals</h3>
+<p>
+The leader between two grid cells is ONE uninterrupted ┄ run with a single space of breathing room at each end.
+</p>
+<ul>
+<li>Absent <code>[?]</code>/<code>[post]</code> slots must not add a second blank next to the caller's separator space (<code>[±]  ┄┄┄┄┄┄</code>).</li>
+<li>A ┄-padded slot adjoining the ┄-padded ahbeh cell must join into one run, no blank seam (<code>┄┄┄┄┄┄ ┄┄┄┄┄[-46]</code>).</li>
+<li>Repo rows (<code>jab</code>, <code>dog</code>, <code>abc</code>) must ┄-fill the whole button region, not blank it (work.js:585).</li>
+<li>Plain (btns=false) output stays BYTE-IDENTICAL — goldens must not move.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fork off <code>//WORK</code> (clean wt of <code>///be#9bbb7003</code>); work root <code>work/WORK-016</code>.</li>
+<li>Column offsets must not shift: every cell keeps its current column.</li>
+<li>Amending <code>test/work/view/check.js</code> is AUTHORIZED; no other test edits.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Root cause: <code>leader(n)</code> (work.js:465) prepends its own space while the call sites (:531, :544) already emit a separator — the two stack.</li>
+<li>Fix by owning the space in ONE place: a leader emits <code>┄</code>-only fill and the row emits exactly one space where a BUTTON abuts, never between two fills.</li>
+</ul>
+<ul>
+<li><code>leader(n)</code> is now ┄ FILL ONLY; the row emits the one space where a cell abuts — same idiom at the <a href="./?.html">?</a>/<a href="./post.html">post</a>/ahbeh/subject/repo sites.</li>
+<li>Bonus seam found + fixed: a subject-LESS row (PINP-6) double-blanked after the #hashlet; the fill now starts right after the one space.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> red: pin the blank seams (<code>[±]  ┄</code>, <code>┄ ┄┄┄[-N]</code>, repo blank run)</li>
+<li><a href="./v.html">v</a> merge adjacent leader runs; keep every column offset fixed</li>
+<li><a href="./v.html">v</a> ┄-fill the repo row's button region (work.js:585)</li>
+<li><a href="./v.html">v</a> green: view test PASS, plain golden byte-identical, pty-click repro</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>test/work/getctx FAILS 3 pty frames — PRE-EXISTING (identical failures on the pristine renderer), untouched by this cut.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Files: views/work/work.js, test/work/view/check.js (both <code>put</code>, NOT posted).</li>
+<li>Commit: <code>WORK-016: one uninterrupted ┄ leader run between grid cells</code></li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

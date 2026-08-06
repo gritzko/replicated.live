@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GET-027</title>
+<title>GET-027: be get be:// clone mangles object hashlet → WIRECRPT</title>
+<meta property="og:title" content="GET-027: be get be:// clone mangles object hashlet → WIRECRPT">
+<meta property="og:description" content="be get be://localhost/beagle?/dogs (independent-store clone) resolves the right tip but then fetches the wrong object: the wire object request uses a hashlet with a stray leading 0, shifted one nibble, so it asks for a non-existent id → KEEPNONE → WIRECRPT. The object is present and intact locally (be commit:?&lt;sha&gt; reads it), so the source store is healthy — the wire request/transfer path is broken. Blocks be:// independent clones; relates to GET-009.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-027.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,62 +16,40 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>GET-027: <code>be get be://</code> clone mangles object hashlet → WIRECRPT</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>be get be://localhost/beagle?/dogs</code> (independent-store clone) resolves the right tip but then fetches the wrong object: the wire object request uses a hashlet with a stray leading <code>0</code>, shifted one nibble, so it asks for a non-existent id → <code>KEEPNONE</code> → <code>WIRECRPT</code>. The object is present and intact locally (<code>be commit:?&lt;sha&gt;</code> reads it), so the source store is healthy — the wire request/transfer path is broken. Blocks <code>be://</code> independent clones; relates to <a href="GET-009.html">GET-009</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Repro: empty cwd, <code>be get be://localhost/beagle?/dogs</code> → `be: subdir<p>
-clone — shard at ~/.be/beagle<code>, then </code>Error: WIRECRPT`.
-</p>
-</li>
-<li>Error detail: `sniff: object not found: hex=cb94e64e7a5e83c4b46c3ce0d4f737516bfb9bab<p>
-hexlen=15 hashlet=0cb94e64e7a5e83c ... keep_err=KEEPNONE`.
-</p>
-</li>
-<li><code>hashlet=0cb94e64e7a5e83c</code> = leading <code>0</code> + the first 15 nibbles of the<p>
-real sha <code>cb94e64e7a5e83c4…</code> — an off-by-one nibble shift, not data loss.
-</p>
-</li>
-<li>Object is present locally: <code>be commit:?cb94e64e</code> prints the commit, so<p>
-the source has it; only the wire object request is mangled.
-</p>
-</li>
-<li>Same &quot;extra char in a sha&quot; shape as the <code>?#?&lt;sha&gt;</code> row that<p>
-<code>be put '?#&lt;sha&gt;'</code> records on a branch reset — possibly a shared hashlet encoder off-by-one (verify; do not assume).
-</p>
-</li>
+<li>Repro: empty cwd, <code>be get be://localhost/beagle?/dogs</code> → <code>be: subdir clone — shard at ~/.be/beagle</code>, then <code>Error: WIRECRPT</code>.</li>
+<li>Error detail: <code>sniff: object not found: hex=cb94e64e7a5e83c4b46c3ce0d4f737516bfb9bab hexlen=15 hashlet=0cb94e64e7a5e83c ... keep_err=KEEPNONE</code>.</li>
+<li><code>hashlet=0cb94e64e7a5e83c</code> = leading <code>0</code> + the first 15 nibbles of the real sha <code>cb94e64e7a5e83c4…</code> — an off-by-one nibble shift, not data loss.</li>
+<li>Object is present locally: <code>be commit:?cb94e64e</code> prints the commit, so the source has it; only the wire object request is mangled.</li>
+<li>Same &quot;extra char in a sha&quot; shape as the <code>?#?&lt;sha&gt;</code> row that <code>be put '?#&lt;sha&gt;'</code> records on a branch reset — possibly a shared hashlet encoder off-by-one (verify; do not assume).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>be get be://</code> transfers the full object closure; the wire object<p>
-request carries the exact 40-hex sha, no leading-nibble shift.
-</p>
-</li>
+<li><code>be get be://</code> transfers the full object closure; the wire object request carries the exact 40-hex sha, no leading-nibble shift.</li>
 <li>A repro test that reproduces the leading-<code>0</code> mangle, then the fix.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li><code>be://</code> here tunnels over ssh (no daemon; only <code>:22</code> listens) — test<p>
-with <code>WITH_SSH=ON</code>, <code>WITH_INET=OFF</code> (<a href="">build-with-ssh-not-inet</a>).
-</p>
-</li>
+<li><code>be://</code> here tunnels over ssh (no daemon; only <code>:22</code> listens) — test with <code>WITH_SSH=ON</code>, <code>WITH_INET=OFF</code> (<a href="./build-with-ssh-not-inet.html">build-with-ssh-not-inet</a>).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Lead to trace: the wire object-request hashlet encoder, AND the<p>
-<code>be put '?#&lt;sha&gt;'</code> recorder that emits <code>?#?&lt;sha&gt;</code> — check whether both route through one hashlet/sha encoder with an off-by-one. Also rule out the recently-added <code>SHA1u8sFeedHashlet</code> (GET-026) if it feeds either path.
-</p>
-</li>
+<li>Lead to trace: the wire object-request hashlet encoder, AND the <code>be put '?#&lt;sha&gt;'</code> recorder that emits <code>?#?&lt;sha&gt;</code> — check whether both route through one hashlet/sha encoder with an off-by-one. Also rule out the recently-added <code>SHA1u8sFeedHashlet</code> (GET-026) if it feeds either path.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro (hermetic, WITH_SSH=ON): <code>be get be://</code> against a store whose<p>
-  tip is a freshly-posted commit → WIRECRPT + mangled hashlet.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro (hermetic, WITH_SSH=ON): <code>be get be://</code> against a store whose tip is a freshly-posted commit → WIRECRPT + mangled hashlet.</li>
 <li class="open"><input type="checkbox" disabled> Trace the off-by-one to its encoder; check the <code>be put</code> <code>?#?&lt;sha&gt;</code> path.</li>
 <li class="open"><input type="checkbox" disabled> Fix; full closure clones clean; <code>be put '?#&lt;sha&gt;'</code> records <code>?#&lt;sha&gt;</code>.</li>
 <li class="open"><input type="checkbox" disabled> Land + ctest WITH_SSH=ON green.</li>
@@ -78,10 +60,18 @@ with <code>WITH_SSH=ON</code>, <code>WITH_INET=OFF</code> (<a href="">build-with
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED <code>a8fa2e87</code>. The &quot;off-by-one hashlet&quot; hypothesis was WRONG —<p>
-<code>0cb94e64e…</code> is a correct <code>%016llx</code>-padded value, not mangled. TWO independent bugs, both fixed: (1) server <code>keeper/WIRE.c</code> tripped on a degenerate <strong>zero-length pack bookmark</strong> (GET-025-era re-index) → shipped a 12-byte empty pack → <code>WIRECRPT</code>; now skips zero-len bookmarks. (2) <code>sniff/PUT.c</code> <code>PUTSetBranch</code> prepended a stray <code>?</code> → the <code>?#?&lt;sha&gt;</code> reset-row malformation; now records bare <code>?#&lt;sha&gt;</code>. +2 tests; 391/391. Live <code>~/.be/dogs</code> keeps the stray bookmark (server now tolerant).
-</p>
-</li>
+<li>LANDED <code>a8fa2e87</code>. The &quot;off-by-one hashlet&quot; hypothesis was WRONG — <code>0cb94e64e…</code> is a correct <code>%016llx</code>-padded value, not mangled. TWO independent bugs, both fixed: (1) server <code>keeper/WIRE.c</code> tripped on a degenerate <strong>zero-length pack bookmark</strong> (GET-025-era re-index) → shipped a 12-byte empty pack → <code>WIRECRPT</code>; now skips zero-len bookmarks. (2) <code>sniff/PUT.c</code> <code>PUTSetBranch</code> prepended a stray <code>?</code> → the <code>?#?&lt;sha&gt;</code> reset-row malformation; now records bare <code>?#&lt;sha&gt;</code>. +2 tests; 391/391. Live <code>~/.be/dogs</code> keeps the stray bookmark (server now tolerant).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

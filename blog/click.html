@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My precious attention</title>
+<meta property="og:title" content="My precious attention">
+<meta property="og:description" content="Some say intelligence is a commodity now. We have intelligence on tap. What is the bottleneck then? Tokens? Lately, my work has been token-constrained more often. Given some context and hints, LLMs can endlessly reproduce known engineering practices and tricks. Then we get some legit-looking codebase that works most of the time. Still, to get beyond that prototype-quality code (slop), we likely need more than tokens. Doing original work takes vision, taste and tons of feedback. My main difficulty so far has been keeping track of things. That means my attention is the bottleneck for everything.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/blog/click.html">
+<meta property="og:image" content="https://replicated.live/blog/img/balcony.jpg">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>My precious attention</h1>
+<figure class="right w30">
+<img src="./img/balcony.jpg#rightw30" alt="M.C.Escher - Balcony">
+<figcaption>M.C.Escher - Balcony</figcaption>
+</figure>
+<p>
+Some say intelligence is a commodity now. We have intelligence on tap. What is the bottleneck then?  Tokens?  Lately, my work has been token-constrained more often.  Given some context and hints, LLMs can endlessly reproduce known engineering practices and tricks. Then we get some legit-looking codebase that works most of the time.  Still, to get beyond that prototype-quality code (slop), we likely need more than tokens.  Doing original work takes vision, taste and tons of feedback.  My main difficulty so far has been keeping track of things. That means  my attention is the bottleneck for everything.
+</p>
+<p>
+I can give Claude the context, the general direction of work and any objective criteria I have.  Still, the resulting work has to be gated.  Some work gets merged at once, some needs one more pass, and some is nuked from orbit, just to be safe. Quite often an LLM creates more problems than it solves. Crams in an extra abstraction, plants a code landmine, and so forth. Until we have superintelligence, that will be an issue. People do all of that too.  That is the reason we have pull requests in the first place!
+</p>
+<p>
+If I run LLM single-threaded, that most often devolves into slow but tiresome chat ping-ponging and ends in late-night swearing. That is exactly how an LLM makes you 10% slower.  The way to make LLMs pay off is to set the rules and goals, let a bunch of them run free, then gate the results.
+</p>
+<p>
+A not so unexpected discovery: I have my context window too. Switching between numerous threads of thought wears me down, makes me dizzy or indifferent. I end up okaying stuff, and then (yes) swearing when I finally see the result.
+</p>
+<p>
+As an engineer working on an SCM system, I looked for an engineering solution. With agents, we collaborate even when working locally. We set goals and policies, accumulate knowledge banks, review PRs. That is relatively high-level work. git is a much lower-level tool. In fact, the original workflow was git plus the <a href="https://lkml.org/">mailing list</a>. For the general public, that became git+GitHub. But GitHub is an intermittently available proprietary service and it is absurd to collaborate with your local agents through GitHub.  Like many others, I use a bunch of Markdown files to steer the agents. Keeping that local and greppable is a plus, while storing it on GitHub is an obvious hindrance. 
+</p>
+<p>
+My objective was clear at this point: keep track of tickets and agents locally, review their work and merge it back, with minimum friction. Once you start second-guessing &quot;merge or rebase&quot; or trying to remember &quot;what else did I have cooking&quot;, that is your workflow failing. These things must be self-evident, in-your-face obvious. (Today, it is difficult for me not to make 10 commits a day - so it worked.)
+</p>
+<p>
+The foundation for the build was Beagle the git-compatible SCM I work on.  Beagle itself is a very low-ceremony revision control system with 6 verbs (get, post, put, delete, patch, head...  remember those?) and no options or flags. Its underlying revision control engine is syntax-aware with CRDT merges.  Plainly put, it merges at the syntax token level, not the traditional line-level. More precise and much less technical conflicts; that removes a lot of friction.  Beagle is also malleable; everything above the engine is JavaScript.
+</p>
+<p>
+So, how does the system that preserves my precious attention work? Easy as one-two-three.
+</p>
+<figure class="center">
+<img src="./img/todos.png#center" alt="$ be work">
+<figcaption>$ be work</figcaption>
+</figure>
+<p>
+The screen gives a good view of the battlefield. What tickets do we have open? Is there a worktree and what is its state? What are the changes? Is it ahead/behind? Should we merge, redo or nuke it?  With two chats on the main screen, multiple workers in each,  and another five or six waiting on blockers or decisions,  this is the right tool for the job.
+</p>
+<p>
+In this system, one ticket corresponds to one branch, one worktree and (ideally) one commit. Commit messages and code comments start with their ticket code for the broader context. Tickets have statuses, also-see references, parents, blockers and so on. Each ticket line has three status/control panels. Each panel has a number of clickable buttons.
+</p>
+<ol>
+<li>worktree state<ul>
+<li><code> i</code> the status view (light blue)</li>
+<li><code>~12</code> changed files (blue-ish)</li>
+<li><code>+3</code> new files (green-ish)</li>
+<li><code>-1</code> deleted files (reddish)</li>
+<li><code> ∞</code> run CI (grey/green/red)</li>
+</ul>
+</li>
+<li>commit state<ul>
+<li><code> ≡</code> commit log</li>
+<li><code>1⇄2</code> divergence (blueish)</li>
+<li><code>+1</code> ahead of the upstream (greenish)</li>
+<li><code>-1</code> behind (reddish)</li>
+<li><code> ✓</code> commit (greenish)</li>
+</ul>
+</li>
+<li>decision<ul>
+<li><code> ✓</code> close with <code>DONE</code></li>
+<li><code> ✗</code> close with <code>DONT</code></li>
+</ul>
+</li>
+</ol>
+<p>
+All button statuses (visible/not, clickable/not) get updated in real time based on the state of the worktrees.  In this system, the happy path is click-click-click.  The buttons are 2-3 characters wide, with a good mouse (Logi MX Anywhere) browsing and acting is effectively instant. One day I will add keyboard shortcuts. Think of the overheads of doing that through GitHub.   In theory, this workflow can be built on top of git. In fact, it might be difficult to make these things work instantly, as git is not a database. The numbers are:
+</p>
+<ol>
+<li><code>be todo</code> screen open time 3sec;</li>
+<li>the total number of files in the tree ~0.5mln;</li>
+<li>Beagle the SCM is 680 files of JS, 100K LoC;</li>
+<li>libdog is 170 files of C, 70KLoC, but 46KLoC are ragel generated parsers;</li>
+<li>the number of tickets 910;</li>
+<li>the number of worktrees 139.</li>
+</ol>
+<p>
+The screen featuring all the tickets and worktree states updates instantly on each click, so some work went there.  I did not have to reimplement all of GitHub, but most of it I do not need either. At this point, I mainly use Beagle for about half a year and I did not touch git at all for maybe one month.
+</p>
+<p>
+Currently I am experimenting with the Linux kernel repo as a performance benchmark for Beagle and it is doing pretty well. Where git's checkout time is 12sec, Beagle's js finishes in 15sec. If any network is involved, the difference is nonexistent.
+</p>
+<p>
+With this workflow, my attention no longer ends up in the scrap pile. It goes to the things agents cannot do for me.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

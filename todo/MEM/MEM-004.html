@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-004</title>
+<title>MEM-004: TLVprobe huge-length overflow → wild value slice (abc/TLV.c)</title>
+<meta property="og:title" content="MEM-004: TLVprobe huge-length overflow → wild value slice (abc/TLV.c)">
+<meta property="og:description" content="For huge TLV records TLVprobe reads a full attacker-controlled 64-bit body length and bounds it only with (hlen + blen) &lt;= $len(data) computed in u64; a blen near u64max makes 9 + blen wrap below $len(data) and pass, after which callers build value1 = value0 + blen and advance from0 += hlen + blen, yielding wildly out-of-bounds pointers handed to downstream readers. The goal is an overflow-safe length check.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-004.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>MEM-004: TLVprobe huge-length overflow → wild value slice (abc/TLV.c)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 For huge TLV records <code>TLVprobe</code> reads a full attacker-controlled 64-bit body length and bounds it only with <code>(*hlen + *blen) &lt;= $len(data)</code> computed in u64; a <code>*blen</code> near <code>u64max</code> makes <code>9 + *blen</code> wrap below <code>$len(data)</code> and pass, after which callers build <code>value[1] = value[0] + blen</code> and advance <code>from[0] += hlen + blen</code>, yielding wildly out-of-bounds pointers handed to downstream readers. The goal is an overflow-safe length check.
 </p>
@@ -36,5 +45,16 @@ Compare against remaining room without adding.
 <li>Repro first: add a <code>TLV</code> probe/drain test row with a huge-type byte and <code>blen=u64max-4</code>; confirm wild slice under ASan.</li>
 <li>Guard as <code>if (*blen &gt; (u64)$len(data) - *hlen) return TLVNODATA;</code> after ensuring <code>$len(data) &gt;= *hlen</code> (or check <code>*blen</code> and <code>*hlen</code> separately so the sum cannot wrap).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

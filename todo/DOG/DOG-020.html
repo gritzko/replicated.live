@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DOG-020</title>
+<title>DOG-020: wire the orphaned fuzz/NEIL.c back into the build</title>
+<meta property="og:title" content="DOG-020: wire the orphaned fuzz/NEIL.c back into the build">
+<meta property="og:description" content="dog/fuzz/NEIL.c — a six-property harness over NEILCleanup/NEILShift/ NEILCanon (reconstruction, token balance, hygiene, substantive-EQ preservation, splice canon, shift idempotence) — is orphaned: when NEIL moved to dog/ (DOG-002) graf/fuzz dropped its NEILfuzz target, the copied source never entered dog/fuzz/CMakeLists.txt, and it still includes graf/JOIN.h (JOINfile/JOINTokenize/JOINFree) which does not exist in libdog. It silently doesn't build anywhere. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DOG/DOG-020.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>DOG-020 <a href="./OPEN.html">OPEN</a>: wire the orphaned fuzz/NEIL.c back into the build</h1>
+<h1>DOG-020: wire the orphaned fuzz/NEIL.c back into the build</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
 <p>
 <code>dog/fuzz/NEIL.c</code> — a six-property harness over <code>NEILCleanup</code>/<code>NEILShift</code>/ <code>NEILCanon</code> (reconstruction, token balance, hygiene, substantive-EQ preservation, splice canon, shift idempotence) — is orphaned: when NEIL moved to <code>dog/</code> (DOG-002) graf/fuzz dropped its NEILfuzz target, the copied source never entered <code>dog/fuzz/CMakeLists.txt</code>, and it still includes <code>graf/JOIN.h</code> (<code>JOINfile</code>/<code>JOINTokenize</code>/<code>JOINFree</code>) which does not exist in libdog. It silently doesn't build anywhere. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -35,14 +44,14 @@
 <h2>WIP</h2>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled>  T1 local tokenize helper (TOKLexer + u64 token hashes) replacing JOINfile.</li>
-<li class="open"><input type="checkbox" disabled>  T2 CMakeLists target <code>NEILfuzz</code>; confirm it links against dog + abc-core.</li>
-<li class="open"><input type="checkbox" disabled>  T3 run under ASan; record execs/sec + any findings as new tickets.</li>
+<li class="open"><input type="checkbox" disabled> T1 local tokenize helper (TOKLexer + u64 token hashes) replacing JOINfile.</li>
+<li class="open"><input type="checkbox" disabled> T2 CMakeLists target <code>NEILfuzz</code>; confirm it links against dog + abc-core.</li>
+<li class="open"><input type="checkbox" disabled> T3 run under ASan; record execs/sec + any findings as new tickets.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
 <li>2026-07-12: T1-T3 implemented in worktree <code>~/src/DOG-020</code>, UNLANDED. The only NEIL.c change is the JOIN-block swap: local <code>JOINfile</code> + <code>JOINTokenize</code> (TOKLexer + <code>tok32Pack</code> + <code>RAPHash</code> into heap <code>u32b</code>/ <code>u64b</code>) — all six property checks byte-identical to the original (orchestrator diffed against the orphan copy to confirm).</li>
-<li>FOUND + FIXED (2026-07-12, follow-up worker): the campaign-only c1 trap was NOT an uninit read (first suspicion wrong) — it is BASS ARENA EXHAUSTION. <code>NEILCleanup</code> is invoked directly (fuzz harness AND <code>WEAVE.c:448</code>), never via <code>call()</code>, so its 5 <code>a_carve</code> scratches leak into the caller's frame; the FUZZ macro never rewinds BASS between iterations, the 1 GB arena fills (~187-490K execs), <code>a_carve</code> returns BNOROOM mid-pipeline and the early-return leaves a malformed EDL (zero-len EQ). Fresh-process replay = empty arena = clean, hence the heisenbug. Fix in <code>NEIL.c</code> (+11 lines): NEILCleanup snapshots the BASS data slice at entry and rewinds on both returns — the exact <code>call()</code> idiom from PRO.h. Orchestrator-verified: campaigns clean, RSS flat ~440 MB (was climbing past 1.2 GB), all saved artifacts + corpus replay clean, ctest 66/66 in the same build.</li>
+<li>FOUND + FIXED (2026-07-12, follow-up worker): the campaign-only c1 trap was NOT an uninit read (first suspicion wrong) — it is BASS ARENA EXHAUSTION. <code>NEILCleanup</code> is invoked directly (fuzz harness AND <code>WEAVE.c:448</code>), never via <code>call()</code>, so its 5 <code>a_carve</code> scratches leak into the caller's frame; the FUZZ macro never rewinds BASS between iterations, the 1 GB arena fills (<del>187-490K execs), <code>a_carve</code> returns BNOROOM mid-pipeline and the early-return leaves a malformed EDL (zero-len EQ). Fresh-process replay = empty arena = clean, hence the heisenbug. Fix in <code>NEIL.c</code> (+11 lines): NEILCleanup snapshots the BASS data slice at entry and rewinds on both returns — the exact <code>call()</code> idiom from PRO.h. Orchestrator-verified: campaigns clean, RSS flat </del>440 MB (was climbing past 1.2 GB), all saved artifacts + corpus replay clean, ctest 66/66 in the same build.</li>
 <li>BONUS in the same tree: root <code>CMakeLists.txt</code> now defines the WITH_ASAN/WITH_FUZZ flag blocks inside the standalone guard (verbatim beagle root), so plain <code>-DWITH_FUZZ=ON -DWITH_ASAN=ON</code> links all five fuzz targets standalone — the cache-var workaround is obsolete. Beagle-child mode untouched by construction (guard is false there).</li>
 <li>Residual (candidate follow-ups): the FUZZ macro itself never rewinds BASS per iteration, so any OTHER directly-called carving fn leaks the same way under fuzzing; <code>a_carve</code>'s own failure path bypasses the new restore (benign once the arena stops filling).</li>
 </ul>
@@ -52,9 +61,13 @@
 </ul>
 <div class="footer">
 ❧
-<a href="/feed.rss">RSS feed</a> ❧
-<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
-<a href="https://github.com/gritzko/jab">JAB</a>
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
 ❧
 </div>
 </body>

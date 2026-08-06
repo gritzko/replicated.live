@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TODO-010 DONE: be-js-todo-rowcache red on a fresh clone of the tip</title>
+<meta property="og:title" content="TODO-010 DONE: be-js-todo-rowcache red on a fresh clone of the tip">
+<meta property="og:description" content="A virgin clone of ///be/#86bd2170 (+ test#b62b635d) fails ONE leg of the /todo/TODO/TODO-006 rowcache pty suite; every other leg (cache hits/drops, clicks, repaints) is green. The tip is red for any fresh worker clone, so landings verify against it.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/TODO/TODO-010.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>TODO-010 <a href="./DONE.html">DONE</a>: be-js-todo-rowcache red on a fresh clone of the tip</h1>
+<div>
+<p>
+Now: DONE Sev: MED Rep: ///be/ See: TODO-006 Ask: gritzko
+</p>
+</div>
+<p>
+A virgin clone of ///be/#86bd2170 (+ test#b62b635d) fails ONE leg of the <a href="/todo/TODO/TODO-006.html">TODO-006</a> rowcache pty suite; every other leg (cache hits/drops, clicks, repaints) is green.  The tip is red for any fresh worker clone, so landings verify against it.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>FAIL <code>…and-the-row-grew-the-staged-tick</code>: after the <code>~</code> click STAGES the changed file (leg passes, no bar err), the check <code>&quot;✓&quot; in half(rowof(f8,&quot;TIC-001&quot;), &quot;[ i&quot;)</code> wants the tick in the <code>[ i</code> half; the actual row carries it in <code>[ ≡</code> only: <code>[ i ~1 +1 ∞] [ ≡ -1 ✓] … [ ✔ ✗]</code> (board.py:199).</li>
+<li>NOT <a href="/todo/BE/BE-063.html">BE-063</a>: flipping its 2-line change back and forth does not move the verdict; a clean tip clone with no BE-063 at all fails identically.  Deterministic, 3× solo.</li>
+<li>NOT the main tree's uncommitted classify.js (BRO-043 walk): copied over the clone's — still red.</li>
+<li>Suspect: TODO-006 was verified in its author wt over state that is STILL uncommitted in ///be — the main tree carries <code>...o test/wtwalk.js</code> and a test/CMakeLists.txt now in CONFLICT (<code>1 con</code>) since the CI-004 <a href="./test.html">test</a> landing.</li>
+<li>Worker clones see the test sub move under them: BE-063's wt registered 350 tests at clone, 353 after the sub followed the live rev to b62b635d (rowcache + 2 CI-004 suites).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A fresh <code>jab get ///be/</code> + cmake + ctest is 100% green.</li>
+<li>Whichever half is wrong — the staged-tick paint in the <code>[ i</code> frame or board.py's expectation — the fix lands COMMITTED, with the wt-verified green run reproduced on a clean clone.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>gritzko's call which half is the bug; do not amend the test without that verdict (<a href="/meta/work.html">work</a> test-edit rule).</li>
+<li>The main tree's conflicted test/CMakeLists.txt and orphan wtwalk.js need his hand or explicit orders — workers must not touch the main tree.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>VERDICT gritzko 2026-08-04: FIX THE TEST.  The paint is correct; board.py's expectation is the stale half.  No view/paint code touched.</li>
+<li>Why the paint is right: CI-004 (ruling 2026-08-03/04) split the two surfaces — the STAGING frame <code>[ i nn nn nn  ∞]</code> ends in the <code> ∞</code> run (&quot;test it&quot;) button and the commit <code> ✓</code> moved to the HISTORY frame's last slot, <code>[ ≡ nn nn  ✓]</code> (todo.js ciSlot: lit while <code>stat.staged &gt; 0</code>, blank otherwise; the comment at todo.js:831-836 states the move, COMMIT grew 10 → 13 cells for it).  board.py's staged-tick leg predates that landing and still read the tick out of the <code>[ i</code> half.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./v.html">v</a> verdict: row paint or test expectation? -<a href="./v.html">v</a> fix + green on a virgin tip clone -<a href="./ .html"> </a> resolve the test/CMakeLists.txt conflict, land or drop
+</p>
+<div>
+<p>
+  wtwalk.js (main tree, gritzko)
+</p>
+</div>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<ul>
+<li>RED (reproduced 1st run in <code>//POST-036/</code>, base <code>///be/#9acaa555</code>, test sub <code>#61fc519a</code>): the single leg <code>FAIL …and-the-row-grew-the-staged-tick</code>, actual row <code>● TIC-001 ┄ [ i ~1    +1  ∞] [ ≡    -1  ✓] the first ticket… [ ✔  ✗]</code> — the tick IS painted, just in the other frame. Every other leg of the suite (44+17 driver legs, the whole pty session) was already green.</li>
+<li>FIX, test only, <code>test/todo/rowcache/board.py:199</code> — the sigil handed to the suite's own <code>half()</code> reader: before: <code>&quot;✓&quot; in half(rowof(f8, &quot;TIC-001&quot;), &quot;[ i&quot;)</code> after : <code>&quot;✓&quot; in half(rowof(f8, &quot;TIC-001&quot;), &quot;[ ≡&quot;)</code> plus a 3-line comment naming CI-004 as the reason.  Same <code>half()</code> idiom the neighbouring legs use (the byte-identical FILE-frame leg reads <code>&quot;[ i&quot;</code>, the log button is located in the <code>≡</code> frame by <code>cellof</code>); no new helper.</li>
+<li>GREEN: <code>ctest -R '^be-js-todo-rowcache$'</code> passed 4 consecutive runs (9.6 s each, no timeouts needed disambiguating in the end).  Neighbours: <code>ctest -R be-js-todo</code> → 10/10 passed (ci, click, meta, nav, pathreuse, rowcache, rows, sort, view).</li>
+<li>Staged in <code>//POST-036/test</code>: <code>test/todo/rowcache/board.py</code> ONLY (the wt's pre-existing POST-036 rows — <code>verbs/post/post.js</code> in <code>///be</code> and <code>test/post/wt-target-sub/run.sh</code> — untouched).</li>
+<li>The &quot;fresh clone 100% green&quot; goal still needs the MAIN TREE's conflicted <code>test/CMakeLists.txt</code> and the orphan <code>test/wtwalk.js</code> resolved — gritzko's hand, outside worker scope.</li>
+<li>Suggested commit: <code>TODO-010: rowcache test expects the staged tick where the row paints it</code></li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

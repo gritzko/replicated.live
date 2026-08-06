@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-055: a clone into a wt that already has an EMPTY .be DIR dies with a raw ToBigInt TypeError after the pack has landed</title>
+<meta property="og:title" content="GET-055: a clone into a wt that already has an EMPTY .be DIR dies with a raw ToBigInt TypeError after the pack has landed">
+<meta property="og:description" content="mkdir .be in an otherwise green-field worktree is enough: jab get &lt;remote&gt; fetches, lands the pack, writes refs and wtlog — and then throws TypeError: Invalid argument type in ToBigInt operation, checking out ZERO files. Remove the empty .be and the identical clone succeeds. The store is left complete-but-unchecked-out, so a retry in the same dir now takes the update path over a wtlog it never finished. Found while converting the clone path to KEEP-006's repack (JAB-020); NOT caused by it — baseline be/ sources on the tmp-pack path fail identically, so the bug predates the conversion and is transport- and repo-independent. Also breaks the plain-words rule: a raw JSC TypeError is not a user-facing error (Errors). Method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-055.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-055: a clone into a wt that already has an EMPTY <code>.be</code> DIR dies with a raw <code>ToBigInt</code> TypeError after the pack has landed</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
+<p>
+<code>mkdir .be</code> in an otherwise green-field worktree is enough: <code>jab get &lt;remote&gt;</code> fetches, lands the pack, writes <code>refs</code> and <code>wtlog</code> — and then throws <code>TypeError: Invalid argument type in ToBigInt operation</code>, checking out ZERO files. Remove the empty <code>.be</code> and the identical clone succeeds. The store is left complete-but-unchecked-out, so a retry in the same dir now takes the update path over a wtlog it never finished. Found while converting the clone path to <a href="../KEEP/KEEP-006.html">KEEP-006</a>'s repack (<a href="../JAB/JAB-020.html">JAB-020</a>); NOT caused by it — baseline <code>be/</code> sources on the tmp-pack path fail identically, so the bug predates the conversion and is transport- and repo-independent. Also breaks the plain-words rule: a raw JSC TypeError is not a user-facing error (<a href="../DIS/DIS-079.html">Errors</a>). Method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro (2026-07-27), no submodules, 6 objects: <code>mkdir -p wt/.be &amp;&amp; cd wt &amp;&amp; jab get ssh://localhost/&lt;bare&gt;</code> → <code>get: 6/6 objects, 0 MB in, 1 log(s)</code> then <code>JS exception: TypeError: Invalid argument type in ToBigInt operation</code>; <code>ls</code> = 0 files.</li>
+<li>The SAME command in a wt with no <code>.be</code> at all: clean clone, files checked out, <code>jab log</code> walks the history.</li>
+<li>Not the repack: baseline <code>~/jsrc</code> sources (GET-044 tmp-pack path, <code>~/bin/jab</code>) throw the identical TypeError on the identical setup.</li>
+<li>Not submodule-related: first hit on <code>c-rdx</code> (has <code>.gitmodules</code>), reproduced on a 1-commit bare repo with none.</li>
+<li>The shard IS complete when it throws: <code>0000000001.keeper</code> + a <code>.keeper.idx</code> run + <code>refs</code> + <code>.be/wtlog</code> all written.</li>
+<li>How the empty <code>.be</code> arises in practice: a FAILED fetch leaves one behind (bad remote path → <code>wire.fetch: peer advertised no usable ref</code>), so the user's natural retry hits this on the second run.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+A clone into a wt carrying an empty (or otherwise unusable) <code>.be</code> either completes or refuses in plain words — never a raw engine TypeError with a half-populated store.
+</p>
+<ul>
+<li>Decide what an empty <code>.be</code> DIR means: green-field to adopt, or a wt to refuse.</li>
+<li>Whatever the ruling, the failure path says so in normal words (<a href="../DIS/DIS-079.html">Errors</a>).</li>
+<li>No half state: a refusal must not leave a landed pack and a wtlog behind.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Plain words at the boundary, never an <code>ok64</code> code or an engine type error.</li>
+<li>A <code>.be</code> that is a redirect FILE (secondary wt) is a DIFFERENT case and already works — do not disturb it (<a href="./GET-041.html">GET-041</a>).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Nothing ruled yet. The suspicion — unverified, stated as such — is the branch pick in <code>verbs/get/get.js</code> <code>seedRemote</code>: <code>be.treeAt(wt)</code> sees a <code>.be</code> and yields an anchor with no usable baseline, so the UPDATE leg runs (<code>oldTipOf(info.bePath)</code> over an absent wtlog) instead of the green-field one. The <code>ToBigInt</code> is then a <code>BigInt(undefined)</code> downstream of that. NOT confirmed — no stack is available (the release build deliberately does not read <code>.stack</code>), so the first task is to localise it.
+</p>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> Localise the throw (debug build / bisect <code>seedRemote</code>), then write the repro as a test.</li>
+<li><a href="./ .html"> </a> Get the ruling: adopt an empty <code>.be</code> as green-field, or refuse the wt.</li>
+<li><a href="./ .html"> </a> Make the failure path leave nothing behind (no landed pack, no wtlog).</li>
+<li><a href="./ .html"> </a> Check the sibling case: <code>.be</code> present with a <code>&lt;proj&gt;</code> dir but no wtlog (what a failed fetch leaves once <a href="../KEEP/KEEP-006.html">KEEP-006</a>'s repack pre-creates the shard).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Release builds print name+message only — no line, no stack (<code>main.cpp</code> <code>JABCReport</code>, deliberate: reading <code>.stack</code> pins JSC source state that trips LeakSanitizer). Localising needs a debug build or bisection.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+Filed 2026-07-27 from the <a href="../JAB/JAB-020.html">JAB-020</a> clone-path conversion. Not fixed, not started.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

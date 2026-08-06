@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GET-016</title>
+<title>GET-016: be get is non-atomic for the wt (ref advances before the write) and get --force/get! won't full-reset a drifted worktree</title>
+<meta property="og:title" content="GET-016: be get is non-atomic for the wt (ref advances before the write) and get --force/get! won't full-reset a drifted worktree">
+<meta property="og:description" content="be get's COMMIT POINT (sniff/GET.c:1338-1353) appends the get ULOG row and advances the local branch tip BEFORE the worktree mutation, whose own comment admits it &quot;is not crash-safe — a partial run leaves a mix of new contents and old paths&quot;; so a midway fail (or any path that advances the ref without completing the write) leaves the ref/wtlog ahead of the tree, and because checkout is a baseline↔target delta (getoverlapcheck, GET.c:319-335) the now-equal baseline==target paths fall into the no-op-overlay bucket (GET.c:264-297) and are skipped, so the stale bytes are never rewritten and the wt is permanently drifted with no automatic recovery — --force only steers the dirty classification (GET.c:458-475), never the no-op skip (GET.c:272), so even get! can't reset it. See GET, Issues, GET-012, GET-014.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-016.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,8 +16,13 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>GET-016: <code>be get</code> is non-atomic for the wt (ref advances before the write) and <code>get --force</code>/<code>get!</code> won't full-reset a drifted worktree</h1>
+<div>
 <p>
-<code>be get</code>'s COMMIT POINT (<code>sniff/GET.c:1338-1353</code>) appends the <code>get</code> ULOG row and advances the local branch tip BEFORE the worktree mutation, whose own comment admits it &quot;is not crash-safe — a partial run leaves a mix of new contents and old paths&quot;; so a midway fail (or any path that advances the ref without completing the write) leaves the ref/wtlog ahead of the tree, and because checkout is a baseline↔target <strong>delta</strong> (<code>get_overlap_check</code>, <code>GET.c:319-335</code>) the now-equal baseline==target paths fall into the no-op-overlay bucket (<code>GET.c:264-297</code>) and are skipped, so the stale bytes are never rewritten and the wt is permanently drifted with no automatic recovery — <code>--force</code> only steers the <strong>dirty</strong> classification (<code>GET.c:458-475</code>), never the no-op skip (<code>GET.c:272</code>), so even <code>get!</code> can't reset it. See <a href="../../wiki/GET.html">GET</a>, <a href="../../rule/Issues.html">Issues</a>, <a href="">GET-012</a>, <a href="">GET-014</a>.
+Now: DONE
+</p>
+</div>
+<p>
+<code>be get</code>'s COMMIT POINT (<code>sniff/GET.c:1338-1353</code>) appends the <code>get</code> ULOG row and advances the local branch tip BEFORE the worktree mutation, whose own comment admits it &quot;is not crash-safe — a partial run leaves a mix of new contents and old paths&quot;; so a midway fail (or any path that advances the ref without completing the write) leaves the ref/wtlog ahead of the tree, and because checkout is a baseline↔target <strong>delta</strong> (<code>get_overlap_check</code>, <code>GET.c:319-335</code>) the now-equal baseline==target paths fall into the no-op-overlay bucket (<code>GET.c:264-297</code>) and are skipped, so the stale bytes are never rewritten and the wt is permanently drifted with no automatic recovery — <code>--force</code> only steers the <strong>dirty</strong> classification (<code>GET.c:458-475</code>), never the no-op skip (<code>GET.c:272</code>), so even <code>get!</code> can't reset it. See <a href="../../wiki/GET.html">GET</a>, <a href="../../rule/Issues.html">Issues</a>, <a href="./GET-012.html">GET-012</a>, <a href="./GET-014.html">GET-014</a>.
 </p>
 <h2>Repro (observed this session, MEM-044 worktree)</h2>
 <ul>
@@ -30,12 +39,23 @@
 <h2>Status / Planned</h2>
 <ul>
 <li><strong>(2) <code>get --force</code>/<code>get!</code> = full tree reset — LANDED <code>52ba21b5</code>.</strong> The content-rewrite half was already handled by the <code>c-&gt;force</code> short-circuit at <code>get_overlap_step</code> (<code>GET.c:417</code>); the missing piece was unlinking wt-only TRACKED orphans, added as <code>force_orphan_cb</code> (<code>GET.c:641</code>, <code>SNIFFAtKnown</code>-gated so untracked clutter survives) wired into <code>GETCheckout</code> (<code>GET.c:1525</code>, under <code>force &amp;&amp; !prune</code>). Repro <code>test/get/49-force-full-reset</code> (red→green); 280/280 green. <code>be get --force ?&lt;cur&gt;</code> is now a reliable full-reset recovery.</li>
-<li><strong>(1) Atomic wt GET → split to <a href="">GET-018</a>.</strong> The literal &quot;advance the ref only after the write&quot; reorder breaks a deliberately-documented crash-safety invariant and <code>test/get/09</code>+<code>10</code> (get/10 asserts the wtlog GROWS on a failed write and that <code>--force</code> replay is the recovery). True all-or-nothing atomicity needs a stage-to-temp/journal+rollback redesign with a design pass — tracked as <a href="">GET-018</a>.</li>
-<li><strong>Sibling stuck-ref → <a href="">GET-017</a>.</strong> <code>be get --nosub</code> not advancing a switch-shaped worktree's ref at all (the bug that forced fresh-clone salvage of MEM-041/042/044 this session) is filed as <a href="">GET-017</a>.</li>
+<li><strong>(1) Atomic wt GET → split to <a href="./GET-018.html">GET-018</a>.</strong> The literal &quot;advance the ref only after the write&quot; reorder breaks a deliberately-documented crash-safety invariant and <code>test/get/09</code>+<code>10</code> (get/10 asserts the wtlog GROWS on a failed write and that <code>--force</code> replay is the recovery). True all-or-nothing atomicity needs a stage-to-temp/journal+rollback redesign with a design pass — tracked as <a href="./GET-018.html">GET-018</a>.</li>
+<li><strong>Sibling stuck-ref → <a href="./GET-017.html">GET-017</a>.</strong> <code>be get --nosub</code> not advancing a switch-shaped worktree's ref at all (the bug that forced fresh-clone salvage of MEM-041/042/044 this session) is filed as <a href="./GET-017.html">GET-017</a>.</li>
 </ul>
 <h2>Impact</h2>
 <p>
 The Issues.mkd loop's &quot;<code>be get --nosub</code> to update first&quot; step is unreliable today — it silently leaves stale trees and invites the revert footgun; fixing (1)+(2) restores a trustworthy update-then-post cycle.
 </p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

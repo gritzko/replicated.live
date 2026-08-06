@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-089</title>
+<title>JS-089: back-edge require cycle — views/bro/bro.js requires core/loop.js</title>
+<meta property="og:title" content="JS-089: back-edge require cycle — views/bro/bro.js requires core/loop.js">
+<meta property="og:description" content="core/loop -&gt; views/bro/bro -&gt; core/loop is a require cycle broken only by a LAZY in-body require. A leaf view re-entering the whole dispatcher — driving the loop and capturing fd-1 via a monkey-patch of io.writeAll — is a layering inversion: the BRO view should consume a sub-run capability, not own one. Pairs with JS-081 (the fd-1 patch). Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-089.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,82 +15,66 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-089 <a href="./MED.html">MED</a>: back-edge require cycle — <code>views/bro/bro.js</code> requires <code>core/loop.js</code></h1>
+<h1>JS-089: back-edge require cycle — <code>views/bro/bro.js</code> requires <code>core/loop.js</code></h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
 <p>
 <code>core/loop -&gt; views/bro/bro -&gt; core/loop</code> is a require cycle broken only by a LAZY in-body require.  A leaf view re-entering the whole dispatcher — driving the loop and capturing fd-1 via a monkey-patch of io.writeAll — is a layering inversion: the <a href="./BRO.html">BRO</a> view should consume a sub-run capability, not own one.  Pairs with <a href="./JS-081.html">JS-081</a> (the fd-1 patch). Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>bro.js:83 <code>const loop = require(&quot;core/loop.js&quot;);</code> inside a<p>
-function body — the cycle is only &quot;OK&quot; because it's deferred.
-</p>
-</li>
-<li>bro.js:84-88 then monkey-patches <code>io.writeAll</code> to capture fd 1<p>
-(<code>chunks.push(b.data().slice())</code>) around the sub-run.
-</p>
-</li>
-<li>bro.js:79-82 the comment itself flags the trap: requiring the<p>
-be/loop.js ENTRY shim self-runs and recurses (JAB-028) — so it must reach for the core/loop.js MODULE, deepening the inversion.
-</p>
-</li>
+<li>bro.js:83 <code>const loop = require(&quot;core/loop.js&quot;);</code> inside a function body — the cycle is only &quot;OK&quot; because it's deferred.</li>
+<li>bro.js:84-88 then monkey-patches <code>io.writeAll</code> to capture fd 1 (<code>chunks.push(b.data().slice())</code>) around the sub-run.</li>
+<li>bro.js:79-82 the comment itself flags the trap: requiring the be/loop.js ENTRY shim self-runs and recurses (JAB-028) — so it must reach for the core/loop.js MODULE, deepening the inversion.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Expose a re-entry / sub-run capability through ctx, e.g.<p>
-<code>ctx.driveSubRun(argv)</code> returning the captured hunks, so bro consumes an INJECTED callback instead of requiring core/loop.
-</p>
-</li>
+<li>Expose a re-entry / sub-run capability through ctx, e.g. <code>ctx.driveSubRun(argv)</code> returning the captured hunks, so bro consumes an INJECTED callback instead of requiring core/loop.</li>
 <li>Removing the cycle ALSO removes the fd-1 monkey-patch (<a href="./JS-081.html">JS-081</a>).</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Byte-identical <code>be bro …</code> output: the captured-hunks stream must<p>
-match the current io.writeAll-capture path exactly.
-</p>
-</li>
-<li>ctx.driveSubRun lives at the loop edge (core owns re-entry), so<p>
-bro never imports core — the arrow points down only.
-</p>
-</li>
+<li>Byte-identical <code>be bro …</code> output: the captured-hunks stream must match the current io.writeAll-capture path exactly.</li>
+<li>ctx.driveSubRun lives at the loop edge (core owns re-entry), so bro never imports core — the arrow points down only.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>loop.js builds <code>ctx.driveSubRun</code> once at dispatch and threads it<p>
-into ctx; bro calls it, captures the returned hunks, no patch.
-</p>
-</li>
-<li>Keep the self-run-shim guard reasoning in a comment at the seam<p>
-so a future caller doesn't reintroduce the entry-shim require.
-</p>
-</li>
+<li>loop.js builds <code>ctx.driveSubRun</code> once at dispatch and threads it into ctx; bro calls it, captures the returned hunks, no patch.</li>
+<li>Keep the self-run-shim guard reasoning in a comment at the seam so a future caller doesn't reintroduce the entry-shim require.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: a <code>test/js/bro</code> case asserting captured-hunk bytes<p>
- for a nested <code>bro</code> run, against the current monkey-patch path.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: a <code>test/js/bro</code> case asserting captured-hunk bytes for a nested <code>bro</code> run, against the current monkey-patch path.</li>
 <li class="open"><input type="checkbox" disabled> Add ctx.driveSubRun(argv) at the loop edge; thread into ctx.</li>
-<li class="open"><input type="checkbox" disabled> Rewrite bro.js:83-88 to call ctx.driveSubRun; drop the require<p>
- + the io.writeAll patch.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Rewrite bro.js:83-88 to call ctx.driveSubRun; drop the require + the io.writeAll patch.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul class="todo">
 <li class="blocked"><input type="checkbox" disabled> ← <a href="./JS-081.html">JS-081</a> (the fd-1 capture monkey-patch is removed together).</li>
 </ul>
 <ul>
-<li>2026-07-07 audit: STILL OPEN (line refs shifted) — <code>views/bro/bro.js:105</code> in-body<p>
-<code>require(&quot;core/loop.js&quot;)</code> + the <code>io.writeAll</code> global patch (<code>:106-118</code>) persist; no <code>ctx.driveSubRun</code> seam exists. <a href="./JSQUE-020.html">JSQUE-020</a>'s <code>opts2.reentry</code> marker mitigates the nested pager (see <a href="./JS-081.html">JS-081</a>) but does NOT break the cycle or remove the monkey-patch.
-</p>
-</li>
+<li>2026-07-07 audit: STILL OPEN (line refs shifted) — <code>views/bro/bro.js:105</code> in-body <code>require(&quot;core/loop.js&quot;)</code> + the <code>io.writeAll</code> global patch (<code>:106-118</code>) persist; no <code>ctx.driveSubRun</code> seam exists. <a href="./JSQUE-020.html">JSQUE-020</a>'s <code>opts2.reentry</code> marker mitigates the nested pager (see <a href="./JS-081.html">JS-081</a>) but does NOT break the cycle or remove the monkey-patch.</li>
+<li>2026-07-10 revision: still OPEN — bro.js:108 in-body require(&quot;core/loop.js&quot;) + io.writeAll patch :109-123 (2nd require :176); no ctx.driveSubRun seam anywhere in be/</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>(pending)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

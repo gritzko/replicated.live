@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GET-035</title>
+<title>GET-035: jab get (JS) writes NO project shard on a FAILING wire fetch — native writes the flat shard BEFORE fetching (beagle/test/get/25 pre-fetch arm)</title>
+<meta property="og:title" content="GET-035: jab get (JS) writes NO project shard on a FAILING wire fetch — native writes the flat shard BEFORE fetching (beagle/test/get/25 pre-fetch arm)">
+<meta property="og:description" content="Native be get be://&lt;host&gt;?/proj/ref writes the project shard .be/&lt;proj&gt;/ (flat refs carrying the peer URI) in BEEnsureProjectRepo BEFORE the keeper fetch runs, so even a FAILED fetch (unreachable host) leaves the on-disk layout in place (beagle/test/get/25 asserts exactly this). The JS jab get (verbs/get/get.js::seedRemote) does wire.fetch FIRST and only ingests on success — a wire-fail throws and writes NOTHING (no .be, no shard). Surfaced splitting JS-096: the 25 port (test/get/remote-shard) lands the SUCCEEDING-clone flat-layout arm; the pre-fetch-shard arm is this divergence. Method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-035.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,62 +15,57 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>GET-035 <a href="./LOW.html">LOW</a>: <code>jab get</code> (JS) writes NO project shard on a FAILING wire fetch — native writes the flat shard BEFORE fetching (beagle/test/get/25 pre-fetch arm)</h1>
+<h1>GET-035: <code>jab get</code> (JS) writes NO project shard on a FAILING wire fetch — native writes the flat shard BEFORE fetching (beagle/test/get/25 pre-fetch arm)</h1>
+<div>
+<p>
+Now: OPEN Sev: LOW
+</p>
+</div>
 <p>
 Native <code>be get be://&lt;host&gt;?/proj/ref</code> writes the project shard <code>.be/&lt;proj&gt;/</code> (flat <code>refs</code> carrying the peer URI) in <code>BEEnsureProjectRepo</code> BEFORE the keeper fetch runs, so even a FAILED fetch (unreachable host) leaves the on-disk layout in place (beagle/test/get/25 asserts exactly this). The JS <code>jab get</code> (<code>verbs/get/get.js::seedRemote</code>) does <code>wire.fetch</code> FIRST and only ingests on success — a wire-fail throws and writes NOTHING (no <code>.be</code>, no shard). Surfaced splitting <a href="../JS/JS-096.html">JS-096</a>: the 25 port (<code>test/get/remote-shard</code>) lands the SUCCEEDING-clone flat-layout arm; the pre-fetch-shard arm is this divergence. Method <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Repro (live 2026-06-28, prebuilt <code>jab</code>): <code>jab get be://nonexistent.invalid?/myproj/main</code><p>
-from a fresh dir → <code>ssh: Could not resolve hostname</code>, <code>JS exception: wire.fetch: peer advertised no usable ref</code>, exit 1, and NO <code>.be</code> / no <code>myproj</code> shard written. Native writes <code>.be/myproj/{refs,...}</code> first.
-</p>
-</li>
-<li>Site: <code>verbs/get/get.js::seedRemote</code> (~line 145): <code>wire.fetch(...)</code> runs<p>
-ahead of <code>ingest.clone</code>, so a fetch throw aborts before any shard write. Native <code>BEEnsureProjectRepo</code> (beagle/GET.c) mints the shard up front.
-</p>
-</li>
+<li>Repro (live 2026-06-28, prebuilt <code>jab</code>): <code>jab get be://nonexistent.invalid?/myproj/main</code> from a fresh dir → <code>ssh: Could not resolve hostname</code>, <code>JS exception: wire.fetch: peer advertised no usable ref</code>, exit 1, and NO <code>.be</code> / no <code>myproj</code> shard written. Native writes <code>.be/myproj/{refs,...}</code> first.</li>
+<li>Site: <code>verbs/get/get.js::seedRemote</code> (~line 145): <code>wire.fetch(...)</code> runs ahead of <code>ingest.clone</code>, so a fetch throw aborts before any shard write. Native <code>BEEnsureProjectRepo</code> (beagle/GET.c) mints the shard up front.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Decide the intended JS contract: either (a) mirror native — pre-write the<p>
-flat project shard (+ peer-URI refs row) before the fetch, so a wire-fail leaves the registered-but-empty shard; or (b) ratify the JS fetch-first/atomic-on-success behavior as the spec and DOCUMENT that the native pre-fetch-shard arm is intentionally NOT ported.
-</p>
-</li>
+<li>Decide the intended JS contract: either (a) mirror native — pre-write the flat project shard (+ peer-URI refs row) before the fetch, so a wire-fail leaves the registered-but-empty shard; or (b) ratify the JS fetch-first/atomic-on-success behavior as the spec and DOCUMENT that the native pre-fetch-shard arm is intentionally NOT ported.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Whichever way: keep the SUCCEEDING-clone flat layout intact (no <code>remotes/</code><p>
-dir, peer URI in the single flat <code>refs</code>) — already covered by <code>test/get/remote-shard</code> + <code>test/get/remote-shard-refs</code> (<a href="../JS/JS-096.html">JS-096</a>).
-</p>
-</li>
+<li>Whichever way: keep the SUCCEEDING-clone flat layout intact (no <code>remotes/</code> dir, peer URI in the single flat <code>refs</code>) — already covered by <code>test/get/remote-shard</code> + <code>test/get/remote-shard-refs</code> (<a href="../JS/JS-096.html">JS-096</a>).</li>
 <li>No hand-rolled URI parsing.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open) Leaning (b): fetch-first is cleaner (no orphan shard on a typo'd<p>
-host) and matches <code>jab</code>'s atomic-write model; if so, just record the decision and the native-divergence note here, no code change.
-</p>
-</li>
+<li>(open) Leaning (b): fetch-first is cleaner (no orphan shard on a typo'd host) and matches <code>jab</code>'s atomic-write model; if so, just record the decision and the native-divergence note here, no code change.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Pick (a) pre-write-shard or (b) ratify fetch-first; if (a), add a<p>
- pre-fetch-shard arm to <code>test/get/remote-shard</code>.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Pick (a) pre-write-shard or (b) ratify fetch-first; if (a), add a pre-fetch-shard arm to <code>test/get/remote-shard</code>.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Low impact: only matters for the &quot;register a remote then fetch later&quot;<p>
- workflow; a normal reachable clone is unaffected.
-</p>
-</li>
+<li>Low impact: only matters for the &quot;register a remote then fetch later&quot; workflow; a normal reachable clone is unaffected.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>(open) Split off <a href="../JS/JS-096.html">JS-096</a> (the 25 port), filed 2026-06-28.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

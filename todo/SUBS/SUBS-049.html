@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SUBS-049</title>
+<title>SUBS-049: put/status treat a primary-anchored nested wt (.be DIR) as parent files — the .gitmodules sub boundary is missed</title>
+<meta property="og:title" content="SUBS-049: put/status treat a primary-anchored nested wt (.be DIR) as parent files — the .gitmodules sub boundary is missed">
+<meta property="og:description" content="Report (gritzko, 2026-07-10): jab get into a subdir + listing it in .gitmodules — jab put &lt;subdir&gt; recurs into it like new files instead of recognizing a submodule boundary. Root cause: BOTH boundary probes only accept the SECONDARY anchor form (.be regular FILE = the wtlog): classify.js::wtScan nested-repo detect (be/shared/classify.js:77-79) and recurse.js::isMount (be/core/recurse.js:36-44). But a green-field jab get of a remote plants the PRIMARY form — a .be DIR holding wtlog + the shard (be/verbs/get/get.js:217-228 seedRemote → ingest.clone + writeWtlog(join(beDir,&quot;wtlog&quot;))) — which be.find anchors on (core/discover.js:128-134) yet neither probe recognizes. So the sub's interior rides the parent's wtScan and put &lt;dir&gt; stages it as parent put rows; status floods unk the same way. The .gitmodules declaration never enters this path (expandDir is gitmodules-blind; recurse.walk consults it but gates on isMount). Siblings SUBS-039 SUBS-044 SUBS-045; umbrella DIS-058.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/SUBS/SUBS-049.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>SUBS-049 <a href="./HIGH.html">HIGH</a>: put/status treat a primary-anchored nested wt (<code>.be</code> DIR) as parent files — the <code>.gitmodules</code> sub boundary is missed</h1>
+<h1>SUBS-049: put/status treat a primary-anchored nested wt (<code>.be</code> DIR) as parent files — the <code>.gitmodules</code> sub boundary is missed</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
 <p>
 Report (gritzko, 2026-07-10): <code>jab get</code> into a subdir + listing it in <code>.gitmodules</code> — <code>jab put &lt;subdir&gt;</code> recurs into it like new files instead of recognizing a submodule boundary.  Root cause: BOTH boundary probes only accept the SECONDARY anchor form (<code>.be</code> regular FILE = the wtlog): <code>classify.js::wtScan</code> nested-repo detect (<code>be/shared/classify.js:77-79</code>) and <code>recurse.js::isMount</code> (<code>be/core/recurse.js:36-44</code>).  But a green-field <code>jab get</code> of a remote plants the PRIMARY form — a <code>.be</code> DIR holding <code>wtlog</code> + the shard (<code>be/verbs/get/get.js:217-228</code> seedRemote → <code>ingest.clone</code> + <code>writeWtlog(join(beDir,&quot;wtlog&quot;))</code>) — which <code>be.find</code> anchors on (<code>core/discover.js:128-134</code>) yet neither probe recognizes. So the sub's interior rides the parent's wtScan and <code>put &lt;dir&gt;</code> stages it as parent <code>put</code> rows; <code>status</code> floods <code>unk</code> the same way.  The <code>.gitmodules</code> declaration never enters this path (expandDir is gitmodules-blind; recurse.walk consults it but gates on isMount). Siblings <a href="SUBS-039.html">SUBS-039</a> <a href="SUBS-044.html">SUBS-044</a> <a href="SUBS-045.html">SUBS-045</a>; umbrella <a href="../DIS/DIS-058.html">DIS-058</a>.
 </p>
@@ -42,10 +51,10 @@ Report (gritzko, 2026-07-10): <code>jab get</code> into a subdir + listing it in
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled>  wtScan: accept the primary anchor — <code>be/shared/classify.js:79-82</code> now: <code>beKind === &quot;reg&quot; || (beKind === &quot;dir&quot; &amp;&amp; statKind(join(full, &quot;.be/wtlog&quot;)) === &quot;reg&quot;)</code> (applied 2026-07-10, UNCOMMITTED; post-fix: <code>put vendor2</code> → PUTNONE, status/wtlog 0 sub rows; suite 171/173, the 2 fails pre-exist — see bummers).</li>
-<li class="open"><input type="checkbox" disabled>  isMount (<code>core/recurse.js:43</code>): same widening (<code>&quot;reg&quot; || dir-with-wtlog</code>) so a DIR-anchored declared sub delegates (<code>stageInSub</code>), descends (bareStageSubs, delete sweep) and read-recurses (status/diff) like a FILE-anchored one.</li>
-<li class="open"><input type="checkbox" disabled>  subMountPrefix (<code>be/verbs/put/put.js:465-473</code>) tests only PROPER prefixes (<code>i &lt; segs.length - 1</code>): <code>jab put &lt;sub&gt;</code> (no trailing slash) never probes <code>&lt;sub&gt;</code> itself → PUTNONE while <code>jab put &lt;sub&gt;/</code> stages inside the sub (repro'd on the FILE form).  Probe the full path too (dir-args only).</li>
-<li class="open"><input type="checkbox" disabled>  Tests: <code>test/sub/</code> case for a primary-anchored declared sub — put path-arg, bare put, status; plus the no-slash <code>put &lt;sub&gt;</code> delegation case.</li>
+<li class="done"><input type="checkbox" checked disabled> wtScan: accept the primary anchor — <code>be/shared/classify.js:79-82</code> now: <code>beKind === &quot;reg&quot; || (beKind === &quot;dir&quot; &amp;&amp; statKind(join(full, &quot;.be/wtlog&quot;)) === &quot;reg&quot;)</code> (applied 2026-07-10, UNCOMMITTED; post-fix: <code>put vendor2</code> → PUTNONE, status/wtlog 0 sub rows; suite 171/173, the 2 fails pre-exist — see bummers).</li>
+<li class="open"><input type="checkbox" disabled> isMount (<code>core/recurse.js:43</code>): same widening (<code>&quot;reg&quot; || dir-with-wtlog</code>) so a DIR-anchored declared sub delegates (<code>stageInSub</code>), descends (bareStageSubs, delete sweep) and read-recurses (status/diff) like a FILE-anchored one.</li>
+<li class="open"><input type="checkbox" disabled> subMountPrefix (<code>be/verbs/put/put.js:465-473</code>) tests only PROPER prefixes (<code>i &lt; segs.length - 1</code>): <code>jab put &lt;sub&gt;</code> (no trailing slash) never probes <code>&lt;sub&gt;</code> itself → PUTNONE while <code>jab put &lt;sub&gt;/</code> stages inside the sub (repro'd on the FILE form).  Probe the full path too (dir-args only).</li>
+<li class="open"><input type="checkbox" disabled> Tests: <code>test/sub/</code> case for a primary-anchored declared sub — put path-arg, bare put, status; plus the no-slash <code>put &lt;sub&gt;</code> delegation case.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -58,9 +67,13 @@ Report (gritzko, 2026-07-10): <code>jab get</code> into a subdir + listing it in
 </ul>
 <div class="footer">
 ❧
-<a href="/feed.rss">RSS feed</a> ❧
-<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
-<a href="https://github.com/gritzko/jab">JAB</a>
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
 ❧
 </div>
 </body>

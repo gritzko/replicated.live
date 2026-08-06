@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MARK-012: explicit-link text and figure captions render inline markup flat</title>
+<meta property="og:title" content="MARK-012: explicit-link text and figure captions render inline markup flat">
+<meta property="og:description" content="StrictMark :42 gives an explicit text text &quot;any display text&quot;, but both renderers escape that text verbatim instead of running the inline pass on it, so a bold word shows literal asterisks in the anchor. Same for a captioned figure: emitFigure (render.js:209) escapes the bracket text into &lt;figcaption&gt;, which is flow content and could carry the markup. No grammar work is involved — the inline bracket rules already admit ~ and backticks in their bodies (^\\n]+), so the span reaches the renderer whole and MKDTDecomposeSpan hands back the raw inner text; only the emit side chose escf. Scope is explicit links and captions ONLY.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MARK/MARK-012.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>MARK-012: explicit-link text and figure captions render inline markup flat</h1>
+<div>
+<p>
+Now: OPEN Sev: LOW
+</p>
+</div>
+<p>
+<a href="../../wiki/StrictMark.html">StrictMark</a> :42 gives an explicit <code>[text text][l]</code> &quot;any display text&quot;, but both renderers escape that text verbatim instead of running the inline pass on it, so <code>[a *bold* word][1]</code> shows literal asterisks in the anchor. Same for a captioned figure: <code>emitFigure</code> (<code>render.js:209</code>) escapes the bracket text into <code>&lt;figcaption&gt;</code>, which is flow content and could carry the markup. No grammar work is involved — the inline bracket rules already admit <code>*_~</code> and backticks in their bodies (<code>[^\]\n]+</code>), so the span reaches the renderer whole and <code>MKDTDecomposeSpan</code> hands back the raw inner text; only the emit side chose <code>escf</code>. Scope is explicit links and captions ONLY.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>emitLink</code> (<code>render.js:194</code>) and <code>mark_emit_link</code> (<code>MARK.c:252</code>) emit display text through <code>escf</code> / <code>MARKu8bFeedEsc</code>; <code>inline</code> (<code>render.js:214</code>) is never re-entered.</li>
+<li>Recursion already exists for <code>&lt;strong&gt;</code>/<code>&lt;em&gt;</code>/<code>&lt;del&gt;</code> (<code>render.js:225</code>, <code>mark_inline_wrap</code> <code>MARK.c:306</code>), so the machinery is in place and depth-capped (<code>MARK_MAX_DEPTH</code> 64, <code>MARK.c:361</code>).</li>
+<li>Probe (2026-07-28, <code>renderDoc</code>): <code>[link with *strong* text]</code> → <code>&lt;a href=&quot;…&quot;&gt;link with *strong* text&lt;/a&gt;</code>.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>An explicit <code>[text][l]</code> renders its display text through the inline pass — <code>*strong*</code>, <code>_emph_</code>, <code>~~del~~</code>, `<code> </code>code<code> </code><code> become tags inside the </code>&lt;a&gt;`.</li>
+<li>A figure caption renders through the inline pass, while the <code>alt=</code> attribute of the same image stays plain text.</li>
+<li>C and JS stay in step for the link half (<code>render.js:5</code> still claims byte-parity with the C renderer).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Shortcut <code>[page]</code> links are OUT of scope: the bracket text is also the ref key and the implicit-link filename, so decorating it would break lookup — leave them escaped.</li>
+<li>Image <code>alt=</code> is an HTML attribute and can never hold tags; strip with the existing <code>plain</code> (<code>render.js:239</code>), do not write a second stripper.</li>
+<li>No change to <code>MKDT.c.rl</code> or <code>MKDTB.c.rl</code> — the grammar already covers this.</li>
+<li><code>&lt;figure&gt;</code> exists only in the JS renderer (C emits a bare inline <code>&lt;img&gt;</code>), so the caption half is JS-only.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>&quot;Explicit&quot; is exactly <code>label != text</code> — the discriminator <code>decompose</code> already sets (<code>render.js:85</code> vs <code>:87</code>), matching the C <code>shortcut</code> test at <code>MARK.c:273</code>.</li>
+<li><code>emitFigure</code> splits its one argument into two emits: <code>esc(plain(text))</code> into <code>alt=</code>, <code>this.inline(text)</code> into <code>&lt;figcaption&gt;</code>.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: golden-ish probe asserting <code>[a *bold* b][1]</code> and a <code>![a *bold* b][1]</code> caption render flat today.</li>
+<li class="open"><input type="checkbox" disabled> JS: recurse on explicit-link display text; split alt/caption in <code>emitFigure</code>.</li>
+<li class="open"><input type="checkbox" disabled> C: <code>mark_emit_link</code> non-shortcut branch calls <code>mark_inline</code> on <code>g-&gt;text</code>.</li>
+<li class="open"><input type="checkbox" disabled> Re-render the wiki + blog through the real path, eyeball anchors carrying <code>&lt;code&gt;</code> against <code>assets/css/style.css</code>.</li>
+<li class="open"><input type="checkbox" disabled> Note in <a href="../../wiki/StrictMark.html">StrictMark</a> §Links that display text takes inline markup while the key does not.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>An <code>&lt;a&gt;</code> wrapping <code>&lt;code&gt;</code> may need a style tweak; check before calling it done.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>URI-003</title>
+<title>URI-003: URI serialization safety — URIutf8FeedSafe (no cross-component injection)</title>
+<meta property="og:title" content="URI-003: URI serialization safety — URIutf8FeedSafe (no cross-component injection)">
+<meta property="og:description" content="A uri is built from component slices (scheme/authority/host/port/user/path/query/fragment) and serialized back to text by URIutf8Feed / URIMake / auri. If a component carries a reserved delimiter that is not escaped, it bleeds across a boundary and the emitted text re-parses into a different structure — a structural injection: a branch/path/host name containing #, ?, /, @, : can silently become a fragment, query, extra path segment, userinfo, or port. We want a guarantee that the generated URI fits the grammar and means exactly what the caller asked for. Provide URIutf8FeedSafe(into, u): serialize via URIutf8Feed, parse the result back, and assert every parsed field is byte-identical to the input component — emit only if the round-trip is the identity, else err out (URIUNSAFE, emit nothing). The pre-existing leading-/ round-trip defect (the original URI-003) is the first thing this catches: serialize→parse is not yet the identity even for valid input, so the serializer must be fixed before FeedSafe can pass. Found via abc/fuzz/URI.c. See URI-spec, POST-002, CLAUDE.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/URI/URI-003.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>URI-003: URI serialization safety — <code>URIutf8FeedSafe</code> (no cross-component injection)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 A <code>uri</code> is built from component slices (<code>scheme</code>/<code>authority</code>/<code>host</code>/<code>port</code>/<code>user</code>/<code>path</code>/<code>query</code>/<code>fragment</code>) and serialized back to text by <code>URIutf8Feed</code> / <code>URIMake</code> / <code>a_uri</code>. If a component carries a reserved delimiter that is not escaped, it bleeds across a boundary and the emitted text <strong>re-parses into a different structure</strong> — a structural injection: a branch/path/host name containing <code>#</code>, <code>?</code>, <code>/</code>, <code>@</code>, <code>:</code> can silently become a fragment, query, extra path segment, userinfo, or port. We want a guarantee that the generated URI fits the grammar and means exactly what the caller asked for. Provide <code>URIutf8FeedSafe(into, u)</code>: serialize via <code>URIutf8Feed</code>, parse the result back, and assert every parsed field is byte-identical to the input component — emit only if the round-trip is the identity, else <strong>err out</strong> (<code>URIUNSAFE</code>, emit nothing). The pre-existing leading-<code>/</code> round-trip defect (the original URI-003) is the first thing this catches: serialize→parse is not yet the identity even for <strong>valid</strong> input, so the serializer must be fixed before <code>FeedSafe</code> can pass. Found via <code>abc/fuzz/URI.c</code>. See <a href="../../wiki/URI.html">URI-spec</a>, <a href="../POST/POST-002.html">POST-002</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
 </p>
@@ -39,5 +48,16 @@ Make the serializer injection-safe, verified by a round-trip <code>FeedSafe</cod
 <li>Add <code>ok64 URIutf8FeedSafe(u8s into, uricp u)</code> to abc/URI: feed via <code>URIutf8Feed</code>, parse the emitted text back into a scratch <code>uri</code>, compare all 8 fields with <code>u8csEq</code>; on any mismatch return <code>URIUNSAFE</code> and emit nothing. Route URI construction from untrusted components through it (be/keeper/sniff ref+host builders).</li>
 <li>Fuzz the invariant on <code>abc/fuzz/URI.c</code> (multi-core, <code>$HOME/Corpus/URI</code>); feed every minimized failure back into the property test (<a href="../../CLAUDE.md">CLAUDE</a> §3).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

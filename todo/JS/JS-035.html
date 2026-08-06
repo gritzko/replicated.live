@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-035</title>
+<title>JS-035: zip.deflate / zip.inflate — raw zlib over dog/git/ZINF</title>
+<meta property="og:title" content="JS-035: zip.deflate / zip.inflate — raw zlib over dog/git/ZINF">
+<meta property="og:description" content="Expose ZINFDeflate/ZINFInflate as a zip JS global so JS can (de)compress arbitrary bytes — the missing primitive for a pure-JS git-wire client (REFDELTA record bodies, loose objects). Reopens JS-018 (no longer MOOT: the wire needs standalone compression, not just pack-internal). Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-035.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,56 +15,40 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-035 <a href="">MED</a>: <code>zip.deflate</code> / <code>zip.inflate</code> — raw zlib over <code>dog/git/ZINF</code></h1>
+<h1>JS-035: <code>zip.deflate</code> / <code>zip.inflate</code> — raw zlib over <code>dog/git/ZINF</code></h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 Expose <code>ZINFDeflate</code>/<code>ZINFInflate</code> as a <code>zip</code> JS global so JS can (de)compress arbitrary bytes — the missing primitive for a pure-JS git-wire client (REF_DELTA record bodies, loose objects). Reopens <a href="JS-018.html">JS-018</a> (no longer MOOT: the wire needs standalone compression, not just pack-internal). Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>A JS git-wire client must emit/ingest pack records whose bodies are<p>
-standalone zlib streams; <code>git.pack</code> only (de)compresses WHOLE records, no raw transform. <code>dog/git/ZINF.h</code> (libdog) has <code>ZINFInflate</code>/<code>ZINFDeflate</code>.
-</p>
-</li>
+<li>A JS git-wire client must emit/ingest pack records whose bodies are standalone zlib streams; <code>git.pack</code> only (de)compresses WHOLE records, no raw transform. <code>dog/git/ZINF.h</code> (libdog) has <code>ZINFInflate</code>/<code>ZINFDeflate</code>.</li>
 <li>Prereq for <a href="JS-037.html">JS-037</a> (thin-pack REF_DELTA bodies) and the future wire client.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
 <li><code>zip.deflate(bytes[, out]) -&gt; Uint8Array | n</code> and <code>zip.inflate(bytes[, out])</code>.</li>
-<li>No <code>out</code>: fresh sized Uint8Array. <code>out</code> is a Buf: write into IDLE, advance<p>
-<code>fed</code>, return n (zero-copy), mirroring <code>tok.parse</code>/<code>pack</code> shape.
-</p>
-</li>
+<li>No <code>out</code>: fresh sized Uint8Array. <code>out</code> is a Buf: write into IDLE, advance <code>fed</code>, return n (zero-copy), mirroring <code>tok.parse</code>/<code>pack</code> shape.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Pure marshalling over <code>dog/git/ZINF</code> (libdog, already linked). No new abc, NO<p>
-dog. Holds no refs (rule #4). Leaf sizes nothing — JS owns the out buffer.
-</p>
-</li>
+<li>Pure marshalling over <code>dog/git/ZINF</code> (libdog, already linked). No new abc, NO dog. Holds no refs (rule #4). Leaf sizes nothing — JS owns the out buffer.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Native leaves <code>_deflate(src,out,outOff)-&gt;n</code> / <code>_inflate(src,out,outOff)-&gt;n</code><p>
-in a new <code>js/zip.cpp</code> (<code>JABCZipInstall</code>, like <code>ansi.cpp</code>); install in main.cpp.
-</p>
-</li>
-<li>JS <code>zip</code> wrapper sizes the out scratch (deflate: <code>len+len&gt;&gt;10+128</code>; inflate:<p>
-grow-and-retry on NOROOM, like keeper.js readRecord) — sizing is JS's job.
-</p>
-</li>
+<li>Native leaves <code>_deflate(src,out,outOff)-&gt;n</code> / <code>_inflate(src,out,outOff)-&gt;n</code> in a new <code>js/zip.cpp</code> (<code>JABCZipInstall</code>, like <code>ansi.cpp</code>); install in main.cpp.</li>
+<li>JS <code>zip</code> wrapper sizes the out scratch (deflate: <code>len+len&gt;&gt;10+128</code>; inflate: grow-and-retry on NOROOM, like keeper.js readRecord) — sizing is JS's job.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first ctest <code>test/js/get/zip.js</code> (registered <code>JABCzip</code>, helpers from<p>
-  <code>test/js/lib/</code>): deflate→inflate round-trip (random + a real blob borrowed   from <code>test/get/</code> fixtures); empty input; large (&gt;64 KiB); known zlib blob.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Implement <code>js/zip.cpp</code> + main.cpp install + CMakeLists (src + test); update<p>
-  <code>js/INDEX.md</code> (+ <code>js/API.md</code>).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first ctest <code>test/js/get/zip.js</code> (registered <code>JABCzip</code>, helpers from <code>test/js/lib/</code>): deflate→inflate round-trip (random + a real blob borrowed from <code>test/get/</code> fixtures); empty input; large (&gt;64 KiB); known zlib blob.</li>
+<li class="open"><input type="checkbox" disabled> Implement <code>js/zip.cpp</code> + main.cpp install + CMakeLists (src + test); update <code>js/INDEX.md</code> (+ <code>js/API.md</code>).</li>
 </ul>
 <h3>Blockers</h3>
 <ul>
@@ -68,14 +56,19 @@ grow-and-retry on NOROOM, like keeper.js readRecord) — sizing is JS's job.
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>Landed <code>c3fbdda5</code>: <code>js/zip.cpp</code> (<code>zip._deflate</code>/<code>_inflate</code> leaves) + the<p>
-<code>zip.deflate</code>/<code>inflate</code> JS sugar; <code>ctest JABCzip</code> green, full <code>JABC</code> 23/23.
-</p>
-</li>
-<li>Surfaced <a href="../GIT/GIT-011.html">GIT-011</a>: <code>ZINFInflate</code> wraps <code>next_out</code> on a full slice instead of<p>
-returning NOROOM, forcing the XOR head-sentinel hack in <code>zip.cpp</code> (removable once GIT-011 lands).
-</p>
-</li>
+<li>Landed <code>c3fbdda5</code>: <code>js/zip.cpp</code> (<code>zip._deflate</code>/<code>_inflate</code> leaves) + the <code>zip.deflate</code>/<code>inflate</code> JS sugar; <code>ctest JABCzip</code> green, full <code>JABC</code> 23/23.</li>
+<li>Surfaced <a href="../GIT/GIT-011.html">GIT-011</a>: <code>ZINFInflate</code> wraps <code>next_out</code> on a full slice instead of returning NOROOM, forcing the XOR head-sentinel hack in <code>zip.cpp</code> (removable once GIT-011 lands).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-063: drop the pointless .slice() on RO mmap reads</title>
+<meta property="og:title" content="BE-063: drop the pointless .slice() on RO mmap reads">
+<meta property="og:description" content="Ruling (gritzko, 2026-08-04): the io.mmap(p,&quot;r&quot;).data().slice() copy is cargo cult — view or copy, release is GC-driven either way, so the memcpy buys nothing (/todo/ABC/ABC-023 Context). With ABC-023 landed the fd closes at map time, so holding the raw .data() view costs mapped pages only. Drop the copy at the RO mmap call-sites and hand the view onward, zero-copy.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BE/BE-063.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-063: drop the pointless .slice() on RO mmap reads</h1>
+<div>
+<p>
+Now: OPEN Sev: LOW Rep: ///be/ On1: ABC-023 See: BE-050 Ask: gritzko
+</p>
+</div>
+<p>
+Ruling (gritzko, 2026-08-04): the <code>io.mmap(p,&quot;r&quot;).data().slice()</code> copy is cargo cult — view or copy, release is GC-driven either way, so the memcpy buys nothing (<a href="/todo/ABC/ABC-023.html">ABC-023</a> Context). With ABC-023 landed the fd closes at map time, so holding the raw <code>.data()</code> view costs mapped pages only. Drop the copy at the RO mmap call-sites and hand the view onward, zero-copy.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Known sites: diff.js:520 readWtFile, why.js:32 — the exact <code>io.mmap(path, &quot;r&quot;).data().slice()</code> shape; sweep for others.</li>
+<li>gitmodules.js:20 / ignore.js:188 already pass the raw view into utf8.Decode — the pattern to converge on.</li>
+<li>Scratch-buffer slices (<code>io.buf</code> + readAll + slice) are a DIFFERENT thing — they trim oversized scratch; keeping the scratch alive via a subarray is a real cost. NOT in scope.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>RO mmap call-sites return the raw <code>.data()</code> view; bytes flow to consumers unchanged, no copy, no behavior change.</li>
+<li>Full suite green; diff/why goldens byte-identical.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>A PROT_READ view is write-protected: verify no consumer MUTATES the returned bytes — a site whose caller writes into them keeps its copy, with a 1-line comment saying why.</li>
+<li>A view is live, not a snapshot: a site that reads the same file twice expecting a stable before-image keeps its copy.</li>
+<li>Only <code>&quot;r&quot;</code> mmap sites; io.buf/io.ram slices and all test/ files stay untouched.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Sweep verdict — the ONLY non-test <code>io.mmap(p,&quot;r&quot;)</code> + copy sites in be/ are the two known ones (<code>jsrc/</code> is a symlink to <code>.</code>, its hits are the same files).  Per-site audit:
+</p>
+<ul>
+<li>diff.js:520 readWtFile — DROPPED the copy.  Consumers of the wt bytes: frameSha (feeds a fresh io.buf), isBinary/bytesEq (index reads), weave.fold → CFOLD (copies the source into its own ram buffer).  No writer, and no caller re-reads the path — one read per file, consumed before the next.</li>
+<li>why.js:32 readWtFile — DROPPED.  Same shape: wtBytes go to weave.fold / weave.foldWt (bytesEq + CFOLD fold), read-only.</li>
+<li>ingest.js:165/564, ignore.js:188, gitmodules.js:20, mark.js:19, rss.js:18, view/bro.js:615 — already raw <code>.data()</code>/subarray, no copy to drop.</li>
+<li>ulog.js:237 <code>abc.mmap(&quot;ULOG&quot;,path,&quot;r&quot;).slice()</code> — KEPT, and out of scope anyway (ULOG binding, not io.mmap): it is the textbook SNAPSHOT case — <code>abc.book</code> on the next line TRUNCATES the same file, so the survivors must already be off the map.  Left untouched (no comment added: the existing _book header already says &quot;abc.book truncates on open, so snapshot first&quot;).</li>
+<li>git.pack.mmap (store.js:191, ingest.js:341/476, log.js:131) and io._mmap &quot;rw&quot; (ingest.js:397) — different bindings/modes, no byte copy; untouched.</li>
+<li>io.buf/io.ram + readAll + slice scratch trims: out of scope per the ruling, none touched.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./v.html">v</a> sweep be/ (non-test) for <code>&quot;r&quot;</code> mmap + slice shapes -<a href="./v.html">v</a> diff.js readWtFile, why.js: return the raw view -<a href="./v.html">v</a> per-site mutation/snapshot audit, keep-with-comment where
+</p>
+<div>
+<p>
+  load-bearing (no site needed a keep-comment; see above)
+</p>
+</div>
+<p>
+ -<a href="./v.html">v</a> ctest 350/350, diff+why goldens byte-identical; <code>jab diff</code> /
+</p>
+<div>
+<p>
+  <code>status</code> / <code>why</code> run live on the write-protected views
+</p>
+</div>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<p>
+Suggested commit: <code>BE-063: RO mmap reads hand on the raw view</code>
+</p>
+<p>
+Files: views/diff/diff.js (readWtFile), views/why/why.js (readWtFile) — one line each, <code>.data().slice()</code> → <code>.data()</code>. No other non-test site had a copy to drop; ulog.js's ULOG copy is a real snapshot (abc.book truncates) and stays. ctest 350/350 green; diff/why golden cases unchanged. UNCOMMITTED in work/BE-063, <code>jab put</code> only, per the no-post order.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

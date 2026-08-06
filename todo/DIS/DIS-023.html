@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DIS-023</title>
+<title>DIS-023: be status is non-idempotent — a re-run hides real modifications</title>
+<meta property="og:title" content="DIS-023: be status is non-idempotent — a re-run hides real modifications">
+<meta property="og:description" content="Two consecutive be status runs with NO intervening edit or commit report different results: ? 1057 ok, 4 mod then ? 1061 ok. The dirty gate is mtime-only and re-stamps on read, so the first status records the current mtimes and the second sees them as matching → the 4 genuinely-modified tracked files are silently reported clean. The goal: status is idempotent and a modified file stays mod until it is actually committed; equality is confirmed by content hash, not just mtime. Shares its root with DIS-004 (mtime-only gate, no hash double-check). See Sniff.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-023.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>DIS-023: <code>be</code> status is non-idempotent — a re-run hides real modifications</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 Two consecutive <code>be</code> status runs with NO intervening edit or commit report different results: <code>?  1057 ok, 4 mod</code> then <code>?  1061 ok</code>. The dirty gate is mtime-only and re-stamps on read, so the first status records the current mtimes and the second sees them as matching → the 4 genuinely-modified tracked files are silently reported clean. The goal: status is idempotent and a modified file stays <code>mod</code> until it is actually committed; equality is confirmed by content hash, not just mtime. Shares its root with <a href="../todo/DIS-004.html">DIS-004</a> (mtime-only gate, no hash double-check). See <a href="../wiki/Sniff.html">Sniff</a>.
 </p>
@@ -42,12 +51,20 @@ Make status read-only and confirm modification by content hash, repro-first.
 ALREADY RESOLVED on the current tree — closed without a new commit (2026-06-25).
 </p>
 <ul>
-<li>Status routes the CLASS_BOTH verdict through <code>CLASSWtState</code> (<code>sniff/CLASS.c:359-374</code>),<p>
-which calls CLEAN only when on-disk bytes hash to the baseline blob via <code>CLASSWtEqBase</code> (content-confirmed, never mtime-only) and writes no stamp; the invocation is opened read-only (<code>sniff/SNIFF.cli.c:102-105</code>). The shared scan <code>SNIFFAtScanDirty</code> does the same double-check.
-</p>
-</li>
+<li>Status routes the CLASS_BOTH verdict through <code>CLASSWtState</code> (<code>sniff/CLASS.c:359-374</code>), which calls CLEAN only when on-disk bytes hash to the baseline blob via <code>CLASSWtEqBase</code> (content-confirmed, never mtime-only) and writes no stamp; the invocation is opened read-only (<code>sniff/SNIFF.cli.c:102-105</code>). The shared scan <code>SNIFFAtScanDirty</code> does the same double-check.</li>
 <li>Repro test already present + green: <code>sniff/test/idempotent.sh</code> (<code>SNIFFidempotent</code>, registered <code>sniff/test/CMakeLists.txt:38</code>) — modify, status twice, assert files stay <code>mod</code>; incl. the <code>touch -r</code> mtime-restored trap. Live two-run check: <code>4 ok, 4 mod</code> both runs; wtlog sha256 byte-identical (read-only).</li>
 <li>Reuses the <a href="../todo/DIS-004.html">DIS-004</a> <code>CLASSWtEqBase</code> helper as the ticket asked; already factored shared. No DIS-023-labelled commit in <code>be log</code>; landed with the CLASS content-check work.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

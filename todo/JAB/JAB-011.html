@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-011: io.readdir drops the first char of every entry under a trailing-slash root</title>
+<meta property="og:title" content="JAB-011: io.readdir drops the first char of every entry under a trailing-slash root">
+<meta property="og:description" content="JABCReaddirRel (jab/io.cpp:315) strips rootlen + 1 bytes off each walked path, assuming the root never ends in /; JABCPath (io.cpp:26) copies the JS arg verbatim, so io.readdir(p + '/') returns mutilated names. Found in the 2026-07-24 jab/ house-cleaning review.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-011.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-011: io.readdir drops the first char of every entry under a trailing-slash root</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<p>
+<code>JABCReaddirRel</code> (jab/io.cpp:315) strips <code>rootlen + 1</code> bytes off each walked path, assuming the root never ends in <code>/</code>; <code>JABCPath</code> (io.cpp:26) copies the JS arg verbatim, so <code>io.readdir(p + '/')</code> returns mutilated names. Found in the 2026-07-24 jab/ house-cleaning review.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Live repro on a fixture dir: <code>io.readdir(p)</code> → <code>[&quot;alpha&quot;,&quot;sub/&quot;]</code>, <code>io.readdir(p+'/')</code> → <code>[&quot;lpha&quot;,&quot;ub/&quot;]</code>, recursive → <code>[&quot;lpha&quot;,&quot;ub/&quot;,&quot;ub/child&quot;]</code>.</li>
+<li>Any JS caller that composes the root from a URI dir path (which ends in <code>/</code>) hits this silently.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>io.readdir</code> returns identical entries for <code>p</code> and <code>p+'/'</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first: a test dir listed via both spellings asserts equality.</li>
+<li>Fix the offset math or normalize in <code>JABCPath</code> — one place, not both.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro test: trailing-slash root, flat + recursive.</li>
+<li class="open"><input type="checkbox" disabled> Fix the skip length; rerun test/ suite.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

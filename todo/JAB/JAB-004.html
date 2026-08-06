@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JAB-004</title>
+<title>JAB-004: uniform verb call convention — a verb is a JS fn, args are plain JS values, one tokenizer for CLI + pager, ambient global be</title>
+<meta property="og:title" content="JAB-004: uniform verb call convention — a verb is a JS fn, args are plain JS values, one tokenizer for CLI + pager, ambient global be">
+<meta property="og:description" content="Straighten the JS verb calling convention so a verb is a plain JS function invoked with plain JS args, driven identically from the CLI and the pager. THREE call shapes: (1) verb — 0 args; (2) verb some args incl 'some quoted' — shell-split string args; (3) verb(&quot;proper&quot;, 132, &quot;js&quot;) — JS-eval'd to real values. The CLI gets shape 2 pre-split by the shell; the pager : line must split the SAME way. Ambient state (repo, output sink, render mode, flags) rides a global be object, not call args; the verb understands paths/URIs on its own. Replaces the (row, ctx)→{enqueue} handler + central resolve.js classifier.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-004.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>JAB-004: uniform verb call convention — a verb is a JS fn, args are plain JS values, one tokenizer for CLI + pager, ambient global <code>be</code></h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 Straighten the JS verb calling convention so a verb is a plain JS function invoked with plain JS args, driven identically from the CLI and the pager. THREE call shapes: (1) <code>verb</code> — 0 args; (2) <code>verb some args incl 'some quoted'</code> — shell-split string args; (3) <code>verb(&quot;proper&quot;, 132, &quot;js&quot;)</code> — JS-eval'd to real values. The CLI gets shape 2 pre-split by the shell; the pager <code>:</code> line must split the SAME way. Ambient state (repo, output sink, render mode, flags) rides a global <code>be</code> object, not call args; the verb understands paths/URIs on its own. Replaces the <code>(row, ctx)→{enqueue}</code> handler + central <code>resolve.js</code> classifier.
 </p>
@@ -48,7 +57,7 @@ Straighten the JS verb calling convention so a verb is a plain JS function invok
 </ul>
 <h3>TODOs</h3>
 <p>
- -<a href="./v.html">v</a> Phase 1 — the tokenizer <code>shared/argline.js</code> (bare / shell-split / <code>verb(</code>-eval), unit-driven; pager <code>:</code> line (bro.js spellCall) rewired to it. 122/122.  -<a href="./v.html">v</a> Phase 2 — global <code>be</code>: <code>globalThis.be</code> minted at loop entry (mintBe folds discover + repo/sink/format/flags); 18 <code>require(discover)</code> aliases dropped. 122/122.  -<a href="./v.html">v</a> Phase 3 — flags onto <code>be</code>: <code>be.force</code> set from <code>--force</code>, <code>be.format</code> from the render selectors; force/format reads migrated via the single <code>shared/ambient.js</code> ctx→be bridge (transitional, phase 5 removes it); bro driveSpell re-entry snapshots/restores the <code>be</code> ambient. 122/122.  -<a href="./v.html">v</a> Phase 4 — plain-arg conversion: dual-convention spine (registry marker <code>.jab=&quot;args&quot;</code> + loop.js plain branch calling <code>fn(...args)</code>), then ALL 24 verbs/views converted in a parallel worker-per-verb fan-out (shared worktree, disjoint files, own build dirs). Every handler reads ambient off <code>be</code>, owns its arg loop + fan-out (<code>{enqueue}</code> dead), and self-parses/classifies its URIs. POST colon-message drop FIXED + proven (post-colon-msg). lsr latent non-recursion bug fixed via <code>be.verb</code>. 122/122 throughout. RECIPE.md drove the fan-out (columnar + mutating + re-entrancy addenda).  -<a href="./v.html">v</a> Phase 5 — CLEANUP done (full classifyArg retirement, gritzko's call): put/delete parse their OWN args (a tiny bare/URI/file-list 3-way, NOT the classifyArg matrix); deleted resolve.seed/seedCtx/classifyArg/pinPath (<code>core/resolve.js</code> 208→27 lines, now just isHexish/resolveHex for the 6 view/put users); deleted cli()'s dead legacy dispatch branch + run()'s whole queue loop + <code>_memQueue</code> (<code>core/loop.js</code> net −65; run() is a thin plain-dispatch wrapper); dropped 3 orphaned requires; refreshed registry.js verb-contract doc. 122/122. KEPT (still live): shared/ambient.js ctx-fallback + per-verb dual-shape <code>(row,ctx)</code> fallbacks — direct-handler unit tests (cat/commit/blob) still call verbs that way; removing them needs a test-update pass (own follow-up).  -<a href="./ .html"> </a> Consistency follow-ups surfaced mid-fan-out: unify the search-trio fan-out (regex per-arg vs spot single-search); lift the re-entrancy <code>src = ctx || be</code> precedence into ambient.js (commit→diff needed an ad-hoc <code>be</code> I/O-surface swap).
+ -<a href="./v.html">v</a> Phase 1 — the tokenizer <code>shared/argline.js</code> (bare / shell-split / <code>verb(</code>-eval), unit-driven; pager <code>:</code> line (bro.js spellCall) rewired to it. 122/122. -<a href="./v.html">v</a> Phase 2 — global <code>be</code>: <code>globalThis.be</code> minted at loop entry (mintBe folds discover + repo/sink/format/flags); 18 <code>require(discover)</code> aliases dropped. 122/122. -<a href="./v.html">v</a> Phase 3 — flags onto <code>be</code>: <code>be.force</code> set from <code>--force</code>, <code>be.format</code> from the render selectors; force/format reads migrated via the single <code>shared/ambient.js</code> ctx→be bridge (transitional, phase 5 removes it); bro driveSpell re-entry snapshots/restores the <code>be</code> ambient. 122/122. -<a href="./v.html">v</a> Phase 4 — plain-arg conversion: dual-convention spine (registry marker <code>.jab=&quot;args&quot;</code> + loop.js plain branch calling <code>fn(...args)</code>), then ALL 24 verbs/views converted in a parallel worker-per-verb fan-out (shared worktree, disjoint files, own build dirs). Every handler reads ambient off <code>be</code>, owns its arg loop + fan-out (<code>{enqueue}</code> dead), and self-parses/classifies its URIs. POST colon-message drop FIXED + proven (post-colon-msg). lsr latent non-recursion bug fixed via <code>be.verb</code>. 122/122 throughout. RECIPE.md drove the fan-out (columnar + mutating + re-entrancy addenda). -<a href="./v.html">v</a> Phase 5 — CLEANUP done (full classifyArg retirement, gritzko's call): put/delete parse their OWN args (a tiny bare/URI/file-list 3-way, NOT the classifyArg matrix); deleted resolve.seed/seedCtx/classifyArg/pinPath (<code>core/resolve.js</code> 208→27 lines, now just isHexish/resolveHex for the 6 view/put users); deleted cli()'s dead legacy dispatch branch + run()'s whole queue loop + <code>_memQueue</code> (<code>core/loop.js</code> net −65; run() is a thin plain-dispatch wrapper); dropped 3 orphaned requires; refreshed registry.js verb-contract doc. 122/122. KEPT (still live): shared/ambient.js ctx-fallback + per-verb dual-shape <code>(row,ctx)</code> fallbacks — direct-handler unit tests (cat/commit/blob) still call verbs that way; removing them needs a test-update pass (own follow-up). -<a href="./ .html"> </a> Consistency follow-ups surfaced mid-fan-out: unify the search-trio fan-out (regex per-arg vs spot single-search); lift the re-entrancy <code>src = ctx || be</code> precedence into ambient.js (commit→diff needed an ad-hoc <code>be</code> I/O-surface swap).
 </p>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -64,5 +73,16 @@ Straighten the JS verb calling convention so a verb is a plain JS function invok
 <li>Related: <a href="JAB-003.html">JAB-003</a> (same call-mapping area + POST symptom — largely subsumed), <a href="../JSQUE/JSQUE-020.html">JSQUE-020</a> (the fan-out queue this sits on, now also fully deleted).</li>
 <li>Audit 2026-07-07: the in-log land is <code>11e4dddc</code> (Fri03 &quot;JAB-004: plain js calling convention for the verbs&quot;); <code>b937076d</code> is absent from <code>be log</code> (pre-post worktree hash). Code state verified: <code>shared/argline.js</code>, <code>core/resolve.js</code> at 27 lines, <code>mintBe</code>/<code>globalThis.be</code> in loop.js, <code>test/post/colon-msg</code>.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

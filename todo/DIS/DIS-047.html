@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DIS-047</title>
+<title>DIS-047: weave/graf 3-way merge is very slow on large files</title>
+<meta property="og:title" content="DIS-047: weave/graf 3-way merge is very slow on large files">
+<meta property="og:description" content="GRAFMergeWtFile / WEAVEMerge is very slow merging a large file (beagle/BE.cli.c, ~5k lines) during be get. Surfaced updating the JS-027 worktree. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-047.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,29 +15,25 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>DIS-047 <a href="">MED</a>: weave/graf 3-way merge is very slow on large files</h1>
+<h1>DIS-047: weave/graf 3-way merge is very slow on large files</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>GRAFMergeWtFile</code> / <code>WEAVEMerge</code> is very slow merging a large file (<code>beagle/BE.cli.c</code>, ~5k lines) during <code>be get</code>. Surfaced updating the <a href="../JS/JS-027.html">JS-027</a> worktree. Method: <a href="../../skill/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>be get</code> onto trunk <code>371ad14b</code> weave-merged <code>beagle/BE.cli.c</code> (both sides<p>
-edited it: SUBS-027b be-head + the JS-025 hook) — &quot;merge of BE.cli.c was veeerey slow&quot; (user, direct observation).
-</p>
-</li>
+<li><code>be get</code> onto trunk <code>371ad14b</code> weave-merged <code>beagle/BE.cli.c</code> (both sides edited it: SUBS-027b be-head + the JS-025 hook) — &quot;merge of BE.cli.c was veeerey slow&quot; (user, direct observation).</li>
 <li>BE.cli.c is ~5000 lines; the single-file merge took noticeably long.</li>
-<li>Path: <code>GRAFMergeWtFileTunable</code> (<code>graf/GET.c:301</code>) → <code>WEAVEMerge</code> /<p>
-<code>GRAFMerge3Bytes</code> / <code>WEAVENext</code> (<code>dog/WEAVE</code>). Suspect superlinear token scan or repeated whole-blob rewrites per <code>WEAVENext</code> (the blob is rewritten whole — see <code>dog/WEAVE.h</code> &quot;rewrite the whole blob&quot;).
-</p>
-</li>
+<li>Path: <code>GRAFMergeWtFileTunable</code> (<code>graf/GET.c:301</code>) → <code>WEAVEMerge</code> / <code>GRAFMerge3Bytes</code> / <code>WEAVENext</code> (<code>dog/WEAVE</code>). Suspect superlinear token scan or repeated whole-blob rewrites per <code>WEAVENext</code> (the blob is rewritten whole — see <code>dog/WEAVE.h</code> &quot;rewrite the whole blob&quot;).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Profile the merge on a large file; bring it to ~linear. Add a bench that makes<p>
-a regression brutally obvious (CLAUDE.md §3).
-</p>
-</li>
+<li>Profile the merge on a large file; bring it to ~linear. Add a bench that makes a regression brutally obvious (CLAUDE.md §3).</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
@@ -42,10 +42,7 @@ a regression brutally obvious (CLAUDE.md §3).
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open) find where the time goes (token identity scan? per-step whole-blob<p>
-rewrite?) before touching the hot loop.
-</p>
-</li>
+<li>(open) find where the time goes (token identity scan? per-step whole-blob rewrite?) before touching the hot loop.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -58,10 +55,18 @@ rewrite?) before touching the hot loop.
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li><strong>LANDED <code>5b062e24</code></strong> (2026-06-21): O(n²)→linear <code>WEAVEMerge</code> Pass-2 remover-union<p>
-(<code>dog/WEAVE.c</code>) — prefix-sum slots + one scatter pass + compaction via the existing <code>umap</code>, order-preserving so merge output is BYTE-IDENTICAL. ~212× faster (N=5k: 9777ms→46ms; doubling 4.04×→2.27×). Bench <code>dog/test/WEAVE04.c</code> (<code>DWEAVE04test</code>, fails if ratio ≥ 3.0). FUZZ-VALIDATED: <code>DWEAVEfuzz</code> 235k runs × 16 jobs / 10 min, 0 crashes / 0 oracle failures / 0 sanitizer findings (corpus <code>~/src/Corpus/dweave</code>).
-</p>
-</li>
+<li><strong>LANDED <code>5b062e24</code></strong> (2026-06-21): O(n²)→linear <code>WEAVEMerge</code> Pass-2 remover-union (<code>dog/WEAVE.c</code>) — prefix-sum slots + one scatter pass + compaction via the existing <code>umap</code>, order-preserving so merge output is BYTE-IDENTICAL. <del>212× faster (N=5k: 9777ms→46ms; doubling 4.04×→2.27×). Bench <code>dog/test/WEAVE04.c</code> (<code>DWEAVE04test</code>, fails if ratio ≥ 3.0). FUZZ-VALIDATED: <code>DWEAVEfuzz</code> 235k runs × 16 jobs / 10 min, 0 crashes / 0 oracle failures / 0 sanitizer findings (corpus `</del>/src/Corpus/dweave`).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DOG-008</title>
+<title>DOG-008: WEAVEParse/WEAVEStep trust wire indices — OOB read+write</title>
+<meta property="og:title" content="DOG-008: WEAVEParse/WEAVEStep trust wire indices — OOB read+write">
+<meta property="og:description" content="dog/WEAVE.c's codec is a zero-copy, entirely UNVALIDATED view over a 'W' blob the header itself flags as &quot;may be attacker-influenced&quot;, and the merge/next decoders then dereference the parsed inserter/remover indices as raw array subscripts. WEAVEStep reads a token's inserter straight from the 'I' column (WEAVE.c:165) and remover ids from 'M' (:174-176) with NO bound against the commit-table length; those indices flow into ordpins++ (ADVIDH, WEAVE.c:410) — a controllable OOB WRITE — and into commits0 / rmapli (wmergedecode, :552,561,564) — OOB reads. Separately WEAVEParse aliases byte-aligned TLV values as tok32c/u64c (:55-58) with no length-multiple or alignment check, so a 'K'/'C' value of non-multiple length is read 1-3 bytes past its end and mis-aligned loads are UB. The sibling HUNKu8sDrain already does the right thing (validate tok32Offset, length, aligned copy) — this is the precedent to mirror. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DOG/DOG-008.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,48 +15,29 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>DOG-008 <a href="./CRIT.html">CRIT</a>: <code>WEAVEParse</code>/<code>WEAVEStep</code> trust wire indices — OOB read+write</h1>
+<h1>DOG-008: <code>WEAVEParse</code>/<code>WEAVEStep</code> trust wire indices — OOB read+write</h1>
+<div>
+<p>
+Now: OPEN Sev: CRIT
+</p>
+</div>
 <p>
 <code>dog/WEAVE.c</code>'s codec is a zero-copy, entirely UNVALIDATED view over a <code>'W'</code> blob the header itself flags as &quot;may be attacker-influenced&quot;, and the merge/next decoders then dereference the parsed inserter/remover indices as raw array subscripts. <code>WEAVEStep</code> reads a token's inserter straight from the <code>'I'</code> column (<code>WEAVE.c:165</code>) and remover ids from <code>'M'</code> (<code>:174-176</code>) with NO bound against the commit-table length; those indices flow into <code>ordp[_ins]++</code> (<code>ADV_IDH</code>, <code>WEAVE.c:410</code>) — a controllable OOB WRITE — and into <code>commits[0][li]</code> / <code>rmap[li]</code> (<code>wmerge_decode</code>, <code>:552,561,564</code>) — OOB reads. Separately <code>WEAVEParse</code> aliases byte-aligned TLV values as <code>tok32c*</code>/<code>u64c*</code> (<code>:55-58</code>) with no length-multiple or alignment check, so a <code>'K'</code>/<code>'C'</code> value of non-multiple length is read 1-3 bytes past its end and mis-aligned loads are UB. The sibling <code>HUNKu8sDrain</code> already does the right thing (validate <code>tok32Offset</code>, length, aligned copy) — this is the precedent to mirror. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>OOB write: <code>WEAVE.c:410</code> <code>#define ADV_IDH(INS) ... ordp[_ins]++</code> with<p>
-<code>_ins = cur.inserter</code>, <code>ordp</code> sized <code>u64bDataLen(out_cmts)+1</code> (<code>:402</code>).
-</p>
-</li>
-<li>OOB reads: <code>wmerge_decode</code> <code>WEAVE.c:552</code> <code>commits[0][li]</code>, <code>:561/564</code><p>
-<code>rmap[li]/rmap[*r]</code> (both sized <code>nc</code>); <code>li = tk.inserter</code>, unchecked.
-</p>
-</li>
-<li>Unchecked source: <code>WEAVEStep</code> <code>:165</code> <code>u8sDrain32(c-&gt;ins,&amp;out-&gt;inserter)</code> and<p>
-<code>:174-176</code> remover <code>u32cs</code> — never compared to <code>$len(commits)</code>.
-</p>
-</li>
-<li>Alignment/length: <code>WEAVEParse</code> <code>:55-58</code> casts <code>v[0]</code>→<code>tok32c*</code>/<code>u64c*</code>; loop<p>
-guard <code>toks[0]&gt;=toks[1]</code> is a pointer compare, so a 3-byte <code>'K'</code> still enters <code>WEAVEStep</code> and reads a full 4-byte <code>tok32</code>. <code>HUNK</code> rejects via <code>HUNKTOKLEN</code>.
-</p>
-</li>
-<li>Emit path (<code>weave_scope_alive :976</code>, <code>weave_emit_membership :1283</code>) is safe<p>
-ONLY because it routes indices through bounds-checked <code>u1At</code>; decode bypasses it.
-</p>
-</li>
-<li><code>WEAVEAlive</code> (<code>:117-132</code>) slices text with UNCHECKED offsets: <code>hi=tok32Offset(t)</code><p>
-(24-bit, ≤16 MiB) then <code>a_part(u8c,seg,text,lo,hi-lo)</code> with no <code>hi&lt;=$len(text)</code> and no monotonicity check (<code>a_part</code>'s bound is an <code>assert</code>, gone in release). <code>WEAVEStep</code> has these guards (<code>:152,155</code>); <code>WEAVEAlive</code> does not → OOB read of ~16 MiB (large <code>hi</code>) or a ~4 GiB read from <code>hi-lo</code> underflow (<code>hi&lt;lo</code>).
-</p>
-</li>
+<li>OOB write: <code>WEAVE.c:410</code> <code>#define ADV_IDH(INS) ... ordp[_ins]++</code> with <code>_ins = cur.inserter</code>, <code>ordp</code> sized <code>u64bDataLen(out_cmts)+1</code> (<code>:402</code>).</li>
+<li>OOB reads: <code>wmerge_decode</code> <code>WEAVE.c:552</code> <code>commits[0][li]</code>, <code>:561/564</code> <code>rmap[li]/rmap[*r]</code> (both sized <code>nc</code>); <code>li = tk.inserter</code>, unchecked.</li>
+<li>Unchecked source: <code>WEAVEStep</code> <code>:165</code> <code>u8sDrain32(c-&gt;ins,&amp;out-&gt;inserter)</code> and <code>:174-176</code> remover <code>u32cs</code> — never compared to <code>$len(commits)</code>.</li>
+<li>Alignment/length: <code>WEAVEParse</code> <code>:55-58</code> casts <code>v[0]</code>→<code>tok32c*</code>/<code>u64c*</code>; loop guard <code>toks[0]&gt;=toks[1]</code> is a pointer compare, so a 3-byte <code>'K'</code> still enters <code>WEAVEStep</code> and reads a full 4-byte <code>tok32</code>. <code>HUNK</code> rejects via <code>HUNKTOKLEN</code>.</li>
+<li>Emit path (<code>weave_scope_alive :976</code>, <code>weave_emit_membership :1283</code>) is safe ONLY because it routes indices through bounds-checked <code>u1At</code>; decode bypasses it.</li>
+<li><code>WEAVEAlive</code> (<code>:117-132</code>) slices text with UNCHECKED offsets: <code>hi=tok32Offset(t)</code> (24-bit, ≤16 MiB) then <code>a_part(u8c,seg,text,lo,hi-lo)</code> with no <code>hi&lt;=$len(text)</code> and no monotonicity check (<code>a_part</code>'s bound is an <code>assert</code>, gone in release). <code>WEAVEStep</code> has these guards (<code>:152,155</code>); <code>WEAVEAlive</code> does not → OOB read of <del>16 MiB (large <code>hi</code>) or a </del>4 GiB read from <code>hi-lo</code> underflow (<code>hi&lt;lo</code>).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Validate at parse/step time: every inserter/remover index <code>&lt; $len(commits)</code>,<p>
-<code>'K'</code> length a multiple of <code>sizeof(tok32)</code>, <code>'C'</code>/<code>'A'</code> a multiple of 8, and <code>$len(anc) == $len(toks)</code>; return <code>WEAVEFAIL</code> (never OK) on violation.
-</p>
-</li>
-<li>Alignment: require aligned offsets or copy into aligned BASS scratch like<p>
-<code>hunk_drain_toks</code> does; no raw dereference of a <code>u8c*</code>-derived <code>tok32c*</code>.
-</p>
-</li>
+<li>Validate at parse/step time: every inserter/remover index <code>&lt; $len(commits)</code>, <code>'K'</code> length a multiple of <code>sizeof(tok32)</code>, <code>'C'</code>/<code>'A'</code> a multiple of 8, and <code>$len(anc) == $len(toks)</code>; return <code>WEAVEFAIL</code> (never OK) on violation.</li>
+<li>Alignment: require aligned offsets or copy into aligned BASS scratch like <code>hunk_drain_toks</code> does; no raw dereference of a <code>u8c*</code>-derived <code>tok32c*</code>.</li>
 <li>A malformed <code>'W'</code> blob can NEVER produce an OOB access downstream.</li>
 </ul>
 <h3>Constraints</h3>
@@ -63,42 +48,35 @@ ONLY because it routes indices through bounds-checked <code>u1At</code>; decode 
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Centralize validation in one place: fold the three near-identical decoders<p>
-(<code>wmerge_decode</code> <code>:526-581</code>, <code>weave_emit_decode</code> <code>:936-966</code>, the inline pass-1 loop in <code>wnext_diff</code> <code>:350-364</code>) into a single validated decoder so the index check lives once, not thrice.
-</p>
-</li>
+<li>Centralize validation in one place: fold the three near-identical decoders (<code>wmerge_decode</code> <code>:526-581</code>, <code>weave_emit_decode</code> <code>:936-966</code>, the inline pass-1 loop in <code>wnext_diff</code> <code>:350-364</code>) into a single validated decoder so the index check lives once, not thrice.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> T1 repro: add a <code>fuzz/WEAVE.c</code> (and property) case feeding malformed<p>
- <code>'I'</code>/<code>'M'</code>/<code>'K'</code>/<code>'C'</code> records straight into <code>WEAVEParse</code>→<code>WEAVEMerge</code>/<code>Next</code>;  existing fuzz only round-trips well-formed blobs.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> T2 gate indices in <code>WEAVEStep</code>/<code>WEAVEParse</code> (inserter/remover <code>&lt; ncommits</code>);<p>
- add the same <code>hi&lt;=$len(text)</code> + monotonic-offset guards to <code>WEAVEAlive</code>.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> T1 repro: add a <code>fuzz/WEAVE.c</code> (and property) case feeding malformed <code>'I'</code>/<code>'M'</code>/<code>'K'</code>/<code>'C'</code> records straight into <code>WEAVEParse</code>→<code>WEAVEMerge</code>/<code>Next</code>; existing fuzz only round-trips well-formed blobs.</li>
+<li class="open"><input type="checkbox" disabled> T2 gate indices in <code>WEAVEStep</code>/<code>WEAVEParse</code> (inserter/remover <code>&lt; ncommits</code>); add the same <code>hi&lt;=$len(text)</code> + monotonic-offset guards to <code>WEAVEAlive</code>.</li>
 <li class="open"><input type="checkbox" disabled> T3 gate TLV value length multiples + <code>anc==toks</code> count; fix alignment.</li>
-<li class="open"><input type="checkbox" disabled> T4 consolidate the three column decoders into one validated pass (folds<p>
- <a href="DOG-013.html">DOG-013</a> reuse note: also swap the hand-rolled <code>u64map</code> <code>:610-631</code> for  <a href="../../beagle/abc/HASHx.h">HASHx</a> and fix its <code>u64map_cap</code> <code>u32</code> overflow).
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> T5 <code>WEAVEScope</code> (<code>:95-109</code>) must reject an undersized <code>into</code> bitmap up front<p>
- instead of silently no-oping via <code>u1sSet</code>, and its <code>ok64</code> return made real.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> T4 consolidate the three column decoders into one validated pass (folds <a href="DOG-013.html">DOG-013</a> reuse note: also swap the hand-rolled <code>u64map</code> <code>:610-631</code> for <a href="../../beagle/abc/HASHx.h">HASHx</a> and fix its <code>u64map_cap</code> <code>u32</code> overflow).</li>
+<li class="open"><input type="checkbox" disabled> T5 <code>WEAVEScope</code> (<code>:95-109</code>) must reject an undersized <code>into</code> bitmap up front instead of silently no-oping via <code>u1sSet</code>, and its <code>ok64</code> return made real.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Related but distinct: <a href="../PTR/PTR-002.html">PTR-002</a> cleans dog/ pointer-poke style; this is the<p>
-security validation gap, not the style. <a href="DOG-003.html">DOG-003</a> owns the WEAVE core format.
-</p>
-</li>
+<li>Related but distinct: <a href="../PTR/PTR-002.html">PTR-002</a> cleans dog/ pointer-poke style; this is the security validation gap, not the style. <a href="DOG-003.html">DOG-003</a> owns the WEAVE core format.</li>
 <li>Audit 2026-07-07: all cited sites re-verified in libdog HEAD <code>79612854</code> — <code>WEAVEStep</code> unchecked inserter/removers <code>WEAVE.c:163-176</code>, <code>ADV_IDH</code> <code>ordp[_ins]++</code> <code>:410</code>, <code>WEAVEParse</code> raw <code>tok32c*</code>/<code>u64c*</code> casts <code>:56-58</code>, <code>WEAVEAlive</code> unchecked <code>hi</code> <code>:116-131</code>. NOTHING landed (no DOG-008 in the log); a WIP fix sits UNLANDED in worktree <code>~/src/DOG-008</code> (<code>WEAVE.c</code> + <code>test/WEAVE01,04</code> modified).</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>OPEN — filed 2026-07-06, the libdog code-quality review session.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

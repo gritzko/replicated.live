@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-042 DONT: bro status click fails to OPEN an unparseable file — must refold with libdog's plain-text tokenizer</title>
+<meta property="og:title" content="BRO-042 DONT: bro status click fails to OPEN an unparseable file — must refold with libdog's plain-text tokenizer">
+<meta property="og:description" content="Incident 2026-07-30 in //PATCH-025: after a trunk get stored a token-level &lt;&lt;&lt;&lt;/||||/&gt;&gt;&gt;&gt; conflict render into verbs/get/get.js (markers glued MID-LINE, file no longer valid JS), clicking that row in the bro status view fails to open the file. A conflicted file is unparseable BY DESIGN until resolved — every view must still open it.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BRO/BRO-042.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-042 <a href="./DONT.html">DONT</a>: bro status click fails to OPEN an unparseable file — must refold with libdog's plain-text tokenizer</h1>
+<div>
+<p>
+Now: DONT
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Incident 2026-07-30 in <code>//PATCH-025</code>: after a trunk <code>get</code> stored a token-level <code>&lt;&lt;&lt;&lt;</code>/<code>||||</code>/<code>&gt;&gt;&gt;&gt;</code> conflict render into <code>verbs/get/get.js</code> (markers glued MID-LINE, file no longer valid JS), clicking that row in the bro status view fails to open the file. A conflicted file is unparseable BY DESIGN until resolved — every view must still open it.
+</p>
+<ul>
+<li>Status routes a <code>v</code>/<code>x</code>/<code>!</code> row click to <code>diff:</code> (<a href="./be/views/status/status.js:327.html">status.js:327</a>); <code>cat:</code>/<code>blob:</code> already degrade to no-markup on <code>tok.parse</code> throw (<a href="./be/views/cat/cat.js:192.html">cat.js:192</a>, <a href="./be/views/blob/blob.js:159.html">blob.js:159</a>) — find the exact failing call by pty repro, do not guess.</li>
+<li>The fallback ALREADY EXISTS: <a href="./be/views/diff/diff.js:132-139.html">diff.js:132-139</a> (DIFF-015/DOG-021) refolds with ext <code>&quot;&quot;</code> = libdog's plain-text tokenizer (TXTT) when the jab binding reports a fold failure (&quot;out full&quot; masks lexer defects too).</li>
+<li>Adjacent, do not conflate: <a href="/todo/DIFF/DIFF-019.html">DIFF-019</a> (<code>hunk.render: out full</code> on big scoped diffs) can ALSO kill the same click — if the repro trips that instead, report, don't fix it here.</li>
+<li>Repro material: the mush bytes live in <code>//PATCH-025</code> <code>verbs/get/get.js</code> (read-only evidence — copy bytes out, never write there).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>RULING (gritzko): on tokenizer failure ANY bro file open falls back to libdog's plain-text tokenizer — IN LIBDOG, NEVER a new/hand-rolled tokenizer.</li>
+<li>Pty-click repro FIRST: bro status over a tree with an unparseable .js file, click the row — view fails; after the fix the file opens as plain text. The repro must FLIP with the fix.</li>
+<li>Permanent test with a committed unparseable-js fixture.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fix at the existing call site(s), mirroring the diff.js:132-139 refold pattern; no second heuristic, no new tokenizer, no parallel render path.</li>
+<li>No other tests edited; put + report only, per <a href="/meta/work.html">work</a>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> pty repro: which call dies on the mush file (tok.parse? fold? hunk.render?)</li>
+<li><a href="./ .html"> </a> ext-&quot;&quot; refold fallback at that site</li>
+<li><a href="./ .html"> </a> pty repro flips; permanent test</li>
+<li><a href="./ .html"> </a> full ctest run</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>NO-REPRO as a tokenizer failure — the fallback ALREADY EXISTS and works end-to-end: pty click on a small genuinely-unparseable .js opens fine via the <a href="./DIFF-015.html">DIFF-015</a> ext-&quot;&quot; refold (&quot;cannot tokenize ... — diffing as plain text&quot;).</li>
+<li>The incident's click death is <a href="/todo/DIFF/DIFF-019.html">DIFF-019</a>: pty click on the 82KB mush dies <code>err: Error: hunk.render: out full</code> AFTER a successful fold (the mush is token-legal to JST); a VALID 82KB file with a 3-line edit dies identically — size, not parseability.</li>
+<li>Root cause moved to DIFF-019 (in-C cap, <code>jab/dog/HUNK.c:1308</code>); no fix, no files put; pty driver + fixtures preserved in <code>//BRO-042/scratch/</code>.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

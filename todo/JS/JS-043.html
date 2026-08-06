@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-043</title>
+<title>JS-043: bin/.js helper consolidation + clarity cleanup</title>
+<meta property="og:title" content="JS-043: bin/.js helper consolidation + clarity cleanup">
+<meta property="og:description" content="The JS be status/be get extensions duplicate small helpers across 12 files and carry some dead/awkward code. Consolidate into shared libs and remove the cruft — pure bin/.js, NO behavior change (the be-bin- / be-js-get- parity tests stay byte-for-byte green). Disjoint from JS-042/JS-044 (touches no js/ C, adds no bindings). Found by the bin/.js review. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-043.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,87 +15,64 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-043 <a href="">MED</a>: <code>bin/*.js</code> helper consolidation + clarity cleanup</h1>
+<h1>JS-043: <code>bin/*.js</code> helper consolidation + clarity cleanup</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The JS <code>be status</code>/<code>be get</code> extensions duplicate small helpers across 12 files and carry some dead/awkward code. Consolidate into shared libs and remove the cruft — pure <code>bin/*.js</code>, NO behavior change (the <code>be-bin-*</code> / <code>be-js-get-*</code> parity tests stay byte-for-byte green). Disjoint from <a href="JS-042.html">JS-042</a>/<a href="JS-044.html">JS-044</a> (touches no js/ C, adds no bindings). Found by the bin/*.js review. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Duplication: <code>isFullSha</code> ×6 (wtlog/keeper/classify/dag/subs/wire), <code>join</code> ×8,<p>
-<code>dirname</code> ×5 (TWO divergent semantics — a latent bug), <code>dateCol</code>/<code>verbCol</code>/<code>writeStdout</code> (status.js &amp; get.js), <code>shQuote</code>≡<code>shq</code> (status.js/wire.js), the ULOG-drain watermark incantation ×6.
-</p>
-</li>
-<li>Reinvented: <code>keeper.js</code> <code>hexToBytes</code> reimplements the <code>hex.decode</code> binding;<p>
-<code>dag.rowFor</code> inlines the ts logic already in <code>dag.commitTs</code>.
-</p>
-</li>
-<li>Dead/awkward: <code>get.js:136 isDir</code>, <code>keeper.js:141 dirname</code> (unused); the<p>
-keeper.js ref-delta fallback (<code>indexPackByWalk</code>/<code>frameSha</code>/<code>hashlet60FromBytes</code> /<code>keyFor</code>, ~90 lines) is unreachable on the hot path (<code>pack.scan</code> does it natively) and only log-and-skips. Stale comments <code>keeper.js:88-93,166-173</code>.
-</p>
-</li>
+<li>Duplication: <code>isFullSha</code> ×6 (wtlog/keeper/classify/dag/subs/wire), <code>join</code> ×8, <code>dirname</code> ×5 (TWO divergent semantics — a latent bug), <code>dateCol</code>/<code>verbCol</code>/<code>writeStdout</code> (status.js &amp; get.js), <code>shQuote</code>≡<code>shq</code> (status.js/wire.js), the ULOG-drain watermark incantation ×6.</li>
+<li>Reinvented: <code>keeper.js</code> <code>hexToBytes</code> reimplements the <code>hex.decode</code> binding; <code>dag.rowFor</code> inlines the ts logic already in <code>dag.commitTs</code>.</li>
+<li>Dead/awkward: <code>get.js:136 isDir</code>, <code>keeper.js:141 dirname</code> (unused); the keeper.js ref-delta fallback (<code>indexPackByWalk</code>/<code>frameSha</code>/<code>hashlet60FromBytes</code> /<code>keyFor</code>, ~90 lines) is unreachable on the hot path (<code>pack.scan</code> does it natively) and only log-and-skips. Stale comments <code>keeper.js:88-93,166-173</code>.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>New <code>lib/path.js</code> (join/dirname/basename, ONE semantics) + <code>lib/sha.js</code><p>
-(<code>isFullSha</code> + hashlet/hex helpers); shared render/ulog helpers; all <code>bin/*.js</code> import them.
-</p>
-</li>
-<li><code>hexToBytes</code> → <code>hex.decode</code>; <code>dag.rowFor</code> calls <code>dag.commitTs</code>; remove the two<p>
-dead funcs; delete-or-gate the keeper ref-delta fallback; fix stale comments.
-</p>
-</li>
+<li>New <code>lib/path.js</code> (join/dirname/basename, ONE semantics) + <code>lib/sha.js</code> (<code>isFullSha</code> + hashlet/hex helpers); shared render/ulog helpers; all <code>bin/*.js</code> import them.</li>
+<li><code>hexToBytes</code> → <code>hex.decode</code>; <code>dag.rowFor</code> calls <code>dag.commitTs</code>; remove the two dead funcs; delete-or-gate the keeper ref-delta fallback; fix stale comments.</li>
 <li>No behavior change: <code>be-bin-*</code> and <code>be-js-get-*</code> stay byte-for-byte green.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li><code>bin/*.js</code> ONLY — keep disjoint from <a href="JS-042.html">JS-042</a>'s <code>js/io.cpp</code>. No new bindings<p>
-(use existing JABC). Comment budget per <code>CLAUDE.md</code>.
-</p>
-</li>
+<li><code>bin/*.js</code> ONLY — keep disjoint from <a href="JS-042.html">JS-042</a>'s <code>js/io.cpp</code>. No new bindings (use existing JABC). Comment budget per <code>CLAUDE.md</code>.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li><code>lib/path.js</code> <code>dirname</code> settles on ONE return value — verify each caller's<p>
-expectation first (be.js/ignore.js use <code>.</code>/<code>/</code>, checkout.js/keeper.js <code>&quot;&quot;</code>/<code>/</code>) and preserve behavior.
-</p>
-</li>
-<li>Gate the keeper ref-delta fallback behind a clear &quot;thin packs unsupported&quot;<p>
-guard, or delete with a one-line note (it only log-and-skips today).
-</p>
-</li>
+<li><code>lib/path.js</code> <code>dirname</code> settles on ONE return value — verify each caller's expectation first (be.js/ignore.js use <code>.</code>/<code>/</code>, checkout.js/keeper.js <code>&quot;&quot;</code>/<code>/</code>) and preserve behavior.</li>
+<li>Gate the keeper ref-delta fallback behind a clear &quot;thin packs unsupported&quot; guard, or delete with a one-line note (it only log-and-skips today).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
 <li class="open"><input type="checkbox" disabled> Consolidate path/sha/render/ulog helpers; repoint all callers.</li>
-<li class="open"><input type="checkbox" disabled> <code>hex.decode</code> swap; <code>dag.commitTs</code> reuse; dead-func removal; ref-delta gate;<p>
-  comment fixes.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> <code>hex.decode</code> swap; <code>dag.commitTs</code> reuse; dead-func removal; ref-delta gate; comment fixes.</li>
 <li class="open"><input type="checkbox" disabled> <code>ctest -R 'be-bin|be-js-get'</code> green (parity unchanged); no regressions.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Touches classify.js/status.js/keeper.js/checkout.js — <a href="JS-044.html">JS-044</a> (rewire) must<p>
-land AFTER this to avoid a reconcile; flag the order.
-</p>
-</li>
-<li>NB: a <code>be-bin-sub-status-parity</code> fix (dag.commitTs sub-tip ts) may be<p>
-uncommitted in the main tree at fork time; if that test reads red on your base, it is PRE-EXISTING, not your change — note it, don't chase it.
-</p>
-</li>
+<li>Touches classify.js/status.js/keeper.js/checkout.js — <a href="JS-044.html">JS-044</a> (rewire) must land AFTER this to avoid a reconcile; flag the order.</li>
+<li>NB: a <code>be-bin-sub-status-parity</code> fix (dag.commitTs sub-tip ts) may be uncommitted in the main tree at fork time; if that test reads red on your base, it is PRE-EXISTING, not your change — note it, don't chase it.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>Landed <code>cbad5786</code> (FF onto <code>ff7a378e</code>): 4 new shared libs (<code>bin/lib/path.js</code>/<p>
-<code>sha.js</code>/<code>ulog.js</code>/<code>render.js</code>), 12 callers repointed; <code>hexToBytes</code>→<code>hex.decode</code>, <code>dag.rowFor</code>→<code>dag.commitTs</code>, dead funcs gone. Net −177 lines; <code>status.js</code>/ <code>refs.js</code> output BYTE-IDENTICAL. Parity green (the 1 <code>be-bin-sub-status-parity</code> red is the native SUBS-030 <code>adv</code> verb = <a href="JS-045.html">JS-045</a>, not this change).
-</p>
-</li>
-<li>CORRECTION to the review premise: the keeper ref-delta fallback is NOT dead —<p>
-wire-cloned packs carry REF_DELTA (<code>pack.scan</code> throws), so it's GATED + deduplicated, not deleted (deleting collapsed status to 1327 unk). REF_DELTA records are still log-and-skipped → a JS-034 REF-base resolve leaf would index them fully.
-</p>
-</li>
+<li>Landed <code>cbad5786</code> (FF onto <code>ff7a378e</code>): 4 new shared libs (<code>bin/lib/path.js</code>/ <code>sha.js</code>/<code>ulog.js</code>/<code>render.js</code>), 12 callers repointed; <code>hexToBytes</code>→<code>hex.decode</code>, <code>dag.rowFor</code>→<code>dag.commitTs</code>, dead funcs gone. Net −177 lines; <code>status.js</code>/ <code>refs.js</code> output BYTE-IDENTICAL. Parity green (the 1 <code>be-bin-sub-status-parity</code> red is the native SUBS-030 <code>adv</code> verb = <a href="JS-045.html">JS-045</a>, not this change).</li>
+<li>CORRECTION to the review premise: the keeper ref-delta fallback is NOT dead — wire-cloned packs carry REF_DELTA (<code>pack.scan</code> throws), so it's GATED + deduplicated, not deleted (deleting collapsed status to 1327 unk). REF_DELTA records are still log-and-skipped → a JS-034 REF-base resolve leaf would index them fully.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

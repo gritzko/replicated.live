@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GIT-017</title>
+<title>GIT-017: remote-tracking refs must record host + FULL ABSOLUTE branch</title>
+<meta property="og:title" content="GIT-017: remote-tracking refs must record host + FULL ABSOLUTE branch">
+<meta property="og:description" content="A remote-tracking ref row must identify BOTH the remote host AND the remote branch, in full absolute form (?/project/branch/…) — but the JS writer drops the branch: shared/ingest.js saveRemoteRef (and clone/add) do remoteUri.replace(/\?./, &quot;?&quot;), recording //host?#tip with the query stripped to a bare ?. So every branch of one host collapses onto the trunk key even though store.eachRemote keys by authority + query and COULD tell them apart: a second branch push overwrites the first, and a cached be head //origin?branch cannot resolve the right per-branch tip. Fix: record {verb:&quot;get&quot;, uri: &lt;scheme&gt;://&lt;host&gt;?/&lt;abs-branch&gt;#&lt;tip&gt;} — host kept, branch kept and RESOLVED to absolute — across every remote-track writer. Split from GIT-016 T3 (saveRemoteRef); JS only (be/, via jab). Method: work.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GIT/GIT-017.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>GIT-017 <a href="./JS.html">JS</a>: remote-tracking refs must record host + FULL ABSOLUTE branch</h1>
+<h1>GIT-017: remote-tracking refs must record host + FULL ABSOLUTE branch</h1>
+<div>
+<p>
+Now: STALE
+</p>
+</div>
 <p>
 A remote-tracking ref row must identify BOTH the remote host AND the remote branch, in full absolute form (<code>?/project/branch/…</code>) — but the JS writer drops the branch: <code>shared/ingest.js</code> <code>saveRemoteRef</code> (and <code>clone</code>/<code>add</code>) do <code>remoteUri.replace(/\?.*/, &quot;?&quot;)</code>, recording <code>//host?#tip</code> with the query stripped to a bare <code>?</code>. So every branch of one host collapses onto the trunk key even though <code>store.eachRemote</code> keys by <code>authority + query</code> and COULD tell them apart: a second branch push overwrites the first, and a cached <code>be head //origin?branch</code> cannot resolve the right per-branch tip. Fix: record <code>{verb:&quot;get&quot;, uri: &lt;scheme&gt;://&lt;host&gt;?/&lt;abs-branch&gt;#&lt;tip&gt;}</code> — host kept, branch kept and RESOLVED to absolute — across every remote-track writer. Split from <a href="GIT-016.html">GIT-016</a> T3 (<code>saveRemoteRef</code>); JS only (<code>be/</code>, via <code>jab</code>). Method: <a href="../../meta/work.html">work</a>.
 </p>
@@ -56,7 +65,20 @@ A remote-tracking ref row must identify BOTH the remote host AND the remote bran
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(pending)</li>
+<li>STALE 2026-07-14, gritzko: superseded by <a href="../URI/URI-016.html">URI-016</a>. The premise — a row carrying <code>?/project/branch</code> — dies with URI-016 decision 1 (<code>?/project</code> dropped; the shard rides the PATH, <code>file:/…/.be/shard</code> or <code>&lt;scheme&gt;://host/project</code>), so a remote-track row becomes <code>&lt;scheme&gt;://host/project?branch#tip</code>.</li>
+<li>The underlying defect is NOT fixed by that and carries into <a href="../URI/URI-016.html">URI-016</a>: <code>saveRemoteRef</code>'s <code>\?.*</code>-&gt;<code>?</code> strip still collapses every branch of one host onto the trunk key (a second branch push clobbers the first; cached <code>be head //origin?branch</code> mis-resolves). Under decision 1 the fix shrinks to &quot;stop stripping the query&quot; — no absolute resolution, no <code>resolveRef</code> dependency.</li>
+<li>Nothing landed under this code. T1's repro (two branches of one host, both tips distinct) still fails today and moves to <a href="../URI/URI-016.html">URI-016</a>.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

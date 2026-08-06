@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GIT-021</title>
+<title>GIT-021 DONE: linux-scale checkout dies mid-reconcile with git.tree: bad tree entry + a 1.7 GB anon spike — store content verifies CLEAN post-hoc (stateful read bug, pre-existing)</title>
+<meta property="og:title" content="GIT-021 DONE: linux-scale checkout dies mid-reconcile with git.tree: bad tree entry + a 1.7 GB anon spike — store content verifies CLEAN post-hoc (stateful read bug, pre-existing)">
+<meta property="og:description" content="A jab get clone of a linux-v3.0-scale repo (698 MB pack, 2.06 M objects) lands + indexes the pack fine and STARTS the checkout, then dies in reconcileDir → treeMap → readTree with Error: git.tree: bad tree entry (gittreenext@native code) — and the process' ANONYMOUS RSS explodes from ~48 MB to 1.75 GB in the final ~5 s before the throw (a garbage size feeding a giant alloc, then the bad parse). The landed store is NOT corrupt: a FRESH process walks the same baseline tree completely (2265 trees, every readTree OK). So the bug is STATE accumulated inside the long-running get process (a shared/reused Buf or resolve window poisoned after ~10^5 interleaved getObject/materialise calls), not the pack, not the index, not GET-044 streaming. Method: work.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GIT/GIT-021.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,9 +15,14 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>GIT-021 <a href="./JS.html">JS</a> <a href="./HIGH.html">HIGH</a>: linux-scale checkout dies mid-reconcile with <code>git.tree: bad tree entry</code> + a 1.7 GB anon spike — store content verifies CLEAN post-hoc (stateful read bug, pre-existing)</h1>
+<h1>GIT-021 <a href="./DONE.html">DONE</a>: linux-scale checkout dies mid-reconcile with <code>git.tree: bad tree entry</code> + a 1.7 GB anon spike — store content verifies CLEAN post-hoc (stateful read bug, pre-existing)</h1>
+<div>
 <p>
-A <code>jab get</code> clone of a linux-v3.0-scale repo (698 MB pack, 2.06 M objects) lands + indexes the pack fine and STARTS the checkout, then dies in <code>reconcileDir → treeMap → readTree</code> with <code>Error: git.tree: bad tree entry</code> (<code>_git_tree_next@[native code]</code>) — and the process' ANONYMOUS RSS explodes from ~48 MB to 1.75 GB in the final ~5 s before the throw (a garbage size feeding a giant alloc, then the bad parse).  The landed store is NOT corrupt: a FRESH process walks the same baseline tree completely (2265 trees, every <code>readTree</code> OK).  So the bug is STATE accumulated inside the long-running get process (a shared/reused Buf or resolve window poisoned after ~10^5 interleaved <code>getObject</code>/materialise calls), not the pack, not the index, not <a href="../GET/GET-044.html">GET-044</a> streaming.  Method: <a href="../../meta/work.html">work</a>.
+Now: DONE Sev: HIGH
+</p>
+</div>
+<p>
+A <code>jab get</code> clone of a linux-v3.0-scale repo (698 MB pack, 2.06 M objects) lands + indexes the pack fine and STARTS the checkout, then dies in <code>reconcileDir → treeMap → readTree</code> with <code>Error: git.tree: bad tree entry</code> (<code>_git_tree_next@[native code]</code>) — and the process' ANONYMOUS RSS explodes from <del>48 MB to 1.75 GB in the final </del>5 s before the throw (a garbage size feeding a giant alloc, then the bad parse).  The landed store is NOT corrupt: a FRESH process walks the same baseline tree completely (2265 trees, every <code>readTree</code> OK).  So the bug is STATE accumulated inside the long-running get process (a shared/reused Buf or resolve window poisoned after ~10^5 interleaved <code>getObject</code>/materialise calls), not the pack, not the index, not <a href="../GET/GET-044.html">GET-044</a> streaming.  Method: <a href="../../meta/work.html">work</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -21,7 +30,7 @@ A <code>jab get</code> clone of a linux-v3.0-scale repo (698 MB pack, 2.06 M obj
 <li>Repro 2026-07-14 (deterministic, twice): single-branch bare fixture at linux v3.0 (<code>git clone --bare --single-branch</code> off a local mirror; 733 MB closure, ~2.06 M objects), served via <code>git-upload-pack</code> over an ssh shim; <code>jab get 'ssh://…?/linux'</code>.  Pack lands as <code>0000000001.keeper</code> 697.7 MB + a 31.4 MB idx run + refs; root files materialise (COPYING, Makefile, …); then the throw.</li>
 <li>PRE-EXISTING: the identical clone with the PRISTINE (pre-GET-044) in-memory wire path fails at the SAME point with the SAME error — streaming did not introduce it, it only made the phase visible with flat memory.</li>
 <li>Store exonerated: post-fail, a fresh <code>store.open(...)</code> + full depth-first <code>readTree</code> walk of the tip's tree = 2265 trees, ZERO failures.  <code>buildIndex</code>'s scan also passed (the idx run was written).</li>
-<li>RSS timeline (0.3 s sampling, anon column): flat ~35 MB through the 200 s transfer, flat through the ~130 s index build, ~48 MB through the first ~40 s of checkout, then 486 MB → 1 747 MB in the last ~5 s ending at the throw — the blow-up and the bad parse are one event (suspect: a corrupt record size → <code>io.buf(size*4+256)</code> giant alloc → garbled resolve → <code>git.tree</code> refuses).</li>
+<li>RSS timeline (0.3 s sampling, anon column): flat <del>35 MB through the 200 s transfer, flat through the </del>130 s index build, <del>48 MB through the first </del>40 s of checkout, then 486 MB → 1 747 MB in the last ~5 s ending at the throw — the blow-up and the bad parse are one event (suspect: a corrupt record size → <code>io.buf(size*4+256)</code> giant alloc → garbled resolve → <code>git.tree</code> refuses).</li>
 <li>Locus to start from: be/shared/store.js <code>getObject</code>/<code>readTree</code> resolve path (the Buf sizing off <code>pk.size</code>), the JABC pack cursor state (<code>pk.seek/resolve</code> reuse across ~10^5 calls), and jab cont.cpp <code>_pack_next/_pack_size</code> — note <a href="../JAB/JAB-007.html">JAB-007</a>'s Buf <code>| 0</code> int32 cursors: offsets/watermarks past 2^31 are NOT in play here (log is 698 MB), but the same narrowing pattern in per-record math is a candidate.</li>
 <li>Fixture recipe (cheap to rebuild, no re-download): <code>git clone --mirror https://github.com/torvalds/linux.git</code> ONCE, then <code>git clone --bare --single-branch --branch v3.0 &lt;mirror&gt; medium.git; git -C medium.git update-ref refs/heads/master 02f8c6aee8df…; git -C medium.git symbolic-ref HEAD refs/heads/master</code>.</li>
 </ul>
@@ -46,9 +55,13 @@ A <code>jab get</code> clone of a linux-v3.0-scale repo (698 MB pack, 2.06 M obj
 </ul>
 <div class="footer">
 ❧
-<a href="/feed.rss">RSS feed</a> ❧
-<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
-<a href="https://github.com/gritzko/jab">JAB</a>
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
 ❧
 </div>
 </body>

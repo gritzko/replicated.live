@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORK-014: work view post-click repaint is stale — the +1 post lands, the repaint shows the OLD counts</title>
+<meta property="og:title" content="WORK-014: work view post-click repaint is stale — the +1 post lands, the repaint shows the OLD counts">
+<meta property="og:description" content="Reported by gritzko 2026-07-19, live: //ABC-021 tracks ///jab/dog/abc/ (dir-form, .be row get ///jab/dog/abc/#3e047885) and renders UNDER the abc mount; it was ahead 1. Clicking +1 posted the commit (post ?#8339157e, 23:03) — the wt's +1 vanished but the abc mount row showed NO +1 in the repaint. A FRESH jab work (orchestrator, 23:0x) renders it RIGHT: abc mount +1 23:03 #8339157e, //ABC-021 under it counter-less. The data model is correct; the pager's post-mutation repaint serves stale state.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/WORK/WORK-014.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WORK-014: work view post-click repaint is stale — the <a href="./+1.html">+1</a> post lands, the repaint shows the OLD counts</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+Reported by gritzko 2026-07-19, live: //ABC-021 tracks <code>///jab/dog/abc/</code> (dir-form, <code>.be</code> row <code>get ///jab/dog/abc/#3e047885</code>) and renders UNDER the abc mount; it was ahead 1. Clicking <code>[+1]</code> posted the commit (<code>post ?#8339157e</code>, 23:03) — the wt's <code>+1</code> vanished but the abc mount row showed NO <code>+1</code> in the repaint. A FRESH <code>jab work</code> (orchestrator, 23:0x) renders it RIGHT: abc mount <code>+1 23:03 #8339157e</code>, //ABC-021 under it counter-less. The data model is correct; the pager's post-mutation repaint serves stale state.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Fresh-render truth (verified): the post wrote through to the tracked worktree's log — nodeTip(abc) (wtlog curTip, work.js:213) = 8339157e; mount ahbeh = tip vs parent's de-jure pin (:662-664) → <code>+1</code>; the dir-form tracker leg compares wt.sha vs nodeTip(mount) → in sync, no counter. All correct when computed cold.</li>
+<li>The incident is therefore in the CLICK → repaint path: after an O mutation (<a href="./+1.html">+1</a> bare post in //ABC-021's context) the pager repainted counts that neither showed abc's new <code>+1</code> nor matched the fresh render.</li>
+<li>Suspects, in order: (a) the view is not RE-DRIVEN after a mutation O click — old hunks repaint; (b) it re-drives but <code>registry()</code> memos (keepers/ancs/metas/grafs Maps, work.js:101-150) or graf idx state are captured per pager process and serve pre-post data; (c) wtlog/keeper reads cached below (shared/wtlog.js, store open) in the long-lived pager process.</li>
+<li>Related ground: <a href="/todo/WORK/WORK-002.html">WORK-002</a> (mutation clicks run in the row's context, landed), <a href="/todo/WORK/WORK-004.html">WORK-004</a> (<a href="./+N.html">+N</a>/<a href="./-N.html">-N</a> mint bare post/get), WORK-004's post-click behavior; <a href="/todo/BRO/BRO-035.html">BRO-035</a> (streaming bro / resident producer) may own the long-term repaint story — this ticket wants the minimal correct-now fix.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>After a <code>[+N]</code>/<code>[-N]</code> mutation click succeeds, the repainted work view equals a fresh <code>jab work</code> of the new state: the poster wt's counter clears AND the tracked mount's counter appears in the SAME repaint.</li>
+<li>Establish which suspect (a)/(b)/(c) it is and record it in Design decisions before fixing; fix at that one seam.</li>
+<li>Red-first pty repro: fixture mount + tracker ahead 1 → click <code>[+1]</code> → assert the repaint shows the mount's <code>+1</code> and the wt's cleared counter (today: stale, pinned red).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Rulings in force: verify through the real UI path (pty), context only changes by navigation, no VC ops by the worker (the pty fixture may post inside its OWN sandbox trees only).</li>
+<li>Counts keep flowing through the WORK-011 graf-backed registry; if the fix is &quot;rebuild the registry per drive&quot;, show the pty flip proves it and graf/parity stays green.</li>
+<li>Do not touch the WORK-013 mint-side lines (nav/navLink :646/:666, wtSpans :530/:544) — a sibling worker owns them; coordinate, expect weaves.</li>
+<li>Overlaps none of the landed WORK-012 logic (WHICH shas compare) — this is WHEN they are recomputed.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Could NOT reproduce the stale repaint on WORK tip #b4ec4c47 with the working jab (~/bin/jab, jsrc-scan). The re-drive path is correct — see Blockers for the seam analysis.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> red pty fixture built (scratchpad): mount <code>sub</code> pinned at C0, tracker //SUB-1 dir-form ahead 1; click <a href="./+1.html">+1</a> -&gt; post writes through to sub/.be/wtlog. Comes up GREEN, not red: the repaint shows sub <code>+1</code> and //SUB-1 cleared, == fresh render, deterministic over 3 runs.</li>
+<li class="done"><input type="checkbox" checked disabled> seam analysis: (a) DISPROVEN — the O mutation click IS re-driven: <em>mouse -&gt; </em>actSpell (post in verbs/ =&gt; mutation) -&gt; _refresh -&gt; driveSpell(&quot;work&quot;) re-runs emitForest fresh. (b) DISPROVEN — registry() is fresh per drive; no module-level caches in store/graf/idxmaint/wtlog. (c) DISPROVEN — store.open/wtlog.open re-read disk each drive; the posted commit PRE-EXISTS in the shard keeper (a tracker can only be &quot;ahead&quot; of a commit already walkable in its shard), so no keeper/graf staleness can blank the mount.</li>
+<li class="open"><input type="checkbox" disabled> fix — NONE APPLIED: no defect reproduced to fix.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The &quot;jab is ASAN&quot; binary (beagle/build/bin/jab) is STALE: pre-jsrc-rename (scans be/), renders a broken forest (missing rows, wrong sha) — not a valid test binary. The only working binary is ~/bin/jab (jsrc-scan; view/pinahbeh/graf all pass).</li>
+<li>Need from orchestrator/gritzko: the EXACT jab binary + rev the incident used, or a reproducing state. The stale repaint may be a native artifact of the stale ASAN build, or already fixed at WORK tip. No JS fix invented for a non-repro.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>No code change. Worktree left clean (jab diff empty).</li>
+<li>Investigation only; awaiting a reproducing case.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

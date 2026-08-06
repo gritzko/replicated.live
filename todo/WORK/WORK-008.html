@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORK-008: work view post mints the ticket's status mark into the message</title>
+<meta property="og:title" content="WORK-008: work view post mints the ticket's status mark into the message">
+<meta property="og:description" content="Reported by gritzko 2026-07-19. The post button mints post '&lt;ticket title&gt;' where title = the ticket page's RAW first header line (views/work/work.js:338 → views/todo/todo.js:116 pageTitle, #+padding stripped only), so the status mark leaks into the commit message: post 'WORK-004 OPEN: work view — …'. - Mint site: work.js:429 SPELL.mintOspell(ctx, &quot;post '&quot; + title + &quot;'&quot;). - todo.js:127 headerMark already parses the mark grammar — an UPPERCASE … word either side of the colon (KEY MARK: title and KEY: MARK title both live on the board).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/WORK/WORK-008.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WORK-008: work view <a href="./post.html">post</a> mints the ticket's status mark into the message</h1>
+<div>
+<p>
+Now: OPEN Sev: LOW
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Reported by gritzko 2026-07-19. The <code>[post]</code> button mints <code>post '&lt;ticket title&gt;'</code> where title = the ticket page's RAW first header line (views/work/work.js:338 → views/todo/todo.js:116 <code>pageTitle</code>, <code>#</code>+padding stripped only), so the status mark leaks into the commit message: <code>post 'WORK-004 [OPEN]: work view — …'</code>.
+</p>
+<ul>
+<li>Mint site: work.js:429 <code>SPELL.mintOspell(ctx, &quot;post '&quot; + title + &quot;'&quot;)</code>.</li>
+<li>todo.js:127 <code>headerMark</code> already parses the mark grammar — an UPPERCASE <code>[…]</code> word either side of the colon (<code>KEY [MARK]: title</code> and <code>KEY: [MARK] title</code> both live on the board).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Regex the <code>[OPEN]</code>/<code>[HIGH]</code>/<code>[MED]</code>/<code>[LOW]</code>/<code>[DONE]</code>/<code>[DONT]</code>/<code>[STALE]</code> status token out of the minted title — everything before the first ':' loses the mark, so the message is <code>WORK-004: work view — …</code> (the meta/work.mkd commit convention).
+</p>
+<h3>Constraints</h3>
+<ul>
+<li>Fix at the work-view title consumer, not inside <code>pageTitle</code> (the todo board reads the mark separately via <code>headerMark</code>); reuse/share the todo.js mark grammar rather than a second regex if cheap.</li>
+<li>Handle both mark placements around the colon; a markless title passes through unchanged.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>ared grammar: refactored todo.headerMark to a markSpan() helper;</li>
+</ul>
+<p>
+  added todo.stripMark(key,title) beside it, exported for work.js.
+</p>
+<ul>
+<li>rip at ticketTitle() (the work.js pageTitle consumer), NOT in</li>
+</ul>
+<p>
+  pageTitle; board still marks via headerMark. Both placements + colon-space normalized; markless title passes through unchanged.
+</p>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> red: view/unit case pins the minted spell for a marked ticket header (both placements)</li>
+<li class="done"><input type="checkbox" checked disabled> strip the mark before the first ':' at the work.js title seam; green</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<p>
+Fixed. work.js ticketTitle now calls todo.stripMark; grammar shared via markSpan (headerMark + stripMark). Red-then-green verified. Files: views/todo/todo.js, views/work/work.js, test/work/view/{check.js,run.sh}. Suggested commit: WORK-008: strip status mark from work <a href="./post.html">post</a> title
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

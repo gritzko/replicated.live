@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PATCH-007</title>
+<title>PATCH-007: whole-tree be patch absorbing a commit that bumps TWO sub gitlinks collides on the ULOG timestamp → ULOGCLOCK → spurious &quot;failed &lt;2nd sub&gt;&quot;</title>
+<meta property="og:title" content="PATCH-007: whole-tree be patch absorbing a commit that bumps TWO sub gitlinks collides on the ULOG timestamp → ULOGCLOCK → spurious &quot;failed &lt;2nd sub&gt;&quot;">
+<meta property="og:description" content="A be patch be://spot/journal?main! that absorbs a journal commit moving MORE THAN ONE sub gitlink (here be AND beagle in the same commit) staged each put &lt;sub&gt;#&lt;pin&gt; provenance row with the SAME st-&gt;ts. ULOG requires strictly-increasing ts (rec-&gt;ts &lt;= lastts → ULOGCLOCK, dog/ULOG.c:641), so the first put (be) landed and advanced the tail, the second (beagle) collided → ULOGCLOCK → emitstatus(&quot;failed&quot;, &quot;beagle&quot;) → failed=1 / PATCHCFLCT / BEDOGEXIT. Presented as &quot;failed beagle&quot; with content-conflict=0 (no real conflict). The earlier object not found 8a1f8413 line was a stale-probe red herring. Method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PATCH/PATCH-007.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,39 +15,40 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>PATCH-007 <a href="./HIGH.html">HIGH</a>: whole-tree <code>be patch</code> absorbing a commit that bumps TWO sub gitlinks collides on the ULOG timestamp → ULOGCLOCK → spurious &quot;failed &lt;2nd sub&gt;&quot;</h1>
+<h1>PATCH-007: whole-tree <code>be patch</code> absorbing a commit that bumps TWO sub gitlinks collides on the ULOG timestamp → ULOGCLOCK → spurious &quot;failed &lt;2nd sub&gt;&quot;</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 A <code>be patch be://spot/journal?main!</code> that absorbs a journal commit moving MORE THAN ONE sub gitlink (here <code>be</code> AND <code>beagle</code> in the same commit) staged each <code>put &lt;sub&gt;#&lt;pin&gt;</code> provenance row with the SAME <code>st-&gt;ts</code>. ULOG requires strictly-increasing ts (<code>rec-&gt;ts &lt;= last_ts → ULOGCLOCK</code>, <code>dog/ULOG.c:641</code>), so the first put (<code>be</code>) landed and advanced the tail, the second (<code>beagle</code>) collided → <code>ULOGCLOCK</code> → <code>emit_status(&quot;failed&quot;, &quot;beagle&quot;)</code> → <code>failed=1</code> / <code>PATCHCFLCT</code> / <code>BEDOGEXIT</code>. Presented as &quot;failed beagle&quot; with <code>content-conflict=0</code> (no real conflict). The earlier <code>object not found 8a1f8413</code> line was a stale-probe red herring. Method <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Repro (live): clone journal, <code>be patch be://spot/journal?main!</code> → <code>applied be</code>,<p>
-<code>failed beagle</code>, <code>failed=1</code>, PATCHCFLCT — where the absorbed spot commit (<code>46f8ea42#bump be-&gt;… beagle-&gt;…</code>) moves both gitlinks. Instrumented proof: <code>DBG PATCH gitlink-put 'beagle' … ao=ULOGCLOCK</code>.
-</p>
-</li>
-<li>Root: <code>sniff/PATCH.c</code> gitlink-put arm of <code>patch_walk_inner</code> reused <code>st-&gt;ts</code> for every<p>
-gitlink put row; the 2nd+ collide against the just-advanced ULOG tail.
-</p>
-</li>
+<li>Repro (live): clone journal, <code>be patch be://spot/journal?main!</code> → <code>applied be</code>, <code>failed beagle</code>, <code>failed=1</code>, PATCHCFLCT — where the absorbed spot commit (<code>46f8ea42#bump be-&gt;… beagle-&gt;…</code>) moves both gitlinks. Instrumented proof: <code>DBG PATCH gitlink-put 'beagle' … ao=ULOGCLOCK</code>.</li>
+<li>Root: <code>sniff/PATCH.c</code> gitlink-put arm of <code>patch_walk_inner</code> reused <code>st-&gt;ts</code> for every gitlink put row; the 2nd+ collide against the just-advanced ULOG tail.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>A whole-tree patch absorbing a commit that bumps N sub gitlinks stages all N put<p>
-rows with strictly-increasing ts; no ULOGCLOCK, no spurious &quot;failed&quot;.
-</p>
-</li>
+<li>A whole-tree patch absorbing a commit that bumps N sub gitlinks stages all N put rows with strictly-increasing ts; no ULOGCLOCK, no spurious &quot;failed&quot;.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li><code>9accc3a4</code> (2026-06-26) — REPRODUCED on current trunk and FIXED.<p>
-<code>sniff/PATCH.c</code> gitlink-put arm: each gitlink put now takes its OWN strictly-greater ts via <code>SNIFFAtNow</code> (tail+1) instead of reusing <code>st-&gt;ts</code> (mirrors the PATCH-001 final provenance row).  Repro <code>test/patch/40-multi-sub-gitlink-bump</code> (two subs cha+chb bumped in ONE absorbed commit): RED <code>applied cha</code>/<code>failed chb</code>/PATCHCFLCT (2nd put ULOGCLOCK) → GREEN <code>take-theirs=2 failed=0</code>, both subs advanced, both put rows staged with distinct ts.  ctest 351/351.
-</p>
-</li>
-<li>NOTE: this commit ALSO carries the PATCH-006 fix CODE — the prior<p>
-<code>9ed6f41b</code> (PATCH-006) posted SELECTIVELY (only the staged test files, not the modified tracked sources), so the keep-ours fix landed here. Lesson: <code>be post</code> after <code>be put</code>-ing some files is selective; stage ALL changed files before posting.
-</p>
-</li>
+<li><code>9accc3a4</code> (2026-06-26) — REPRODUCED on current trunk and FIXED. <code>sniff/PATCH.c</code> gitlink-put arm: each gitlink put now takes its OWN strictly-greater ts via <code>SNIFFAtNow</code> (tail+1) instead of reusing <code>st-&gt;ts</code> (mirrors the PATCH-001 final provenance row).  Repro <code>test/patch/40-multi-sub-gitlink-bump</code> (two subs cha+chb bumped in ONE absorbed commit): RED <code>applied cha</code>/<code>failed chb</code>/PATCHCFLCT (2nd put ULOGCLOCK) → GREEN <code>take-theirs=2 failed=0</code>, both subs advanced, both put rows staged with distinct ts.  ctest 351/351.</li>
+<li>NOTE: this commit ALSO carries the PATCH-006 fix CODE — the prior <code>9ed6f41b</code> (PATCH-006) posted SELECTIVELY (only the staged test files, not the modified tracked sources), so the keep-ours fix landed here. Lesson: <code>be post</code> after <code>be put</code>-ing some files is selective; stage ALL changed files before posting.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

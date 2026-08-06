@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SUBS-009</title>
+<title>SUBS-009: no be put path to add a brand-new submodule gitlink (PARTLY LANDED)</title>
+<meta property="og:title" content="SUBS-009: no be put path to add a brand-new submodule gitlink (PARTLY LANDED)">
+<meta property="og:description" content="LOW — PARTLY LANDED 50724d9a (2026-06-06). A design pass found two unresolved forks blocking true git submodule add parity, so the ticket's sanctioned fallback shipped and the full add escalated to SUBS-013: - URL source unrecoverable — a mounted-but-untracked sub's row-0 .be anchor is file:/…/.be//?/&lt;title&gt;#&lt;sha&gt; (a local shard pointer, not the portable upstream .gitmodules needs); auto-writing it would break a fresh clone elsewhere. - Pin grammar taken — be put &lt;sub&gt;#&lt;sha&gt; is the move-form, so a pin slot is a CLI fork.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/SUBS/SUBS-009.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,24 +16,23 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>SUBS-009: no <code>be put</code> path to add a brand-new submodule gitlink (PARTLY LANDED)</h1>
+<div>
 <p>
-<strong>LOW — PARTLY LANDED <code>50724d9a</code> (2026-06-06).</strong>  A design pass found two unresolved forks blocking true <code>git submodule add</code> parity, so the ticket's sanctioned fallback shipped and the full add escalated to <a href="">SUBS-013</a>:
+Now: DONE
+</p>
+</div>
+<p>
+<strong>LOW — PARTLY LANDED <code>50724d9a</code> (2026-06-06).</strong>  A design pass found two unresolved forks blocking true <code>git submodule add</code> parity, so the ticket's sanctioned fallback shipped and the full add escalated to <a href="./SUBS-013.html">SUBS-013</a>:
 </p>
 <ul>
-<li><strong>URL source unrecoverable</strong> — a mounted-but-untracked sub's row-0 <code>.be</code><p>
-anchor is <code>file:/…/.be//?/&lt;title&gt;#&lt;sha&gt;</code> (a <strong>local shard pointer</strong>, not the portable upstream <code>.gitmodules</code> needs); auto-writing it would break a fresh clone elsewhere.
-</p>
-</li>
-<li><strong>Pin grammar taken</strong> — <code>be put &lt;sub&gt;#&lt;sha&gt;</code> is the move-form, so a pin slot<p>
-is a CLI fork.
-</p>
-</li>
+<li><strong>URL source unrecoverable</strong> — a mounted-but-untracked sub's row-0 <code>.be</code> anchor is <code>file:/…/.be//?/&lt;title&gt;#&lt;sha&gt;</code> (a <strong>local shard pointer</strong>, not the portable upstream <code>.gitmodules</code> needs); auto-writing it would break a fresh clone elsewhere.</li>
+<li><strong>Pin grammar taken</strong> — <code>be put &lt;sub&gt;#&lt;sha&gt;</code> is the move-form, so a pin slot is a CLI fork.</li>
 </ul>
 <p>
-<strong>Landed:</strong> <code>sniff/PUT.c</code> <code>PUTStage</code> now detects a sub-add candidate (a dir that is not a mount and is either declared in <code>.gitmodules</code> via <code>SNIFFSubsParseFind</code> or holds a child <code>.be</code>) and <strong>refuses with an actionable message</strong> naming the <code>sniff sub-mount ./&lt;sub&gt;#&lt;pin&gt;</code> step, instead of the misleading &quot;does not exist — skipped&quot; / PUTNONE.  A trailing-slash arg still falls through to dir-form; a plain untracked dir still gets the original message (see <a href="">SUBS-014</a>).  Repro <code>test/put/11-sub-add-refusal</code> added.  The existing declare-<code>.gitmodules</code> + <code>sniff sub-mount</code> + <code>be put</code>-gitlink flow already records both the <code>160000</code> gitlink and the <code>.gitmodules</code> section end-to-end (post/15).
+<strong>Landed:</strong> <code>sniff/PUT.c</code> <code>PUTStage</code> now detects a sub-add candidate (a dir that is not a mount and is either declared in <code>.gitmodules</code> via <code>SNIFFSubsParseFind</code> or holds a child <code>.be</code>) and <strong>refuses with an actionable message</strong> naming the <code>sniff sub-mount ./&lt;sub&gt;#&lt;pin&gt;</code> step, instead of the misleading &quot;does not exist — skipped&quot; / PUTNONE.  A trailing-slash arg still falls through to dir-form; a plain untracked dir still gets the original message (see <a href="./SUBS-014.html">SUBS-014</a>).  Repro <code>test/put/11-sub-add-refusal</code> added.  The existing declare-<code>.gitmodules</code> + <code>sniff sub-mount</code> + <code>be put</code>-gitlink flow already records both the <code>160000</code> gitlink and the <code>.gitmodules</code> section end-to-end (post/15).
 </p>
 <p>
-<strong>Remaining (→ <a href="">SUBS-013</a>):</strong> the full auto-add — choose a URL source and a pin grammar, then stage gitlink + synth <code>.gitmodules</code> from a single <code>be put</code>.
+<strong>Remaining (→ <a href="./SUBS-013.html">SUBS-013</a>):</strong> the full auto-add — choose a URL source and a pin grammar, then stage gitlink + synth <code>.gitmodules</code> from a single <code>be put</code>.
 </p>
 <p>
 <strong>LOW (feature gap).</strong>  A freshly-mounted submodule that is not yet a <code>160000</code> gitlink in the parent baseline cannot be added through <code>be put</code>.  <code>be put vendor/sub2</code> on such a path returns <code>put: vendor/sub2 does not exist — skipped</code> / <code>no eligible paths</code> (PUTNONE/206); the parent sees the dir as unknown and skips it.  There is no <code>git submodule add</code> parity.
@@ -37,10 +40,7 @@ is a CLI fork.
 <h2>Repro</h2>
 <ol>
 <li><code>be get &lt;parent&gt;?master</code>.</li>
-<li>Mount a fresh sub at <code>vendor/sub2</code> (no <code>.gitmodules</code> entry, no <code>160000</code><p>
-entry in the parent tree).
-</p>
-</li>
+<li>Mount a fresh sub at <code>vendor/sub2</code> (no <code>.gitmodules</code> entry, no <code>160000</code> entry in the parent tree).</li>
 <li><code>be put vendor/sub2</code> → PUTNONE; nothing staged.</li>
 </ol>
 <h2>Expected</h2>
@@ -59,5 +59,16 @@ Detect a mounted-but-untracked sub dir (a child <code>.be</code> anchor with no 
 <p>
 <code>test/put/10-sub-gitlink-bump</code> covers the <strong>existing</strong>-gitlink bump (passing); sub-add stays a documented gap until the flow is designed.
 </p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

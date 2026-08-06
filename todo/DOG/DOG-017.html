@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DOG-017</title>
+<title>DOG-017: WEAVEMerge global qsort is ~half the merge; bucket by anchor instead</title>
+<meta property="og:title" content="DOG-017: WEAVEMerge global qsort is ~half the merge; bucket by anchor instead">
+<meta property="og:description" content="Retroactive ticket (2026-07-07 libdog WEAVE perf session). After DIS-047 removed the Pass-2 remover-union quadratic, a three-agent audit + phase profile of WEAVEMerge (libdog WEAVE.c) showed the RGA-linearise $sort(sks, rgacmp) was still ~49% of merge wall time (musl smoothsort + an indirect call per compare; 79.9 ms of 164 ms at N=10k lines, -O2), plus ~19% more in the per-pop gmap hash probe of PUSHCHILDREN. The emit DFS never needs a global order — only each anchor's sibling group contiguous and internally (cidx DESC, ord ASC)-sorted — so the sort is replaceable by O(nu) bucketing with byte-identical output. Also the n·log n term was the main superlinear creep behind DIS-047's WEAVE04 ratio gate (the gate itself proved VM-flaky on mac CI and was disabled the same session).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DOG/DOG-017.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,55 +15,36 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>DOG-017 <a href="./MED.html">MED</a>: WEAVEMerge global qsort is ~half the merge; bucket by anchor instead</h1>
+<h1>DOG-017: WEAVEMerge global qsort is ~half the merge; bucket by anchor instead</h1>
+<div>
 <p>
-Retroactive ticket (2026-07-07 libdog WEAVE perf session). After <a href="../DIS/DIS-047.html">DIS-047</a> removed the Pass-2 remover-union quadratic, a three-agent audit + phase profile of <code>WEAVEMerge</code> (libdog <code>WEAVE.c</code>) showed the RGA-linearise <code>$sort(sks, rga_cmp)</code> was still ~49% of merge wall time (musl smoothsort + an indirect call per compare; 79.9 ms of 164 ms at N=10k lines, -O2), plus ~19% more in the per-pop <code>gmap</code> hash probe of <code>PUSH_CHILDREN</code>. The emit DFS never needs a global order — only each anchor's sibling group contiguous and internally <code>(cidx DESC, ord ASC)</code>-sorted — so the sort is replaceable by O(nu) bucketing with byte-identical output. Also the n·log n term was the main superlinear creep behind <a href="../DIS/DIS-047.html">DIS-047</a>'s WEAVE04 ratio gate (the gate itself proved VM-flaky on mac CI and was disabled the same session).
+Now: OPEN Sev: MED
+</p>
+</div>
+<p>
+Retroactive ticket (2026-07-07 libdog WEAVE perf session). After <a href="../DIS/DIS-047.html">DIS-047</a> removed the Pass-2 remover-union quadratic, a three-agent audit + phase profile of <code>WEAVEMerge</code> (libdog <code>WEAVE.c</code>) showed the RGA-linearise <code>$sort(sks, rga_cmp)</code> was still <del>49% of merge wall time (musl smoothsort + an indirect call per compare; 79.9 ms of 164 ms at N=10k lines, -O2), plus </del>19% more in the per-pop <code>gmap</code> hash probe of <code>PUSH_CHILDREN</code>. The emit DFS never needs a global order — only each anchor's sibling group contiguous and internally <code>(cidx DESC, ord ASC)</code>-sorted — so the sort is replaceable by O(nu) bucketing with byte-identical output. Also the n·log n term was the main superlinear creep behind <a href="../DIS/DIS-047.html">DIS-047</a>'s WEAVE04 ratio gate (the gate itself proved VM-flaky on mac CI and was disabled the same session).
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>WEAVE.c</code> (libdog): <code>rgakey</code> qsort + <code>gmap</code> group map, old <code>:819-842</code>; DFS<p>
-probe per pop in <code>PUSH_CHILDREN</code>, old <code>:869-887</code>. Bench <code>test/WEAVE04.c</code>.
-</p>
-</li>
-<li>Measured (-O2, N=10k, nu=154k union tokens): qsort 48.8%, DFS push/pop 18.7%,<p>
-decode 8.1%, pass1 8.0%, emit 6.6%, pass2 4.7%; merge grows 5.5x for 4x work.
-</p>
-</li>
-<li>Sibling groups are almost always 1-2 tokens; group-vs-group order is unused<p>
-by the DFS, so a global (anchor, cidx, ord) sort does O(n log n) wasted work.
-</p>
-</li>
+<li><code>WEAVE.c</code> (libdog): <code>rgakey</code> qsort + <code>gmap</code> group map, old <code>:819-842</code>; DFS probe per pop in <code>PUSH_CHILDREN</code>, old <code>:869-887</code>. Bench <code>test/WEAVE04.c</code>.</li>
+<li>Measured (-O2, N=10k, nu=154k union tokens): qsort 48.8%, DFS push/pop 18.7%, decode 8.1%, pass1 8.0%, emit 6.6%, pass2 4.7%; merge grows 5.5x for 4x work.</li>
+<li>Sibling groups are almost always 1-2 tokens; group-vs-group order is unused by the DFS, so a global (anchor, cidx, ord) sort does O(n log n) wasted work.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Replace the global sort: hash-bucket tokens by anchor, insertion-sort within<p>
-each (tiny) sibling group; resolve each group's parent ONCE so the DFS pushes children by direct index (no hash probe per pop).
-</p>
-</li>
-<li>Byte-identical merge output (DIS-044 tie-break preserved verbatim); all tests<p>
-green; ~2x+ faster WEAVEMerge on the WEAVE04 workload.
-</p>
-</li>
+<li>Replace the global sort: hash-bucket tokens by anchor, insertion-sort within each (tiny) sibling group; resolve each group's parent ONCE so the DFS pushes children by direct index (no hash probe per pop).</li>
+<li>Byte-identical merge output (DIS-044 tie-break preserved verbatim); all tests green; ~2x+ faster WEAVEMerge on the WEAVE04 workload.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>libdog ABC style; no wire-format change; no behaviour change under idh/anchor<p>
-hash collisions (<code>seen</code> guard semantics kept, stack stays <code>2*nu+1</code>).
-</p>
-</li>
+<li>libdog ABC style; no wire-format change; no behaviour change under idh/anchor hash collisions (<code>seen</code> guard semantics kept, stack stays <code>2*nu+1</code>).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Bucketing is count → prefix-sum → insertion-scatter into a flat <code>gtok[]</code>;<p>
-per-token-parent <code>cstart/ccnt</code> arrays replace per-pop <code>gmap</code> probes (ROOT group kept addressable via a colliding idh, as before).
-</p>
-</li>
-<li>Proof of equivalence: old <code>WEAVEMerge</code> from git HEAD symbol-renamed via<p>
-objcopy, linked beside the new one; 96 scenarios x 6 merges (both arg orders, chained re-merges, deletes, N=1..5000) memcmp'd — 0 mismatches.
-</p>
-</li>
+<li>Bucketing is count → prefix-sum → insertion-scatter into a flat <code>gtok[]</code>; per-token-parent <code>cstart/ccnt</code> arrays replace per-pop <code>gmap</code> probes (ROOT group kept addressable via a colliding idh, as before).</li>
+<li>Proof of equivalence: old <code>WEAVEMerge</code> from git HEAD symbol-renamed via objcopy, linked beside the new one; 96 scenarios x 6 merges (both arg orders, chained re-merges, deletes, N=1..5000) memcmp'd — 0 mismatches.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -71,22 +56,24 @@ objcopy, linked beside the new one; 96 scenarios x 6 merges (both arg orders, ch
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Remaining superlinear creep is u64map cache misses at N&gt;&gt;10k, not compute;<p>
-interleaved key/val slots would help — that is <a href="DOG-013.html">DOG-013</a> T2 (u64map→HASHx) territory. wmerge_commits O(C^2) tail scan is a separate follow-up candidate.
-</p>
-</li>
-<li>Test/bench builds run -O0 (<code>TEST_CXX_FLAGS &quot;-g&quot;</code>, empty CMAKE_BUILD_TYPE), so<p>
-CI times an unshipped build; WEAVE04's ratio gate is disabled pending that.
-</p>
-</li>
+<li>Remaining superlinear creep is u64map cache misses at N&gt;&gt;10k, not compute; interleaved key/val slots would help — that is <a href="DOG-013.html">DOG-013</a> T2 (u64map→HASHx) territory. wmerge_commits O(C^2) tail scan is a separate follow-up candidate.</li>
+<li>Test/bench builds run -O0 (<code>TEST_CXX_FLAGS &quot;-g&quot;</code>, empty CMAKE_BUILD_TYPE), so CI times an unshipped build; WEAVE04's ratio gate is disabled pending that.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>Implemented + verified 2026-07-07; sits uncommitted in the libdog working<p>
-tree together with the WEAVE04 gate disable. Hashlet TBD on landing.
-</p>
-</li>
+<li>Implemented + verified 2026-07-07; sits uncommitted in the libdog working tree together with the WEAVE04 gate disable. Hashlet TBD on landing.</li>
 <li>Audit 2026-07-07: confirmed — <code>~/src/libdog</code> has <code> M WEAVE.c</code> (uncommitted; <code>rga_cmp</code>/<code>$sort(sks…)</code> absent in the worktree copy, still present in HEAD <code>79612854</code>); the WEAVE04 ratio-gate disable is ALREADY landed (commented out at <code>test/WEAVE04.c:135</code>). Only T5 (land) remains.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

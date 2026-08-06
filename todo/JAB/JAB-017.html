@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-017: Buf.grow's grow hook is dead — growing a mapped Buf silently severs its file backing</title>
+<meta property="og:title" content="JAB-017: Buf.grow's grow hook is dead — growing a mapped Buf silently severs its file backing">
+<meta property="og:description" content="Buf.grow (jab/buf.cpp:100-108) has an if (this.grow) mapped-backing branch that nothing ever installs (grep across jab/.cpp, test/, jsrc/ — cont.cpp's P.grow is the unrelated PACK scratch grower), so growing an io.ram/io.mmap(&quot;rw&quot;) Buf falls into the heap-copy path: a fresh Uint8Array replaces the mapping and later msync() no longer flushes the file. API.md:118 promises &quot;io.buf/ram: realloc-or-mremap&quot;, which the code cannot do. Found in the 2026-07-24 jab/ review; sibling of the JAB-006 contract gaps.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-017.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-017: Buf.grow's <code>_grow</code> hook is dead — growing a mapped Buf silently severs its file backing</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
+<p>
+<code>Buf.grow</code> (jab/buf.cpp:100-108) has an <code>if (this._grow)</code> mapped-backing branch that nothing ever installs (grep across jab/*.cpp, test/, jsrc/ — cont.cpp's <code>P._grow</code> is the unrelated PACK scratch grower), so growing an <code>io.ram</code>/<code>io.mmap(&quot;rw&quot;)</code> Buf falls into the heap-copy path: a fresh <code>Uint8Array</code> replaces the mapping and later <code>msync()</code> no longer flushes the file. API.md:118 promises &quot;io.buf/ram: realloc-or-mremap&quot;, which the code cannot do. Found in the 2026-07-24 jab/ review; sibling of the <a href="./JAB-006.html">JAB-006</a> contract gaps.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Latent today (no caller grows a mapped Buf yet), but the failure is silent data loss the moment one does.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Either wire <code>_grow</code> for mapped backings (mremap/ftruncate path) or make <code>grow</code> on a mapped Buf throw; API.md must match the ruling.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first: grow an mmap-backed Buf, write, msync, reopen — assert bytes hit the file (or assert the throw).</li>
+<li>Depends on the <a href="./JAB-006.html">JAB-006</a> implement-vs-de-document ruling; land consistently with it.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending — wire vs forbid)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: grow-then-msync on a mapped Buf.</li>
+<li class="open"><input type="checkbox" disabled> Implement or forbid; align API.md:118.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Gated on the same API ruling as <a href="./JAB-006.html">JAB-006</a>.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

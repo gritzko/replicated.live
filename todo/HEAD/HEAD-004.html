@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>HEAD-004</title>
+<title>HEAD-004: be head be:// fetches subs from .gitmodules URL, not parent</title>
+<meta property="og:title" content="HEAD-004: be head be:// fetches subs from .gitmodules URL, not parent">
+<meta property="og:description" content="For a be:// (beagle-scheme) remote, be head recursing into a submodule goes STRAIGHT to the sub's declared .gitmodules URL instead of fetching the sub from the SAME parent source first. be head be://localhost/beagle reached into abc and tried https://github.com/gritzko/libabc.git over ssh → github.com:22 refused → WIREUNRCH, aborting the whole peek. A beagle parent keeps every sub in its own shard (Submodules/submodule-parent-source-fetch), so the parent source MUST be the primary candidate; the declared URL is a fallback used only when the parent has no copy. be get already forwards --source (GET-011); HEAD's recursion does not. Relates to HEAD-003.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/HEAD/HEAD-004.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,76 +16,62 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>HEAD-004: <code>be head be://</code> fetches subs from <code>.gitmodules</code> URL, not parent</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 For a <code>be://</code> (beagle-scheme) remote, <code>be head</code> recursing into a submodule goes STRAIGHT to the sub's declared <code>.gitmodules</code> URL instead of fetching the sub from the SAME parent source first. <code>be head be://localhost/beagle</code> reached into <code>abc</code> and tried <code>https://github.com/gritzko/libabc.git</code> over ssh → <code>github.com:22</code> refused → <code>WIREUNRCH</code>, aborting the whole peek. A beagle parent keeps every sub in its own shard (<a href="../../wiki/Submodules.html">Submodules</a>/<a href="./submodule-parent-source-fetch.html">submodule-parent-source-fetch</a>), so the parent source MUST be the primary candidate; the declared URL is a fallback used only when the parent has no copy. <code>be get</code> already forwards <code>--source</code> (GET-011); HEAD's recursion does not. Relates to <a href="HEAD-003.html">HEAD-003</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Repro (from <code>~/todo/DIS-045</code>): <code>be head be://localhost/beagle</code> →<p>
-<code>be: head .</code>, <code>be: head abc</code>, then <code>ssh: connect to host github.com port 22: Connection refused</code>, <code>remote https://github.com/gritzko/libabc.git is unreachable</code>, <code>Error: WIREUNRCH</code>, <code>BEDOGEXIT</code> — the peek dies on a sub fetch.
-</p>
-</li>
-<li>The sub <code>abc</code>/<code>libabc</code> lives in the parent shard; <code>be://localhost/beagle</code><p>
-can serve it. Going to github first is both wrong and fatal when offline.
-</p>
-</li>
-<li><code>be get</code> forwards the in-flight source as <code>--source &lt;src_uri&gt;</code> so sniff's<p>
-SubMount builds the PRIMARY candidate from the same remote (<code>beagle/SUBS.c:485-502</code>, GET-011). HEAD's sub recursion omits it.
-</p>
-</li>
+<li>Repro (from <code>~/todo/DIS-045</code>): <code>be head be://localhost/beagle</code> → <code>be: head .</code>, <code>be: head abc</code>, then <code>ssh: connect to host github.com port 22: Connection refused</code>, <code>remote https://github.com/gritzko/libabc.git is unreachable</code>, <code>Error: WIREUNRCH</code>, <code>BEDOGEXIT</code> — the peek dies on a sub fetch.</li>
+<li>The sub <code>abc</code>/<code>libabc</code> lives in the parent shard; <code>be://localhost/beagle</code> can serve it. Going to github first is both wrong and fatal when offline.</li>
+<li><code>be get</code> forwards the in-flight source as <code>--source &lt;src_uri&gt;</code> so sniff's SubMount builds the PRIMARY candidate from the same remote (<code>beagle/SUBS.c:485-502</code>, GET-011). HEAD's sub recursion omits it.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>be head be://&lt;parent&gt;</code> resolves each sub's pin from the PARENT source<p>
-first; the <code>.gitmodules</code> URL is tried only if the parent lacks the objects.
-</p>
-</li>
-<li>A dead declared URL (github offline) does NOT fail the peek when the parent<p>
-can serve the sub — no <code>WIREUNRCH</code> abort.
-</p>
-</li>
+<li><code>be head be://&lt;parent&gt;</code> resolves each sub's pin from the PARENT source first; the <code>.gitmodules</code> URL is tried only if the parent lacks the objects.</li>
+<li>A dead declared URL (github offline) does NOT fail the peek when the parent can serve the sub — no <code>WIREUNRCH</code> abort.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>be-scheme parents only; a git-source parent keeps git's own recursion<p>
-(the <code>--source</code> flag is omitted when empty — <code>SUBS.c:488</code>).
-</p>
-</li>
-<li>Fallback order is parent-source → declared <code>.gitmodules</code> URL, in that order;<p>
-never the reverse (<a href="./submodule-parent-source-fetch.html">submodule-parent-source-fetch</a>).
-</p>
-</li>
+<li>be-scheme parents only; a git-source parent keeps git's own recursion (the <code>--source</code> flag is omitted when empty — <code>SUBS.c:488</code>).</li>
+<li>Fallback order is parent-source → declared <code>.gitmodules</code> URL, in that order; never the reverse (<a href="./submodule-parent-source-fetch.html">submodule-parent-source-fetch</a>).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(pending) HEAD's sub recursion should forward <code>--source &lt;parent_uri&gt;</code> the<p>
-way <code>BEGetSubMount</code> does, so the read-only peek mirrors <code>be get</code>'s primary- candidate logic; confirm the head path that omits it (<code>be_recurse_capture</code> / the HEAD leg of dispatch).
-</p>
-</li>
+<li>(pending) HEAD's sub recursion should forward <code>--source &lt;parent_uri&gt;</code> the way <code>BEGetSubMount</code> does, so the read-only peek mirrors <code>be get</code>'s primary- candidate logic; confirm the head path that omits it (<code>be_recurse_capture</code> / the HEAD leg of dispatch).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Repro hermetic (WITH_SSH=ON): be-parent with a sub whose declared URL is<p>
-  dead; <code>be head be://</code> must still peek via the parent.
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Repro hermetic (WITH_SSH=ON): be-parent with a sub whose declared URL is dead; <code>be head be://</code> must still peek via the parent.</li>
 <li class="done"><input type="checkbox" checked disabled> Forward the parent source into HEAD's sub recursion; fallback on miss.</li>
 <li class="done"><input type="checkbox" checked disabled> Verify github-offline no longer aborts; declared-URL fallback still works.</li>
 <li class="done"><input type="checkbox" checked disabled> Land + ctest WITH_SSH=ON.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Needs <code>WITH_SSH=ON</code> to exercise the ssh-localhost sub path<p>
-(<a href="./build-with-ssh-not-inet.html">build-with-ssh-not-inet</a>); plain INET=OFF silently skips it.
-</p>
-</li>
+<li>Needs <code>WITH_SSH=ON</code> to exercise the ssh-localhost sub path (<a href="./build-with-ssh-not-inet.html">build-with-ssh-not-inet</a>); plain INET=OFF silently skips it.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>Landed <code>6dad6c58</code> (beagle, 2026-06-20): &quot;be head be:// peeks subs from parent first&quot; — HEAD's sub recursion tries the parent source before the declared <code>.gitmodules</code> URL.</li>
 <li>Regression kept as <code>test/head/25-sub-parent-source</code> (beagle test tree).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

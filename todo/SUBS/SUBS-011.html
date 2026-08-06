@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SUBS-011</title>
+<title>SUBS-011: search projectors (grep/spot/regex) do not descend into submodules (LANDED)</title>
+<meta property="og:title" content="SUBS-011: search projectors (grep/spot/regex) do not descend into submodules (LANDED)">
+<meta property="og:description" content="HIGH — LANDED 7d37f90f (2026-06-06). Two coupled fixes: (1) index on mount — a sub mount runs a local be get ?&lt;pin&gt; which doesn't trip the transport-gated indexers, so the sub shard had keeper.idx but no .spot.idx; new BEIndexMount (beagle/SUBS.c) forks spot get+graf get with cwd=the sub mount, called from BEGetDrainSubs after each sub checkout. (2) projector recursion — new BEProjectorSubs (beagle/BE.cli.c) enumerates mounts via BESubsHere and relays the projector into each, path-prefixed via BERelaySub; --nosub honoured. Applies to grep/spot/regex. Repro test/spot/10 off WILLFAIL. (SUBS-012 reuses the same machinery for the object/diff/history projectors.)">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/SUBS/SUBS-011.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>SUBS-011: search projectors (grep/spot/regex) do not descend into submodules (LANDED)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <strong>HIGH — LANDED <code>7d37f90f</code> (2026-06-06).</strong>  Two coupled fixes: (1) <strong>index on mount</strong> — a sub mount runs a <strong>local</strong> <code>be get ?&lt;pin&gt;</code> which doesn't trip the transport-gated indexers, so the sub shard had <code>keeper.idx</code> but no <code>.spot.idx</code>; new <code>BEIndexMount</code> (<code>beagle/SUBS.c</code>) forks <code>spot get</code>+<code>graf get</code> with cwd=the sub mount, called from <code>BEGetDrainSubs</code> after each sub checkout.  (2) <strong>projector recursion</strong> — new <code>BEProjectorSubs</code> (<code>beagle/BE.cli.c</code>) enumerates mounts via <code>BESubsHere</code> and relays the projector into each, path-prefixed via <code>BERelaySub</code>; <code>--nosub</code> honoured.  Applies to grep/spot/regex.  Repro <code>test/spot/10</code> off <code>WILL_FAIL</code>.  (SUBS-012 reuses the same machinery for the object/diff/history projectors.)
 </p>
@@ -19,34 +28,19 @@
 <strong>HIGH (feature gap — the headline of &quot;seamless interop&quot;).</strong>  Repo-wide <code>be grep:</code>, <code>be spot:</code>, <code>be regex:</code> search only the parent project's index; they never look into a mounted submodule's index.  Two coupled causes:
 </p>
 <ol>
-<li><strong><code>BEProjector</code> has zero submodule recursion</strong> (<code>beagle/BE.cli.c:557</code>).  It<p>
-resolves the owning dog (grep/spot/regex → the <code>spot</code> dog), forwards the URI + <code>--at</code>, and runs it once against the parent store.  Unlike the verb paths it never calls <code>BESubsHere</code> / <code>BERelaySub</code> / <code>BERecurseInto</code>.
-</p>
-</li>
-<li><strong>A mounted sub is never indexed.</strong>  After <code>be get</code> materialises<p>
-<code>vendor/sub</code>, the sub shard <code>.be/&lt;sub&gt;/</code> has a <code>keeper.idx</code> from the fetch but <strong>no <code>.spot.idx</code></strong> — its content was never trigram-indexed, so even a recursing search would have nothing to query.
-</p>
-</li>
+<li><strong><code>BEProjector</code> has zero submodule recursion</strong> (<code>beagle/BE.cli.c:557</code>).  It resolves the owning dog (grep/spot/regex → the <code>spot</code> dog), forwards the URI + <code>--at</code>, and runs it once against the parent store.  Unlike the verb paths it never calls <code>BESubsHere</code> / <code>BERelaySub</code> / <code>BERecurseInto</code>.</li>
+<li><strong>A mounted sub is never indexed.</strong>  After <code>be get</code> materialises <code>vendor/sub</code>, the sub shard <code>.be/&lt;sub&gt;/</code> has a <code>keeper.idx</code> from the fetch but <strong>no <code>.spot.idx</code></strong> — its content was never trigram-indexed, so even a recursing search would have nothing to query.</li>
 </ol>
 <h2>Repro</h2>
 <ol>
-<li><code>be get &lt;parent&gt;?master</code> (mounts <code>vendor/sub</code>; sub <code>core.c</code> defines<p>
-<code>sub_counter</code>, <code>sub_reset</code>, <code>sub_inc</code>).
-</p>
-</li>
+<li><code>be get &lt;parent&gt;?master</code> (mounts <code>vendor/sub</code>; sub <code>core.c</code> defines <code>sub_counter</code>, <code>sub_reset</code>, <code>sub_inc</code>).</li>
 <li><code>be grep:.c#sub_counter</code> → returns nothing (sub-only symbol).</li>
-<li><code>be grep:.c#findme</code> where the token is in BOTH parent and sub → returns<p>
-only <code>main.c</code>, never <code>vendor/sub/core.c</code> / <code>vendor/sub/helper.c</code>.
-</p>
-</li>
+<li><code>be grep:.c#findme</code> where the token is in BOTH parent and sub → returns only <code>main.c</code>, never <code>vendor/sub/core.c</code> / <code>vendor/sub/helper.c</code>.</li>
 <li><code>ls .be/sub/*.spot.idx</code> → none (sub not indexed).</li>
 </ol>
 <h2>Counter-evidence (what already works)</h2>
 <ul>
-<li><strong>Path-scoped</strong> grep into a sub file works: <code>be grep:vendor/sub/core.c#findme</code><p>
-returns <code>vendor/sub/core.c#L1 …</code> — the path-scoped form scans the named file directly (no index needed).  So the bytes are reachable; only the repo-wide index search misses them.
-</p>
-</li>
+<li><strong>Path-scoped</strong> grep into a sub file works: <code>be grep:vendor/sub/core.c#findme</code> returns <code>vendor/sub/core.c#L1 …</code> — the path-scoped form scans the named file directly (no index needed).  So the bytes are reachable; only the repo-wide index search misses them.</li>
 </ul>
 <h2>Expected</h2>
 <p>
@@ -54,14 +48,8 @@ Per the model (&quot;seamless recursive experience … grep &amp; friends look i
 </p>
 <h2>Fix sketch</h2>
 <ol>
-<li>Index sub content on mount (run the spot indexer over the checked-out sub<p>
-tree, or have <code>SNIFFSubMount</code> trigger the same <code>sniff_indexer_fanout</code> that commit uses) so each sub shard gets a <code>.spot.idx</code>.
-</p>
-</li>
-<li>Teach <code>BEProjector</code> (or a search-specific wrapper) to enumerate mounted<p>
-subs via <code>BESubsHere</code> and relay the search into each, path-prefixing hits with <code>HUNKu8sRelay</code> — mirror <code>BERelaySub</code>.  Honour <code>--nosub</code>.
-</p>
-</li>
+<li>Index sub content on mount (run the spot indexer over the checked-out sub tree, or have <code>SNIFFSubMount</code> trigger the same <code>sniff_indexer_fanout</code> that commit uses) so each sub shard gets a <code>.spot.idx</code>.</li>
+<li>Teach <code>BEProjector</code> (or a search-specific wrapper) to enumerate mounted subs via <code>BESubsHere</code> and relay the search into each, path-prefixing hits with <code>HUNKu8sRelay</code> — mirror <code>BERelaySub</code>.  Honour <code>--nosub</code>.</li>
 </ol>
 <p>
 Applies to grep, spot, and regex (all served by the <code>spot</code> dog).
@@ -70,5 +58,16 @@ Applies to grep, spot, and regex (all served by the <code>spot</code> dog).
 <p>
 <code>test/spot/10-sub-recurse-search</code> (repo-wide grep must find a sub-only symbol under <code>vendor/sub/</code>) — <code>WILL_FAIL</code> until fixed.
 </p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

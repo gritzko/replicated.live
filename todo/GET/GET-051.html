@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-051: cheap pre-discard guard in every tree update — size-check a file before taking theirs/ours over it</title>
+<meta property="og:title" content="GET-051: cheap pre-discard guard in every tree update — size-check a file before taking theirs/ours over it">
+<meta property="og:description" content="Ordered by gritzko 2026-07-19 after the /todo/STATUS/STATUS-008 data loss: classify false-cleaned dirty files, so today's bare get in //STATUS-008-f21 took the base version of core/loop.js and silently discarded an uncommitted edit (blob in no store, unrecoverable). BOTH lost/spared files differed from the baseline IN SIZE (29376 vs 29343 B; 19078 vs 16770 B) — a size compare alone would have refused the discard. - The classification layer can lie (STATUS-008 live repro; GET-050 stale stamps false-clean too) — so the OVERWRITE/DISCARD site needs its own independent guard, not another upstream scan. - Full read+hash of every touched file on every update is rejected up front: too slow (&quot;reading and hashing will slow everything down&quot; — gritzko).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-051.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-051: cheap pre-discard guard in every tree update — size-check a file before taking theirs/ours over it</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Ordered by gritzko 2026-07-19 after the <a href="/todo/STATUS/STATUS-008.html">STATUS-008</a> data loss: classify false-cleaned dirty files, so today's bare <code>get</code> in <code>//STATUS-008-f21</code> took the base version of <code>core/loop.js</code> and silently discarded an uncommitted edit (blob in no store, unrecoverable). BOTH lost/spared files differed from the baseline IN SIZE (29376 vs 29343 B; 19078 vs 16770 B) — a size compare alone would have refused the discard.
+</p>
+<ul>
+<li>The classification layer can lie (<a href="./STATUS-008.html">STATUS-008</a> live repro; <a href="./GET-050.html">GET-050</a> stale stamps false-clean too) — so the OVERWRITE/DISCARD site needs its own independent guard, not another upstream scan.</li>
+<li>Full read+hash of every touched file on every update is rejected up front: too slow (&quot;reading and hashing will slow everything down&quot; — gritzko).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Every tree-update write path (get checkout/weave, post, any theirs/ours decision that discards on-disk bytes) double-checks, immediately before overwriting or discarding a file it believes clean, that the on-disk file actually matches the presumed baseline blob — by SIZE at minimum.
+</p>
+<ul>
+<li>Cheap by construction: stat().size (already in hand or one syscall) vs the baseline blob's stored length (known from the object header/index) — O(1) per file, no content read.</li>
+<li>On mismatch: the file IS modified — never silent-discard; divert to the weave/conflict path or refuse loudly (plain words), naming the file.</li>
+<li>One shared helper at the write seam, used by get AND post — not per-verb copies.</li>
+<li>Known residue: a size-preserving edit slips the cheap gate — that class stays with hashing paths / <a href="./GET-050.html">GET-050</a> band stamps; optional strict mode may hash ON SIZE MATCH only, never by default.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The guard sits at the write/discard site (the last touch point), independent of classify's verdict — it must fire even when classify is wrong, which is the whole point.</li>
+<li>No new tree scan, no mtime reliance (mtime is what fooled status); size vs stored blob length only.</li>
+<li>Repro-first: the STATUS-008 shape as the red test — dirty file + false-clean classification + upstream change → today's code discards; guarded code refuses/weaves.</li>
+<li>Related: <a href="./GET-050.html">GET-050</a> (stamp bands), <a href="/todo/STATUS/STATUS-008.html">STATUS-008</a> (the incident + live repro tree — do NOT use <code>//STATUS-008-f21</code> itself as a test bed).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> locate every discard/overwrite site in get/post (checkout-over-wt, weave &quot;take theirs/ours&quot; resolution, post staging) — the seam inventory</li>
+<li class="open"><input type="checkbox" disabled> red: fixture with a dirty-but-misclassified file, update replaces it silently today</li>
+<li class="open"><input type="checkbox" disabled> shared size-guard helper at the seam; mismatch → weave/refuse loudly; green</li>
+<li class="open"><input type="checkbox" disabled> measure: update wall-time before/after on a big tree (must be noise)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>2026-07-19 scope note from <a href="/todo/GET/GET-052.html">GET-052</a> (NO-REPRO, <a href="./DONT.html">DONT</a>): TIP get's decision is already content-based (checkout.leafUnchanged full-read, get.js:1024/1032) — the stamp fast path never gates it. This guard's remaining value: the POST paths, an assert-shaped invariant at the write seam (catches future regressions and any misclassification class), and users running old-code trees via the jsrc climb (the actual STATUS-008 loss vector).</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

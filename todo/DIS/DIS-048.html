@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DIS-048</title>
+<title>DIS-048: be get op-summary lists orphaned (non-DAG) post-rows</title>
+<meta property="og:title" content="DIS-048: be get op-summary lists orphaned (non-DAG) post-rows">
+<meta property="og:description" content="be get's summary prints wtlog post-rows for commits NOT reachable from the resulting branch tip, so it can show two &quot;JS-025&quot; posts while be log (the DAG) shows one — confusing. Surfaced in the JS-027 worktree from an orphaned sibling commit (an earlier botched + rolled-back commit). Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-048.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,54 +15,38 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>DIS-048 <a href="">LOW</a>: <code>be get</code> op-summary lists orphaned (non-DAG) post-rows</h1>
+<h1>DIS-048: <code>be get</code> op-summary lists orphaned (non-DAG) post-rows</h1>
+<div>
 <p>
-<code>be get</code>'s summary prints wtlog post-rows for commits NOT reachable from the resulting branch tip, so it can show two &quot;JS-025&quot; posts while <code>be log</code> (the DAG) shows one — confusing. Surfaced in the <a href="">JS-027</a> worktree from an orphaned sibling commit (an earlier botched + rolled-back commit). Method: <a href="../../skill/Issues.html">Issues</a>.
+Now: DONE
+</p>
+</div>
+<p>
+<code>be get</code>'s summary prints wtlog post-rows for commits NOT reachable from the resulting branch tip, so it can show two &quot;JS-025&quot; posts while <code>be log</code> (the DAG) shows one — confusing. Surfaced in the <a href="./JS-027.html">JS-027</a> worktree from an orphaned sibling commit (an earlier botched + rolled-back commit). Method: <a href="../../skill/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>In the JS-025 worktree <code>be get</code> printed <code>post ?9718389d#JS-025…</code> AND<p>
-<code>post ?371ad14b#JS-025…</code>, while <code>be log:</code> shows only <code>371ad14b</code>. Confirmed: <code>9718389d</code> is NOT an ancestor of trunk tip <code>371ad14b</code> — a sibling orphan (both children of <code>b9c6b647</code>); its diff is ONLY <code>test/all/02-extension-dispatch/run.sh</code> (a botched partial commit, see <a href="../JS/JS-025.html">JS-025</a> Outcome).
-</p>
-</li>
-<li><code>be get</code>'s op-summary reads the wtlog (operations this wt performed); <code>be log</code><p>
-walks the branch DAG. They legitimately differ, but surfacing a non-DAG post indistinguishably from a landed commit reads as &quot;the branch has 2 commits&quot;.
-</p>
-</li>
+<li>In the JS-025 worktree <code>be get</code> printed <code>post ?9718389d#JS-025…</code> AND <code>post ?371ad14b#JS-025…</code>, while <code>be log:</code> shows only <code>371ad14b</code>. Confirmed: <code>9718389d</code> is NOT an ancestor of trunk tip <code>371ad14b</code> — a sibling orphan (both children of <code>b9c6b647</code>); its diff is ONLY <code>test/all/02-extension-dispatch/run.sh</code> (a botched partial commit, see <a href="../JS/JS-025.html">JS-025</a> Outcome).</li>
+<li><code>be get</code>'s op-summary reads the wtlog (operations this wt performed); <code>be log</code> walks the branch DAG. They legitimately differ, but surfacing a non-DAG post indistinguishably from a landed commit reads as &quot;the branch has 2 commits&quot;.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>be get</code>'s summary should mark or omit post-rows not reachable from the new tip<p>
-(or otherwise distinguish op-log from DAG), so it can't be misread as branch history. Decide the intended op-log-vs-DAG semantics and make the views agree.
-</p>
-</li>
+<li><code>be get</code>'s summary should mark or omit post-rows not reachable from the new tip (or otherwise distinguish op-log from DAG), so it can't be misread as branch history. Decide the intended op-log-vs-DAG semantics and make the views agree.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Presentation fix in the <code>be get</code> / sniff summary path; NOT a data bug (the<p>
-orphan is a real wtlog row). Also decide whether orphaned local commits should be GC'd. Related to <a href="DIS-022.html">DIS-022</a> (be log empty in detached/submodule wt).
-</p>
-</li>
+<li>Presentation fix in the <code>be get</code> / sniff summary path; NOT a data bug (the orphan is a real wtlog row). Also decide whether orphaned local commits should be GC'd. Related to <a href="DIS-022.html">DIS-022</a> (be log empty in detached/submodule wt).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>RESOLVED (user 2026-06-22): OMIT the disapplied set — a commit not<p>
-reachable from the new tip is not mentioned at all in the get banner.
-</p>
-</li>
-<li>Rejected <code>miss</code> (= behind ≠ rolled-back) and <code>post</code> (reads as forward<p>
-history); drop the <code>base \ tgt</code> loop in <code>get_emit_commit_list</code>. Forked.
-</p>
-</li>
+<li>RESOLVED (user 2026-06-22): OMIT the disapplied set — a commit not reachable from the new tip is not mentioned at all in the get banner.</li>
+<li>Rejected <code>miss</code> (= behind ≠ rolled-back) and <code>post</code> (reads as forward history); drop the <code>base \ tgt</code> loop in <code>get_emit_commit_list</code>. Forked.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Repro with a sibling-orphan commit; make <code>be get</code> + <code>be log</code> agree.<p>
-  Done: <code>test/get/56-orphan-banner-not-dag</code> (ctest #258), red→green.
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Repro with a sibling-orphan commit; make <code>be get</code> + <code>be log</code> agree. Done: <code>test/get/56-orphan-banner-not-dag</code> (ctest #258), red→green.</li>
 </ul>
 <h3>Blockers</h3>
 <ul>
@@ -66,10 +54,18 @@ history); drop the <code>base \ tgt</code> loop in <code>get_emit_commit_list</c
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED <code>6bc22109</code>: <code>get_emit_commit_list</code> (sniff/GET.c) drops the<p>
-disapplied (<code>base \ tgt</code>) loop — only tip-reachable commits print as <code>post</code>; banner now agrees with <code>be log</code>. Repro <code>test/get/56</code> (#258).
-</p>
-</li>
+<li>LANDED <code>6bc22109</code>: <code>get_emit_commit_list</code> (sniff/GET.c) drops the disapplied (<code>base \ tgt</code>) loop — only tip-reachable commits print as <code>post</code>; banner now agrees with <code>be log</code>. Repro <code>test/get/56</code> (#258).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

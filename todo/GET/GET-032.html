@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GET-032</title>
+<title>GET-032: be get of an offline submodule mount reports ok but writes no files</title>
+<meta property="og:title" content="GET-032: be get of an offline submodule mount reports ok but writes no files">
+<meta property="og:description" content="When be get mounts a submodule whose official remote is UNREACHABLE but whose pinned objects are ALREADY in the local/shared store, it records the manifest/ref and reports &lt;n&gt; ok, yet materializes ZERO files (empty mount dir). A failed fetch with locally-resolvable objects must still run the checkout — 237 ok and an empty worktree must never coexist. Hit twice this session (JS-042/JS-043 worktree setup). Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-032.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -18,56 +22,29 @@ When <code>be get</code> mounts a submodule whose official remote is UNREACHABLE
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>abc</code>'s <code>.gitmodules</code> URL is <code>https://github.com/gritzko/libabc.git</code>; with the<p>
-network down, <code>be get</code> of the parent mounts <code>abc</code>, the <code>abc</code> fetch fails (ssh/https refused), but the pinned commit (<code>6e3b93f8</code>) objects ARE in the local store.
-</p>
-</li>
-<li>Symptom: <code>be status</code> in the mount shows <code>?6e3b93f86ca5…  237 ok</code> (objects<p>
-present) while the <code>abc/</code> dir is EMPTY (no files on disk). Workaround used by both workers: copy <code>abc/</code> from a sibling worktree.
-</p>
-</li>
-<li>Independent of (and a sibling to) the already-filed <code>be get</code> path-form <code>file:</code><p>
-URL misparse; both surfaced in the same worktree-setup step.
-</p>
-</li>
+<li><code>abc</code>'s <code>.gitmodules</code> URL is <code>https://github.com/gritzko/libabc.git</code>; with the network down, <code>be get</code> of the parent mounts <code>abc</code>, the <code>abc</code> fetch fails (ssh/https refused), but the pinned commit (<code>6e3b93f8</code>) objects ARE in the local store.</li>
+<li>Symptom: <code>be status</code> in the mount shows <code>?6e3b93f86ca5…  237 ok</code> (objects present) while the <code>abc/</code> dir is EMPTY (no files on disk). Workaround used by both workers: copy <code>abc/</code> from a sibling worktree.</li>
+<li>Independent of (and a sibling to) the already-filed <code>be get</code> path-form <code>file:</code> URL misparse; both surfaced in the same worktree-setup step.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>On a submodule fetch failure where the pinned objects resolve locally, <code>be get</code><p>
-materializes the files from the local store (or refuses with a clear error) — never a silent empty mount that still reports <code>ok</code>.
-</p>
-</li>
+<li>On a submodule fetch failure where the pinned objects resolve locally, <code>be get</code> materializes the files from the local store (or refuses with a clear error) — never a silent empty mount that still reports <code>ok</code>.</li>
 <li>The <code>ok</code> count and a populated worktree stay consistent.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>sniff GET submodule-mount path; offline-tolerant — don't require the remote<p>
-when objects are local. Likely the fetch-fail short-circuits the checkout step.
-</p>
-</li>
+<li>sniff GET submodule-mount path; offline-tolerant — don't require the remote when objects are local. Likely the fetch-fail short-circuits the checkout step.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(pending) — separate the submodule FETCH from the CHECKOUT: a failed fetch with<p>
-locally-resolvable objects should still run the materialize pass.
-</p>
-</li>
+<li>(pending) — separate the submodule FETCH from the CHECKOUT: a failed fetch with locally-resolvable objects should still run the materialize pass.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro: unreachable submodule remote + pinned objects present locally → `be<p>
-  get<code> parent → assert the mount has FILES, not just an </code>ok` count.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Fix the submodule get to materialize from the local store on<p>
-  fetch-fail-but-objects-present; keep <code>ok</code> consistent with on-disk files.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Audit 2026-07-07: no GET-032 commit landed; <code>BEActSubsGet</code> (<code>beagle/BE.cli.c:2065</code>)<p>
-  now DOCUMENTS &quot;skipped when its pin is already present in the local shard (offline-safe)&quot; — verify that skip path actually RUNS the checkout (the bug was exactly fetch-fail short-circuiting materialise), and note the JS twin already reuses an already-local pin (<code>shared/submount.js</code> &quot;Already-local pin?&quot; arm) as the model.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro: unreachable submodule remote + pinned objects present locally → <code>be get</code> parent → assert the mount has FILES, not just an <code>ok</code> count.</li>
+<li class="open"><input type="checkbox" disabled> Fix the submodule get to materialize from the local store on fetch-fail-but-objects-present; keep <code>ok</code> consistent with on-disk files.</li>
+<li class="open"><input type="checkbox" disabled> Audit 2026-07-07: no GET-032 commit landed; <code>BEActSubsGet</code> (<code>beagle/BE.cli.c:2065</code>) now DOCUMENTS &quot;skipped when its pin is already present in the local shard (offline-safe)&quot; — verify that skip path actually RUNS the checkout (the bug was exactly fetch-fail short-circuiting materialise), and note the JS twin already reuses an already-local pin (<code>shared/submount.js</code> &quot;Already-local pin?&quot; arm) as the model.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -77,5 +54,16 @@ locally-resolvable objects should still run the materialize pass.
 <ul>
 <li>(pending)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

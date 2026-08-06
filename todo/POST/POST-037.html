@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-037 DONE: post content-confirms clean-but-unstamped files, then discards the verdict — stamp them</title>
+<meta property="og:title" content="POST-037 DONE: post content-confirms clean-but-unstamped files, then discards the verdict — stamp them">
+<meta property="og:description" content="RULING (gritzko, 2026-08-04): status never restamps (membership only, STATUS-011 stands); the restamp belongs to the verbs that already paid for the content test — unknown timestamp → test (maybe write) → stamp. /todo/POST/POST-029 made post stamp every file it UNDIRTIES; this ticket is the remaining class: files post's pre-commit classify content-HASHED (mtime off the stamp-set → wtEqBase read+sha, shared/classify.js:546) and confirmed CLEAN. They were never dirty, so the BE-011 loop (verbs/post/post.js:961-974) never touches them — the verdict is discarded and EVERY later be status re-hashes them. Measured: be status in be/ opens ~780 tracked files per run. Their content is in the committed tree exactly like the posted paths', so stamping them to the same assigned post row ts makes the identical truth claim BE-011 already makes. Siblings: /todo/POST/POST-029, /todo/GET/GET-059 (get's half of the same ruling).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/POST/POST-037.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>POST-037 <a href="./DONE.html">DONE</a>: post content-confirms clean-but-unstamped files, then discards the verdict — stamp them</h1>
+<div>
+<p>
+Now: DONE Sev: MED
+</p>
+</div>
+<p>
+RULING (gritzko, 2026-08-04): status never restamps (membership only, STATUS-011 stands); the restamp belongs to the verbs that already paid for the content test — unknown timestamp → test (maybe write) → stamp. <a href="/todo/POST/POST-029.html">POST-029</a> made post stamp every file it UNDIRTIES; this ticket is the remaining class: files post's pre-commit classify content-HASHED (mtime off the stamp-set → <code>wtEqBase</code> read+sha, <code>shared/classify.js:546</code>) and confirmed CLEAN. They were never dirty, so the BE-011 loop (<code>verbs/post/post.js:961-974</code>) never touches them — the verdict is discarded and EVERY later <code>be status</code> re-hashes them. Measured: <code>be status</code> in <code>be/</code> opens ~780 tracked files per run. Their content is in the committed tree exactly like the posted paths', so stamping them to the same assigned post row ts makes the identical truth claim BE-011 already makes. Siblings: <a href="/todo/POST/POST-029.html">POST-029</a>, <a href="/todo/GET/GET-059.html">GET-059</a> (get's half of the same ruling).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>The knowledge exists and is dropped: classify's <code>ok</code> bucket is count-only (<code>classify.js:10-12</code> — &quot;clean tracked files would flood the output&quot;), so post never learns WHICH paths were content-confirmed vs stamp-confirmed.</li>
+<li>Two sub-classes inside <code>ok</code>, only ONE gets stamped: 1. content-confirmed ok (the hash ran because the mtime was off the stamp-set) → STAMP to the assigned post row ts. 2. stamp-set-confirmed ok (<code>wtlogReader.has(mtime)</code> hit, no read) → LEAVE — it already carries a truthful stamp; restamping shifts provenance for no gain (the PUT.mkd:27 principle).</li>
+<li>The BE-011 loop is the pattern to extend, not replace: post row appended first, <code>ulog.append</code> returns the ASSIGNED ts, mtimes set to that (POST-029's row-before-stamp discipline, same ts across parent + folded subs via ctx.now).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+After any post, every tracked file whose cleanliness was content-confirmed during that run carries a stamp-set mtime; the next status does zero content reads on the whole committed tree.
+</p>
+<ul>
+<li>Repro-first: tree with clean tracked files at randomized (off-stamp-set) mtimes → post (commit-all and selective both) → assert those files' mtimes ∈ the wtlog stamp-set AND next status does zero content reads (<code>test/post/restamp/run.sh</code> + <code>.stampchk.js</code> is the pattern; extend or sibling it).</li>
+<li>Sub posts (fold-decide): the folded sub's content-confirmed-clean files covered the same way, one ctx.now.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>A still-dirty file must NEVER be stamped (POST-029 constraint stands).</li>
+<li>An already-stamped file must NOT be restamped — content-confirmed paths only.</li>
+<li>classify surfaces the content-confirmed-ok path list behind an opt (the JAB-018 <code>opts.listing</code> precedent) — status byte-parity stays intact, status itself remains a strict reader (never a writer; the DIS-023 ban binds STATUS, not post).</li>
+<li>Row-before-stamp ordering; mtime == an assigned wtlog row ts, never a resampled now.</li>
+<li>Minimal diff: <code>verbs/post/post.js</code> + <code>shared/classify.js</code> (the opt) + <code>shared/stage.js</code> only if the helper moves there; no other verbs.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>The opt is <code>classifyMerge({ wantConfirmed: true })</code> → an extra <code>confirmed: [path,…]</code> on the result, next to the existing <code>wantClean</code> (the JAB-018 <code>listing</code> precedent).  It is a pure ADD: <code>rows</code>/<code>counts</code> are untouched and the field is <code>undefined</code> when the opt is off, so <code>status</code> (which never asks) is byte-identical and stays a strict reader.</li>
+<li><code>confirmed</code> is fed from EXACTLY the two sites where the hash actually ran and came back equal: the unpatched leg <code>!stamped &amp;&amp; wtEqBase(...)</code> (classify.js:546) and the patched leg <code>wSha === b.sha</code> (classify.js:521).  The stamp-set leg (<code>wtlogReader.has(mtime)</code> hit) is deliberately NOT listed — it already carries a truthful stamp and a restamp would only shift provenance (PUT.mkd:27).  Nothing dirty can ever enter the list: it is built inside the <code>ok</code> branch only.</li>
+<li>The conduit is <code>verbs/post/fold-decide.js</code> (post's OWN decide module, not another verb): it turns the opt on and passes <code>m.confirmed</code> out as <code>dres.confirmed</code>.  post.js then has a 3-line sibling loop right after the BE-011 <code>add</code> loop, using the SAME <code>rowTs</code> — the ts <code>ulog.append</code> ASSIGNED to the post row, never a resampled now.</li>
+<li>Truth claim: a content-confirmed clean file is emitted as a <code>keep</code> decision, i.e. its baseline blob rides into the new commit verbatim — identical to an <code>add</code>'s bytes-in-the-tree claim BE-011 already stamps on.  So the same row ts is the correct stamp for both.</li>
+<li>Sub posts need no threading: <code>postOne</code> runs per repo and each repo's own classify → own <code>confirmed</code> → own assigned row ts, all off the ONE <code>ctx.now</code> POST-029 established.  The G class of the test pins it (the sub's get-materialised <code>helper.c</code> is clean-and-unstamped by construction — get stamps nothing, GET-049).</li>
+<li>Not touched: <code>shared/stage.js</code> (no helper moved), <code>verbs/put/put.js</code> (its bare-put restamp is its own PUT-004 ground), and the pre-post quad snapshot's second classify (same wt state, so <code>dres.confirmed</code> already covers its paths).</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> Repro test RED on pristine post.js: clean-unstamped files still unstamped after post, status re-reads them.</li>
+<li><a href="./v.html">v</a> classify opt surfacing content-confirmed-ok paths; BE-011 loop extended; GREEN.</li>
+<li><a href="./v.html">v</a> Sub-post (fold-decide) class covered, one ctx.now across parent + subs.</li>
+<li><a href="./v.html">v</a> Full <code>test/post/*</code> suite green; POST-029's test/post/restamp stays green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<ul>
+<li>CONFIRMED + FIXED.  New test <code>test/post/restamp-clean/run.sh</code> (sibling of POST-029's <code>test/post/restamp</code>, same <code>.stampchk.js</code> checker shape: mtime ∈ <code>wtlogReader.has()</code> + a hooked <code>io.open</code> over one <code>classify.classify</code> run + no dirty rows).  Three classes, each seeding CLEAN tracked files at randomized off-stamp-set mtimes (<code>touch -d @&lt;pid-derived 2023 epoch&gt;</code>, content byte-identical): E commit-all post, F selective post (<code>put</code> one file), G sub post folding a gitlink bump.</li>
+<li>RED on pristine post.js, each class verified INDEPENDENTLY (running the same run.sh against the untouched main-tree sources): E <code>NOSTAMP b.txt/c.txt</code> + <code>READ b.txt/c.txt</code>; F the same two on the selective path; G <code>NOSTAMP helper.c</code> + <code>READ helper.c</code> in the sub.  GREEN after the fix, all four checks (E/F/G-sub/G-parent) <code>stampchk ok</code>, zero reads.</li>
+<li>GREEN by: <code>classifyMerge</code> opt <code>wantConfirmed</code> → <code>confirmed</code> path list from the two hash-ran-and-equal sites; <code>fold-decide</code> turns it on and passes it out as <code>dres.confirmed</code>; post.js stamps those paths with the ASSIGNED post row ts in a loop right after the BE-011 <code>add</code> loop.</li>
+<li>Suite 353/354 (<code>ctest -LE big</code>, 254s, stable over two runs).  The one failure <code>be-js-todo-rowcache</code> is PRE-EXISTING and unrelated — it fails identically on the pristine main tree at the same base (<code>FAIL …and-the-row-grew-the-staged-tick</code>).  <code>test/post/*</code> 51/51 green (incl. POST-029's <code>restamp</code> and the new <code>restamp-clean</code>); <code>put</code>/<code>status</code>/<code>get</code>/<code>diff</code> 106/106 green (status byte-parity intact).</li>
+<li>Diff: <code>shared/classify.js</code> (+26/-3: header note + the opt doc, the <code>confirm()</code> collector, two call sites, the returned field), <code>verbs/post/fold-decide.js</code> (+7/-2: opt on, <code>confirmed</code> out), <code>verbs/post/post.js</code> (+10/-0: the stamp loop), <code>test/post/restamp-clean/run.sh</code> (new, 185 lines).  Staged with <code>jab put</code>, nothing committed.</li>
+<li>Suggested commit message: <code>POST-037: post stamps the files it content-confirmed clean</code></li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

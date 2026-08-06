@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>KEEP-002</title>
+<title>KEEP-002: ?main advanced to a commit whose object is absent from the keeper → be get ?main dies KEEPNONE (dangling ref, main unreachable)</title>
+<meta property="og:title" content="KEEP-002: ?main advanced to a commit whose object is absent from the keeper → be get ?main dies KEEPNONE (dangling ref, main unreachable)">
+<meta property="og:description" content="Concurrent be posts from multiple store-backed worktrees sharing one store (~/.be/beagle) advanced the shared ?main ref past the objects/index actually written to the keeper, leaving ?main pointing at a commit the keeper can't resolve. be get ?main then dies:">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/KEEP/KEEP-002.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -47,15 +51,26 @@ Surfaced when a lagging worktree (<code>$HOME/beagle</code> at <code>a2e2300c</c
 </p>
 <h2>Blockers</h2>
 <ul>
-<li>None for diagnosis. Two intertwined causes to separate: (1) a real <code>be post</code> atomicity/concurrency defect (ref advanced without a durably-packed+indexed object), and (2) a process/isolation problem — posting workers on a <strong>shared</strong> store instead of independent clones, and repro <code>be post</code>s escaping a hermetic <code>.be</code> into <code>~/.be/beagle</code> (<a href="">be_dot_be_shield_walk</a>, <a href="">test_hermetic_be_store</a>).</li>
+<li>None for diagnosis. Two intertwined causes to separate: (1) a real <code>be post</code> atomicity/concurrency defect (ref advanced without a durably-packed+indexed object), and (2) a process/isolation problem — posting workers on a <strong>shared</strong> store instead of independent clones, and repro <code>be post</code>s escaping a hermetic <code>.be</code> into <code>~/.be/beagle</code> (<a href="./be_dot_be_shield_walk.html">be_dot_be_shield_walk</a>, <a href="./test_hermetic_be_store.html">test_hermetic_be_store</a>).</li>
 </ul>
 <h2>Planned</h2>
 <ul>
 <li><strong>Repro:</strong> drive ≥2 concurrent <code>be post</code>s from store-backed worktrees of one shared store (or a single post whose object-write/index-update is interrupted) and assert <code>?main</code> is NEVER advanced to a sha the keeper can't resolve — i.e. <code>be get ?main</code> always succeeds or the post fails atomically. Also a torn/empty <code>.keeper.idx</code> repro (16-byte idx) to confirm the index path.</li>
 <li><strong>Localize:</strong> the <code>be post</code> write order in keeper — object append → index update → ref-row append. The ref (refs ULOG) must not be advanced until the object is durably packed AND indexed; and concurrent posts to one store must serialize (lock) or use atomic index swaps. Inspect the <code>*.keeper.idx</code> writer for a torn-write / lost-update under concurrency (the 16-byte idx).</li>
 <li><strong>Fix:</strong> make <code>be post</code> ref-vs-object atomic — write+fsync+index the object, verify resolvable, THEN append the ref row; refuse (or roll back the ref) if the object isn't resolvable. Serialize concurrent posts to a shared store (store-level lock), or rebuild the keeper index from the pack on open if torn.</li>
-<li><strong>Process guard (separate, smaller):</strong> posting/landing workers must run in <strong>independent clones</strong> (<code>be get be://localhost?/beagle</code>), not store-backed worktrees of the live store; repro tests must anchor a hermetic <code>.be</code> that never escapes to <code>~/.be</code> (<a href="">test_hermetic_be_store</a>).</li>
-<li><strong>Recovery for the current break:</strong> reset <code>?main</code> to the last reachable commit (<code>a2e2300c</code>) by removing the seven dangling <code>post ?main#…</code> rows from <code>~/.be/beagle/refs</code> + the wtlog + deleting <code>.refs.idx</code> (<a href="">be_undo_commit_procedure</a>) — OR locate/repack the seven missing objects if a worker store still holds them. (Do under human direction.)</li>
+<li><strong>Process guard (separate, smaller):</strong> posting/landing workers must run in <strong>independent clones</strong> (<code>be get be://localhost?/beagle</code>), not store-backed worktrees of the live store; repro tests must anchor a hermetic <code>.be</code> that never escapes to <code>~/.be</code> (<a href="./test_hermetic_be_store.html">test_hermetic_be_store</a>).</li>
+<li><strong>Recovery for the current break:</strong> reset <code>?main</code> to the last reachable commit (<code>a2e2300c</code>) by removing the seven dangling <code>post ?main#…</code> rows from <code>~/.be/beagle/refs</code> + the wtlog + deleting <code>.refs.idx</code> (<a href="./be_undo_commit_procedure.html">be_undo_commit_procedure</a>) — OR locate/repack the seven missing objects if a worker store still holds them. (Do under human direction.)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

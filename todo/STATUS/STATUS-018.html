@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STATUS-018: a staged path's live con never renders — the put branch preempts the con check</title>
+<meta property="og:title" content="STATUS-018: a staged path's live con never renders — the put branch preempts the con check">
+<meta property="og:description" content="classify tests the /todo/ULOG/ULOG-004 con set only in its NO-STAGED-INTENT arm, so a con row on a path that also carries a put row is unreachable: the row renders ...V (staged change) and counts.con stays 0, while post — which reads wtl.conflicts() directly — refuses the same path. Status and post disagree on one ulog. A conflicting get RE-STAGES an already-staged path, so this masks EVERY conflict on staged work, which is the normal shape of a post that had to merge.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/STATUS/STATUS-018.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>STATUS-018: a staged path's live <code>con</code> never renders — the put branch preempts the con check</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH Ask: gritzko Env: any wt where the conflicting path was STAGED before the merge Rev: ///be/#3d764808 See: STATUS-017
+</p>
+</div>
+<p>
+<code>classify</code> tests the <a href="../ULOG/ULOG-004.html">/todo/ULOG/ULOG-004</a> con set only in its NO-STAGED-INTENT arm, so a <code>con</code> row on a path that also carries a <code>put</code> row is unreachable: the row renders <code>...V</code> (staged change) and <code>counts.con</code> stays 0, while <code>post</code> — which reads <code>wtl.conflicts()</code> directly — refuses the same path. Status and post disagree on one ulog. A conflicting <code>get</code> RE-STAGES an already-staged path, so this masks EVERY conflict on staged work, which is the normal shape of a <code>post</code> that had to merge.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Live evidence, <code>//TODO-005</code> after a half-failed post: <code>log.conflicts()</code> → <code>[&quot;views/todo/todo.js&quot;]</code>, classify buckets that path <code>put</code>, <code>counts.con = 0</code>, <code>be status</code> prints <code>...V</code>, <code>be post</code> throws <code>conflict in tracked file views/todo/todo.js</code>.</li>
+<li>Root cause: <code>shared/classify.js:456</code> <code>if (onDisk &amp;&amp; conSet.has(path))</code> sits AFTER the staged-intent branch (<code>shared/classify.js:443</code>, <code>push({bucket: b ? &quot;put&quot; : &quot;new&quot;}); continue;</code>).</li>
+<li>The trigger is the get itself: a merge-get re-writes a <code>put &lt;path&gt;</code> row for a path that was already staged, THEN the <code>con &lt;path&gt;</code> row — so the mask is automatic.</li>
+<li><code>be/test/status/conflict</code> only covers the UNSTAGED path (no put row lands, <code>...!</code> renders), which is why this passed CI.</li>
+<li><a href="../POST/POST-035.html">/todo/POST/POST-035</a>'s gate and <a href="../DIS/DIS-080.html">/todo/DIS/DIS-080</a>'s &quot;resolution == posted&quot; are both intact — post is the correct side here.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+A live <code>con</code> row outranks staged intent, so the two readers of one ulog cannot disagree.
+</p>
+<ul>
+<li>A path in <code>wtl.conflicts()</code> buckets <code>con</code> and paints the wt char <code>!</code> whether or not it carries a <code>put</code> row; <code>counts.con</code> tallies it.</li>
+<li>The staged fact is not lost: the row stays <code>staged</code> (the quad's own column), only the wt char changes.</li>
+<li>Ack semantics UNCHANGED: a <code>put</code>/<code>delete</code> row LATER than the con row still resolves it (verified: edit + <code>put</code> + <code>post</code> lands with no <code>--force</code>).</li>
+<li>status stays row-driven — no byte scan, no marker parsing (<a href="/todo/STATUS/STATUS-017.html">STATUS-017</a>).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>ONE accessor for both sides: classify must consume <code>wtl.conflicts()</code>, never re-derive a con set, so post's gate and status cannot drift again.</li>
+<li>Regold any golden asserting <code>...V</code> on a staged-and-conflicted path.</li>
+<li>No change to <code>conflicts()</code> itself — the accessor is right; only its consumer in classify is wrong.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Shape of the fix: hoist the <code>conSet</code> test above the staged-intent branch, keeping the <code>onDisk</code> guard (a con row for a path no longer on disk is not a wt conflict).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro test: stage the path, then a conflicting get; assert <code>...!</code> + <code>1 con</code> and that post's refusal and status agree</li>
+<li class="open"><input type="checkbox" disabled> hoist the con test above the staged branch in <code>shared/classify.js</code></li>
+<li class="open"><input type="checkbox" disabled> keep <code>staged</code> true on the con row; check <code>quad.js</code> renders both facts</li>
+<li class="open"><input type="checkbox" disabled> regold whatever asserted <code>...V</code> for this shape</li>
+<li class="open"><input type="checkbox" disabled> extend <code>be/test/status/conflict</code> with the staged variant (its unstaged case stays)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="../DIFF/DIFF-020.html">/todo/DIFF/DIFF-020</a> needs this: the status row is where a conflict is NOTICED, and its <code>!</code> char is what routes the row's nav to <code>diff</code> (<code>views/status/status.js:326</code>).</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

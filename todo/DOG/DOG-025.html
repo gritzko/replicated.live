@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOG-025: code inners are one fat 'H' token — tokenize them, but recognize no nested formatting</title>
+<meta property="og:title" content="DOG-025: code inners are one fat 'H' token — tokenize them, but recognize no nested formatting">
+<meta property="og:description" content="Ruling (gritzko, 2026-07-29): DOG-024 (dog 737d196b) made inline formatted ranges tokenize their text and recognize nested formatting; code is the exception it forgot — the inners of an inline code span AND of a fenced code block must be TOKENIZED (word granularity), but NO nested formatting is recognized there: no spans, no links, no escapes open inside code.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DOG/DOG-025.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG-025: code inners are one fat 'H' token — tokenize them, but recognize no nested formatting</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<p>
+Ruling (gritzko, 2026-07-29): DOG-024 (dog 737d196b) made inline formatted ranges tokenize their text and recognize nested formatting; <code>code</code> is the exception it forgot — the inners of an inline code span AND of a ```` fenced code block must be TOKENIZED (word granularity), but NO nested formatting is recognized there: no spans, no links, no escapes open inside code.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>MKDTonCode</code> (<code>dog/tok/MKDT.c:48</code>) emits the span body as ONE verbatim 'H' token — <code>G open, H body, G close</code> — never running the word layer over it.</li>
+<li>The <code>MKDTLexer</code> in-fence branch (<code>dog/tok/MKDT.c:351</code>) emits each fence-body LINE as one 'H' token, so a code block diffs/paints line-at-a-time, not word-at-a-time.</li>
+<li><code>FREEEmitCode</code> (<code>dog/tok/FREE.c.rl</code>) is the comment-overlay twin with the same one-'H' body; <code>FREEEmitSpan</code> next to it already re-lexes formatted spans one level down.</li>
+<li><code>test/TOK01.c</code> pins the fat shapes: `<code> </code>ABC-123<code> </code><code> → </code>GHG<code> (&quot;code stays verbatim 'H', never re-lexed&quot;), </code>MDTCodeFenceTest<code>, the DOG-024 fence cases in </code>MKDTBlockQuadTest`.</li>
+<li>The spec keeps code lowest-nesting by design: &quot;no backticks inside code&quot; (<code>wiki/StrictMark.mkd:38</code>), code span is highest precedence (<code>:33</code>).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A code span's body emits word-granularity tokens (the word/number/space/punct layer), with the <code>*</code>/<code>_</code>/<code>~</code>/<code>[</code>/<code>\</code> rules DEAD inside — `<code> </code><strong>x</strong><code> </code>` yields plain tokens, no 'G' span, no escape.</li>
+<li>A fenced block's body lines tokenize the same way; fence-open/close markup handling (<code>MKDTEmitFence</code>, <code>fence_blank</code>) stays as DOG-024 left it.</li>
+<li><code>FREEEmitCode</code> mirrors the split so comments and .mkd pages tokenize code identically; C and the JS twin (<code>render.js</code> classify/paint path) agree case-for-case.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The body tokenization goes through a ragel machine (a restricted MKDT main, e.g. spans/escapes ripped out) — no hand-rolled byte scanning in <code>MKDT.c</code> (never ever do manual parsing in C).</li>
+<li>Repro-first: new <code>TOK01</code> cases land before the grammar change; the DOG-024 cases that pin one-'H' bodies get amended to the new shapes in the same commit.</li>
+<li>Regenerate with <code>ragel -C XXT.c.rl -o XXT.rl.c -L</code>; <code>ctest -j16</code> clean.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Ruled (gritzko, 2026-07-29): every inner sub-token KEEPS the 'H' tag — word-granularity boundaries, unchanged code paint and overlay stickiness; natural-tags-inside (<code>F</code> in backticks) is rejected.</li>
+<li>Open: does the fence info string (<code>MKDTEmitFence</code> 'H' rest) tokenize too, or stay one token.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro <code>TOK01</code> cases: `<code> </code>a b<code> </code><code>, </code><code> </code><strong>x</strong><code> </code><code>, </code><code> </code>*<code> </code><code>, </code><code> </code>ABC-123<code> </code><code>, fence body with </code><strong>x</strong>` and multi-word lines.</li>
+<li class="open"><input type="checkbox" disabled> Code-body ragel machine (word layer, no span/escape rules) callable from both <code>MKDTonCode</code> and the in-fence branch.</li>
+<li class="open"><input type="checkbox" disabled> <code>FREEEmitCode</code> uses the same machine (<code>FREE.c.rl</code>).</li>
+<li class="open"><input type="checkbox" disabled> Check the <code>MDT.c</code> (two-pass Markdown) code-span/fence twins for the same fat-'H' shape.</li>
+<li class="open"><input type="checkbox" disabled> JS/renderer parity (<code>render.js</code> classify, verbatim <code>&lt;code&gt;</code> bodies) executes in <a href="./MARK-013.html">MARK-013</a><a href="../MARK/MARK-013.html">13</a>.</li>
+<li class="open"><input type="checkbox" disabled> Spec touch: <code>wiki/StrictMark.mkd</code> §Inline markup / §Code blocks — code inners are tokenized, formatting-blind.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none known)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Landed in dog as 6d80f8a2 &quot;DOG-025: tokenize the text in code sections&quot; (2026-07-29): <code>mkdtc</code>/<code>MKDTCodeBody</code> machine, <code>MKDTonCode</code> + in-fence + <code>FREEEmitCode</code> routed through it, <code>MKDTCodeInnerTest</code>; 72/72 ctest.</li>
+<li>Not done here: <code>MDT.c</code> two-pass Markdown twin still emits fat 'H' spans/lines (own ticket if wanted); <code>wiki/StrictMark.mkd</code> spec touch outstanding; renderer parity landed via <a href="./MARK-013.html">MARK-013</a><a href="../MARK/MARK-013.html">13</a>'s wt.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

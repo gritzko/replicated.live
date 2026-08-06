@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BLAME-001</title>
+<title>BLAME-001: blame walks all ancestors, re-inflating unchanged blobs</title>
+<meta property="og:title" content="BLAME-001: blame walks all ancestors, re-inflating unchanged blobs">
+<meta property="og:description" content="graf blame:&lt;path&gt; costs O(total history), not O(file history). GRAFFileWeave (graf/BLAME.c) topo-walks the tip's full ancestor closure (nord) and calls GRAFBlobAtCommit (graf/BLOB.c) for every commit — inflating the commit object, each path tree, and the (large) file blob from keeper — then byte-dedups AFTER the fetch. Measured (release): blame:graf/GRAF.c 0.34s (1.16s debug+ASAN), nord=1545 for EVERY file regardless of its 11–116-commit history, ~16 inflates/commit, only ~12% of fetches yield a fold. The fix is keeper-side, no index format change: compare object hashes top-down (each child OID is free in its parent tree), stop at the highest unchanged subtree, and inflate the blob + fold only when the leaf OID actually changed. The deeper index-side variant is BLAME-002; parallelism is BLAME-003. See Plan.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BLAME/BLAME-001.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -13,7 +17,7 @@
 </a>
 <h1>BLAME-001: blame walks all ancestors, re-inflating unchanged blobs</h1>
 <p>
-<code>graf blame:&lt;path&gt;</code> costs O(total history), not O(file history). <code>GRAFFileWeave</code> (graf/BLAME.c) topo-walks the tip's full ancestor closure (<code>nord</code>) and calls <code>GRAFBlobAtCommit</code> (graf/BLOB.c) for every commit — inflating the commit object, each path tree, and the (large) file blob from keeper — then byte-dedups AFTER the fetch. Measured (release): <code>blame:graf/GRAF.c</code> 0.34s (1.16s debug+ASAN), <code>nord</code>=1545 for EVERY file regardless of its 11–116-commit history, ~16 inflates/commit, only ~12% of fetches yield a fold. The fix is keeper-side, no index format change: compare object hashes top-down (each child OID is free in its parent tree), stop at the highest unchanged subtree, and inflate the blob + fold only when the leaf OID actually changed. The deeper index-side variant is <a href="../todo/BLAME-002.html">BLAME-002</a>; parallelism is <a href="../todo/BLAME-003.html">BLAME-003</a>. See <a href="../wiki/Plan.html">Plan</a>.
+<code>graf blame:&lt;path&gt;</code> costs O(total history), not O(file history). <code>GRAFFileWeave</code> (graf/BLAME.c) topo-walks the tip's full ancestor closure (<code>nord</code>) and calls <code>GRAFBlobAtCommit</code> (graf/BLOB.c) for every commit — inflating the commit object, each path tree, and the (large) file blob from keeper — then byte-dedups AFTER the fetch. Measured (release): <code>blame:graf/GRAF.c</code> 0.34s (1.16s debug+ASAN), <code>nord</code>=1545 for EVERY file regardless of its 11–116-commit history, <del>16 inflates/commit, only </del>12% of fetches yield a fold. The fix is keeper-side, no index format change: compare object hashes top-down (each child OID is free in its parent tree), stop at the highest unchanged subtree, and inflate the blob + fold only when the leaf OID actually changed. The deeper index-side variant is <a href="../todo/BLAME-002.html">BLAME-002</a>; parallelism is <a href="../todo/BLAME-003.html">BLAME-003</a>. See <a href="../wiki/Plan.html">Plan</a>.
 </p>
 <h2>Issues</h2>
 <p>
@@ -60,5 +64,16 @@ Compare object hashes top-down, stop at the highest unchanged subtree, and infla
 <ul>
 <li><code>1a5acce8</code> (BLAME-002 &quot;index-served tree descent, zero re-inflate&quot;) delivers this ticket's Steps 0-2 and moots Step 3; only the unindexed-commit fallback remains on the old fetch+byte-dedup path.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

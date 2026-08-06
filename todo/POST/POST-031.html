@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-031: dag walks fail on post-Jun-29 commits — false non-FF + false &quot;broken tree&quot; (stale graf.idx suspected)</title>
+<meta property="og:title" content="POST-031: dag walks fail on post-Jun-29 commits — false non-FF + false &quot;broken tree&quot; (stale graf.idx suspected)">
+<meta property="og:description" content="Live incident (gritzko, 2026-07-18, maintree ///be/, cwd be/test): be post '?' → JS exception: ? can not be fast-forwarded (the post.js:327 FF-gate refusal in advanceBranch). Probes say the refusal is WRONG — the trunk tip is on cur's own line:">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/POST/POST-031.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>POST-031: dag walks fail on post-Jun-29 commits — false non-FF + false &quot;broken tree&quot; (stale graf.idx suspected)</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Live incident (gritzko, 2026-07-18, maintree <code>///be/</code>, cwd <code>be/test</code>): <code>be post '?'</code> → `<code>JS exception: </code>?<code> can not be fast-forwarded</code>` (the post.js:327 FF-gate refusal in advanceBranch). Probes say the refusal is WRONG — the trunk tip is on cur's own line:
+</p>
+<ul>
+<li><code>jab 'sha1:?'</code> → <code>00101ce103ac...</code> (&quot;correct post URI mishap&quot;, Fri17) — the trunk tip.</li>
+<li><code>jab log</code> (cur) → <code>0d47c8ec → 226c6228 → 00101ce1 → ...</code> — trunk tip is cur's 3rd entry; <code>jab 'log:?'</code> shows the same line from 00101ce1 down.</li>
+<li><code>type:?#00101ce1</code> and <code>type:#226c6228</code> both → <code>commit</code> — objects present and readable in the store.</li>
+<li>So advanceBranch's <code>dag.isAncestor(reader, expectedOld=00101ce1, parent=cur tip)</code> returned false on ancestry the log view itself renders — trunk should FF to cur.</li>
+</ul>
+<p>
+Incident 2, SAME class (gritzko, 2026-07-18, journal root, <code>:post</code> in bro): &quot;err: broken tree: track and base share no common ancestor&quot; (<code>shared/quad.js:146</code>, the BRO-030 quad merge-base). Wtlog+reflog forensics:
+</p>
+<ul>
+<li>Jul 17's <code>post ?#08e9fdb2</code> HALF-landed: wtlog row <code>26717I7028</code> written, but the store refs row is stamped <code>26718Cf30e</code> (today) — the refs advance died with the post (post was being fixed that day, &quot;correct post URI mishap&quot;). One-invocation rows share one be.now stamp — the split stamp proves the half-write.</li>
+<li>Today's <code>:post</code> repaired the advance (trunk → 08e9fdb2 = base; <code>commit:#08e9fdb2</code> confirms parent 7e68484e = old trunk), THEN quad threw &quot;no common ancestor&quot; on track == base — the walk fails even on identical-sha lines.</li>
+<li>Prime suspect sharpened: newest <code>~/.be/journal/*.graf.idx</code> is Jun 29; every trunk commit since (<code>db7d2bd8</code>, <code>7e68484e</code>, <code>08e9fdb2</code>) is UNINDEXED, and the walk resolves ids via the index (<code>idOf</code>, shared/dag.js:261-263) — unindexed commits dead-end it. Incident 1's be store presumably same staleness.</li>
+<li>Fallout to clear when fixed: today's staged gitlink puts (<code>be#0d47c8ec</code>, <code>html#3f0d1736</code>) are still UNCOMMITTED — the <code>:post</code> aborted at the quad throw before committing.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Repro first, then make <code>post ?</code> FF the trunk in exactly this shape.
+</p>
+<ul>
+<li>Suspects, reordered by incident 2: (1) STALE graf index — dag walks resolve ids via graf.idx runs that stop at Jun 29, unindexed commits dead-end the walk (fits BOTH false verdicts, incl. track==base); (2) cross-shard walk miss (<a href="../BE/BE-039.html">/todo/BE/BE-039</a> family); (3) <code>parent</code>/ref-key resolution divergence between post's reader and the views.</li>
+<li>The repro must capture WHICH: instrument/probe the walk (what id the index returns for a post-Jun-29 sha, where the queue dies) before fixing; a <code>log</code>/<code>log:</code> twin walk succeeds on the same line — explain the difference.</li>
+<li>Fix must also answer WHY graf.idx went stale (posts since Jun 29 didn't extend it — missing index-on-post hook?) and whether a lazy reindex on walk-miss is the right recovery (the <a href="../SPOT/SPOT-003.html">/todo/SPOT/SPOT-003</a> lazy-indexing shape).</li>
+<li>Both refusal messages are walk-verdict consumers, not causes: post.js:327 FF gate, quad.js:146 root — one dag fix clears both; a false &quot;broken tree&quot; must never abort the commit it decorates.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Wt state at incident: uncommitted pager.js changes present (the BRO-031-adjacent fix) — plausibly irrelevant (post logic untouched), but the repro should include a dirty-wt leg to rule it in/out.</li>
+<li>Fix in the dag/reader seam, not a post-local workaround; the FF gate's semantics (POST-027 refusal order) stay.</li>
+<li>No test edits without explicit permission; repro as a NEW test in test/post/ (the refuse/track-maintree pattern).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>SUSPECT (1) DISPROVEN by forensics on /tmp copies of the live shards: every walk the incidents blamed succeeds on the real bytes.  journal: mergeBase(08e9fdb2,7e68484e)=7e68484e; be: isAncestor(00101ce1,0d47c8ec)=true.  graf.idx is the NATIVE keeper's index; jab reads keeper.idx runs, and those covered every pack (ingest/idxmaint heal on open).  No index miss.</li>
+<li>REAL cause 1 (post <code>?</code> refusal): postSubs fans ctx.args into every mounted sub, so the sub's postOne re-ran the <code>?</code> bare- advance on the SUB's OWN shard.  be/test's shard (beagle-ext- tests) trunk 57b4996a vs pin 30b12f5b genuinely diverged, and that sub-shard refusal bubbled up spelled as the parent's <code>?</code>. POST-030 already rules a recursed sub must not self-advance; it was enforced only for the no-Query form.  Fix: postOne returns early on ctx._sub for the Query bare-advance arm too (verbs/post/post.js:863 arm).  The parent then FFs fine.</li>
+<li>REAL cause 2 (broken-tree throw): journal's html sub was RE- CLONED from github Jul 17 (html/.be is a fresh colocated store); the parent's track-tree pin a63a583c does not exist in it.  quadModel treated the dangling pin as a real tip, mergeBase found no common ancestor, and quad.js:146 killed the WHOLE bare <code>status</code> (and the :post that renders one). Fix: a track pin with no readable commit in the sub's store degrades to the no-track rule (track:=base), per the wiki Status.mkd degenerate-roots family.  The genuine two-real- tips broken-tree refusal STAYS (test/quad/model.js leg 3).</li>
+<li>Why log/log: survived: log renders the wtlog/refs rows of its own anchor shard; it never evaluates another shard's verdict.</li>
+<li>Fix is quad/post-seam, not dag: the walks were CORRECT; the verdicts were minted in the wrong shard (1) or from a dangling pin (2).  dag.js untouched.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> repro as a test: test/post/sub-diverged (both faces RED<div>
+<p>
+on pre-fix code, exact incident exceptions)
+</p>
+</div>
+</li>
+<li><a href="./v.html">v</a> trace the walk; pinned: NOT graf staleness — sub-shard<div>
+<p>
+fan-out (1) + dangling re-clone pin (2), evidence above
+</p>
+</div>
+</li>
+<li><a href="./v.html">v</a> fix; repro GREEN both faces; refuse/adv/quad suites green</li>
+<li><a href="./x.html">x</a> graf.idx staleness — N/A (native index; jab keeper.idx<div>
+<p>
+runs were complete; heal-on-open verified on copies)
+</p>
+</div>
+</li>
+<li><a href="./v.html">v</a> dirty-wt leg (unstaged parent edit rides the <code>?</code> advance)</li>
+<li><a href="./v.html">v</a> replayed on a FULL /tmp replica of the live trees: bare<div>
+<p>
+status renders all sub hunks; be <code>post ?</code> FFs trunk 00101ce1 -&gt; 0d47c8ec; journal commit lands staged be/html gitlinks.  Live maintrees left untouched — the real <code>:post</code> / <code>post ?</code> re-runs are gritzko's call.
+</p>
+</div>
+</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>be/test's tests-shard trunk 57b4996a vs be-pinned 30b12f5b is a REAL fork (mergeBase 21fb27d4) — post <code>?</code> typed INSIDE be/test still refuses, now correctly about that shard.</li>
+<li>html's old ~/.be/replicated.live store still holds the pre-re-clone line; the a63a583c work is not in the new store.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+Fixed in worktree work/POST-031, commit 611f5851 (+ test-sub 019ad68b): postOne skips the Query bare-advance for a recursed sub (post.js), quadModel degrades a dangling track pin to no-track instead of throwing (quad.js), new repro test test/post/sub-diverged.  Suite 294/294.  NOT merged.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

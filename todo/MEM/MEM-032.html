@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-032</title>
+<title>MEM-032 DONT: JABCu8bImport builder overflow + JSC refcount leaks (js/convert.cpp)</title>
+<meta property="og:title" content="MEM-032 DONT: JABCu8bImport builder overflow + JSC refcount leaks (js/convert.cpp)">
+<meta property="og:description" content="The JABCu8bImport family imports JS values into an RDX builder with two memory defects. JABCu8bImportString sizes the JSStringGetUTF8CString write by the string's worst-case UTF-8 length (maxSize) instead of the builder's idle room, so a large string overflows u8bIdle (the u8bReserve call is commented out as a todo) and idle is hand-advanced instead of u8bFed. The same paths leak owned JSC refs: JSValueToStringCopy is never JSStringRelease'd and JSObjectCopyPropertyNames is never JSPropertyNameArrayRelease'd (incl. call-macro error early-returns). The code is compiled WIP with no in-tree callers yet, so the overflow is latent. The goal is to bound the write to idle room and release every owned ref.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-032.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>MEM-032: JABCu8bImport builder overflow + JSC refcount leaks (js/convert.cpp)</h1>
+<h1>MEM-032 <a href="./DONT.html">DONT</a>: JABCu8bImport builder overflow + JSC refcount leaks (js/convert.cpp)</h1>
+<div>
+<p>
+Now: DONT
+</p>
+</div>
 <p>
 The <code>JABCu8bImport</code> family imports JS values into an RDX builder with two memory defects. <code>JABCu8bImportString</code> sizes the <code>JSStringGetUTF8CString</code> write by the string's worst-case UTF-8 length (<code>maxSize</code>) instead of the builder's idle room, so a large string overflows <code>u8bIdle</code> (the <code>u8bReserve</code> call is commented out as a todo) and <code>*idle</code> is hand-advanced instead of <code>u8bFed</code>. The same paths leak owned JSC refs: <code>JSValueToStringCopy</code> is never <code>JSStringRelease</code>'d and <code>JSObjectCopyPropertyNames</code> is never <code>JSPropertyNameArrayRelease</code>'d (incl. call-macro error early-returns). The code is compiled WIP with no in-tree callers yet, so the overflow is latent. The goal is to bound the write to idle room and release every owned ref.
 </p>
@@ -39,5 +48,16 @@ Reserve room; release refs on every exit.
 <li>Reserve via <code>call(u8bReserve/u8bGrow, builder, maxSize)</code> and check, OR cap the JSC write to <code>u8bIdleLen(builder)</code>; then <code>u8bFed(builder, factlen-1)</code>.</li>
 <li><code>JSStringRelease(str)</code> in the <code>kJSTypeString</code> case after import; <code>JSPropertyNameArrayRelease(keys)</code> on every <code>JABCu8bImportObject</code> exit incl. error paths (single epilogue).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PUT-006</title>
+<title>PUT-006: be put &lt;dir&gt;/ re-stages every UNCHANGED file (status says ok)</title>
+<meta property="og:title" content="PUT-006: be put &lt;dir&gt;/ re-stages every UNCHANGED file (status says ok)">
+<meta property="og:description" content="jab put test/ on a store-backed worktree stages ALL 214 already-committed files under the test/ submodule mount as fresh put rows, even though jab status calls the SAME tree 214 ok (clean, no changes). Only genuinely new / modified files should stage; an unchanged tracked file must emit NO row. The gate stage.js::expandDir uses (w.ts != null &amp;&amp; wtlogReader.has(w.ts) — mtime stamp-set membership, NOT a content-sha compare) disagrees with what classify/status call clean, so the whole subtree re-stages. Reflog noise, and a following post would commit a spurious whole-subtree re-add. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PUT/PUT-006.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,105 +15,67 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>PUT-006 <a href="./MED.html">MED</a>: <code>be put &lt;dir&gt;/</code> re-stages every UNCHANGED file (status says <code>ok</code>)</h1>
+<h1>PUT-006: <code>be put &lt;dir&gt;/</code> re-stages every UNCHANGED file (status says <code>ok</code>)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>jab put test/</code> on a store-backed worktree stages ALL 214 already-committed files under the <code>test/</code> submodule mount as fresh <code>put</code> rows, even though <code>jab status</code> calls the SAME tree <code>214 ok</code> (clean, no changes).  Only genuinely new / modified files should stage; an unchanged tracked file must emit NO row.  The gate <code>stage.js::expandDir</code> uses (<code>w.ts != null &amp;&amp; wtlogReader.has(w.ts)</code> — mtime stamp-set membership, NOT a content-sha compare) disagrees with what <code>classify</code>/status call clean, so the whole subtree re-stages.  Reflog noise, and a following <code>post</code> would commit a spurious whole-subtree re-add.  Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Repro on a CLEAN store-backed get (<code>jab get file:/$HOME/.be/?/beagle-ext</code><p>
-into an empty dir): <code>jab status</code> = <code>214 ok</code> under <code>?/beagle-ext-tests</code>.
-</p>
-</li>
-<li><code>jab put test/</code> → exit 0, then <code>jab status</code> shows all 214 files as<p>
-<code>HH:MM  put test/&lt;path&gt;</code> — every unchanged already-committed file re-staged.
-</p>
-</li>
-<li>Live evidence tree: /home/gritzko/JS-072 (do NOT mutate — kept as the repro;<p>
-its <code>test/</code> shows the same all-<code>put</code> state from a user <code>:put test/</code>).
-</p>
-</li>
-<li><code>stage.js:245-269 expandDir(prefix)</code>: unions base+wt paths under prefix; a<p>
-tracked+present file is &quot;settled&quot; only if <code>w.ts != null &amp;&amp; wtlogReader.has(w.ts)</code> — an mtime stamp-set test, NOT a content-sha compare.
-</p>
-</li>
-<li>Contrast <code>classify.js</code> (&quot;never mtime alone — a restored-stamp mtime over<p>
-edited bytes&quot;): status calls the same files <code>ok</code>, so the two gates diverge.
-</p>
-</li>
-<li><code>test/</code> is the beagle-ext-tests SUBMODULE mount; the over-stage may be<p>
-specific to a sub-mounted dir (sub stamps vs the parent <code>wtlogReader</code>).
-</p>
-</li>
+<li>Repro on a CLEAN store-backed get (<code>jab get file:/$HOME/.be/?/beagle-ext</code> into an empty dir): <code>jab status</code> = <code>214 ok</code> under <code>?/beagle-ext-tests</code>.</li>
+<li><code>jab put test/</code> → exit 0, then <code>jab status</code> shows all 214 files as <code>HH:MM  put test/&lt;path&gt;</code> — every unchanged already-committed file re-staged.</li>
+<li>Live evidence tree: /home/gritzko/JS-072 (do NOT mutate — kept as the repro; its <code>test/</code> shows the same all-<code>put</code> state from a user <code>:put test/</code>).</li>
+<li><code>stage.js:245-269 expandDir(prefix)</code>: unions base+wt paths under prefix; a tracked+present file is &quot;settled&quot; only if <code>w.ts != null &amp;&amp; wtlogReader.has(w.ts)</code> — an mtime stamp-set test, NOT a content-sha compare.</li>
+<li>Contrast <code>classify.js</code> (&quot;never mtime alone — a restored-stamp mtime over edited bytes&quot;): status calls the same files <code>ok</code>, so the two gates diverge.</li>
+<li><code>test/</code> is the beagle-ext-tests SUBMODULE mount; the over-stage may be specific to a sub-mounted dir (sub stamps vs the parent <code>wtlogReader</code>).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>be put &lt;dir&gt;/</code> (incl. a submodule mount) stages ONLY content-changed / new<p>
-files; an unchanged tracked file (wt sha == base sha) emits no <code>put</code> row.
-</p>
-</li>
-<li><code>put &lt;dir&gt;/</code> and <code>status</code> AGREE: a tree <code>status</code> calls all-<code>ok</code> yields an<p>
-empty <code>put</code> (a second <code>put dir/</code> already emits nothing — idempotence).
-</p>
-</li>
+<li><code>be put &lt;dir&gt;/</code> (incl. a submodule mount) stages ONLY content-changed / new files; an unchanged tracked file (wt sha == base sha) emits no <code>put</code> row.</li>
+<li><code>put &lt;dir&gt;/</code> and <code>status</code> AGREE: a tree <code>status</code> calls all-<code>ok</code> yields an empty <code>put</code> (a second <code>put dir/</code> already emits nothing — idempotence).</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Scope to the staging engine (<code>shared/stage.js</code> expandDir) + whatever<p>
-content-sha compare it needs; do not regress bare <code>be put</code> (PUT-004), the explicit-move, or the named-single-file paths.
-</p>
-</li>
-<li>Match <code>classify</code>'s clean determination (content-sha fallback when the mtime<p>
-is not in the stamp-set), not a second divergent gate.
-</p>
-</li>
+<li>Scope to the staging engine (<code>shared/stage.js</code> expandDir) + whatever content-sha compare it needs; do not regress bare <code>be put</code> (PUT-004), the explicit-move, or the named-single-file paths.</li>
+<li>Match <code>classify</code>'s clean determination (content-sha fallback when the mtime is not in the stamp-set), not a second divergent gate.</li>
 <li>Keep idempotence keyed on the full get/post/put stamp-set.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Likely: <code>expandDir</code>'s <code>settled</code> test must fall back to a CONTENT compare<p>
-(base tree sha vs hashed wt bytes) when <code>w.ts</code> is not in the stamp-set, mirroring how <code>classify</code>/status resolve <code>mis</code>/<code>ok</code>; OR reuse the classifier's dirty buckets directly instead of a bespoke mtime gate.
-</p>
-</li>
-<li>Determine whether the root is put (mtime-only gate) or a submodule checkout<p>
-leaving sub-file mtimes outside the sub wtlog stamp-set.  The CLEAN <code>status</code> (<code>214 ok</code>) points at put's gate, not at the files.
-</p>
-</li>
+<li>Likely: <code>expandDir</code>'s <code>settled</code> test must fall back to a CONTENT compare (base tree sha vs hashed wt bytes) when <code>w.ts</code> is not in the stamp-set, mirroring how <code>classify</code>/status resolve <code>mis</code>/<code>ok</code>; OR reuse the classifier's dirty buckets directly instead of a bespoke mtime gate.</li>
+<li>Determine whether the root is put (mtime-only gate) or a submodule checkout leaving sub-file mtimes outside the sub wtlog stamp-set.  The CLEAN <code>status</code> (<code>214 ok</code>) points at put's gate, not at the files.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Repro-first <code>test/</code>: a clean get, assert <code>status</code> is all-<code>ok</code>, then `put<p>
- &lt;sub-dir&gt;/<code> stages ZERO rows (</code>be/test/put/dir-clean-unstamped<code>) </code>4bc5add6`
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Localise: is it sub-mount-specific, or does a plain non-sub <code>put subdir/</code><p>
- over-stage too?  General, not sub-specific (per the repro test header).
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Gate expandDir on content so put agrees with status: <code>stage.js:261-265</code> —<p>
- stamp-set stays the fast path, a MISS falls back to <code>wtEqBase</code> content compare.
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Repro-first <code>test/</code>: a clean get, assert <code>status</code> is all-<code>ok</code>, then <code>put &lt;sub-dir&gt;/</code> stages ZERO rows (<code>be/test/put/dir-clean-unstamped</code>) <code>4bc5add6</code></li>
+<li class="done"><input type="checkbox" checked disabled> Localise: is it sub-mount-specific, or does a plain non-sub <code>put subdir/</code> over-stage too?  General, not sub-specific (per the repro test header).</li>
+<li class="done"><input type="checkbox" checked disabled> Gate expandDir on content so put agrees with status: <code>stage.js:261-265</code> — stamp-set stays the fast path, a MISS falls back to <code>wtEqBase</code> content compare.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Related but DISTINCT from <a href="PUT-005.html">PUT-005</a> (CLOSED moot — a <code>cp -a</code> copied <code>.be</code><p>
-artifact); THIS repros on a clean <code>jab get</code>, so it is a real gate bug.
-</p>
-</li>
-<li>Pairs with <a href="PUT-004.html">PUT-004</a> (bare-stage + submodule recursion) and the classify<p>
-ts↔mtime coherence (a file-mtime must match its provenance row ts).
-</p>
-</li>
+<li>Related but DISTINCT from <a href="PUT-005.html">PUT-005</a> (CLOSED moot — a <code>cp -a</code> copied <code>.be</code> artifact); THIS repros on a clean <code>jab get</code>, so it is a real gate bug.</li>
+<li>Pairs with <a href="PUT-004.html">PUT-004</a> (bare-stage + submodule recursion) and the classify ts↔mtime coherence (a file-mtime must match its provenance row ts).</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED <code>4bc5add6</code> (be/, 2026-07-04 &quot;PUT-006 and test clean-up&quot;):<p>
-<code>shared/stage.js::expandDir</code> <code>settled</code> gate = stamp-set OR <code>wtEqBase</code> content compare, so a get-checkout mtime over baseline-equal bytes stays clean, agreeing with <code>classify</code>/status. Repro <code>be/test/put/dir-clean-unstamped</code>.
-</p>
-</li>
+<li>LANDED <code>4bc5add6</code> (be/, 2026-07-04 &quot;PUT-006 and test clean-up&quot;): <code>shared/stage.js::expandDir</code> <code>settled</code> gate = stamp-set OR <code>wtEqBase</code> content compare, so a get-checkout mtime over baseline-equal bytes stays clean, agreeing with <code>classify</code>/status. Repro <code>be/test/put/dir-clean-unstamped</code>.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

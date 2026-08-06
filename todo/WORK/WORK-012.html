@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORK-012: work view pin-form tracker ahbeh reads the parent's TIP, not its gitlink pin</title>
+<meta property="og:title" content="WORK-012: work view pin-form tracker ahbeh reads the parent's TIP, not its gitlink pin">
+<meta property="og:description" content="A wt tracking a slashless pin-form URI (get ///be#43a754a0… — //WHY) renders +99: placeWt (views/work/work.js:257) hangs it under the mount's PARENT and computes counts(wt.repo, wt.sha, nodeTip(parent)) — the parent repo's own tip sha, fed into the WT's shard keeper. Cross-repo garbage: ancestors(wt tip) = the whole be history (clamp +99), ancestors(alien sha) = {itself} (dag.js walks stop quietly on unknown commits) = behind 1. Investigated 2026-07-19, read-only.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/WORK/WORK-012.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WORK-012: work view pin-form tracker ahbeh reads the parent's TIP, not its gitlink pin</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+A wt tracking a slashless pin-form URI (<code>get ///be#43a754a0…</code> — //WHY) renders <code>[+99][-1]</code>: <code>placeWt</code> (views/work/work.js:257) hangs it under the mount's PARENT and computes <code>counts(wt.repo, wt.sha, nodeTip(parent))</code> — the parent repo's own tip sha, fed into the WT's shard keeper. Cross-repo garbage: ancestors(wt tip) = the whole be history (clamp +99), ancestors(alien sha) = {itself} (dag.js walks stop quietly on unknown commits) = behind 1. Investigated 2026-07-19, read-only.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro live in the forest: //WHY (work/WHY) tracks <code>///be</code> pinned <code>#43a754a0…</code>; journal root tip is <code>#4d8da412…</code> (journal repo), its de-jure <code>be</code> pin IS <code>43a754a0…</code> — correct ahbeh is 0/0, row shows <code>[+99][-1]</code>.</li>
+<li><code>resolveTrack</code> (work.js:221-244): slashless track → <code>{ node: m.parent }</code> — returns ONLY the parent node, DROPPING which mount/subpath the pin names; <code>placeWt</code> then has nothing to look the pin up by.</li>
+<li>The mount repo rows already do it right: <code>nodePins(node, reg)[c.subpath]</code> (work.js:601) per the R2 ruling &quot;a mount reads vs the PARENT's de-jure gitlink pin&quot; (<a href="./dejure-vs-defacto.html">dejure-vs-defacto</a>, work.js:20-22).</li>
+<li>Same wrong-tip shape wherever the parent is a DIFFERENT repo; a same-repo parent merely yields wrong-but-plausible counts.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A pin-form tracker wt's ahbeh reads its cur tip vs the PARENT's de-jure gitlink pin of the tracked mount (<code>nodePins(parent)[subpath]</code>); //WHY renders no counters (0/0).</li>
+<li>A dir-form track (<code>///be/</code>) keeps reading vs the mount's own live tip — unchanged.</li>
+<li>No cross-repo sha ever enters a shard keeper's ancestor walk.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fix inside resolveTrack/placeWt: return the mount node + pin/base bit (or the subpath) instead of pre-collapsing to the parent; hanging position (under the parent) stays as ruled by WORK-007.</li>
+<li>Unpinned mount (no gitlink in the parent's base tree) → no counts, like the repo rows' <code>mc = pin ? … : null</code>.</li>
+<li><a href="/todo/WORK/WORK-011.html">WORK-011</a> rewires counts() onto the graf index — coordinate; this ticket is about WHICH shas compare, not how.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> red repro test/work/pinahbeh: pin-form tracker under a two-repo parent (real 160000 pin), mount ADVANCED past the pin; RED both trackers <code>+1-1</code> (parent-tip garbage), GREEN counter-less. Unpinned mount ALTW = no counts.</li>
+<li class="done"><input type="checkbox" checked disabled> resolveTrack returns { node, pinNode, subpath } for a slashless pin (keeps mount identity); placeWt reads nodePins(pinNode)<a href="./subpath.html">subpath</a>, unpinned -&gt; null counts.</li>
+<li class="open"><input type="checkbox" disabled> verify //WHY row in the real forest goes counter-less — SKIPPED (runs main-tree code), post-land user step.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>none.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>pin-form tracker ahbeh now reads the PARENT's de-jure gitlink pin (nodePins), not nodeTip(parent) — no cross-repo sha enters a shard keeper's walk; dir-form unchanged; unpinned mount -&gt; counter-less.</li>
+<li>Files: views/work/work.js (resolveTrack + placeWt), test/work/pinahbeh/run.sh (new focused case).</li>
+<li>Evidence: pinahbeh RED (PINW/ALTW <code>+1-1</code>) -&gt; GREEN (counter-less); test/work/view + test/graf/parity green.</li>
+<li>Suggested commit: WORK-012: pin-form tracker ahbeh vs parent gitlink pin</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

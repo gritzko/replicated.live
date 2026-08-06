@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DOG-012</title>
+<title>DOG-012: BRAM fallback double-counts region; alignment + recursion hardening</title>
+<meta property="og:title" content="DOG-012: BRAM fallback double-counts region; alignment + recursion hardening">
+<meta property="og:description" content="dog/BRAM.c's bramregion (BRAM.c:114-131) silently corrupts the edit list on an inner-diff failure. When BRAMu64s fails (NOROOM/budget), it appends a wholesale DEL(olen)+INS(nlen) — but the failed recursion has usually ALREADY appended part of the region into the caller-owned edl (BRAMu64s rewinds BASS, never the edl gauge; failure can hit mid-way through bramcore steps 4/5, :301-311). The region is double-counted, bramregion returns OK, so the edit list no longer sums to the token counts and the weave/merge layer applies a WRONG diff with no error. The rollback is subtle: DIFFu64AddEntry coalesces into the previous entry (abc/DIFFx.h:12-24), so a fix must snapshot BOTH edl0 and the trailing entry's value before recursing and restore both before the fallback. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DOG/DOG-012.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>DOG-012 <a href="./HIGH.html">HIGH</a>: BRAM fallback double-counts region; alignment + recursion hardening</h1>
+<h1>DOG-012: BRAM fallback double-counts region; alignment + recursion hardening</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
 <p>
 <code>dog/BRAM.c</code>'s <code>bram_region</code> (<code>BRAM.c:114-131</code>) silently corrupts the edit list on an inner-diff failure. When <code>BRAMu64s</code> fails (NOROOM/budget), it appends a wholesale <code>DEL(olen)+INS(nlen)</code> — but the failed recursion has usually ALREADY appended part of the region into the caller-owned <code>edl</code> (<code>BRAMu64s</code> rewinds BASS, never the <code>edl</code> gauge; failure can hit mid-way through <code>bram_core</code> steps 4/5, <code>:301-311</code>). The region is double-counted, <code>bram_region</code> returns OK, so the edit list no longer sums to the token counts and the weave/merge layer applies a WRONG diff with no error. The rollback is subtle: <code>DIFFu64AddEntry</code> coalesces into the previous entry (<code>abc/DIFFx.h:12-24</code>), so a fix must snapshot BOTH <code>edl[0]</code> and the trailing entry's value before recursing and restore both before the fallback. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -19,29 +28,14 @@
 <h3>Context</h3>
 <ul>
 <li>Double-count: <code>BRAM.c:114-131</code> fallback after a partial inner append.</li>
-<li>Misaligned typed access UB: all scratch carved <code>a_carve(u8,…)</code> (1-byte align,<p>
-<code>abc/Bx.h:507</code>) then cast to <code>bram_line*</code>(u64 member)/<code>bram_pair*</code>/<code>u64*</code>/<code>u32*</code> (<code>BRAM.c:174-244</code>); after the byte carves <code>ina_buf</code>/<code>inb_buf</code> (<code>:205-206</code>) the head has arbitrary parity → <code>ah_a=(u64*)ah_a_buf[0]</code> (<code>:241</code>) misaligned when <code>la_n%8!=0</code>. SIGBUS on strict-alignment targets, UBSan noise.
-</p>
-</li>
-<li>Unbounded mutual recursion: <code>bram_region</code>→<code>BRAMu64s</code>→<code>bram_core</code>→<code>bram_region</code><p>
-(<code>:127</code>); BASS rewinds per level (MEM-018) but the C stack does not — depth bounded only by anchor nesting (worst case O(#lines)) → stack overflow.
-</p>
-</li>
-<li>32-bit size wrap: <code>(na+1)*sizeof(bram_line)</code> (<code>:174-175</code>, same at <code>:188</code>) wraps<p>
-in 32-bit before the size_t multiply; <code>na=UINT32_MAX</code> → zero-size carve then OOB write in <code>bram_lines</code>. Unreachable today (4G tokens) but wrong arithmetic.
-</p>
-</li>
-<li>Integrity: equality is declared purely by UNSEEDED 64-bit <code>RAPHash</code> (<code>:57-82</code>,<p>
-<code>:222-230</code>, <code>:283-313</code>) with NO byte re-check on a hash hit — unlike NEIL's <code>NEILTokEq</code> <code>memcmp</code>. A predictable collision renders a real change as <code>DIFF_EQ</code>, so WEAVE keeps the OLD bytes and silently drops the NEW change (~2^64 targeted, hence integrity-grade, but the missing verify is a genuine gap).
-</p>
-</li>
+<li>Misaligned typed access UB: all scratch carved <code>a_carve(u8,…)</code> (1-byte align, <code>abc/Bx.h:507</code>) then cast to <code>bram_line*</code>(u64 member)/<code>bram_pair*</code>/<code>u64*</code>/<code>u32*</code> (<code>BRAM.c:174-244</code>); after the byte carves <code>ina_buf</code>/<code>inb_buf</code> (<code>:205-206</code>) the head has arbitrary parity → <code>ah_a=(u64*)ah_a_buf[0]</code> (<code>:241</code>) misaligned when <code>la_n%8!=0</code>. SIGBUS on strict-alignment targets, UBSan noise.</li>
+<li>Unbounded mutual recursion: <code>bram_region</code>→<code>BRAMu64s</code>→<code>bram_core</code>→<code>bram_region</code> (<code>:127</code>); BASS rewinds per level (MEM-018) but the C stack does not — depth bounded only by anchor nesting (worst case O(#lines)) → stack overflow.</li>
+<li>32-bit size wrap: <code>(na+1)*sizeof(bram_line)</code> (<code>:174-175</code>, same at <code>:188</code>) wraps in 32-bit before the size_t multiply; <code>na=UINT32_MAX</code> → zero-size carve then OOB write in <code>bram_lines</code>. Unreachable today (4G tokens) but wrong arithmetic.</li>
+<li>Integrity: equality is declared purely by UNSEEDED 64-bit <code>RAPHash</code> (<code>:57-82</code>, <code>:222-230</code>, <code>:283-313</code>) with NO byte re-check on a hash hit — unlike NEIL's <code>NEILTokEq</code> <code>memcmp</code>. A predictable collision renders a real change as <code>DIFF_EQ</code>, so WEAVE keeps the OLD bytes and silently drops the NEW change (~2^64 targeted, hence integrity-grade, but the missing verify is a genuine gap).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>A failed inner diff leaves <code>edl</code> byte-identical to its pre-recursion state<p>
-before the wholesale fallback is appended (snapshot head + trailing entry).
-</p>
-</li>
+<li>A failed inner diff leaves <code>edl</code> byte-identical to its pre-recursion state before the wholesale fallback is appended (snapshot head + trailing entry).</li>
 <li>Typed scratch carved with the element type so <code>bAcquire</code> alignment applies.</li>
 <li>A depth counter bottoms out at <code>DIFFu64s</code>/wholesale DEL+INS past a cap.</li>
 <li>Size arithmetic is <code>size_t</code> throughout.</li>
@@ -54,17 +48,11 @@ before the wholesale fallback is appended (snapshot head + trailing entry).
 <h2>WIP</h2>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> T1 repro: a region that fails the inner budget mid-append; assert the edit<p>
- list still sums to token counts (currently double-counts silently).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> T1 repro: a region that fails the inner budget mid-append; assert the edit list still sums to token counts (currently double-counts silently).</li>
 <li class="open"><input type="checkbox" disabled> T2 snapshot/restore <code>edl</code> head + trailing entry around the fallback.</li>
 <li class="open"><input type="checkbox" disabled> T3 typed carves for alignment; <code>size_t</code> sizing.</li>
 <li class="open"><input type="checkbox" disabled> T4 recursion depth cap.</li>
-<li class="open"><input type="checkbox" disabled> T5 byte-recheck (<code>memcmp</code>) on a hash-equal line/token before emitting<p>
- <code>DIFF_EQ</code> (and/or seed <code>RAPHash</code>), closing the collision integrity gap.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> T5 byte-recheck (<code>memcmp</code>) on a hash-equal line/token before emitting <code>DIFF_EQ</code> (and/or seed <code>RAPHash</code>), closing the collision integrity gap.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -74,5 +62,16 @@ before the wholesale fallback is appended (snapshot head + trailing entry).
 <ul>
 <li>OPEN — filed 2026-07-06, the libdog code-quality review session.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

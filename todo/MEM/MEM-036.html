@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-036</title>
+<title>MEM-036: WEAVE EDL fallback raw writes can overflow on BRAM NOROOM (graf/WEAVE.c)</title>
+<meta property="og:title" content="MEM-036: WEAVE EDL fallback raw writes can overflow on BRAM NOROOM (graf/WEAVE.c)">
+<meta property="og:description" content="weavediffcore's BRAM-failure fallback does edlg1=edlg0 then two raw edlg1++ writes with no capacity check. The gauge convention (DIFFx.h:14-22) is 0=write cursor, 1=cap end, 2=base; BRAMu64s shares the same gauge and advances edl0 via DIFFu64AddEntry, leaving edl0==edl1==edlbuf3 on DIFFNOROOM. The fallback then writes AT edlbuf3 = heap OOB. The olen&gt;0/nlen&gt;0 early-returns only ensure cap≥2 from base, not that BRAM left 2 free slots. The goal is to make the fallback use the checked DIFF path so it cannot overflow, and to fix the dropped-write logic bug.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-036.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>MEM-036: WEAVE EDL fallback raw writes can overflow on BRAM NOROOM (graf/WEAVE.c)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>weave_diff_core</code>'s BRAM-failure fallback does <code>edlg[1]=edlg[0]</code> then two raw <code>*edlg[1]++</code> writes with no capacity check. The gauge convention (<code>DIFFx.h:14-22</code>) is <code>[0]</code>=write cursor, <code>[1]</code>=cap end, <code>[2]</code>=base; <code>BRAMu64s</code> shares the same gauge and advances <code>edl[0]</code> via <code>DIFFu64AddEntry</code>, leaving <code>edl[0]==edl[1]==edlbuf[3]</code> on DIFFNOROOM. The fallback then writes AT <code>edlbuf[3]</code> = heap OOB. The <code>olen&gt;0</code>/<code>nlen&gt;0</code> early-returns only ensure cap≥2 from base, not that BRAM left 2 free slots. The goal is to make the fallback use the checked DIFF path so it cannot overflow, and to fix the dropped-write logic bug.
 </p>
@@ -38,5 +47,16 @@ Use the checked DIFF path; advance the cursor.
 <li>Replace the two <code>*edlg[1]++</code> writes with checked <code>DIFFAddEntry</code>/<code>DIFFu64AddEntry</code> against <code>edlbuf</code> so NOROOM propagates instead of overflowing.</li>
 <li>Advance <code>edl[0]</code> (not just <code>edl[1]</code>) so <code>NEILCanon</code>'s <code>n=edl[0]-edl[2]</code> sees the entries; drop the manual <code>edlg[1]=edlg[0]</code> reset. If raw writes are kept, add <code>must(edlg[0]+2 &lt;= edlbuf[3], …)</code>.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

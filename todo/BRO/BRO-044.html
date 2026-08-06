@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-044 DONE: mtime.idx — cache each blob's introducing commit time</title>
+<meta property="og:title" content="BRO-044 DONE: mtime.idx — cache each blob's introducing commit time">
+<meta property="og:description" content="Every view that shows &quot;when was this last touched&quot; re-walks history to derive it: be list costs 2.8 s scoped to todo/ and 18 s at the repo root, and STILL renders entries unk at the LISTMAXWALK ceiling. Cache it instead, keyed by the OBJECT: (hashlet60 | type:4) -&gt; ron60 ts, the commit time of the OLDEST commit carrying that blob or tree. A blob-keyed row never invalidates — new content is a new key — so the cache is filled once and only ever grows. Consumers: /todo/BRO/BRO-025's :list last-touch column via shared/lastcommit.js, and the postponed time-sort of /todo/TODO/TODO-004.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BRO/BRO-044.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-044 <a href="./DONE.html">DONE</a>: <code>mtime.idx</code> — cache each blob's introducing commit time</h1>
+<div>
+<p>
+Now: DONE Sev: MED
+</p>
+</div>
+<p>
+Every view that shows &quot;when was this last touched&quot; re-walks history to derive it: <code>be list</code> costs 2.8 s scoped to <code>todo/</code> and 18 s at the repo root, and STILL renders entries <code>unk</code> at the <code>LIST_MAX_WALK</code> ceiling. Cache it instead, keyed by the OBJECT: <code>(hashlet60 | type:4) -&gt; ron60 ts</code>, the commit time of the OLDEST commit carrying that blob or tree. A blob-keyed row never invalidates — new content is a new key — so the cache is filled once and only ever grows. Consumers: <a href="/todo/BRO/BRO-025.html">BRO-025</a>'s <code>:list</code> last-touch column via <code>shared/lastcommit.js</code>, and the postponed time-sort of <a href="/todo/TODO/TODO-004.html">TODO-004</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>shared/lastcommit.js</code> (LIST-001) walks tip→first-parent per invocation, diffing each commit's tree, and halts only when EVERY entry is attributed or the ceiling hits.</li>
+<li>Measured 2026-08-03: <code>be list</code> 18.0 s at the root, <code>be list todo</code> 2.8 s, <code>be list todo/TODO</code> 2.6 s — and <code>TODO-001.mkd</code>/<code>TODO-002.mkd</code> still come back <code>unk</code>.</li>
+<li>One ancient untouched entry drags the walk to the bottom of history, so the cost is set by the STALEST row on screen, not the freshest.</li>
+<li>A path-keyed cache would expire on every commit and need an ancestry check after a reset; an object-keyed one never does — that is the whole reason for this shape.</li>
+<li><code>(hashlet60 | type:4)</code> is the house key already: <code>WHIFF.h:7</code> documents the <code>id=0</code> case where the hashlet spans 60 bits, and <code>keeper.idx</code> uses exactly it.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+<code>shared/mtimeidx.js</code>: one <code>kv64</code> lane, ext <code>mtime.idx</code>, in the store shard beside <code>keeper.idx</code> and <code>meta.idx</code>, filled incrementally by the history walk and read by every last-touch column.
+</p>
+<ul>
+<li>Row: key <code>(hashlet60 | type:4)</code> -&gt; val a ron60 timestamp; type 3 a blob, type 2 a tree.</li>
+<li>ALL blobs, not just <code>todo/</code> — <code>:list</code> has the same problem the ticket board does, and one lane serves both.</li>
+<li>Attribution: the commit that CHANGES a path, first-change-seen walking newest-first — which IS that content's oldest carrier, and never moves as history grows.</li>
+<li>Tree rows make the walk sublinear: a cached <code>(tree hashlet, type 2)</code> answers a whole dir entry, so <code>:list</code> never descends an unchanged subtree.</li>
+<li>Two sentinel marks: the tip as of the last run (walk the new commits at the head) and the deepest commit reached (the tail frontier, resumed only when a query needs rows not yet attributed).</li>
+<li>Retrofit <code>shared/lastcommit.js</code> to READ the lane and FILL it, so <code>views/list/list.js</code> and <a href="/todo/TODO/TODO-004.html">TODO-004</a> both inherit it without their own walk.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Bound the walk to what is on screen: attribute the visible rows and stop, rather than &quot;halt when every entry is attributed&quot; — the ceiling exists because the current walk cannot stop early.</li>
+<li>Unattributed rows render blank and sort last, stably; they attribute when scrolled or filtered down to.</li>
+<li>Only the MARKS can go stale: if the recorded commit is no longer an ancestor (reset, rebase), drop both marks and re-walk — every cached row stays valid, because an object's oldest carrier does not depend on the branch.</li>
+<li>Dirty files never touch the lane: their bytes hash to no committed blob, the lookup misses, and the fs mtime answers (<a href="/todo/TODO/TODO-004.html">TODO-004</a>'s freshness rule).</li>
+<li>The header must say the lane holds COMMIT times despite the name — the fs mtime only ever appears live, for dirty files.</li>
+<li>Attribution follows CONTENT, so a file reverted to earlier text carries that earlier timestamp; accepted, not a bug.</li>
+<li>The shard is resolved through <code>shared/store.js</code>, never composed by hand, and never <code>&lt;wt&gt;/.be</code> (a FILE when the store is not colocated).</li>
+<li>Rows put between two commits must fit ONE 4 KB memtable page (256 kv64 rows), so batch at 200 — the <code>shared/ingest.js</code> <code>idxWriter</code> discipline.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Object-keyed, not path-keyed: the row is immutable by construction, so there is no invalidation protocol to get wrong.</li>
+<li>Its own ext rather than a reserved code in <code>meta.idx</code> — that lane is path-keyed, and mixing two orderings in one run buys nothing.</li>
+<li>Newest-first with first-change-seen, not oldest-first: it lets the walk stop at screen depth, and it yields the oldest carrier anyway.</li>
+<li>Known trap: <code>abc.index</code>'s <code>prefix</code>/<code>range</code> silently return zero rows when the upper bound reaches 2^64 — use the <code>seek(0n)</code>+<code>next()</code> cursor for a full pass.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> <code>shared/mtimeidx.js</code>: row pack/unpack, lane open/close, the two sentinel marks</li>
+<li class="open"><input type="checkbox" disabled> fill: newest-first walk over <code>changedpaths</code>, first-change-seen, blob AND tree rows, batched commits</li>
+<li class="open"><input type="checkbox" disabled> read path + the bounded &quot;attribute only what is on screen&quot; stop rule</li>
+<li class="open"><input type="checkbox" disabled> retrofit <code>shared/lastcommit.js</code> onto the lane; <code>views/list/list.js</code> keeps its output</li>
+<li class="open"><input type="checkbox" disabled> mark handling: head gap, tail frontier, drop-and-re-walk when the mark is no longer an ancestor</li>
+<li class="open"><input type="checkbox" disabled> golden: cold fill vs warm hit, a new commit extending the head, a deeper query extending the tail, a reverted file's timestamp, a rewritten history dropping the marks</li>
+<li class="open"><input type="checkbox" disabled> measure <code>be list</code> at the root before and after — the number in the intro is the bar</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="/todo/TODO/TODO-004.html">TODO-004</a>'s time-sort is postponed ON this ticket; it consumes the lane once it lands.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>landed <code>///be/#3adde9ed</code>: <code>shared/mtimeidx.js</code> + the <code>shared/lastcommit.js</code> retrofit; consumers (<a href="/todo/TODO/TODO-005.html">TODO-005</a> fade, TODO-004 time-sort) unblock.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

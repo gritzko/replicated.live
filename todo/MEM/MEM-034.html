@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-034</title>
+<title>MEM-034 DONT: main() script slurp unchecked ftell/malloc/fread → OOB (js/main.cpp)</title>
+<meta property="og:title" content="MEM-034 DONT: main() script slurp unchecked ftell/malloc/fread → OOB (js/main.cpp)">
+<meta property="og:description" content="The script-file loader in main() slurps the file with no validation. long len = ftell(f) is unchecked: on a non-seekable file (pipe/FIFO/char device) ftell returns -1, so malloc(len+1) becomes malloc(0), fread is called with count (sizet)-1, and scriptlen=='\0' writes script-1 — a deterministic heap-underflow OOB write. The malloc return is unchecked (NULL write under OOM) and the fread count is ignored (uninitialized bytes before the NUL parsed by JABCExecute). It also fopens argv1 instead of the parsed scriptfile. Local CLI utility (operator is the actor), but the underflow is trivially reachable. The goal is to validate ftell&gt;=0, check malloc, and terminate at the actual fread count.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-034.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>MEM-034: main() script slurp unchecked ftell/malloc/fread → OOB (js/main.cpp)</h1>
+<h1>MEM-034 <a href="./DONT.html">DONT</a>: main() script slurp unchecked ftell/malloc/fread → OOB (js/main.cpp)</h1>
+<div>
+<p>
+Now: DONT
+</p>
+</div>
 <p>
 The script-file loader in <code>main()</code> slurps the file with no validation. <code>long len = ftell(f)</code> is unchecked: on a non-seekable file (pipe/FIFO/char device) <code>ftell</code> returns -1, so <code>malloc(len+1)</code> becomes <code>malloc(0)</code>, <code>fread</code> is called with count <code>(size_t)-1</code>, and <code>script[len]=='\0'</code> writes <code>script[-1]</code> — a deterministic heap-underflow OOB write. The <code>malloc</code> return is unchecked (NULL write under OOM) and the <code>fread</code> count is ignored (uninitialized bytes before the NUL parsed by <code>JABCExecute</code>). It also <code>fopen</code>s <code>argv[1]</code> instead of the parsed <code>script_file</code>. Local CLI utility (operator is the actor), but the underflow is trivially reachable. The goal is to validate <code>ftell&gt;=0</code>, check <code>malloc</code>, and terminate at the actual <code>fread</code> count.
 </p>
@@ -38,5 +47,16 @@ Validate sizes; terminate at the read count.
 <li>Check <code>ftell()&gt;=0</code> and <code>malloc()!=NULL</code>; bail with an error on failure.</li>
 <li>Terminate with the actual <code>fread</code> count <code>n</code> (<code>script[n]='\0'</code>); use <code>script_file</code> (not <code>argv[1]</code>) in <code>fopen</code>.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

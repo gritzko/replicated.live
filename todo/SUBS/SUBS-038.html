@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SUBS-038</title>
+<title>SUBS-038: a sub re-get whose .gitmodules url BASENAME changed since the first mount fetches the wrong shard → object-not-found</title>
+<meta property="og:title" content="SUBS-038: a sub re-get whose .gitmodules url BASENAME changed since the first mount fetches the wrong shard → object-not-found">
+<meta property="og:description" content="When a submodule's declared .gitmodules url BASENAME differs between the original mount and a later re-get (GET or whole-tree PATCH), the re-get fetches into a shard named by the NEW url basename while the existing mount + checkout live under the OLD basename. subspinpresent / KEEPHas then reports the pin present in the wrong shard, SubMount short-circuits, and the spawned sniff get &lt;pin&gt; opens the mount's shard and fails object not found / SNIFFFAIL / BEDOGEXIT. Found while building the PATCH-005 hermetic fixture; not the real dogs/journal flow (url basenames are stable there), so low priority — but a real latent gap.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/SUBS/SUBS-038.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -18,36 +22,29 @@ When a submodule's declared <code>.gitmodules</code> url BASENAME differs betwee
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Repro: clone a beagle parent whose sub <code>ch</code> is declared with url<p>
-basename <code>ch</code>; later rewrite the committed <code>.gitmodules</code> url to a different basename (<code>dead-libch</code>) and <code>be get</code> / <code>be patch</code> an advanced pin.  The fetch targets the <code>dead-libch</code> shard but the mount is <code>ch</code> → the child checkout reads <code>ch</code>, misses the pin.
-</p>
-</li>
-<li>Sibling-shard swap (<code>subs_sibling_shard_has_pin</code>, sniff/SUBS.c) keys<p>
-on the PATH basename, but the SHARD dir + anchor are named by the URL basename — they diverge when the url basename changes.
-</p>
-</li>
-<li>Workaround in tests: keep the dead url basename STABLE from the first<p>
-clone (so the shard name never changes).  <a href="../PATCH/PATCH-005.html">PATCH-005</a>/008 guard tests (test/patch/38, 41) do this.
-</p>
-</li>
+<li>Repro: clone a beagle parent whose sub <code>ch</code> is declared with url basename <code>ch</code>; later rewrite the committed <code>.gitmodules</code> url to a different basename (<code>dead-libch</code>) and <code>be get</code> / <code>be patch</code> an advanced pin.  The fetch targets the <code>dead-libch</code> shard but the mount is <code>ch</code> → the child checkout reads <code>ch</code>, misses the pin.</li>
+<li>Sibling-shard swap (<code>subs_sibling_shard_has_pin</code>, sniff/SUBS.c) keys on the PATH basename, but the SHARD dir + anchor are named by the URL basename — they diverge when the url basename changes.</li>
+<li>Workaround in tests: keep the dead url basename STABLE from the first clone (so the shard name never changes).  <a href="../PATCH/PATCH-005.html">PATCH-005</a>/008 guard tests (test/patch/38, 41) do this.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>A sub re-get keys the shard/anchor consistently across mounts — prefer<p>
-the PATH basename (stable) over the URL basename, or detect+migrate an existing OLD-basename mount when the url basename changes.
-</p>
-</li>
+<li>A sub re-get keys the shard/anchor consistently across mounts — prefer the PATH basename (stable) over the URL basename, or detect+migrate an existing OLD-basename mount when the url basename changes.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>OPEN — filed 2026-06-27 (<a href="../PATCH/PATCH-005.html">PATCH-005</a> fixture session).  Latent edge<p>
-case (url-basename change mid-stream); not blocking the PATCH chain.
-</p>
-</li>
-<li>Audit 2026-07-07: no commits reference SUBS-038; unchanged.  NOTE: not<p>
-listed on the top board (<code>todo/README.mkd</code>) — a board gap (LOW, latent).
-</p>
-</li>
+<li>OPEN — filed 2026-06-27 (<a href="../PATCH/PATCH-005.html">PATCH-005</a> fixture session).  Latent edge case (url-basename change mid-stream); not blocking the PATCH chain.</li>
+<li>Audit 2026-07-07: no commits reference SUBS-038; unchanged.  NOTE: not listed on the top board (<code>todo/README.mkd</code>) — a board gap (LOW, latent).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PUT-015: retire put old#new — mv is delete+put rows, shipped as a be mv extension</title>
+<meta property="og:title" content="PUT-015: retire put old#new — mv is delete+put rows, shipped as a be mv extension">
+<meta property="og:description" content="Raised by gritzko 2026-07-24: the verb model does not handle mv well. mv is a binary op (src, dst) in a unary URI grammar, so the /wiki/PUT move form smuggles the dst into #frag, which everywhere else carries a sha pin or a message. Chosen direction (option c of the 2026-07-24 discussion): decompose mv into the primitive delete old + put new rows and ship the user gesture as a be mv extension per /wiki/Extensions, keeping the verb basis pure and the wtlog free of a third row type.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PUT/PUT-015.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PUT-015: retire <code>put old#new</code> — mv is delete+put rows, shipped as a <code>be mv</code> extension</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+Raised by gritzko 2026-07-24: the verb model does not handle mv well. mv is a binary op (src, dst) in a unary URI grammar, so the <a href="/wiki/PUT.html">PUT</a> move form smuggles the dst into <code>#frag</code>, which everywhere else carries a sha pin or a message. Chosen direction (option c of the 2026-07-24 discussion): decompose mv into the primitive <code>delete old</code> + <code>put new</code> rows and ship the user gesture as a <code>be mv</code> extension per <a href="/wiki/Extensions.html">Extensions</a>, keeping the verb basis pure and the wtlog free of a third row type.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+<code>be put old.c#new.c</code> (<a href="/wiki/PUT.html">PUT</a> §CLI) is the declared move form; bare put's mis↔unk same-sha auto-pair (<a href="/todo/PUT/PUT-009.html">PUT-009</a>) is the detected one. The declared form is the wart.
+</p>
+<ul>
+<li><code>#frag</code> overload: <code>be put file.c#abc123</code> — rename to <code>abc123</code>, or pin/reset? 6..40-hex hashlets make the parse genuinely ambiguous.</li>
+<li>The fragment slot is crowded further by the row-edit shapes: <code>put '#~1'</code> (<a href="/todo/PUT/PUT-014.html">PUT-014</a>) and the proposed <code>delete file.c#</code>.</li>
+<li>A move is not a new kind of change: it is a removal plus an addition sharing a sha; the auto-pair already reasons in those terms.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Replace the URI move form with an extension that composes the existing primitives.
+</p>
+<ul>
+<li><code>be mv &lt;old&gt; &lt;new&gt;</code>: rename(2) on disk, then stage <code>delete old</code> + <code>put new</code> rows sharing the blob sha; refusals in plain words.</li>
+<li>Retire the <code>#dst</code> parse and the PUTNOSRC/PUTDSTBAD/PUTNODIR family from the PUT verb; amend <a href="/wiki/PUT.html">PUT</a> accordingly (gritzko's edit).</li>
+<li>Keep the <a href="/todo/PUT/PUT-009.html">PUT-009</a> bare-put mis↔unk auto-pair as the no-typing fallback for shell-<code>mv</code> users; PUTAMBIG advice points at <code>be mv</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Extensions have no store SDK yet (<a href="/wiki/Extensions.html">Extensions</a> §SDK): <code>be mv</code> reaches the repo by spawning <code>be delete</code> / <code>be put</code> via <code>io.spawn</code>.</li>
+<li>No new wtlog row type; POST-side pairing must work from the two primitive rows exactly as it does for the auto-pair path.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Proposed by the agent, each point awaiting gritzko's verdict.
+</p>
+<ul>
+<li>Row shape: plain <code>delete old</code> + <code>put new</code>, no mv row; POST/blame pair them by sha, the same machinery as the PUT-009 auto-pair.</li>
+<li>Order: rename(2) first, so the tree state is exactly the mis+unk pair; then stage the pair scoped to these two paths only.</li>
+<li>Open: <code>be delete &lt;mis-path&gt;</code> must stage the delete row — <a href="/wiki/DELETE.html">DELETE</a> &quot;already-absent is a no-op&quot; needs to mean untracked, not mis.</li>
+<li>Open: a dirty src moves fine (put hashes the moved bytes), but then sha-pairing needs the base sha, not the dirty sha — clarify.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> gritzko: confirm retiring <code>put old#new</code> and amend <a href="/wiki/PUT.html">PUT</a> (spec is his)</li>
+<li><a href="./ .html"> </a> <code>be/mv.js</code> in beagle-ext: arg check, rename(2), spawn delete+put</li>
+<li><a href="./ .html"> </a> retire the <code>#dst</code> parse and move-form errors from the PUT verb path</li>
+<li><a href="./ .html"> </a> repro-first tests: clean mv, dirty mv, dst exists, dst parent missing, sub-crossing mv</li>
+<li><a href="./ .html"> </a> reword PUTAMBIG advice to point at <code>be mv</code></li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>none yet</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>pending</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

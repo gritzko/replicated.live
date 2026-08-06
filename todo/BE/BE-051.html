@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-051: todo view — WORK-005 freshness greyscale on ticket rows</title>
+<meta property="og:title" content="BE-051: todo view — WORK-005 freshness greyscale on ticket rows">
+<meta property="og:description" content="Ordered by gritzko 2026-07-19: the todo board (BE-038 view, be/views/todo/todo.js) should fade its rows by age exactly like the work view does since /todo/WORK/WORK-005 (e4614c19). The formula is TAKEN FROM THE CODE, views/work/work.js:400-412 fadeHex(ts): - days = floor((ronToMs(be.now) - ronToMs(ts)) / 24h); perceptual ramp lvl = days&lt;=0 ? 0 : min(days+1, 8) (day 1 jumps to #222, #000/#111 indistinguishable); channel = lvl0x11 → fresh #000000 .. week+ #888888. - Delivery: a row-leading bare #rrggbb O token (pager-only, btns guard work.js:419); view/bro.js paintWhyRow tints the row's default cells; the plain path stays chrome-free.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BE/BE-051.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-051: todo view — WORK-005 freshness greyscale on ticket rows</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Ordered by gritzko 2026-07-19: the todo board (<a href="./BE-038.html">BE-038</a> view, be/views/todo/todo.js) should fade its rows by age exactly like the work view does since <a href="/todo/WORK/WORK-005.html">WORK-005</a> (<code>e4614c19</code>). The formula is TAKEN FROM THE CODE, views/work/work.js:400-412 <code>fadeHex(ts)</code>:
+</p>
+<ul>
+<li>days = floor((ronToMs(be.now) - ronToMs(ts)) / 24h); perceptual ramp lvl = days&lt;=0 ? 0 : min(days+1, 8) (day 1 jumps to #222, #000/#111 indistinguishable); channel = lvl*0x11 → fresh #000000 .. week+ #888888.</li>
+<li>Delivery: a row-leading bare <code>#rrggbb</code> O token (pager-only, <code>btns</code> guard work.js:419); view/bro.js <code>paintWhyRow</code> tints the row's default cells; the plain path stays chrome-free.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Todo rows fade on the same greyscale ramp: a ticket page's freshness ts drives <code>fadeHex</code>, freshest tickets black, week+ old at #888.
+</p>
+<ul>
+<li>Freshness source for a page: the ticket file's mtime (io.stat) — the board already stats pages in <code>pageFile</code>.</li>
+<li>Same delivery: leading <code>#rrggbb</code> O token per row in the pager, plain output untouched.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Reuse, don't duplicate: lift <code>fadeHex</code> into a shared helper (view/bro.js or shared/render) and point BOTH views at it — no second copy of the ramp.</li>
+<li>be.now is the time truth (never read-back), ronToMs conversions as in work.js.</li>
+<li>No pager changes: <code>paintWhyRow</code> already applies the token.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> extract <code>fadeHex</code> to the shared seam; work view keeps behavior (view test stays green)</li>
+<li class="open"><input type="checkbox" disabled> red: todo view golden pins a fresh row #000000 and an aged row's grade</li>
+<li class="open"><input type="checkbox" disabled> feed page mtime → fadeHex O token on todo rows, pager-only; green + pty look</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

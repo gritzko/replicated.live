@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SUBS-012</title>
+<title>SUBS-012: diff / object / history projectors do not cross submodule boundaries (LANDED)</title>
+<meta property="og:title" content="SUBS-012: diff / object / history projectors do not cross submodule boundaries (LANDED)">
+<meta property="og:description" content="MEDIUM — LANDED 7d37f90f (2026-06-06). Reused SUBS-011's machinery in two shapes (beagle/BE.cli.c): whole-tree fan-out (diff:/tree:/refs: added to beprojectorrecurses — diff: aggregates each sub's path-prefixed working-tree changes) and path-in-mount routing (BEProjectorRouteToMount + bepathinmount — a path-bearing projector whose path lands inside a mount is rewritten mount-relative and relayed into the sub shard). Covered: diff: (aggregate), tree:&lt;gitlink&gt; (descends), blob:&lt;subpath&gt;?ref, log:/blame: on a sub path. Deferred: refs:? sub-shard inclusion — refs: itself returns &quot;projector not implemented&quot; in keeper (pre-existing gap), so the fan-out hook is wired but has nothing to fan into yet. Repros test/diff/06, test/tree/01 added. (Separate pre-existing parent-side bug found here: blob:&lt;path&gt; without ?ref → KEEPNONE, filed as SUBS-015.)">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/SUBS/SUBS-012.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -20,41 +24,17 @@
 </p>
 <h2>Observed (fixture: parent + <code>vendor/sub</code>)</h2>
 <ul>
-<li><strong><code>diff:</code></strong> — a dirty <strong>parent</strong> file shows (<code>+// DIRTYPARENT</code> on <code>main.c</code>),<p>
-but a dirty <strong>sub</strong> file (<code>vendor/sub/core.c</code>) never appears.  <code>be diff:</code> does not aggregate sub working-tree changes.
-</p>
-</li>
-<li><strong><code>tree:vendor/sub?master</code></strong> → <code>PROJFAIL</code> (does not list the gitlink entry<p>
-nor descend into the sub tree).
-</p>
-</li>
-<li><strong><code>blob:vendor/sub/core.c?master</code></strong> → <code>KEEPNONE</code> (the path is a gitlink in<p>
-the parent shard; blob resolution does not hop into the sub shard).
-</p>
-</li>
-<li><strong>`refs:?</strong><strong>`</strong> — lists no sub refs (the sub shard's <code>?/&lt;sub&gt;/.&lt;parent&gt;/…</code><p>
-branches are invisible).
-</p>
-</li>
-<li><strong><code>log:</code> / <code>blame:</code></strong> — operate on the parent history only; no per-sub or<p>
-sub-path-aware view.
-</p>
-</li>
+<li><strong><code>diff:</code></strong> — a dirty <strong>parent</strong> file shows (<code>+// DIRTYPARENT</code> on <code>main.c</code>), but a dirty <strong>sub</strong> file (<code>vendor/sub/core.c</code>) never appears.  <code>be diff:</code> does not aggregate sub working-tree changes.</li>
+<li><strong><code>tree:vendor/sub?master</code></strong> → <code>PROJFAIL</code> (does not list the gitlink entry nor descend into the sub tree).</li>
+<li><strong><code>blob:vendor/sub/core.c?master</code></strong> → <code>KEEPNONE</code> (the path is a gitlink in the parent shard; blob resolution does not hop into the sub shard).</li>
+<li><strong>`refs:?</strong><strong>`</strong> — lists no sub refs (the sub shard's <code>?/&lt;sub&gt;/.&lt;parent&gt;/…</code> branches are invisible).</li>
+<li><strong><code>log:</code> / <code>blame:</code></strong> — operate on the parent history only; no per-sub or sub-path-aware view.</li>
 </ul>
 <h2>Expected</h2>
 <ul>
-<li><code>diff:</code> should aggregate each mounted sub's working-tree diff, path-<p>
-prefixed (one merged hunk stream), like the verb reports already do.
-</p>
-</li>
-<li><code>tree:&lt;gitlinkpath&gt;</code> should either show the <code>160000</code> gitlink line or<p>
-descend into the sub tree when the path points inside a mount.
-</p>
-</li>
-<li><code>blob:&lt;subpath&gt;?&lt;ref&gt;</code> and <code>log:</code>/<code>blame:</code> on a sub path should resolve in<p>
-the sub shard.
-</p>
-</li>
+<li><code>diff:</code> should aggregate each mounted sub's working-tree diff, path- prefixed (one merged hunk stream), like the verb reports already do.</li>
+<li><code>tree:&lt;gitlinkpath&gt;</code> should either show the <code>160000</code> gitlink line or descend into the sub tree when the path points inside a mount.</li>
+<li><code>blob:&lt;subpath&gt;?&lt;ref&gt;</code> and <code>log:</code>/<code>blame:</code> on a sub path should resolve in the sub shard.</li>
 <li><code>refs:?**</code> (recursive) should optionally include sub shard refs.</li>
 </ul>
 <h2>Fix sketch</h2>
@@ -65,5 +45,16 @@ Same two-part shape as SUBS-011: (1) make <code>BEProjector</code> sub-aware —
 <p>
 Documented here; tests follow once the projector-recursion mechanism from SUBS-011 lands (the <code>diff:</code> sub-change case is the natural first one).
 </p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

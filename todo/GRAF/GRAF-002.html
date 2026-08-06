@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GRAF-002: lazy commit indexer for first-touch/mtime (p1/p2/p3/p4)</title>
+<meta property="og:title" content="GRAF-002: lazy commit indexer for first-touch/mtime (p1/p2/p3/p4)">
+<meta property="og:description" content="A lazy, watermark-driven commit indexer that extracts each commit ONCE into the graf .graf.idx LSM family, so first-touch/mtime queries run index-only (no keeper inflate). Record set: p1 parentage, p2 commit-&gt;tree, p3 LAZY tree-child edges (/todo/BLAME/BLAME-002 shape, new-node-only), p4 commit-ts. First-touch = a p1 walk with p2/p3 descent-by-name, ts read from p4 (NOT a seek). Unifies today's three independent DAG walkers: /todo/LIST/LIST-001 (shared/lastcommit.js), log:path file-history (views/log/log.js fileHistory), and the wanted mtime-sorted todo board.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GRAF/GRAF-002.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GRAF-002: lazy commit indexer for first-touch/mtime (p1/p2/p3/p4)</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+A lazy, watermark-driven commit indexer that extracts each commit ONCE into the graf <code>.graf.idx</code> LSM family, so first-touch/mtime queries run index-only (no keeper inflate). Record set: p1 parentage, p2 commit-&gt;tree, p3 LAZY tree-child edges (<a href="../BLAME/BLAME-002.html">/todo/BLAME/BLAME-002</a> shape, new-node-only), p4 commit-ts. First-touch = a p1 walk with p2/p3 descent-by-name, ts read from p4 (NOT a seek). Unifies today's three independent DAG walkers: <a href="../LIST/LIST-001.html">/todo/LIST/LIST-001</a> (<code>shared/lastcommit.js</code>), <code>log:path</code> file-history (<code>views/log/log.js</code> fileHistory), and the wanted mtime-sorted todo board.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Three consumers re-derive the same per-commit tree-diff on demand, none cached; <code>graf.js</code> (GRAF-001) only caches ahead/behind pairs.
+</p>
+<ul>
+<li><code>shared/lastcommit.js</code> (LIST-001) walks tip-&gt;parent, <code>changedpaths. changedCommits</code> per commit — O(history x tree-diff), every call.</li>
+<li><code>views/log/log.js</code> fileHistory <code>dag.ancestors(tip)</code> over the WHOLE reachable set + a tree descent per commit — quadratic across paths.</li>
+<li>C graf (BLAME-002) materialises tree-child edges EAGERLY, one per distinct tree at ingest — the p3 blowup this ticket avoids.</li>
+<li>No path-&gt;last-touch posting exists on either the C or JS side.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+An index that answers &quot;newest commit that changed path P, and its ts&quot; with ONE seek, built incrementally, sized by diff volume not tree count.
+</p>
+<ul>
+<li>Lazy watermark catch-up: on open walk <code>tip -&gt; last-indexed</code>, extract only new commits, append records, advance the mark.</li>
+<li>Change postings: <code>pathhash60 -&gt; (ts, commit_h60, blob_h60)</code> emitted only where a leaf differs from the mainline parent (add/mod), plus a <code>del</code> tombstone (<code>blob_h60 = 0</code>) where it disappears.</li>
+<li>Mtime query = seek pathhash, newest ts wins; a <code>del</code> newest = gone.</li>
+<li>Serve the mtime todo board, <code>list:</code>, and <code>log:path</code> off one family.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Reuse the existing LSM/idxmaint plumbing and graf's 60-bit hashlet identity; keep the change unrelated to the ahead/behind pair cache.
+</p>
+<ul>
+<li>Persist via <code>shared/idxmaint.js</code> under <code>.lock.graf</code>, a NEW <code>ext</code> (e.g. <code>touch.idx</code>) or a disjoint type nibble in <code>.graf.idx</code>.</li>
+<li>Record halves stay wh128 <code>hashlet[60] | type[4]</code>; new types must not collide with native 1..5 (DAG_T_*) or graf.js 0xA/0xB.</li>
+<li>Trunk-scoped (<code>.graf.idx</code> is trunk): board still blends the wtlog for uncommitted edits on top — the index gives COMMITTED mtime only.</li>
+<li>Read-only store degrades to mem-only (idxmaint norm), never crashes.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Record set: p1 parentage, p2 commit-&gt;tree, p4 commit-ts (sentinel+DAG), p3 = TREE-CHILD edges (content-addressed, NOT change postings — AMENDED 2026-07-23, see below). Rulings pinned below.
+</p>
+<ul>
+<li>p3 = <code>combine(parent_tree_h60, name) -&gt; child_h60</code> (the C BLAME-002 <code>DAGChildStep</code> shape), materialised ONCE per DISTINCT tree/blob node, LAZILY — only for a node NEWLY appearing at ingest (dedup by node hash). Supports descent BY KNOWN NAME, NOT enumeration.</li>
+<li>ts lives in p4 ONLY (<code>commit_h60 -&gt; author-ts ron60</code>, <code>dag.commitTs</code>); p3 carries NO ts. First-touch of a KNOWN path = a p1 walk newest- first, descending p2-&gt;p3 by name at C vs its mainline parent, comparing the leaf child_h60; the commit where it changes/first-appears is the touch, ts read from <code>p4[C]</code>. NOT a single seek.</li>
+<li>No tombstone: deletion is STRUCTURAL — the <code>parent^name</code> edge is ABSENT in the newer tree. A p3 miss on a COVERED tree = genuine absence; a miss on an UNCOVERED tree =&gt; keeper-inflate fallback, so the indexer tracks the set of materialised tree hashes.</li>
+<li>Coverage sentinel = p2/p4 (every commit has one); a covered commit with no p1 is a root. Sentinel absent =&gt; reindex that commit.</li>
+<li>Root commit PARENTS ITSELF (p1 key.hl == val.hl == root_h60), so &quot;p1 always exists&quot; is universal — walker guards the self-loop (the seen-set halts it; parent==self IS the root/stop test).</li>
+<li>Merge basis = mainline first parent (argmax commit-ts, the <code>lastcommit.mainlineParent</code> rule): the first-touch walk descends the mainline p1 line. <code>log</code> fileHistory's differs-from-EVERY-parent is a distinct simplification — note it at that call site.</li>
+<li>Prune: descent stops where the subtree child_h60 is equal between C and its parent (subtree-hashlet equality), so a walk touches only the path segments that actually changed.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./v.html">v</a> Core scaffold + hermetic test landed (in-process, WRONG p3 =
+</p>
+<div>
+<p>
+  change postings). Reworking to tree-child p3 per the amendment.
+</p>
+</div>
+<p>
+ -<a href="./ .html"> </a> Rework <code>shared/commitindex.js</code> p3 =&gt; tree-child edges
+</p>
+<div>
+<p>
+  <code>combine(parent_tree_h60,name)-&gt;child_h60</code>, lazy new-node-only via a <code>store.readTree</code> walk; strip ts from p3; drop the blob-0 tombstone.
+</p>
+</div>
+<p>
+ -<a href="./ .html"> </a> <code>firstTouch(path)</code> = p1 walk + p2/p3 descent-by-name, ts from p4,
+</p>
+<div>
+<p>
+  keeper-inflate fallback on a p3 miss over a covered tree set.
+</p>
+</div>
+<p>
+ -<a href="./ .html"> </a> Watermark/coverage is per-COMMIT (p2 sentinel); rebase/reset re-
+</p>
+<div>
+<p>
+  walks tip-&gt;first-covered by construction (no forward-range rebuild).
+</p>
+</div>
+<p>
+ -<a href="./ .html"> </a> changedpaths integ: an INDEX-BACKED reader (resolve child by
+</p>
+<div>
+<p>
+  <code>(tree_h60,name)</code> via p3, inflate on miss) fed to changedpaths' existing <code>readTreeRecursive</code> reader slot — the ONE shared descent. Indexer materialises p3 by its own tree walk, NOT <code>changedCommits</code>.
+</p>
+</div>
+<p>
+ -<a href="./ .html"> </a> Wire the mtime todo board (<code>todo recent</code>, lowercase arg route in
+</p>
+<div>
+<p>
+  <code>views/todo/todo.js</code>) onto <code>firstTouch</code>, wtlog blend on top.
+</p>
+</div>
+<p>
+ -<a href="./ .html"> </a> Migrate <code>lastcommit.js</code> (LIST-001) + <code>log:path</code> fileHistory onto the
+</p>
+<div>
+<p>
+  index reader with keeper-inflate fallback on any coverage miss.
+</p>
+</div>
+<p>
+ -<a href="./ .html"> </a> Parity test vs the on-demand walkers on a real repo (<code>journal</code>).
+</p>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>p3 blowup bounded by DISTINCT tree-node count (new-node-only, deduped by hash) — accepted; scope to queried prefixes (<code>todo/</code>) if it bites.</li>
+<li>Persistence deferred: p3 is a clean wh128 (<code>parent^name</code>-&gt;child) so it FITS the <code>.graf.idx</code> family; a later pass lands it via <code>idxmaint</code>.</li>
+<li>Rename-follow is OUT (LIST-001 precedent): a path appears/disappears only; a move reads as del+add.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+Nothing landed yet. Suggested first commit once the indexer + board land: <code>GRAF-002: lazy commit indexer, change postings, mtime todo board</code>.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIT-022 JS: ssh-remote jab serve — spawn jab receive-pack/upload-pack over ssh, retire the keeper hardcode</title>
+<meta property="og:title" content="GIT-022 JS: ssh-remote jab serve — spawn jab receive-pack/upload-pack over ssh, retire the keeper hardcode">
+<meta property="og:description" content="The JS serve halves EXIST: shared/serve.js uploadPack (GIT-020, 261680bf) and receivePack (POST-028 — the local file:/be: push twin, FF-gate + CAS + report-status). But wire.js classify()'s ssh arm still hardcodes ssh host keeper &lt;verb&gt; for be://host — the native keeper LAGS jab and ships in no bin, so any ssh-remote be:// push or fetch is dead. Make the ssh arm spawn jab remotely, flip the surviving keeper-SKIPped tests, and be:// runs jab-to-jab end to end. This is GIT-020's leftover TODO list promoted to its own ticket; CI-001's push-into-a-VM mode is the consumer.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GIT/GIT-022.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GIT-022 <a href="./JS.html">JS</a>: ssh-remote jab serve — spawn <code>jab receive-pack</code>/<code>upload-pack</code> over ssh, retire the keeper hardcode</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+The JS serve halves EXIST: <code>shared/serve.js</code> <code>uploadPack</code> (<a href="GIT-020.html">GIT-020</a>, <code>261680bf</code>) and <code>receivePack</code> (<a href="../POST/POST-028.html">POST-028</a> — the local file:/be: push twin, FF-gate + CAS + report-status). But <code>wire.js</code> <code>classify()</code>'s ssh arm still hardcodes <code>ssh host keeper &lt;verb&gt;</code> for <code>be://host</code> — the native keeper LAGS jab and ships in no bin, so any ssh-remote be:// push or fetch is dead. Make the ssh arm spawn <code>jab</code> remotely, flip the surviving keeper-SKIPped tests, and be:// runs jab-to-jab end to end. This is <a href="GIT-020.html">GIT-020</a>'s leftover TODO list promoted to its own ticket; <a href="../CI/CI-001.html">CI-001</a>'s push-into-a-VM mode is the consumer.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>wire.js</code> classify ~60–105: local <code>be:</code>/<code>file:</code> exec <code>KEEPER_BIN</code> (jab works today); the ssh arm hardcodes <code>keeper &lt;verb&gt; &lt;sel&gt;</code> — no jab form.</li>
+<li><code>serve.js</code> <code>receivePack</code> (<a href="../POST/POST-028.html">POST-028</a>) takes the BARE path (the <code>?&lt;sel&gt;</code> servePath form is retired for push); the ssh arm still composes <code>?&lt;sel&gt;</code>.</li>
+<li><code>test/get/be</code> SKIPs on <code>command -v keeper</code>; <code>test/get/cached</code> clones over ssh-keeper; only <code>test/serve/uploadpack</code> runs jab-to-jab (local exec).</li>
+<li><code>refUpdate</code> serves only <code>refs/heads</code>, refuses deletion, FF-only with CAS — adequate for <a href="../CI/CI-001.html">CI-001</a> push targets; DELETE-over-wire stays out of scope.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>be get/head/post/put be://host/store…</code> work against a remote host that has only jab installed — advert, negotiate, pack, report, jab-to-jab.</li>
+<li>get/be + get/cached (and a be-store push case) flip off the keeper SKIP and run green with no native keeper anywhere (<a href="../TEST/TEST-003.html">TEST-003</a> completion).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Reuse <code>serve.js</code>/<code>pkt.js</code>/<code>wire.js</code> push-client logic; NO second framing or pack impl. Protocol parity with the jab client is load-bearing (RAW pack, no side-band, v0/v1 advert) — mismatch hangs the fetch.</li>
+<li>Keep a <code>KEEPER_BIN</code>-style override (non-login ssh shells need an explicit remote path, cf. <code>DOG_REMOTE_PATH</code>); native keeper stays reachable via override until deleted, never by default.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Remote command shape: <code>ssh host jab &lt;verb&gt; &lt;path&gt;</code> mirroring the local <code>KEEPER_BIN</code> exec; one env override prefixes PATH for non-login shells.</li>
+<li>receive-pack path selector: the ssh arm adopts the <a href="../POST/POST-028.html">POST-028</a> bare-path contract; upload-pack keeps <code>servePath()</code> — the split lives in classify().</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> 1. classify() ssh be:/keeper: arm: spawn <code>jab &lt;verb&gt;</code> (bare path for receive-pack, servePath for upload-pack); env override for the bin.</li>
+<li class="open"><input type="checkbox" disabled> 2. Local-exec be-store PUSH test: <code>KEEPER_BIN=jab</code> post into a be: store, assert report-status + ref moved (extend <code>test/serve/</code>).</li>
+<li class="open"><input type="checkbox" disabled> 3. ssh-loopback jab-to-jab test: fetch + push over <code>ssh localhost</code> with a jab-only PATH; proves the remote-spawn form end to end.</li>
+<li class="open"><input type="checkbox" disabled> 4. Flip <code>test/get/be</code> off the <code>command -v keeper</code> SKIP; green.</li>
+<li class="open"><input type="checkbox" disabled> 5. Flip <code>test/get/cached</code> to the jab server; green.</li>
+<li class="open"><input type="checkbox" disabled> 6. Drop the <code>keeper</code> default from classify() (override-only), delisting the native daemon from the wire — the <a href="GIT-020.html">GIT-020</a> retirement goal.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>ssh non-login shell PATH: <code>jab</code> must resolve on the remote or every spawn dies quietly — the override env is not optional.</li>
+<li>get/cached's ssh fixture may need a loopback sshd where none runs.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Open. Filed 2026-07-24; supersedes the unfinished TODOs of <a href="GIT-020.html">GIT-020</a> (upload-pack half landed there as <code>261680bf</code>; the receive-pack serve loop + CLI entry landed later under <a href="../POST/POST-028.html">POST-028</a>).</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

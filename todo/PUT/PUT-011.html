@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PUT-011: put &lt;sub&gt; stages the gitlink, put &lt;sub&gt;/ stages inside — fresh-add included</title>
+<meta property="og:title" content="PUT-011: put &lt;sub&gt; stages the gitlink, put &lt;sub&gt;/ stages inside — fresh-add included">
+<meta property="og:description" content="Live incident (gritzko, 2026-07-18, journal maintree): sub jab is declared in .gitmodules, mounted (.be dir + wtlog, SUBS-049 form), cur tip f562778c — but journal's base commit 08e9fdb2 has NO 160000 gitlink for it, and no path can create one:">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PUT/PUT-011.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PUT-011: <code>put &lt;sub&gt;</code> stages the gitlink, <code>put &lt;sub&gt;/</code> stages inside — fresh-add included</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Live incident (gritzko, 2026-07-18, journal maintree): sub <code>jab</code> is declared in <code>.gitmodules</code>, mounted (<code>.be</code> dir + wtlog, SUBS-049 form), cur tip <code>f562778c</code> — but journal's base commit <code>08e9fdb2</code> has NO <code>160000</code> gitlink for it, and no path can create one:
+</p>
+<ul>
+<li><code>:put jab</code> → <code>err: PUTNONE</code> — put crosses into the clean sub (SUBS-039) and the BE-049 bump arm <code>stageSubBump</code> (be/verbs/put/put.js:581) SILENTLY no-ops on a no-pin sub (&quot;fresh gitlink-add ... is a silent no-op&quot;).</li>
+<li><code>status ///</code> shows NO jab row at all: classify's wtScan drops the whole nested-repo prefix INCLUDING the mount dir itself (shared/classify.js:99-108), and every mount-row emitter keys off the BASELINE gitlink list (classify.js:313 base-only; status <code>adv</code> arm iterates the same list).</li>
+<li><code>post</code> fan-out enumerates <code>subs.enumerate(…, baseTree)</code> — baseline gitlinks only — so the parent's post never births the pin either. Chicken-and-egg: every pin path requires the pin to exist.</li>
+<li>Known ground: <a href="../SUBS/SUBS-009.html">/todo/SUBS/SUBS-009</a> <a href="./DONE.html">DONE</a> shipped only a native-sniff refusal and escalated the real add to <a href="../SUBS/SUBS-013.html">/todo/SUBS/SUBS-013</a>; the JS put lacks even the refusal. <a href="../SUBS/SUBS-033.html">/todo/SUBS/SUBS-033</a> covers the display once staged. Kin evidence in <a href="../POST/POST-031.html">/todo/POST/POST-031</a> (the same never-pinned jab).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+RULING (gritzko, 2026-07-18): the trailing slash splits the two puts; a mounted, non-ignored dir MUST show in parent status.
+</p>
+<ul>
+<li><code>put &lt;sub&gt;</code> stages the parent GITLINK bump <code>put &lt;sub&gt;#&lt;subCurTip&gt;</code> — fresh-add included: a no-pin declared+mounted sub stages its FIRST pin (kill the stageSubBump no-pin no-op).</li>
+<li><code>put &lt;sub&gt;/</code> stages everything INSIDE the submod (today's SUBS-039 delegate), no parent gitlink row.</li>
+<li>Parent status shows a mounted never-pinned sub as a wt-created gitlink row: quad <code>...o</code>, <code>gitlink: true</code> (bold path); once the pin is staged it renders staged (TUI: orange, inverted, bold).</li>
+<li>After <code>put jab</code> + <code>post</code>, the parent tree carries the <code>160000</code> pin and the DIS-072 re-attach row lands in the child's wtlog — <code>status ///</code> then labels <code>///jab#&lt;pin8&gt;</code> (STATUS-014).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fix in the put/classify seam; SUBS-039 interior-path delegate and the BE-049 existing-pin bump keep working.</li>
+<li><code>put &lt;sub&gt;#&lt;sha&gt;</code> stays the move-form (SUBS-009 pin-grammar fork) — the pin rides the bare <code>put &lt;sub&gt;</code> arm, sub cur tip only.</li>
+<li>Repro first (test/put/ or test/sub/, fresh-add shape); no other test edits without explicit permission.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>RULING (gritzko, 2026-07-18): user-facing refusals in plain words, not C codes — the all-skip throw now prints <code>put: nothing to stage — &lt;reason&gt;</code>; <code>err: PUTNONE</code> is gone from the UI (exit stays non-zero).</li>
+<li>RULING (gritzko, 2026-07-18): the wt scan must not drop the submod dir ITSELF — only its contents; the mount rides as one wt-axis <code>s</code> entry → the <code>...o</code> gitlink row.</li>
+<li>Bare-name arm gates in stageInSub BEFORE interior staging: bare <code>put &lt;sub&gt;</code> = gitlink bump only (fresh pin requires <code>.gitmodules</code> declaration); slash/interior forms stage inside, old line-552 auto-bump removed.</li>
+<li>Edge (out of put's scope): on a FIRST add, the child's DIS-072 re-attach row lands on the NEXT parent post — postSubs enumerates the pre-commit baseline, which lacks the new gitlink. Label is correct immediately regardless.</li>
+<li>Edge for review: classify's new <code>s</code> row reaches the <code>post //WT</code>-target dirty-probe (POST-030 pure-FF refusal) — an unpinned mount now counts as target dirt.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> repro: parent with declared+mounted, never-pinned sub — <code>put &lt;sub&gt;</code> PUTNONEs, status shows nothing (test/status/freshsub, test/put/sublink — RED pre-fix, exact live symptom)</li>
+<li><a href="./v.html">v</a> classify: emit the wt-axis <code>...o</code> gitlink row for a nested-repo prefix with no baseline gitlink and no staged bump (shared/classify.js +24; stage.js +6 guards; fold-decide +1 no-auto-add)</li>
+<li><a href="./v.html">v</a> put: <code>stageSubBump</code> fresh-add arm (no-pin → stage <code>put &lt;sub&gt;#&lt;tip&gt;</code>); keep <code>put &lt;sub&gt;/</code> inside-only (verbs/put/put.js +35/-14; plain-words skip reasons)</li>
+<li><a href="./v.html">v</a> verify end-to-end on a jab-shaped replica: put → staged row → post → pin in tree → <code>///jab#&lt;pin8&gt;</code> label; suite 296/296; live <code>status ///</code> renders <code>...o jab</code> (read-only check)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Work sits UNCOMMITTED in work/POST-031's working tree (on top of the POST-031 commit 611f5851) — landing is gritzko's call.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

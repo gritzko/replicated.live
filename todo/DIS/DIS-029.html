@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DIS-029</title>
+<title>DIS-029 DONT: MARK renders bare-indent divs as raw &lt;p&gt; text and merges across the depth boundary</title>
+<meta property="og:title" content="DIS-029 DONT: MARK renders bare-indent divs as raw &lt;p&gt; text and merges across the depth boundary">
+<meta property="og:description" content="The StrictMark block model is (INDENT|QUOTE) LIST? LEAF? and &quot;absent a leaf, a paragraph is implied&quot; (StrictMark §Block markup); a bare 4-space indent &quot;opens a generic container (a div)&quot; (§Block markup), and &quot;block-stack depth changes drive nesting&quot;. The MARK HTML renderer honors none of this for plain indented text. In markblocks (mark/MARK.c:281) the paragraph branch (:393-404) computes depth = MKDTIndentDepth(linef) (:360) and the marker end mend (:362) but then ignores both: it never emits a &lt;div&gt; wrapper, and it feeds the FULL line linec — leading spaces included — to markinline, so the indent reaches HTML as literal gutter spaces inside a paragraph. Worse, inpara persists across a depth drop, so an indented line and the following non-indented line collapse into ONE &lt;p&gt;, erasing the structural boundary the depth change is supposed to enforce. depth/mend are consumed only for ULIST/QUOTE markers (:364-391), never for the INDENT (div) container. See DIS-001 (the other open StrictMark/store-layout gap), GET.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-029.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,9 +15,14 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>DIS-029: MARK renders bare-indent divs as raw <code>&lt;p&gt;</code> text and merges across the depth boundary</h1>
+<h1>DIS-029 <a href="./DONT.html">DONT</a>: MARK renders bare-indent divs as raw <code>&lt;p&gt;</code> text and merges across the depth boundary</h1>
+<div>
 <p>
-The <a href="../../wiki/StrictMark.html">StrictMark</a> block model is <code>(INDENT|QUOTE)* LIST? LEAF?</code> and &quot;absent a leaf, a paragraph is implied&quot; (<a href="../../wiki/StrictMark.html">StrictMark</a> §Block markup); a bare 4-space indent &quot;opens a generic container (a div)&quot; (§Block markup), and &quot;block-stack depth changes drive nesting&quot;. The <code>MARK</code> HTML renderer honors none of this for plain indented text. In <code>mark_blocks</code> (<code>mark/MARK.c:281</code>) the paragraph branch (<code>:393-404</code>) computes <code>depth = MKDTIndentDepth(linef)</code> (<code>:360</code>) and the marker end <code>mend</code> (<code>:362</code>) but then ignores both: it never emits a <code>&lt;div&gt;</code> wrapper, and it feeds the FULL line <code>linec</code> — leading spaces included — to <code>mark_inline</code>, so the indent reaches HTML as literal gutter spaces inside a paragraph. Worse, <code>in_para</code> persists across a depth drop, so an indented line and the following non-indented line collapse into ONE <code>&lt;p&gt;</code>, erasing the structural boundary the depth change is supposed to enforce. <code>depth</code>/<code>mend</code> are consumed only for ULIST/QUOTE markers (<code>:364-391</code>), never for the INDENT (div) container. See <a href="">DIS-001</a> (the other open StrictMark/store-layout gap), <a href="../../wiki/GET.html">GET</a>.
+Now: DONT
+</p>
+</div>
+<p>
+The <a href="../../wiki/StrictMark.html">StrictMark</a> block model is <code>(INDENT|QUOTE)* LIST? LEAF?</code> and &quot;absent a leaf, a paragraph is implied&quot; (<a href="../../wiki/StrictMark.html">StrictMark</a> §Block markup); a bare 4-space indent &quot;opens a generic container (a div)&quot; (§Block markup), and &quot;block-stack depth changes drive nesting&quot;. The <code>MARK</code> HTML renderer honors none of this for plain indented text. In <code>mark_blocks</code> (<code>mark/MARK.c:281</code>) the paragraph branch (<code>:393-404</code>) computes <code>depth = MKDTIndentDepth(linef)</code> (<code>:360</code>) and the marker end <code>mend</code> (<code>:362</code>) but then ignores both: it never emits a <code>&lt;div&gt;</code> wrapper, and it feeds the FULL line <code>linec</code> — leading spaces included — to <code>mark_inline</code>, so the indent reaches HTML as literal gutter spaces inside a paragraph. Worse, <code>in_para</code> persists across a depth drop, so an indented line and the following non-indented line collapse into ONE <code>&lt;p&gt;</code>, erasing the structural boundary the depth change is supposed to enforce. <code>depth</code>/<code>mend</code> are consumed only for ULIST/QUOTE markers (<code>:364-391</code>), never for the INDENT (div) container. See <a href="./DIS-001.html">DIS-001</a> (the other open StrictMark/store-layout gap), <a href="../../wiki/GET.html">GET</a>.
 </p>
 <h2>Issues</h2>
 <p>
@@ -60,7 +69,7 @@ Make <code>MARK</code> render a bare 4-space indent as a <code>&lt;div&gt;</code
 <li>Repro first (<a href="../../../CLAUDE.md">CLAUDE</a> §17): add a table case to <code>mark/test/MARK.c</code> asserting the 3-line input above yields <code>&lt;h1&gt;</code> + <code>&lt;div&gt;&lt;p&gt;Indented&lt;/p&gt;&lt;/div&gt;</code> + <code>&lt;p&gt;Non indented&lt;/p&gt;</code> — FAILS pre-fix on all three counts. Add nested-depth (<code>        </code> → <code>&lt;div&gt;&lt;div&gt;…</code>) and depth-restore cases.</li>
 <li>Track an open-div depth in <code>mark_blocks</code> alongside <code>in_para</code>/<code>in_list</code>/<code>in_quote</code>: when <code>depth</code> rises, emit N <code>&lt;div&gt;</code>; when it falls (incl. to 0), close the open leaf and the surplus <code>&lt;div&gt;</code>s before rendering the line. Mirror the close on blank lines and at EOF (<code>:407-410</code>).</li>
 <li>Strip the indent before inline: feed <code>mark_inline</code> the slice from <code>mend</code> (or <code>linec</code> advanced by <code>depth*4</code>), not the raw <code>linec</code>, so gutter spaces never reach HTML.</li>
-<li>Reconcile the <a href="../../wiki/StrictMark.html">StrictMark</a> §Headers &quot;header may span lines&quot; wording with §Block markup depth rules so the div reading is unambiguous (a deeper line opens a div; header-spanning is same-depth) — case-by-case per <a href="">strictmark-wiki-reorg</a>.</li>
+<li>Reconcile the <a href="../../wiki/StrictMark.html">StrictMark</a> §Headers &quot;header may span lines&quot; wording with §Block markup depth rules so the div reading is unambiguous (a deeper line opens a div; header-spanning is same-depth) — case-by-case per <a href="./strictmark-wiki-reorg.html">strictmark-wiki-reorg</a>.</li>
 <li>Verify no regression on the existing wiki pages (<code>make</code> the wiki, diff rendered HTML); run the full <code>mark</code> suite; update <code>mark/INDEX.md</code> if behavior notes change.</li>
 </ul>
 <h2>Outcome</h2>
@@ -68,12 +77,20 @@ Make <code>MARK</code> render a bare 4-space indent as a <code>&lt;div&gt;</code
 ALREADY RESOLVED on the current tree — closed without a new commit (2026-06-25).
 </p>
 <ul>
-<li>The flat paragraph branch the ticket cites (<code>mark/MARK.c:281-410</code>) was replaced by a<p>
-container-stack renderer (<code>MARK.c</code> now 716 lines): <code>mark_grow_divs</code>/<code>mark_enter_leaf</code> emit a <code>&lt;div&gt;</code> per indent group, the paragraph slice starts at <code>mend</code> (no gutter leak), and <code>cont = in_para &amp;&amp; nstk==depth</code> flushes the leaf on a depth change.
-</p>
-</li>
+<li>The flat paragraph branch the ticket cites (<code>mark/MARK.c:281-410</code>) was replaced by a container-stack renderer (<code>MARK.c</code> now 716 lines): <code>mark_grow_divs</code>/<code>mark_enter_leaf</code> emit a <code>&lt;div&gt;</code> per indent group, the paragraph slice starts at <code>mend</code> (no gutter leak), and <code>cont = in_para &amp;&amp; nstk==depth</code> flushes the leaf on a depth change.</li>
 <li>Tests already present and green: <code>mark/test/MARK.c</code> <code>div-indent</code>/<code>div-dedent</code>/<code>div-nested</code>/<code>div-restore</code> (+ <code>indent4</code>/<code>indent8</code>); verified by reverting the fix → exact ticketed bug repro's → restored byte-for-byte. <code>ctest -R '^MARK'</code> 2/2 pass.</li>
 <li>No DIS-029-labelled commit in <code>be log</code>; the renderer rewrite landed it incidentally. <code>mark/INDEX.md:21</code> already documents &quot;<code>&lt;div&gt;</code> per indent&quot;.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

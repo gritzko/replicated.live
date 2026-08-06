@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-054: wt→wt clone: reflink (CoW) intact files instead of re-materializing</title>
+<meta property="og:title" content="GET-054: wt→wt clone: reflink (CoW) intact files instead of re-materializing">
+<meta property="og:description" content="Small optimization, requested by gritzko in chat 2026-07-24. When get clones from a local WORKTREE source (the GET-038 scenario) it decodes every checkout file from the store, though the source wt already holds the exact bytes on disk. On a CoW filesystem (btrfs/XFS/bcachefs/ZFS 2.2+/APFS) an intact source file can be reflinked into the new wt: O(metadata) checkout, shared extents until either side edits, rm -rf of ticket clones stays free. Blobs live inside .keeper TLV segments, not one-file-per-blob, so store→wt reflink is impossible — wt→wt is the only file-level CoW spot.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-054.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-054: wt→wt clone: reflink (CoW) intact files instead of re-materializing</h1>
+<div>
+<p>
+Now: OPEN Sev: LOW
+</p>
+</div>
+<p>
+Small optimization, requested by gritzko in chat 2026-07-24. When <code>get</code> clones from a local WORKTREE source (the <a href="./GET-038.html">GET-038</a> scenario) it decodes every checkout file from the store, though the source wt already holds the exact bytes on disk. On a CoW filesystem (btrfs/XFS/bcachefs/ZFS 2.2+/APFS) an intact source file can be reflinked into the new wt: O(metadata) checkout, shared extents until either side edits, <code>rm -rf</code> of ticket clones stays free. Blobs live inside <code>.keeper</code> TLV segments, not one-file-per-blob, so store→wt reflink is impossible — wt→wt is the only file-level CoW spot.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The agent fleet spawns one clone per ticket under <code>work/&lt;TICKET&gt;</code>; each clone re-materializes the same ~16 MB tree. N sibling clones of one base could share one extent set. CoW applies only when source and destination are on the same filesystem (reflinks never cross mounts).
+</p>
+<ul>
+<li>Chat design notes 2026-07-24: keeper-segment reflink for full-clone store copies is a separate, bigger win — NOT this ticket.</li>
+<li><a href="./GET-038.html">GET-038</a> covers wt-source clone anchor bugs; this ticket assumes that path works.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+When cloning from a wt source, for each checkout file whose source-wt copy is intact (clean against the rev being materialized), clone it with <code>FICLONE</code> instead of decoding from the store.
+</p>
+<ul>
+<li>Fallback chain: <code>FICLONE</code> → plain decode-from-store; failure of the ioctl (EXDEV, EOPNOTSUPP, ext4) is silent and per-file.</li>
+<li>CoW is a perf layer only, never a correctness dependency; behavior identical on ext4.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>&quot;Intact&quot; must not trust a stamp-false-clean file (<a href="./GET-052.html">GET-052</a> showed stamps lie): a dirty source file reflinked forward corrupts the clone. Decide: same clean-check <code>diff</code> uses, or hash-verify the source bytes before reflinking.</li>
+<li>No manual byte copying fallback beyond what checkout already does; no <code>cp -r</code> semantics — track/identity rows are written by <code>get</code> as today.</li>
+<li>Dev boxes run ext4; tests must pass there via the fallback leg and may skip the reflink-assert leg when the fs lacks <code>FICLONE</code>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> Locate the wt-source checkout leg in graf/GET.c / jab get; confirm where source-wt file paths are known.</li>
+<li><a href="./ .html"> </a> Pick the intact-check (diff's clean-check vs hash-verify) — cheap-vs-safe call, ask gritzko if unclear.</li>
+<li><a href="./ .html"> </a> Implement <code>FICLONE</code> attempt + silent per-file fallback.</li>
+<li><a href="./ .html"> </a> Test: clone on a CoW fs shares extents (skip on ext4); clone on ext4 byte-identical to today; dirty source file is NOT reflinked.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

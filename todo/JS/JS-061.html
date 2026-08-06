@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-061</title>
+<title>JS-061: sort duplicated JS tests, rm wrong-side copy</title>
+<meta property="og:title" content="JS-061: sort duplicated JS tests, rm wrong-side copy">
+<meta property="og:description" content="The test files were COPIED across both sides — every test now exists in the binding tree AND the be/ script tree. An agent must sort each file by what it tests and DELETE the copy on the wrong side: JABC binding tests keep their copy in beagle/{js/test,test/js} and lose the be-side copy; be/-script tests (verbs, views, core units, parity/, lib/) keep their copy in be/test (beagle-ext submodule) and lose the beagle-side copy. No moving, no SCM patch dance — the copies already exist; this is classify + rm the redundant one, then rewire the build. In the src/journal layout (a git repo of submodules), replacing old beagle-journal/. Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-061.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,132 +15,68 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-061 <a href="./UMBRELLA.html">UMBRELLA</a>: sort duplicated JS tests, rm wrong-side copy</h1>
+<h1>JS-061: sort duplicated JS tests, rm wrong-side copy</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The test files were COPIED across both sides — every test now exists in the binding tree AND the be/ script tree. An agent must sort each file by what it tests and DELETE the copy on the wrong side: JABC binding tests keep their copy in <code>beagle/{js/test,test/js}</code> and lose the be-side copy; <code>be/</code>-script tests (verbs, views, core units, <code>parity/</code>, <code>lib/</code>) keep their copy in <code>be/test</code> (beagle-ext submodule) and lose the beagle-side copy. No moving, no SCM patch dance — the copies already exist; this is classify + <code>rm</code> the redundant one, then rewire the build. In the <code>src/journal</code> layout (a git repo of submodules), replacing old <code>beagle-journal/</code>. <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Duplication is already done by hand (the copy step); the agent only sorts<p>
-+ deletes. Do NOT treat it as one accidental collision — ALL are dupes.
-</p>
-</li>
-<li>Three submodules (<a href="../../README.html">/README</a>): <code>be</code>→beagle-ext (JS scripts), <code>beagle</code>→core<p>
-C/C++ + JABC bindings, <code>html</code>→site. <code>be &lt;name&gt;</code>/<code>jab</code> runs the <code>be/</code> shard.
-</p>
-</li>
-<li><code>beagle/test/CMakeLists.txt</code> GLOBs <code>test/js/{get,post,put,delete}/*/run.sh</code><p>
-into <code>be-js-&lt;verb&gt;-&lt;case&gt;</code> ctest targets (<code>if(WITH_JS)</code>) — these drive <code>be/</code> verb scripts, so they are be-side and their beagle copy must go.
-</p>
-</li>
+<li>Duplication is already done by hand (the copy step); the agent only sorts + deletes. Do NOT treat it as one accidental collision — ALL are dupes.</li>
+<li>Three submodules (<a href="../../README.html">/README</a>): <code>be</code>→beagle-ext (JS scripts), <code>beagle</code>→core C/C++ + JABC bindings, <code>html</code>→site. <code>be &lt;name&gt;</code>/<code>jab</code> runs the <code>be/</code> shard.</li>
+<li><code>beagle/test/CMakeLists.txt</code> GLOBs <code>test/js/{get,post,put,delete}/*/run.sh</code> into <code>be-js-&lt;verb&gt;-&lt;case&gt;</code> ctest targets (<code>if(WITH_JS)</code>) — these drive <code>be/</code> verb scripts, so they are be-side and their beagle copy must go.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Every test file lives in EXACTLY ONE place after the sort; the duplicate on<p>
-the wrong side is <code>rm</code>'d.
-</p>
-</li>
+<li>Every test file lives in EXACTLY ONE place after the sort; the duplicate on the wrong side is <code>rm</code>'d.</li>
 <li>Binding tests → <code>beagle/test/js</code> + <code>beagle/js/test</code> (JABC surface only).</li>
 <li><code>be/</code>-script tests → <code>be/test</code> (in the beagle-ext submodule).</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>No silent test loss: every case that runs today must still run (same green<p>
-count) after the sort; deleting a dupe must not delete the only home.
-</p>
-</li>
+<li>No silent test loss: every case that runs today must still run (same green count) after the sort; deleting a dupe must not delete the only home.</li>
 <li>Decide ownership per file BEFORE any <code>rm</code>; a wrong delete loses the test.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Classify by subject-under-test: a test exercising a JABC C++ leaf → binding,<p>
-home is beagle; a test exercising a <code>be/{core,shared,verbs,views,view}</code> script → be-script, home is <code>be/test</code>. Keep that copy, <code>rm</code> the other.
-</p>
-</li>
-<li>Likely split of today's <code>beagle/test/js</code>: be-script (→ be/test, rm from<p>
-beagle) = verb dirs get/put/post/delete/patch, views bro/diff/ls/regex/spot, core units loop/emit/resolve/barrier/store/ulog, <code>parity/</code>, <code>lib/</code>. Binding units already in <code>beagle/js/test</code> stay; <code>ulog.js</code> has a copy on each side — keep the binding one in js/test, the be/shared one in be/test.
-</p>
-</li>
-<li>be/test runner finds the toolchain via env (<code>BE_BIN</code>/<code>JABC</code>) exported by the<p>
-parent build; the <code>be</code> shard carries no C build.
-</p>
-</li>
+<li>Classify by subject-under-test: a test exercising a JABC C++ leaf → binding, home is beagle; a test exercising a <code>be/{core,shared,verbs,views,view}</code> script → be-script, home is <code>be/test</code>. Keep that copy, <code>rm</code> the other.</li>
+<li>Likely split of today's <code>beagle/test/js</code>: be-script (→ be/test, rm from beagle) = verb dirs get/put/post/delete/patch, views bro/diff/ls/regex/spot, core units loop/emit/resolve/barrier/store/ulog, <code>parity/</code>, <code>lib/</code>. Binding units already in <code>beagle/js/test</code> stay; <code>ulog.js</code> has a copy on each side — keep the binding one in js/test, the be/shared one in be/test.</li>
+<li>be/test runner finds the toolchain via env (<code>BE_BIN</code>/<code>JABC</code>) exported by the parent build; the <code>be</code> shard carries no C build.</li>
 </ul>
 <h3>TODOs (inventory first — it decides every rm)</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> INVENTORY: done (see table below). KEY FINDING: NO byte-identical dupes<p>
- exist between beagle/js/test and beagle/test/js (only name <code>ulog.js</code>  collides — two genuinely DIFFERENT tests). <code>be/test</code> did not exist. So the  task is MOVE+rewire (single-copy files), not delete-dupe; nothing to <code>rm</code>.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Created <code>be/test/</code> and ported <code>lib/assert.js</code> + the two LIVE, wired,<p>
- portable be-shard unit tests <code>ulog.js</code> (shared/ulog) + <code>store.js</code>  (shared/store) — both run on <code>jab</code> via the upward be/-scan, both green.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Deleted the now-redundant beagle copies (after confirming byte-identical<p>
- home in be/test + rewiring): beagle/test/js/ulog.js, beagle/test/js/store.js.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Rewired beagle/js/CMakeLists.txt: JABCulogLib/JABCstore now point at<p>
- ${CMAKE_SOURCE_DIR}/../be/test/{ulog,store}.js, guarded <code>if(EXISTS ...)</code>.  (Did NOT touch the be-js-* GLOB in beagle/test/CMakeLists.txt — see below.)
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> The big be-js-* shell-harness suite (get/put/post/delete/patch/bro/diff/<p>
- regex/spot/ls/parity + *case.sh) — UNBLOCKED and MOVED by the later JAB-001/  TEST-003 work: <code>e542b67e</code> &quot;jab: main.js bootstrapping scheme; move be tests  out&quot; re-homed it to <code>be/test/</code> (own CMakeLists, <code>be-js-&lt;verb&gt;-&lt;case&gt;</code> glob,  <code>_BE_WILL_FAIL</code> xfails), and <code>d80bdb5c</code> de-nativified the cases. The former  beagle <code>test/js</code> glob block is GONE (<code>beagle/test/CMakeLists.txt:223-224</code>).
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> barrier/emit/loop/resolve.js: the stale JSQUE worktree repros were re-homed<p>
- to <code>be/test/{barrier,emit,loop,resolve}.js</code> with the move (no longer in  beagle/test/js).
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Verified: full suite green at the SAME count — JABC 29/29; be-js 33/43<p>
- (the 10 fails are pre-existing JS diff/regex/spot view stubs, unrelated).
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Land per-shard (beagle removals; be/test add), bump gitlinks. (Landed via<p>
- <code>e542b67e</code> + <code>d80bdb5c</code>; js/ itself became a submodule, JAB-005 <code>46f87bcd</code>.)
-</p>
-</li>
-<li class="wontfix"><input type="checkbox" disabled> <del>Update INDEX.md/READMEs in both shards + this board — SUPERSEDED by the</del><p>
- JAB-001/JAB-005 restructure docs; board delisted 2026-07-07.
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> INVENTORY: done (see table below). KEY FINDING: NO byte-identical dupes exist between beagle/js/test and beagle/test/js (only name <code>ulog.js</code> collides — two genuinely DIFFERENT tests). <code>be/test</code> did not exist. So the task is MOVE+rewire (single-copy files), not delete-dupe; nothing to <code>rm</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Created <code>be/test/</code> and ported <code>lib/assert.js</code> + the two LIVE, wired, portable be-shard unit tests <code>ulog.js</code> (shared/ulog) + <code>store.js</code> (shared/store) — both run on <code>jab</code> via the upward be/-scan, both green.</li>
+<li class="done"><input type="checkbox" checked disabled> Deleted the now-redundant beagle copies (after confirming byte-identical home in be/test + rewiring): beagle/test/js/ulog.js, beagle/test/js/store.js.</li>
+<li class="done"><input type="checkbox" checked disabled> Rewired beagle/js/CMakeLists.txt: JABCulogLib/JABCstore now point at ${CMAKE_SOURCE_DIR}/../be/test/{ulog,store}.js, guarded <code>if(EXISTS ...)</code>. (Did NOT touch the be-js-* GLOB in beagle/test/CMakeLists.txt — see below.)</li>
+<li class="done"><input type="checkbox" checked disabled> The big be-js-* shell-harness suite (get/put/post/delete/patch/bro/diff/ regex/spot/ls/parity + *case.sh) — UNBLOCKED and MOVED by the later JAB-001/ TEST-003 work: <code>e542b67e</code> &quot;jab: main.js bootstrapping scheme; move be tests out&quot; re-homed it to <code>be/test/</code> (own CMakeLists, <code>be-js-&lt;verb&gt;-&lt;case&gt;</code> glob, <code>_BE_WILL_FAIL</code> xfails), and <code>d80bdb5c</code> de-nativified the cases. The former beagle <code>test/js</code> glob block is GONE (<code>beagle/test/CMakeLists.txt:223-224</code>).</li>
+<li class="done"><input type="checkbox" checked disabled> barrier/emit/loop/resolve.js: the stale JSQUE worktree repros were re-homed to <code>be/test/{barrier,emit,loop,resolve}.js</code> with the move (no longer in beagle/test/js).</li>
+<li class="done"><input type="checkbox" checked disabled> Verified: full suite green at the SAME count — JABC 29/29; be-js 33/43 (the 10 fails are pre-existing JS diff/regex/spot view stubs, unrelated).</li>
+<li class="done"><input type="checkbox" checked disabled> Land per-shard (beagle removals; be/test add), bump gitlinks. (Landed via <code>e542b67e</code> + <code>d80bdb5c</code>; js/ itself became a submodule, JAB-005 <code>46f87bcd</code>.)</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Update INDEX.md/READMEs in both shards + this board — SUPERSEDED by the JAB-001/JAB-005 restructure docs; board delisted 2026-07-07.</del></li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>A wrong classification = a deleted test with no home; the inventory gates<p>
-every <code>rm</code>. Verify the correct side is populated before deleting the dupe.
-</p>
-</li>
-<li>Toolchain discovery: be/test must run without a C build present — settle the<p>
-<code>BE_BIN</code>/<code>JABC</code> contract before relying on be/test for the green count.
-</p>
-</li>
-<li>Cross-shard land: beagle removals + new <code>be/test</code> + parent gitlink bump are<p>
-separate posts; serialize them (one shard at a time).
-</p>
-</li>
+<li>A wrong classification = a deleted test with no home; the inventory gates every <code>rm</code>. Verify the correct side is populated before deleting the dupe.</li>
+<li>Toolchain discovery: be/test must run without a C build present — settle the <code>BE_BIN</code>/<code>JABC</code> contract before relying on be/test for the green count.</li>
+<li>Cross-shard land: beagle removals + new <code>be/test</code> + parent gitlink bump are separate posts; serialize them (one shard at a time).</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>No byte-identical duplicate existed on disk; the be-script tests lived ONLY<p>
-in <code>beagle/test/js</code> and <code>be/test</code> was absent. So this was a sort+move, not a delete-the-dupe.
-</p>
-</li>
-<li>Created <code>be/test/</code> with <code>lib/assert.js</code>, <code>ulog.js</code>, <code>store.js</code> (the two<p>
-live, wired, portable be-shard unit tests). Deleted the now-redundant <code>beagle/test/js/{ulog,store}.js</code>. Rewired the js CMakeLists (JABCulogLib/JABCstore → <code>../be/test/*.js</code>, guarded — <a href="./JS-063.html">JS-063</a> <code>0c2063ee</code>).
-</p>
-</li>
-<li>CLOSED 2026-07-07: the once-deferred harness move landed via <code>e542b67e</code><p>
-(&quot;move be tests out&quot;, 2026-06-25) + <code>d80bdb5c</code> (&quot;js tests pass, no native use&quot;, TEST-003) — the whole be-js-* suite (verbs/views/parity/case libs + the JSQUE repros) now lives in <code>be/test/</code> with its own CMakeLists; binding tests live in the jab runtime repo <code>test/</code> (js/ became a submodule, JAB-005 <code>46f87bcd</code>). beagle/test/js keeps only the beagle-owned binding fixtures <code>get/{zip,delta}.js</code> + <code>lib/assert.js</code> (EXISTS-gated from the js CMake) — every test has exactly ONE home; the <a href="./JS-061.html">JS-061</a> goal holds in the new layout.
-</p>
-</li>
+<li>No byte-identical duplicate existed on disk; the be-script tests lived ONLY in <code>beagle/test/js</code> and <code>be/test</code> was absent. So this was a sort+move, not a delete-the-dupe.</li>
+<li>Created <code>be/test/</code> with <code>lib/assert.js</code>, <code>ulog.js</code>, <code>store.js</code> (the two live, wired, portable be-shard unit tests). Deleted the now-redundant <code>beagle/test/js/{ulog,store}.js</code>. Rewired the js CMakeLists (JABCulogLib/JABCstore → <code>../be/test/*.js</code>, guarded — <a href="./JS-063.html">JS-063</a> <code>0c2063ee</code>).</li>
+<li>CLOSED 2026-07-07: the once-deferred harness move landed via <code>e542b67e</code> (&quot;move be tests out&quot;, 2026-06-25) + <code>d80bdb5c</code> (&quot;js tests pass, no native use&quot;, TEST-003) — the whole be-js-* suite (verbs/views/parity/case libs + the JSQUE repros) now lives in <code>be/test/</code> with its own CMakeLists; binding tests live in the jab runtime repo <code>test/</code> (js/ became a submodule, JAB-005 <code>46f87bcd</code>). beagle/test/js keeps only the beagle-owned binding fixtures <code>get/{zip,delta}.js</code> + <code>lib/assert.js</code> (EXISTS-gated from the js CMake) — every test has exactly ONE home; the <a href="./JS-061.html">JS-061</a> goal holds in the new layout.</li>
 </ul>
 <h3>Inventory table (subject-under-test → home → action)</h3>
 <div>
 <p>
-file (current loc)                  class      home        action ----------------------------------  ---------  ----------  ------------------- beagle/js/test/*.js  (ansi codec    binding    beagle      KEEP (already home)   git hash heap hit hunk index   mmap net pack packidx pol   require sha stat tok tty uri   weave) + jabc_test.cpp +   run-015/054/055.sh + ulog.js(abc) beagle/test/js/get/zip.js           binding    beagle      KEEP (tests <code>zip</code>) beagle/test/js/get/delta.js         binding    beagle      KEEP (tests git.delta) beagle/test/js/ulog.js (shared)     be-script  be/test     MOVED → be/test/ulog.js beagle/test/js/store.js (shared)    be-script  be/test     MOVED → be/test/store.js beagle/test/js/lib/assert.js        helper     both        COPIED → be/test/lib
+file (current loc)                  class      home        action ----------------------------------  ---------  ----------  ------------------- beagle/js/test/*.js  (ansi codec    binding    beagle      KEEP (already home) git hash heap hit hunk index mmap net pack packidx pol require sha stat tok tty uri weave) + jabc_test.cpp + run-015/054/055.sh + ulog.js(abc) beagle/test/js/get/zip.js           binding    beagle      KEEP (tests <code>zip</code>) beagle/test/js/get/delta.js         binding    beagle      KEEP (tests git.delta) beagle/test/js/ulog.js (shared)     be-script  be/test     MOVED → be/test/ulog.js beagle/test/js/store.js (shared)    be-script  be/test     MOVED → be/test/store.js beagle/test/js/lib/assert.js        helper     both        COPIED → be/test/lib
 </p>
 <div>
 <div>
@@ -172,8 +112,19 @@ file (current loc)                  class      home        action --------------
 </div>
 </div>
 <p>
-beagle/test/js/{get,put,post,       be-script  be/test     LEFT (harness rewrite   delete,patch}/*<strong>/run.sh +                                 needed — deferred)   lib/{get,put,post,patch}case.sh beagle/test/js/{bro,diff,ls,regex,  be-script  be/test     LEFT (deferred, as above)   spot}/</strong><strong>/run.sh + </strong>/lib/<strong>case.sh beagle/test/js/parity/</strong>*            be-script  be/test     LEFT (deferred, as above) beagle/test/js/{barrier,emit,       be-script  (?)         LEFT (stale repro, flagged)   loop,resolve}.js                   (repro) beagle/test/js/lib/{parity,reanchor be-script  be/test     LEFT (harness deps, deferred)   } + put/{dumprows,mtimeinv,   parentsha,tipsha}.js +   parity/dumprows.js
+beagle/test/js/{get,put,post,       be-script  be/test     LEFT (harness rewrite delete,patch}/*<strong>/run.sh +                                 needed — deferred) lib/{get,put,post,patch}case.sh beagle/test/js/{bro,diff,ls,regex,  be-script  be/test     LEFT (deferred, as above) spot}/</strong><strong>/run.sh + </strong>/lib/<strong>case.sh beagle/test/js/parity/</strong>*            be-script  be/test     LEFT (deferred, as above) beagle/test/js/{barrier,emit,       be-script  (?)         LEFT (stale repro, flagged) loop,resolve}.js                   (repro) beagle/test/js/lib/{parity,reanchor be-script  be/test     LEFT (harness deps, deferred) } + put/{dumprows,mtimeinv, parentsha,tipsha}.js + parity/dumprows.js
 </p>
+</div>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
 </div>
 </body>
 </html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-120: the JS readers never close() their maps — one why drive eats ~1000 fds, blinding the wt oracle</title>
+<meta property="og:title" content="JS-120: the JS readers never close() their maps — one why drive eats ~1000 fds, blinding the wt oracle">
+<meta property="og:description" content="RULING (gritzko, chat 2026-07-20): abc.close()/the buffer close now REALLY closes the file and unmaps (the /todo/ABC/ABC-020 release binding landed in jab, io.cpp:578 io.munmap = munmap + close(fd) + fd=-1) — so the remaining defect is on the JS side: be/ JS maps and never closes. Double-check the jab-side semantics first, then make every JS reader release deterministically. Discovered as the root cause of /todo/BRO/BRO-040 (pager context rot); recurrence of the same disease as /todo/JSQUE/JSQUE-021 (verb-load path) in the ulog/store read path.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-120.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-120: the JS readers never <code>close()</code> their maps — one <code>why</code> drive eats ~1000 fds, blinding the wt oracle</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<p>
+RULING (gritzko, chat 2026-07-20): <code>abc.close()</code>/the buffer close now REALLY closes the file and unmaps (the <a href="/todo/ABC/ABC-020.html">ABC-020</a> release binding landed in <code>jab</code>, <code>io.cpp:578</code> <code>io._munmap</code> = munmap + close(fd) + fd=-1) — so the remaining defect is on the JS side: *<strong>be/ JS maps and never closes</strong>*. Double-check the jab-side semantics first, then make every JS reader release deterministically. Discovered as the root cause of <a href="/todo/BRO/BRO-040.html">BRO-040</a> (pager context rot); recurrence of the same disease as <a href="/todo/JSQUE/JSQUE-021.html">JSQUE-021</a><a href="./DONE.html">DONE</a> (verb-load path) in the ulog/store read path.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>shared/ulog.js:42-48</code> <code>each()</code> maps (<code>abc.mmap(&quot;ULOG&quot;, path, &quot;r&quot;)</code>), iterates, and RETURNS — no close on ANY path, success or throw; <code>_withRo</code> (:265) already has the map-run-close idiom the readers should use.</li>
+<li>Measured (<a href="/todo/BRO/BRO-040.html">BRO-040</a>, pty + headless): ONE <code>why &lt;file&gt;</code> drive consumes <del>1007 fds; ordinary <code>cat</code>/<code>status</code> drives leak </del>17-20 each. Differential proof: under <code>ulimit -n 64</code>, <code>jab status</code> completes, <code>jab why CMakeLists.txt</code> dies <code>Error: No file descriptors available</code>.</li>
+<li>Downstream damage (why this is HIGH, not hygiene): exhaustion makes <code>abc.mmap</code> throw, <code>ulog.each</code> swallows it (<code>catch (e) { return; }</code> → zero rows), <code>anchors()</code> reads that as &quot;no worktree&quot;, the pager's file→dir oracle blinds, and a FILE persists as a dir context segment — the <a href="/todo/BRO/BRO-040.html">BRO-040</a> rot, with the error kind varying by which layer notices first.</li>
+<li>ABC-020 evidence (2026-07-19 probe, that ticket): a baseline with no release exhausts at ~1000 maps — exactly the number measured here, so the JS path is mapping once per object and never releasing.</li>
+<li>Ancestor <a href="/todo/JSQUE/JSQUE-021.html">JSQUE-021</a><a href="./DONE.html">DONE</a> fixed the resident verb-load leg; the read path was never converted. <a href="/todo/JS/JS-100.html">JS-100</a><a href="./DONE.html">DONE</a> already flagged &quot;an uncertain ulog reader map&quot;.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Every JS map is released deterministically at its owner's boundary: readers map → use → close, and a resident session's fd count PLATEAUS across repeated drives instead of climbing.</li>
+<li>Verify FIRST, in <code>./jab</code>, that the close/unmap binding does what the ruling says: munmap + close(2) + fd=-1, idempotent, and safe against the GC finalizer firing later on the same record. Report the finding before relying on it.</li>
+<li>Repro-gated: an fd-count (or lowered-RLIMIT) probe over N × <code>why</code>/<code>status</code> drives is flat after the fix; the <a href="/todo/BRO/BRO-040.html">BRO-040</a> 4-step click dance stops corrupting the context.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Cure is close-after-use / open-once — NEVER a parallel reader or a byte-copy read path (that shape was rm -rf-ed once already; see the BE-050/JSQUE-021 lineage).</li>
+<li>Do NOT reimplement unmap/close logic in JS or in a new binding — use what <code>jab</code> exposes; if the binding is wrong, report, do not patch around it.</li>
+<li>The <a href="/todo/ABC/ABC-020.html">ABC-020</a> in-ticket &quot;REWORK RULING&quot; (fd at close, munmap at GC) is DISAVOWED by gritzko — do not build to it; the live ruling is release-everything-on-close.</li>
+<li>A stale view after close must not crash the reader — check what the landed binding actually leaves behind before converting call sites.</li>
+<li>Mask half is <a href="/todo/BRO/BRO-040.html">BRO-040</a> (b): <code>ulog.each</code> must tell an absent log from a resource error; coordinate, do not duplicate.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> verify in ./jab: close = munmap + close(fd) + fd=-1, idempotent vs GC finalize; report before converting</li>
+<li><a href="./ .html"> </a> red: fd-count probe over N drives climbs (~1000 for one <code>why</code>); <code>ulimit -n 64</code> differential</li>
+<li><a href="./ .html"> </a> convert the readers (ulog.each first, then the store/why/blame walk) to map-use-close</li>
+<li><a href="./ .html"> </a> green: fd count plateaus; BRO-040 dance no longer rots the context</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>BLOCKED on a jab-side ruling: <code>abc.close</code> does NOT release a map whose bytes were already MATERIALIZED — and every real reader materializes. <code>abc.close</code> (cont.cpp:422) is transfer-first (<code>b.transfer()</code> → husk → msync → trim → <code>io._munmap(husk)</code>); after any byte-pointer materialization (the native cursor <code>next()</code>, the row getters <code>abc._ulog_time/_verb/_uri</code> — all <code>GetTypedArrayBytesPtr</code>), <code>ArrayBuffer.transfer()</code> COPIES instead of moving, so the husk carries no mapping, <code>io._munmap(husk)</code> finds no live FILE map at that base, returns NONE silently, and the fd survives to GC.</li>
+<li>Orchestrator-verified 2026-07-20 (differential probe, scratch <code>fdprobe.js</code>, N cycles of map+close on a real <code>.be</code> ULOG): under <code>ulimit -n 64</code>, the NO-READ variant runs 400 cycles flat; the variant that adds ONE <code>log.next()</code> dies <code>No file descriptors available</code> after *<strong>57 cycles</strong>*. Unbounded, both finish 1500 — so release is DEFERRED TO GC, not absent; a fast drive (1005 maps) simply outruns the collector. jab's own <code>test/mmapfd.js</code> passes because it never reads through the container.</li>
+<li>The obvious reorder is NOT free: munmap-live-then-transfer SIGSEGVs (transfer's copy reads unmapped pages), so neutralizing stale views and releasing the fd need a mechanism other than <code>transfer()</code>. This is <a href="/todo/ABC/ABC-020.html">ABC-020</a> design space, whose rework rulings gritzko DISAVOWED — needs his verdict, not a worker's.</li>
+<li>Consequence for this ticket: the JS conversion is correct and staged but INERT until the binding releases read maps; forced-release measurement shows it then plateaus (93/93/94/93/93 fds over 6 <code>why</code> drives), so no store/why/blame sweep is needed.</li>
+<li><a href="/todo/BRO/BRO-040.html">BRO-040</a> (b) mask is NOT made trivial by this fix — <code>each()</code> keeps <code>catch (e) { return; }</code>; keep (b) open.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Staged in work/JS-120 (<code>jab put</code>, NO commit): <code>shared/ulog.js</code> (each/<em>withRO/</em>book → map-use-release-in-finally; <code>_withRO</code> did NOT already close, contra this ticket's premise), new <code>test/js120/fdplateau.js</code> (acceptance: fd count plateaus over N drives, exhausted process = FAIL) and <code>test/js120/fdtrace.js</code> (attribution probe: 1005 ULOG maps + 83 keeper packs + 64 main-tree <code>.be</code> per ONE <code>why</code> drive, <code>abc.close</code> calls ZERO).</li>
+<li>ctest <code>-LE big</code> in-wt: 305/306, sole red work/getctx (pre-existing — fails identically with pristine ulog.js swapped back); bro/color + bro/view PASS. No existing test edited.</li>
+<li>Suggested commit (once unblocked): <code>JS-120: ulog readers release their maps at the frame boundary (map-use-close)</code></li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

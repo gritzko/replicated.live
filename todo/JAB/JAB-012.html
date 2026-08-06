@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-012: ulog.close frees the box but JS keeps the raw pointer — post-close use is UAF</title>
+<meta property="og:title" content="JAB-012: ulog.close frees the box but JS keeps the raw pointer — post-close use is UAF">
+<meta property="og:description" content="JABCulogClose (jab/ulog.hpp:337) does ULOGClose(...); free(h); while the handle circulating in JS is the box's address as a Number; JABCulogHandle (ulog.hpp:276) only rejects d &lt;= 0, so a second ulogclose(h) or any post-close call dereferences freed memory. The &quot;idempotent — nulls handle&quot; comment at ulog.hpp:245 is false — C cannot null the JS-held Number. Found in the 2026-07-24 jab/ review.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-012.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-012: ulog._close frees the box but JS keeps the raw pointer — post-close use is UAF</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<p>
+<code>JABCulogClose</code> (jab/ulog.hpp:337) does <code>ULOGClose(...); free(h);</code> while the handle circulating in JS is the box's address as a Number; <code>JABCulogHandle</code> (ulog.hpp:276) only rejects <code>d &lt;= 0</code>, so a second <code>_ulog_close(h)</code> or any post-close call dereferences freed memory. The &quot;idempotent — nulls handle&quot; comment at ulog.hpp:245 is false — C cannot null the JS-held Number. Found in the 2026-07-24 jab/ review.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Double-close is an easy JS-side mistake (finally blocks, error paths); today it is silent heap corruption, not an error.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Post-close use of a ulog handle throws a plain-words error; double-close is a no-op or throws — never UAF.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first: open, close, close again / append after close — assert throw, run under ASAN.</li>
+<li>Keep the handle representation cheap; a generation-checked slot table or a magic field zeroed on close both fit.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> ASAN repro: double-close + use-after-close.</li>
+<li class="open"><input type="checkbox" disabled> Invalidate handles on close; fix the ulog.hpp:245 comment.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

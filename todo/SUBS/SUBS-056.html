@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-056: mounting a sub re-mints its wtlog, discarding local rows (append-only bypassed)</title>
+<meta property="og:title" content="SUBS-056: mounting a sub re-mints its wtlog, discarding local rows (append-only bypassed)">
+<meta property="og:description" content="Every parent tip move REWRITES each mounted sub's .be from scratch, so any row local to the sub — an in-scope patch, a put/delete, a post — is silently gone along with the work it names. shared/submount.js:337 and :386 call ulog.write(anchorPath, redirect, track) UNCONDITIONALLY, and ulog.write (shared/ulog.js:171-176) builds a fresh log at &lt;path&gt;.tmp.&lt;rand&gt; and renames it over the anchor. The root never does this: verbs/get/get.js:446 picks writeWtlog only when fresh = !exists(bePath) (:416), else appendWtlog. So Worktree's append-only wtlog holds at the root and is bypassed at every mount.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/SUBS/SUBS-056.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-056: mounting a sub re-mints its wtlog, discarding local rows (append-only bypassed)</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<p>
+Every parent tip move REWRITES each mounted sub's <code>.be</code> from scratch, so any row local to the sub — an in-scope <code>patch</code>, a <code>put</code>/<code>delete</code>, a <code>post</code> — is silently gone along with the work it names. <code>shared/submount.js:337</code> and <code>:386</code> call <code>ulog.write(anchorPath, [redirect, track])</code> UNCONDITIONALLY, and <code>ulog.write</code> (<code>shared/ulog.js:171-176</code>) builds a fresh log at <code>&lt;path&gt;.tmp.&lt;rand&gt;</code> and renames it over the anchor. The root never does this: <code>verbs/get/get.js:446</code> picks <code>writeWtlog</code> only when <code>fresh = !exists(bePath)</code> (<code>:416</code>), else <code>appendWtlog</code>. So <a href="../../wiki/Worktree.html">Worktree</a>'s append-only wtlog holds at the root and is bypassed at every mount.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Live incident (gritzko, 2026-07-29, <code>//BRO-041/be</code>): <code>patch ?2c927d8a</code> absorbed into the <code>test</code> sub at 13:05; a parent update at 13:54 left the sub clean, the patched bytes gone.</li>
+<li>Proof by stamps: the PARENT log was APPENDED (anchor still <code>26729AMt08</code> from the clone, new row <code>26729Drw7H</code>), the SUB log was REPLACED (a NEW anchor <code>26729Drw7y</code> + <code>26729Drw7z</code>, both minted at one instant; the old <code>26729Cor0U</code>/<code>26729Cor0V</code> + <code>patch 26729D5A74</code> are gone).</li>
+<li>The absorbed content itself survived only because it came from a commit (<code>2c927d8a</code>); a <code>put</code> row or hand-staged state has no such backstop.</li>
+<li>Both call sites sit in the mount path, so this fires on EVERY parent get that materialises a sub, not just a diverged one.</li>
+<li>Related: <a href="../PATCH/PATCH-024.html">PATCH-024</a> (base tree is the last get/post) and <a href="../PUT/PUT-016.html">PUT-016</a> came out of the same session; this one is the data-loss half.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A mounted sub's <code>.be</code> is APPENDED to when it already exists — the same rule the root follows.</li>
+<li>An in-scope <code>patch</code>/<code>put</code>/<code>delete</code> row in a sub survives a parent tip move, or the move REFUSES in plain words (<a href="../../wiki/Verbs.html">Errors</a>) before touching anything.</li>
+<li>A genuinely fresh mount (no <code>.be</code> yet) still gets the two-row anchor as today.</li>
+<li><code>ulog.write</code> keeps its replace semantics; the fix is at the call site, not in the primitive.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The track row must still land with its ASSIGNED ts — <code>submount.js</code> restamps checked-out files from <code>asg[1]</code> (PUT-012 parity); an append must return the same information.</li>
+<li>Do not change <code>ulog.write</code>'s contract; other callers (fresh clone seeding, <code>get.js:215,280,446</code>) depend on replace-on-fresh.</li>
+<li>Decide and state ONE policy for a sub carrying uncommitted work when the pin moves: preserve-and-append, or refuse. Ask gritzko before implementing the refusal wording.</li>
+<li>JS <code>///be/</code> only.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>The root's <code>fresh = !exists(bePath)</code> gate is the model to copy into both mount call sites.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./ .html"> </a> red repro first, new case under <code>be/test/sub/</code>: parent + mounted sub, absorb a patch into the sub, move the parent tip, assert the sub's rows and bytes survive (red today: log re-minted, work gone). -<a href="./ .html"> </a> second leg: a <code>put</code> row in the sub (staged, never committed) survives the same move. -<a href="./ .html"> </a> gate both <code>ulog.write</code> calls in <code>shared/submount.js</code> on a fresh anchor; append otherwise, preserving the assigned-ts return shape. -<a href="./ .html"> </a> check <code>checkout.apply</code>'s <code>oldTip</code>/<code>stampTs</code> path still stamps correctly when the anchor was appended rather than re-minted. -<a href="./ .html"> </a> verify through the real UI: <code>status</code> in the sub before and after a parent update shows the same rows.
+</p>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

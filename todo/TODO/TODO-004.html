@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TODO-004 DONE: :todo meta-pair args — render, click, filter</title>
+<meta property="og:title" content="TODO-004 DONE: :todo meta-pair args — render, click, filter">
+<meta property="og:description" content="Put the meta pairs to work in the ticket views: render Key: value rows nicely, make both halves clickable, and grow the :todo arg grammar so Key:Value filters are first-class args, answered through the TODO-003 index. Builds on the BE-038 board (:todo, :todo TOPIC, :todo TOPIC-123) and the TODO-001 board IO.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/TODO/TODO-004.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>TODO-004 <a href="./DONE.html">DONE</a>: <code>:todo</code> meta-pair args — render, click, filter</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+Put the meta pairs to work in the ticket views: render <code>Key: value</code> rows nicely, make both halves clickable, and grow the <code>:todo</code> arg grammar so <code>Key:Value</code> filters are first-class args, answered through the <a href="TODO-003.html">TODO-003</a> index. Builds on the BE-038 board (<code>:todo</code>, <code>:todo TOPIC</code>, <code>:todo TOPIC-123</code>) and the <a href="TODO-001.html">TODO-001</a> board IO.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Meta pairs: <a href="/wiki/StrictMark.html">StrictMark</a> §&quot;Meta pairs&quot;; ticket keys (<code>Now: Sev: Who: Due: …</code>) registered in <a href="/meta/todo.html">todo</a>.</li>
+<li><a href="TODO-003.html">TODO-003</a> landed: <code>metaidx.find(query, opts)</code> is LAZY (scan, index the unindexed, answer) and returns <code>{tickets:[{id,rel,code,file,mtime,meta}], sweep}</code>.</li>
+<li>The status migration has RUN: <code>Now:</code> carries the state and <code>Sev:</code> the priority, so the header <code>[MARK]</code> grep that <code>views/todo/todo.js</code> filters on is dead — 9 of 837 headers still carry a mark and the board lists closed tickets.</li>
+<li>BE-038 landed the board shapes; <a href="/todo/TODO/TODO-002.html">TODO-002</a> adds progress badges; <a href="/todo/BE/BE-040.html">BE-040</a> the <code>[done]</code> buttons — this ticket must compose with those rows, not fork them.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+The arg line is a topic OR a ticket id, plus any number of <code>Key:Value</code> filter args, in any order. Errors in plain words.
+</p>
+<ul>
+<li><code>:todo</code> — the board; <code>:todo TODO</code> — one topic; <code>:todo TODO-004</code> — the page (all unchanged).</li>
+<li><code>:todo Now:OPEN</code> — one filter; <code>:todo TODO Now:OPEN</code> — a topic and a filter; <code>:todo Who:gritzko Sev:HIGH</code> — two filters, AND.</li>
+<li>Repeat a key to OR it: <code>:todo Now:OPEN Now:DONE</code>. A second colon inside one token is an error in plain words, not a second meaning.</li>
+<li><code>Now:*</code> matches any value (presence); <code>Now:</code> matches not-defined-or-empty; a bare key with no colon is an error pointing at <code>Key:*</code>.</li>
+<li>Lexical classes: <code>[A-Z]+-[0-9]+</code> ticket id, all-caps word topic, <code>Key:Value</code> filter — case alone separates <code>ABC</code> from <code>Ask:</code>.</li>
+<li>Ticket view renders meta pairs as a key–value block under the header; board rows may show a queried key's value inline.</li>
+<li>A click REPLACES that key's filter and leaves the rest of the arg line alone: on <code>:todo TODO</code>, clicking <code>OPEN</code> gives <code>:todo TODO Now:OPEN</code>, and clicking <code>DONE</code> then gives <code>:todo TODO Now:DONE</code>.</li>
+<li>The click spell carries the WHOLE arg line, not a <code>todo(key, value)</code> call — that is what makes replacement and the address-bar display expressible (<a href="/todo/BRO/BRO-025.html">BRO-025</a>).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Spaces and colons SEPARATE, so a filter value carries neither: <code>Rev:</code> and <code>See:</code> values (URIs, links) are presence-filterable only, never exact.</li>
+<li>With no <code>Now:</code> in the query the board hides <code>Now:DONE</code> and <code>Now:DONT</code> ONLY — <code>Now:STALE</code> and pair-less tickets stay listed (fail-open, as an unmarked header used to).</li>
+<li>Any mention of <code>Now:</code> overrides that default, so <code>:todo Now:DONE</code> reaches the closed tickets.</li>
+<li>Filters go through <a href="TODO-003.html">TODO-003</a> <code>find()</code> only — values and titles for DISPLAY come from reading the narrowed tickets, never from the index payload (it is a despaced, decased match token, sometimes only a hash).</li>
+<li><code>Sev:</code> values order <code>CRIT</code> &gt; <code>HIGH</code> &gt; <code>MED</code> &gt; <code>LOW</code> per <a href="/meta/todo.html">todo</a>; unknown keys and unknown values are legal args — the index is key-agnostic.</li>
+<li>Reuse the <a href="TODO-001.html">TODO-001</a> read/memo path for titles+badges once it lands; until then do not build a second memo layer.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Time-sort is POSTPONED (ruling 2026-08-03) — until it lands, flat filter results order by topic+number and the board keeps its <code>Sev:</code> order.</li>
+<li>When it does land: dirty tickets sort by mtime, committed ones by last-commit time, dirty first.</li>
+<li>mtime alone cannot carry freshness — a checkout restamps every file, so in a fresh clone all 837 tickets tie (measured: a 12:32 clone stamps every file 12:32:07).</li>
+<li>Nor can the walk run per render: <code>be list todo</code> costs 2.8 s and still leaves entries <code>unk</code> at the <code>LIST_MAX_WALK</code> ceiling, against 17 ms for a warm index query.</li>
+<li>The shape that works is ONE newest-first pass attributing every ticket (<code>shared/lastcommit.js</code>), bounded to the visible rows, cached against the tip — never the per-file weave walk repeated down the list.</li>
+<li>Tickets lacking a queried key list after those having it rather than vanishing — filters hide, sorts never do.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> arg lexer: topic / ticket id / <code>Key:Value</code> filters, repeat-key OR, <code>Key:*</code> and <code>Key:</code> forms, plain-word errors</li>
+<li class="open"><input type="checkbox" disabled> the implicit <code>Now:</code> default (hide DONE + DONT) and its override</li>
+<li class="open"><input type="checkbox" disabled> filters through <a href="TODO-003.html">TODO-003</a> <code>find()</code>; value+title read-back over the narrowed set</li>
+<li class="open"><input type="checkbox" disabled> ticket view: meta block render, key/value clicks that replace one filter in the whole arg line</li>
+<li class="open"><input type="checkbox" disabled> board rows: queried key's value inline, composed with <a href="/todo/TODO/TODO-002.html">TODO-002</a> badges</li>
+<li class="open"><input type="checkbox" disabled> golden: each arg form, OR and presence forms, click replacement round-trips, the <code>Now:</code> default and its override</li>
+<li class="open"><input type="checkbox" disabled> time-sort, once unpostponed (its own ticket)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="TODO-003.html">TODO-003</a> has landed; the <a href="/todo/SPOT/SPOT-003.html">SPOT-003</a> dependency it carried is gone.</li>
+<li><code>verbs/done/done.js</code> writes a header <code>[DONE]</code> mark, not <code>Now: DONE</code>, so the pair and the header can drift — its own ticket.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

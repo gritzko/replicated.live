@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GET-002</title>
+<title>GET-002: be get/post //host (scheme+authority only) must complete path/query from history</title>
+<meta property="og:title" content="GET-002: be get/post //host (scheme+authority only) must complete path/query from history">
+<meta property="og:description" content="be get ssh://host with only a scheme and authority — no path, no query — should complete the missing parts from the last successful get/post (the persisted clone source), so a bare-host re-fetch resolves the same repo it was cloned from. Instead it fails WIRECLFL (it tries to fetch from the host with an empty repo path). This completion logic existed and worked; it regressed. The goal is to restore URI-completion-from-history for transport args missing path/query. See GET, POST, URI.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-002.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>GET-002: <code>be get/post //host</code> (scheme+authority only) must complete path/query from history</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>be get ssh://host</code> with only a scheme and authority — no path, no query — should complete the missing parts from the last successful get/post (the persisted clone source), so a bare-host re-fetch resolves the same repo it was cloned from. Instead it fails <code>WIRECLFL</code> (it tries to fetch from the host with an empty repo path). This completion logic existed and worked; it regressed. The goal is to restore URI-completion-from-history for transport args missing path/query. See <a href="../wiki/GET.html">GET</a>, <a href="../wiki/POST.html">POST</a>, <a href="../wiki/URI.html">URI</a>.
 </p>
@@ -22,7 +31,7 @@ A bare-authority transport arg is sent to the wire as-is instead of being comple
 <ul>
 <li>Repro: <code>be get ssh://spot</code> → <code>WIRECLFL</code> / <code>BEDOGEXIT</code>; <code>be get ssh://spot/src/dogs</code> (full path) fetches fine. The clone source (<code>ssh://spot/src/dogs</code>) is recorded — the bare form should reuse its path/query.</li>
 <li>The completion source is the persisted clone source: the project's line-1 <code>get</code> row / row-0 anchor (the original clone URI), and/or the most recent get/post that carried a host path — the wtlog holds it.</li>
-<li>Regression: this URI-completion step was present and working; the recent source/anchor/title refactoring (the <a href="">DIS</a>-001 row-0 / <code>REFSSourceScheme</code> area) likely dropped it. Use git history to locate the removed logic rather than reinventing it.</li>
+<li>Regression: this URI-completion step was present and working; the recent source/anchor/title refactoring (the <a href="./DIS.html">DIS</a>-001 row-0 / <code>REFSSourceScheme</code> area) likely dropped it. Use git history to locate the removed logic rather than reinventing it.</li>
 </ul>
 <h2>Blockers</h2>
 <p>
@@ -38,5 +47,16 @@ Restore completion of a transport URI's missing path/query from the persisted so
 <li>SCHEME ONLY (<code>ssh:</code>, the remaining gap) — find the RECENTMOST get/post row that used that transport scheme and reuse its full URI (authority + path + query). E.g. with a recent <code>ssh://localhost/src/dogs</code> get/post, <code>be get ssh:</code> resolves to it.</li>
 <li>Add a <code>test/get/</code> case asserting <code>ssh:</code> (scheme alone) recovers the recentmost same-transport URI (the <code>ssh://host</code> form is covered by <code>test/get/35</code>).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

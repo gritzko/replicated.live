@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>KEEP-003</title>
+<title>KEEP-003: keeper post self-deadlocks — holds the per-shard .lock, then its spawned keeper receive-pack child blocks on the SAME lock</title>
+<meta property="og:title" content="KEEP-003: keeper post self-deadlocks — holds the per-shard .lock, then its spawned keeper receive-pack child blocks on the SAME lock">
+<meta property="og:description" content="A local keeper post --tlv be://localhost?/&lt;shard&gt; takes the WRITE flock on &lt;store&gt;/&lt;shard&gt;/.lock, then forks keeper receive-pack ?/&lt;shard&gt; for the local wire edge. The parent keeps the flock held and blocks reading the child's pipe; the child blocks acquiring that very flock. Neither side can progress — a permanent self-deadlock that wedges the shard for every other process too. Hit while another ticket agent posted libabc; it then blocked a fresh be get …?/beagle (which recurses into the libabc sub) indefinitely. Method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/KEEP/KEEP-003.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,73 +15,59 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>KEEP-003 <a href="./HIGH.html">HIGH</a>: <code>keeper post</code> self-deadlocks — holds the per-shard <code>.lock</code>, then its spawned <code>keeper receive-pack</code> child blocks on the SAME lock</h1>
+<h1>KEEP-003: <code>keeper post</code> self-deadlocks — holds the per-shard <code>.lock</code>, then its spawned <code>keeper receive-pack</code> child blocks on the SAME lock</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
 <p>
 A local <code>keeper post --tlv be://localhost?/&lt;shard&gt;</code> takes the WRITE flock on <code>&lt;store&gt;/&lt;shard&gt;/.lock</code>, then forks <code>keeper receive-pack ?/&lt;shard&gt;</code> for the local wire edge. The parent keeps the flock held and blocks reading the child's pipe; the child blocks acquiring that very flock. Neither side can progress — a permanent self-deadlock that wedges the shard for every other process too. Hit while another ticket agent posted libabc; it then blocked a fresh <code>be get …?/beagle</code> (which recurses into the libabc sub) indefinitely. Method <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Live (2026-06-27): <code>PATCH-004-land</code> ran `keeper post --at …/abc?/libabc<p>
-#40cf6df6… --tlv be://localhost?/libabc<code> (PID 19883). </code>/proc/locks<code>: PID 19883 HOLDS </code>WRITE FLOCK<code> on inode </code>fd:03:681203<code> (</code>/home/gritzko/.be/libabc/.lock<code>); its child </code>keeper receive-pack ?/libabc<code> (PID 19888) is QUEUED on the same inode. 19883 wchan = </code>anon_pipe_read<code> (waiting on the child); 19888 wchan = </code>locks_lock_inode_wait` (waiting on the parent's flock). Stable for many minutes — a true deadlock, not slow progress.
-</p>
-</li>
-<li>Blast radius: a third process, a fresh <code>be get be://localhost?/beagle</code><p>
-recursing into the libabc sub (sniff PID 15502), queued THIRD on the same <code>.lock</code> and hung. Any rw op on that shard is now blocked.
-</p>
-</li>
+<li>Live (2026-06-27): <code>PATCH-004-land</code> ran <code>keeper post --at …/abc?/libabc #40cf6df6… --tlv be://localhost?/libabc</code> (PID 19883). <code>/proc/locks</code>: PID 19883 HOLDS <code>WRITE FLOCK</code> on inode <code>fd:03:681203</code> (<code>/home/gritzko/.be/libabc/.lock</code>); its child <code>keeper receive-pack ?/libabc</code> (PID 19888) is QUEUED on the same inode. 19883 wchan = <code>anon_pipe_read</code> (waiting on the child); 19888 wchan = <code>locks_lock_inode_wait</code> (waiting on the parent's flock). Stable for many minutes — a true deadlock, not slow progress.</li>
+<li>Blast radius: a third process, a fresh <code>be get be://localhost?/beagle</code> recursing into the libabc sub (sniff PID 15502), queued THIRD on the same <code>.lock</code> and hung. Any rw op on that shard is now blocked.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>A local <code>keeper post</code>/wire-push must NOT hold the per-shard <code>.lock</code><p>
-across the spawn of its own <code>receive-pack</code> (or the child must inherit / share the lock, not re-acquire it). No path where a single logical post acquires the same flock twice.
-</p>
-</li>
-<li>Concurrent agents on the shared <code>~/.be</code> store make progress; a local<p>
-<code>be://localhost</code> post completes without wedging the shard.
-</p>
-</li>
+<li>A local <code>keeper post</code>/wire-push must NOT hold the per-shard <code>.lock</code> across the spawn of its own <code>receive-pack</code> (or the child must inherit / share the lock, not re-acquire it). No path where a single logical post acquires the same flock twice.</li>
+<li>Concurrent agents on the shared <code>~/.be</code> store make progress; a local <code>be://localhost</code> post completes without wedging the shard.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Keeper/wire path (<code>keeper/WIRECLI.c</code> post/receive-pack, the <code>.lock</code><p>
-flock site). Repro-first: a hermetic local <code>be://localhost</code> post of a sub that exercises the post→receive-pack handoff under one process tree; assert it exits and the <code>.lock</code> is released. C-only.
-</p>
-</li>
+<li>Keeper/wire path (<code>keeper/WIRECLI.c</code> post/receive-pack, the <code>.lock</code> flock site). Repro-first: a hermetic local <code>be://localhost</code> post of a sub that exercises the post→receive-pack handoff under one process tree; assert it exits and the <code>.lock</code> is released. C-only.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open) Locate the flock acquire in the post path vs the receive-pack<p>
-path; decide whether to release-before-spawn, pass the fd, or have receive-pack skip re-locking when invoked as the post's own child (e.g. an env/arg marker, or a recursive-flock guard).
-</p>
-</li>
+<li>(open) Locate the flock acquire in the post path vs the receive-pack path; decide whether to release-before-spawn, pass the fd, or have receive-pack skip re-locking when invoked as the post's own child (e.g. an env/arg marker, or a recursive-flock guard).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: a local <code>be://localhost</code> sub post that deadlocks on<p>
- the per-shard <code>.lock</code>; confirm RED (hang/timeout), then fix.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Fix the double-acquire; green: concurrent posts don't wedge.<p>
- Verified still present 2026-07-07: <code>keeper post</code> opens rw (KEEP.cli.c:104  <code>KEEPOpen(YES)</code> → KEEP.c:423-424 <code>FILECreate</code>/<code>FILELock</code> on <code>&lt;leaf&gt;/.lock</code>)  and holds it across <code>WIREPush</code> (KEEP.exe.c:1036) → <code>wcli_spawn</code> of the local  <code>keeper receive-pack</code> child, whose <code>keeper_receive_pack_inner</code>  (KEEP.cli.c:102-110) does its own <code>KEEPOpen(YES)</code> on the same shard — no  release-before-spawn, no lock inheritance/skip marker anywhere in keeper/.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Candidate shape: mirror <code>RECVAdvanceColocatedWt</code> (RECV.h:143 — it already<p>
- runs strictly AFTER <code>KEEPClose</code>+<code>HOMEClose</code> &quot;so the spawned child can  acquire the store lock without deadlocking&quot;) — i.e. close/release the  keeper before the local receive-pack spawn, or pass the flock fd.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: a local <code>be://localhost</code> sub post that deadlocks on the per-shard <code>.lock</code>; confirm RED (hang/timeout), then fix.</li>
+<li class="open"><input type="checkbox" disabled> Fix the double-acquire; green: concurrent posts don't wedge. Verified still present 2026-07-07: <code>keeper post</code> opens rw (KEEP.cli.c:104 <code>KEEPOpen(YES)</code> → KEEP.c:423-424 <code>FILECreate</code>/<code>FILELock</code> on <code>&lt;leaf&gt;/.lock</code>) and holds it across <code>WIREPush</code> (KEEP.exe.c:1036) → <code>wcli_spawn</code> of the local <code>keeper receive-pack</code> child, whose <code>keeper_receive_pack_inner</code> (KEEP.cli.c:102-110) does its own <code>KEEPOpen(YES)</code> on the same shard — no release-before-spawn, no lock inheritance/skip marker anywhere in keeper/.</li>
+<li class="open"><input type="checkbox" disabled> Candidate shape: mirror <code>RECVAdvanceColocatedWt</code> (RECV.h:143 — it already runs strictly AFTER <code>KEEPClose</code>+<code>HOMEClose</code> &quot;so the spawned child can acquire the store lock without deadlocking&quot;) — i.e. close/release the keeper before the local receive-pack spawn, or pass the flock fd.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Surfaced while clearing <a href="../POST/POST-023.html">POST-023</a> (its clone hung behind this<p>
- deadlock; abc/ was sourced from the pinned journal tree to proceed).
-</p>
-</li>
+<li>Surfaced while clearing <a href="../POST/POST-023.html">POST-023</a> (its clone hung behind this deadlock; abc/ was sourced from the pinned journal tree to proceed).</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>OPEN — filed 2026-06-27 from the POST-023 clone hang.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

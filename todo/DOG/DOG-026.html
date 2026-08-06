@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOG-026 DONE: MKDT meta-pair leaf block Key: value</title>
+<meta property="og:title" content="DOG-026 DONE: MKDT meta-pair leaf block Key: value">
+<meta property="og:description" content="Tickets now carry meta (assignee, due date, milestone) as Key: value lines under the header, per /meta/todo; the leaf is specced in /wiki/StrictMark §&quot;Meta pairs&quot;. The tokenizer must emit it as its own block type so renderers and view verbs stop reading meta as paragraph prose.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DOG/DOG-026.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG-026 <a href="./DONE.html">DONE</a>: MKDT meta-pair leaf block <code>Key: value</code></h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<p>
+Tickets now carry meta (assignee, due date, milestone) as <code>Key: value</code> lines under the header, per <a href="/meta/todo.html">todo</a>; the leaf is specced in <a href="/wiki/StrictMark.html">StrictMark</a> §&quot;Meta pairs&quot;. The tokenizer must emit it as its own block type so renderers and view verbs stop reading meta as paragraph prose.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Spec: <code>KEY ':' GAP VALUE</code>, <code>KEY := [A-Z][a-z][a-z]</code> at line start; value verbatim to EOL, no inline layer.</li>
+<li>Registered ticket keys (<a href="/meta/todo.html">todo</a>): <code>Who: Due: For: Ask: Env: Rev: Dup: Sub:</code>; the grammar is key-agnostic.</li>
+<li>Today such a line lexes as paragraph text: greps work, but rendering and the <code>:todo</code> view (BE-038) see prose.</li>
+<li>Ticket status moves from the header into a meta pair (ruling 2026-08-02), so this leaf carries the board's primary query, not just decoration.</li>
+<li>The meta-pair index <a href="/todo/TODO/TODO-003.html">TODO-003</a> extracts by line regex until these tokens land, then swaps over; its row carries a 4-bit kind, so the lexer's kinds are what it can index.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>MKDTLexer</code> (<code>dog/tok/MKDT.c</code>) emits a distinct meta-pair leaf token for <code>^[A-Z][a-z][a-z]: </code> lines.</li>
+<li>A line-start escape (<code>Due\:</code>) keeps a paragraph a paragraph; StrictMark-wins otherwise.</li>
+<li>Repro-first: fixture with a ticket header + meta block + prose-with-colon lines, asserting token kinds.</li>
+<li>Each indexable leaf carries a distinct kind nibble — meta pair now, <code>-[ ]</code> todo marker next for the board badge (<a href="/todo/TODO/TODO-002.html">TODO-002</a>) — one shape the index can key on.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>New alternative in the line-start scan before the paragraph fallback; ragel/regex, no hand-rolled byte scanner.</li>
+<li>Marker is exactly 4 chars (<code>Who:</code> + gap), consistent with the DOG-024 quad discipline.</li>
+<li>Renderer support (key–value row in mark) is a separate MARK ticket once tokens land.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Shape-only recognition: key vocabulary lives in <a href="/meta/todo.html">todo</a>, never in the lexer.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> meta-pair token kind + lexer alternative in <code>dog/tok/MKDT.c</code></li>
+<li class="done"><input type="checkbox" checked disabled> <code>\:</code> line-start escape (free: the backslash breaks the quad shape, test asserts it)</li>
+<li class="done"><input type="checkbox" checked disabled> tokenizer tests: meta block, prose false-positive, escape (<code>MKDTMetaPairTest</code> in <code>test/TOK01.c</code>)</li>
+<li class="open"><input type="checkbox" disabled> todo-marker leaf kind for the board's progress badge (<a href="/todo/TODO/TODO-002.html">TODO-002</a>)</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>stable per-leaf line/offset for <a href="/todo/TODO/TODO-003.html">TODO-003</a>'s <code>line</code> field (moot: the kv64 redesign dropped the <code>line</code> field)</del></li>
+<li class="open"><input type="checkbox" disabled> file the MARK renderer follow-up ticket</li>
+<li class="open"><input type="checkbox" disabled> <a href="/wiki/StrictMark.html">StrictMark</a> §&quot;Meta pairs&quot; grammar line: widen <code>[A-Z][a-z][a-z]</code> to <code>[A-Z][a-z][a-z0-9]</code> (<code>On1:</code> ruling 2026-08-03)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<p>
+Landed in the main tree 2026-08-03 (explicit order), uncommitted; suggested commit <code>DOG-026: meta-pair leaf Key: value in MKDTB</code>.
+</p>
+<ul>
+<li>Grammar: <code>meta = (upper lower (lower|dig) ':' @mt_run) &gt;mt_start sp @mt_set</code> in the innermost list position of <code>main :=</code> (<code>tok/MKDTB.c.rl</code>), <code>MKDTB.rl.c</code> regenerated (ragel 6.10).</li>
+<li><code>mkdtblock</code> gains <code>meta</code>/<code>metakey</code> (<code>tok/MKDT.h</code>); lexer emits key quad 'T', value one verbatim 'S' (no inline layer), 'W' newline; a meta line ends a paragraph run (<code>tok/MKDT.c</code>).</li>
+<li>ctest 72/72 green, new test failed pre-port (repro-first); prior <code>work/DOG-026</code> wt superseded by this port + digit widening.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

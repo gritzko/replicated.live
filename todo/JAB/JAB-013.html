@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-013: ulog seekURI misses long-URI rows — 2048 pad NOROOM reads as &quot;no match&quot;; drain already has the raw slice</title>
+<meta property="og:title" content="JAB-013: ulog seekURI misses long-URI rows — 2048 pad NOROOM reads as &quot;no match&quot;; drain already has the raw slice">
+<meta property="og:description" content="ulogseekURI (jab/ulog.hpp:172-195) reconstructs each row's URI via URIMake into a fixed u8 ub2048; on NOROOM JABCulogUriText returns 0 and the row silently never matches. Feed accepts raw URIs up to FILEPATHMAXLEN=1024 whose escaped form (~3x) exceeds the pad — the same class JS-108 fixed on the read path (JABCulogUriStr, ulog.hpp:38, sized malloc). The reconstruction is also needless: ULOGu8sDrain sets rec.uri.data to the row's URI slice (dog/ULOG.c:119, ULOG.h:159); the ulog.hpp:25 comment claiming it stays empty is wrong. Found in the 2026-07-24 jab/ review.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-013.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-013: ulog seekURI misses long-URI rows — 2048 pad NOROOM reads as &quot;no match&quot;; drain already has the raw slice</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
+<p>
+<code>_ulog_seekURI</code> (jab/ulog.hpp:172-195) reconstructs each row's URI via <code>URIMake</code> into a fixed <code>u8 ub[2048]</code>; on NOROOM <code>JABCulogUriText</code> returns 0 and the row silently never matches. Feed accepts raw URIs up to <code>FILE_PATH_MAX_LEN</code>=1024 whose escaped form (~3x) exceeds the pad — the same class <a href="./JS-108.html">JS-108</a> fixed on the read path (<code>JABCulogUriStr</code>, ulog.hpp:38, sized malloc). The reconstruction is also needless: <code>ULOGu8sDrain</code> sets <code>rec.uri.data</code> to the row's URI slice (dog/ULOG.c:119, ULOG.h:159); the ulog.hpp:25 comment claiming it stays empty is wrong. Found in the 2026-07-24 jab/ review.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>A <code>put</code>/<code>log</code> on a deep path can write rows that seekURI then cannot find — reads as data loss to the caller.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>seekURI matches every row it stored, regardless of URI length; compare against the raw <code>rec.uri.data</code> slice instead of reconstructing.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first: append a row whose escaped URI &gt; 2048 bytes, assert seekURI finds it.</li>
+<li>Fix the ulog.hpp:25 comment while there.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: long-URI row, seekURI hit.</li>
+<li class="open"><input type="checkbox" disabled> Match on the drained uri slice; drop the URIMake pad path.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

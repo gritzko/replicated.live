@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PUT-016: bare put must stage patched-in files (pat/mrg/cnf), theirs-adds included</title>
+<meta property="og:title" content="PUT-016: bare put must stage patched-in files (pat/mrg/cnf), theirs-adds included">
+<meta property="og:description" content="RULING (gritzko, 2026-07-29): patched-in files are DIRTY and a bare be put must stage them — including paths the base does not track (a take-theirs ADD). Today verbs/put/put.js:367-373 keeps only the mod/mis/unk/ok buckets, so a patch-derived file stays ..vv after be put and never reaches ..vV; only POST picks it up, by consuming the patch row directly (DIS-057). The row emission compounds it: put.js:425 walks eng.baseTreeSha and emits a row only for a path that walk yields, so a theirs-add (absent from the base tree by construction) can never be emitted from there. Sibling of PATCH-024 (the base tree is the last get/post) and shares its worktree.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PUT/PUT-016.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PUT-016: bare <code>put</code> must stage patched-in files (pat/mrg/cnf), theirs-adds included</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+RULING (gritzko, 2026-07-29): patched-in files are DIRTY and a bare <code>be put</code> must stage them — including paths the base does not track (a take-theirs ADD). Today <code>verbs/put/put.js:367-373</code> keeps only the <code>mod</code>/<code>mis</code>/<code>unk</code>/<code>ok</code> buckets, so a patch-derived file stays <code>..vv</code> after <code>be put</code> and never reaches <code>..vV</code>; only <a href="../../wiki/POST.html">POST</a> picks it up, by consuming the patch row directly (DIS-057). The row emission compounds it: <code>put.js:425</code> walks <code>eng.baseTreeSha</code> and emits a row only for a path that walk yields, so a theirs-add (absent from the base tree by construction) can never be emitted from there. Sibling of <a href="../PATCH/PATCH-024.html">PATCH-024</a> (the base tree is the last get/post) and shares its worktree.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Live probe (2026-07-29, <code>work/PATCH-024/be</code>): base T0 + <code>?feat</code> changing <code>keep.txt</code>; after <code>be patch ?feat</code>, <code>status</code> shows <code>..vv keep.txt</code> and a bare <code>be put</code> emits NO row for it.</li>
+<li><code>verbs/put/put.js:365</code> sources the dirty list from <code>classify.classifyMerge</code>, then <code>:367-373</code> filters to mod/mis/unk/ok — <code>pat</code>/<code>mrg</code>/<code>cnf</code> fall on the floor.</li>
+<li><code>shared/classify.js:417-436</code> already buckets these correctly, including &quot;a patch-stamped take-theirs ADD (theirs added a path ours lacked)&quot; carrying theirs' sha and mode.</li>
+<li><code>verbs/put/put.js:425</code> emits rows from inside <code>k.readTreeRecursive(eng.baseTreeSha, ...)</code> — base-tree-driven, so a path absent from the base tree gets no row however it is bucketed.</li>
+<li><a href="../PATCH/PATCH-024.html">PATCH-024</a> fixed the neighbouring half (the base tree is <code>curTip</code>, not the patch row); this ticket is the other half of the same interaction.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A bare <code>be put</code> with a patch row in scope stages every patch-derived path: <code>pat</code>, <code>mrg</code>, and a take-theirs ADD the base does not track.</li>
+<li>Staging a patch-derived path flips its wt char to the staged form (<code>..vV</code>), matching <a href="../../wiki/Status.html">Status</a>'s staging-provenance rule.</li>
+<li>A path-scoped <code>be put &lt;path&gt;</code> on a patch-derived file behaves the same as the bare walk.</li>
+<li>Existing bucket behaviour (mod/mis/unk/ok) is unchanged; <code>post</code> keeps working whether or not the user ran <code>put</code> first.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Emit theirs-add rows from the CLASSIFIER row (theirs' sha/mode), never from the base-tree walk — the path is absent there by construction.</li>
+<li><code>cnf</code> (weave left conflict markers): stage it like the rest; <a href="../../wiki/POST.html">POST</a>'s POSTCFLCT pre-scan is the guard that refuses at commit time. If a test says otherwise, STOP and ask — do not amend the test.</li>
+<li>Same worktree as <a href="../PATCH/PATCH-024.html">PATCH-024</a> (<code>work/PATCH-024/be</code>); its base-tree fix is a prerequisite and must not be reverted.</li>
+<li>JS <code>///be/</code> only.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>The classifier is already right; this is a consumer fix in <code>put.js</code> — do not touch <code>classify.js</code> bucket logic.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./ .html"> </a> red repro first, new case under <code>be/test/put/</code>: patch a branch in, bare <code>put</code>, assert the patched-in path stages (<code>..vV</code>); second leg for a take-theirs ADD. -<a href="./ .html"> </a> fold <code>pat</code>/<code>mrg</code>/<code>cnf</code> into put's staged set alongside <code>mod</code>. -<a href="./ .html"> </a> emit rows for paths absent from the base tree from the classifier rows, not the <code>eng.baseTreeSha</code> walk. -<a href="./ .html"> </a> check the restamp/<code>ok</code> fast-path is not confused by patch stamps (put/patch stamps already fall through the get/post stamp gate). -<a href="./ .html"> </a> verify through the real UI: <code>status</code> before/after the <code>put</code>, then a <code>post</code> that commits the staged set.
+</p>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

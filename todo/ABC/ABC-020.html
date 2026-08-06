@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABC-020: abc.close releases nothing — add a real unmap binding (munmap + close + fd=-1)</title>
+<meta property="og:title" content="ABC-020: abc.close releases nothing — add a real unmap binding (munmap + close + fd=-1)">
+<meta property="og:description" content="Read-only investigation 2026-07-19 in jab/, parent incident /todo/JSQUE/JSQUE-021 (resident session fd exhaustion); JS-side consumer discipline is /todo/BE/BE-050. - abc.close(c) (cont.cpp:419-430) does msync + truncate-if-booked + b.map = null — NO munmap, NO close(2); the map null is a self-cycle (cont.cpp:394,472) that does not even shorten the mapping's life. - No native unmap binding exists at all (the io.cpp:886-921 install list has no munmap/unmap entry). - Release happens ONLY at GC finalize: JABCMapFree (io.cpp:506-509) → FILEUnMap (dog/abc/FILE.c:812-819) = FILEUnMapFD munmap + FILEClose close(2) + fd=FILECLOSED — already exactly the wanted semantics, idempotent (re-entry bounces off sane(Bok(buf))). - No reuse layer: FILEMapRO/RW (FILE.c:737-759) open a fresh fd + fresh mapping every call; FILEWANTBUFS is keyed by fd (slot index), not path; abc.mmap (cont.cpp:405-408) has no memo — same path twice = two fds. FILEMAXOPEN=1024 (FILE.h:125) matches the observed ~890-map exhaustion. - OVERTURNED: the /todo/ABC/ABC-014 leftover TODO &quot;close(fd) right after mmap in FILEMapRO/RW&quot; — the fd number IS the registry key (FILEBookedFD FILE.h:662-668; FILEMapFD FILE.c:706-707 requires slot FILEWANTBUFSfd free), so an early close lets a reused fd collide with an occupied slot and makes GC close(2) an unrelated fd. FILEReMap/pread on the stored fd are unreachable from the JS io.mmap path. - FILECloseAll (FILE.c:693-698) is a // todo stub.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/ABC/ABC-020.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ABC-020: abc.close releases nothing — add a real unmap binding (munmap + close + fd=-1)</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Read-only investigation 2026-07-19 in jab/, parent incident <a href="/todo/JSQUE/JSQUE-021.html">JSQUE-021</a> (resident session fd exhaustion); JS-side consumer discipline is <a href="/todo/BE/BE-050.html">BE-050</a>.
+</p>
+<ul>
+<li><code>abc.close(c)</code> (cont.cpp:419-430) does msync + truncate-if-booked + <code>b._map = null</code> — NO munmap, NO close(2); the <code>_map</code> null is a self-cycle (cont.cpp:394,472) that does not even shorten the mapping's life.</li>
+<li>No native unmap binding exists at all (the io.cpp:886-921 install list has no <em>munmap/</em>unmap entry).</li>
+<li>Release happens ONLY at GC finalize: JABCMapFree (io.cpp:506-509) → FILEUnMap (dog/abc/FILE.c:812-819) = FILEUnMapFD munmap + FILEClose close(2) + fd=FILE_CLOSED — already exactly the wanted semantics, idempotent (re-entry bounces off <code>sane(Bok(buf))</code>).</li>
+<li>No reuse layer: FILEMapRO/RW (FILE.c:737-759) open a fresh fd + fresh mapping every call; FILE_WANT_BUFS is keyed by fd (slot index), not path; abc.mmap (cont.cpp:405-408) has no memo — same path twice = two fds. FILE_MAX_OPEN=1024 (FILE.h:125) matches the observed ~890-map exhaustion.</li>
+<li>OVERTURNED: the <a href="/todo/ABC/ABC-014.html">ABC-014</a> leftover TODO &quot;close(fd) right after mmap in FILEMapRO/RW&quot; — the fd number IS the registry key (FILEBookedFD FILE.h:662-668; FILEMapFD_ FILE.c:706-707 requires slot <code>FILE_WANT_BUFS[fd]</code> free), so an early close lets a reused fd collide with an occupied slot and makes GC close(2) an unrelated fd. FILEReMap/pread on the stored fd are unreachable from the JS io._mmap path.</li>
+<li>FILECloseAll (FILE.c:693-698) is a <code>// todo</code> stub.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+gritzko's ruling: explicit unmap must munmap the region, close the file, and set fd to -1, idempotently. <code>abc.close</code> becomes a real deterministic release so <a href="/todo/BE/BE-050.html">BE-050</a> can close per drain and a resident session's fd count plateaus.
+</p>
+<ul>
+<li>Red-first repro: N × (abc.mmap + abc.close) of one path under a lowered RLIMIT_NOFILE (or a FILE slot-count probe) exhausts today, stays flat after the fix.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Reuse FILEUnMap — it already implements the wanted semantics; do NOT reimplement unmap/close logic inside the binding.</li>
+<li>ABC idioms per <a href="/meta/abc.html">abc</a>; PRO.h stays in .c files; user-facing errors in plain words, never bare C codes.</li>
+<li>Fresh clone in work/ABC-020 from <code>///jab/</code> (the journal tree's jab sub, live form); stop + report on any clone failure, no improvised fallback; cmake + ninja + ctest -j16; the ~/bin/jab ASAN build prints an LSan trailer — ignore it.</li>
+<li>No unrelated edits; keeper/git.pack.mmap consumers (cont.cpp:476-492) must keep working unchanged.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>RULING (gritzko, 2026-07-19): the ENTIRE goal is to release everything on close — abc.close = msync + trim + munmap + close(fd) + fd=-1, nothing deferred to GC. The LESSER, subordinate problem is making the now-empty JS buffer safe to touch afterwards.</li>
+<li>Probe evidence (jab JSC, 2026-07-19): <code>ArrayBuffer.prototype.transfer()</code> works on the NoCopy mmap buffers — old buffer detaches, all views go length-0/undefined, no crash. Caveat: transfer MOVES the mapping pointer into the husk buffer it returns; the husk's GC finalizer (JABCMapFree→FILEUnMap) later fires on the same record, so full-release-at-close needs that finalizer path to be an idempotent no-op for an already-released mapping. Baseline with no release exhausts fds at ~1000 maps (&quot;No file descriptors available&quot;), reproducing JSQUE-021.</li>
+<li>REWORK RULING (gritzko, 2026-07-19, supersedes the tag/guard design below): fd lifetime = map→abc.close; mapping lifetime = map→GC. <code>abc.close</code> = msync + trim (booked) + close(fd) + unregister the slot — NEVER munmap. GC finalizer = plain munmap(bytes, len) off a per-array ctx box (the io._ram JABCRamFree pattern), plus fd release iff close was never called (box fd set to -1 on explicit close). Writable maps keep the fd across their working life (resize/msync) and surrender it at close like RO.</li>
+<li>Consequences: stale views after close read still-mapped, valid file pages (no dangling, no zero-remap needed); no ABA (the VA stays occupied until GC); the JABCMapTag live/guard machinery is deleted. Accepted costs: closed mappings leave the registry until GC (FILECloseAll/accounting blind); the pre-existing writer-trim vs stale-tail SIGBUS stays as today.</li>
+<li>DISAVOWED (gritzko, 2026-07-19: &quot;bs&quot; — this was NOT his ruling, agent-attributed in error; do not build on it): REWORK 2: the box+side-table+branch layer is rejected as a circus. Root cause is the fd-keyed registry — re-key: mapping records live map→GC in their own pool (no malloc), fd is a FIELD; close = close(fd) + rec.fd=-1 (record and pages stay); GC ctx = record ptr → close fd iff rec.fd&gt;=0, munmap by record len, free record. Reset the circus files in the wt via <code>jab get! &lt;path/file&gt;</code> and rebuild on the survivors (tests, cont.cpp wiring, FILECloseMap sans slot-free).</li>
+<li>DISAVOWED (same status as REWORK 2 above): GC pressure: when open FILE fds exceed 1/2 of FILE_MAX_OPEN, force a collection (JSSynchronousGarbageCollectForDebugging; plain JSGarbageCollect is advisory). Report each mapping's ACTUAL RAM weight to the GC via JSReportExtraMemoryCost (JSBasePrivate.h export) — the file's DATA length, never the virtual reservation (a 1TB sparse map must not drive the GC crazy).</li>
+<li>Design is OPEN pending gritzko's real verdict; the REWORK 1 fd-at-close / munmap-at-GC split (above) is the last state not disputed.</li>
+<li>NEW EVIDENCE 2026-07-20 (via <a href="/todo/JS/JS-120.html">JS-120</a>, <a href="/todo/BRO/BRO-040.html">BRO-040</a>): the landed close releases an UNTOUCHED map but NOT one whose bytes were materialized — and every real reader materializes. The :28 caveat is WIDER than recorded: it was logged as an <code>io._msync</code> quirk, but ANY byte-pointer materialization does it (the native ULOG cursor <code>next()</code>, the row getters <code>abc._ulog_time/_verb/_uri</code> — all <code>GetTypedArrayBytesPtr</code>). After that, <code>ArrayBuffer.transfer()</code> COPIES instead of moving: the husk carries no mapping, <code>io._munmap(husk)</code> finds no live FILE map at that base and returns NONE silently, fd survives to GC.</li>
+<li>Orchestrator differential (2026-07-20, real <code>.be</code> ULOG, scratch <code>fdprobe.js</code>): under <code>ulimit -n 64</code> the no-read map+close loop runs 400 cycles FLAT; adding ONE <code>log.next()</code> dies <code>No file descriptors available</code> after 57 cycles. Unbounded both reach 1500 — release is DEFERRED TO GC, not absent; a real drive (1005 maps) outruns the collector. <code>test/mmapfd.js</code> passes only because it never reads through the container — extend it with a read-then-close leg.</li>
+<li>The naive reorder is ruled out empirically: munmap-live-THEN-transfer SIGSEGVs (transfer's copy reads unmapped pages), so stale-view neutralization + fd release need a mechanism other than <code>transfer()</code>. This is the open verdict's crux.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./x.html">x</a> red repro test test/mmapfd.js (JABCmmapfd): loop mmap+close, assert /proc/self/fd flat — RED base=9 after=77 (GC-lagged leak), GREEN base=9 after=9</li>
+<li><a href="./x.html">x</a> io.cpp JABCioMunmap (io._munmap): base ptr → FILEUnMapBase (new FILE.c helper) → FILEFindMap → FILEUnMap; no reimpl of unmap/close</li>
+<li><a href="./x.html">x</a> guard JABCMapFree — BOUNCED v1 (buf<a href="./0.html">0</a>==bytes alone): same fd + same VA base reuse passed the guard, stale husk GC unmapped the LIVE mapping, SIGSEGV</li>
+<li><a href="./x.html">x</a> v2 identity fix: static gen<a href="./FILE_MAX_OPEN.html">FILE_MAX_OPEN</a> in io.cpp, bumped per map; ctx = gen&lt;&lt;FILE_MAX_OPEN_BITS|fd (gritzko: pow2 assumed, bits define is the knob, FILE.h derives FILE_MAX_OPEN=1&lt;&lt;BITS); finalizer unmaps only if gen AND base match</li>
+<li><a href="./x.html">x</a> ABA repro folded into mmapfd.js: close-into-husk + remap same fd/base + GC churn + write-read, 2000x — SIGSEGV (exit 139) pre-fix, green after</li>
+<li><a href="./x.html">x</a> neutralize view: abc.close does b.transfer() FIRST (stale views length-0); double close = transfer throws → early return</li>
+<li><a href="./x.html">x</a> abc.close: transfer BEFORE msync (msync materializes buffer, defeats transfer's move); then msync+trim(msync-first)+io._munmap off the husk</li>
+<li><a href="./x.html">x</a> git.pack/pack/ulog/hash/heap mmap tests all green — release path shared, unchanged</li>
+<li><a href="./x.html">x</a> ctest -j16 100% (104/104); INDEX.md io._munmap entry added</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>This wt's dog/abc files are misstamped by the sub-mount checkout (no GET-049 restamp) — phantom <code>7 wt</code> in status, put refuses; filed as <a href="/todo/PUT/PUT-012.html">PUT-012</a>. The ABC-020 staging itself is fine (leaf put rows landed).</li>
+<li>GOTCHA (not a blocker): io._msync's GetTypedArrayBytesPtr materializes the NoCopy buffer, after which ArrayBuffer.transfer() COPIES instead of moving — the mapping pointer never reaches the husk and the fd leaks. Cure: transfer must precede any byte-ptr access; msync the husk afterwards. The orchestrator probe (Context) saw move only because it never msynced first.</li>
+<li>MEASURED (orchestrator, this build): the NoCopy deallocator NEVER fires at transfer/detach, move or copy mode — always at GC of whichever object carries the contents. Pending-finalizer husks are unavoidable; finalizer identity must be (gen, fd), pointer equality is not identity.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+Suggested commit: <code>ABC-020: abc.close releases fd+mapping now (io._munmap)</code>
+</p>
+<p>
+Files: cont.cpp (abc.close: transfer-first + msync/trim/munmap husk), io.cpp (io._munmap binding + (gen,fd)-identity JABCMapFree guard), dog/abc/FILE.c+.h (FILEUnMapBase), test/mmapfd.js + CMakeLists (JABCmmapfd fd-flat + ABA loop), INDEX.md.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

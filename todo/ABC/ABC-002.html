@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ABC-002</title>
+<title>ABC-002: unify C errno→ok64 handling (one mapping, not FILEerrno vs FILEERRVOCAB)</title>
+<meta property="og:title" content="ABC-002: unify C errno→ok64 handling (one mapping, not FILEerrno vs FILEERRVOCAB)">
+<meta property="og:description" content="abc has two parallel errno→ok64 mechanisms that disagree. FILEerrno (abc/FILE.h, a switch) maps each errno to the canonical FILE symbol — e.g. ENOENT→FILENONE. FILEErr / FILEERRVOCAB (abc/FILE.c, a hand-built {errno, raw-hex} table) returns its own prefix-less ron60 literals that do NOT match the FILE symbols and omits several errnos. So FILEErr(ENOENT) = 0x39760e5dd ≠ FILEerrno(ENOENT) = FILENONE (0x3d254e5d85ce); FILEErr(EBADF) = 0xe2ca34f ≠ FILEBADF (0x3d254e2ca34f); and FILEERRVOCAB omits EEXIST entirely. FILEErr is used by the open-failure paths (FILEOpen/FILECreate do fail(FILEErr(FILENOOPEN))), so a caller comparing the result against a FILE symbol can silently never match. Collapse to ONE errno→ok64 mapping. abc/core change — maintainer-reviewed. See Issues, CLAUDE, ABC-001, SUBS-016.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/ABC/ABC-002.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>ABC-002: unify C errno→ok64 handling (one mapping, not <code>FILEerrno</code> vs <code>FILE_ERR_VOCAB</code>)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 abc has <strong>two parallel errno→ok64 mechanisms that disagree</strong>. <code>FILEerrno</code> (<code>abc/FILE.h</code>, a <code>switch</code>) maps each errno to the canonical <code>FILE*</code> symbol — e.g. <code>ENOENT</code>→<code>FILENONE</code>. <code>FILEErr</code> / <code>FILE_ERR_VOCAB</code> (<code>abc/FILE.c</code>, a hand-built <code>{errno, raw-hex}</code> table) returns its own <strong>prefix-less ron60 literals that do NOT match the `FILE</strong><code> symbols* and omits several errnos. So </code>FILEErr(ENOENT)<code> = </code>0x39760e5dd<code> ≠ </code>FILEerrno(ENOENT)<code> = </code>FILENONE<code> (</code>0x3d254e5d85ce<code>); </code>FILEErr(EBADF)<code> = </code>0xe2ca34f<code> ≠ </code>FILEBADF<code> (</code>0x3d254e2ca34f<code>); and </code>FILE_ERR_VOCAB<code> omits </code>EEXIST<code> entirely. </code>FILEErr<code> is used by the open-failure paths (</code>FILEOpen<code>/</code>FILECreate<code> do </code>fail(FILEErr(FILENOOPEN))<code>), so a caller comparing the result against a </code>FILE*` symbol can silently never match. Collapse to ONE errno→ok64 mapping. abc/core change — maintainer-reviewed. See <a href="../../rule/Issues.html">Issues</a>, <a href="../../CLAUDE.md">CLAUDE</a>, <a href="ABC-001.html">ABC-001</a>, <a href="../SUBS/SUBS-016.html">SUBS-016</a>.
 </p>
@@ -39,5 +48,16 @@ One source of truth.
 <li>Repro-first (<a href="../../CLAUDE.md">CLAUDE</a> §17): a table test asserting <code>FILEErr(e) == FILEerrno(e)</code> for every errno <code>FILEerrno</code> maps (incl. <code>EEXIST</code>), and that an unmapped errno returns <code>def</code>.</li>
 <li>Remove the <a href="../SUBS/SUBS-016.html">SUBS-016</a> <code>{ENOENT, …}</code> stopgap once unified.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

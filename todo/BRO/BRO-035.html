@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-035: streaming bro — resident producer, pipe protocol, hunks via mmap log</title>
+<meta property="og:title" content="BRO-035: streaming bro — resident producer, pipe protocol, hunks via mmap log">
+<meta property="og:description" content="Ruling thread (gritzko 2026-07-18): bro renders gradually as hunks arrive. JS is 1 process, so the verb runs in a SEPARATE producer process; hunks go into a shared mmap log; a pipe carries the line protocol. The hunk substrate is already stream-shaped (HUNKcb one-at-a-time, TLV framing, sink rows) — only the plumbing is batch today (sink collected in full, pager blocked around the verb call).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BRO/BRO-035.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-035: streaming bro — resident producer, pipe protocol, hunks via mmap log</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Ruling thread (gritzko 2026-07-18): bro renders gradually as hunks arrive. JS is 1 process, so the verb runs in a SEPARATE producer process; hunks go into a shared mmap log; a pipe carries the line protocol. The hunk substrate is already stream-shaped (HUNKcb one-at-a-time, TLV framing, sink rows) — only the plumbing is batch today (sink collected in full, pager blocked around the verb call).
+</p>
+<ul>
+<li>Producer is warm-resident (VM boot + require + store open paid ONCE at bro launch), the serve.js resident-daemon pattern.</li>
+<li>Fast path: <code>io.fork()</code> of the already-warm pager process — probe 2026-07-18: this musl JSCOnly jab runs <code>Threads: 1</code> (no JIT/GC helpers), fork-safe. macOS/system JSC is multithreaded + CF-hostile → spawn fallback.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Pager sends a request, paints arriving hunks incrementally, stays responsive throughout.
+</p>
+<ul>
+<li>Pipe protocol (line-oriented, hand-debuggable, ONE request in flight):<ol>
+<li><code>&gt;&gt;&gt; //context verb args</code> — the addr-bar form (<a href="BRO-024.html">BRO-024</a> prompt minus the colon), argline/spell escaping, no new grammar;</li>
+<li><code>&lt;&lt;&lt; hunk OFF LEN</code> — one line per committed hunk, byte offset+length into the log (no ordinals, no scanning; the line IS the commit publish);</li>
+<li><code>&lt;&lt;&lt; ok N</code> / <code>&lt;&lt;&lt; err CODE</code> — terminator with tally or error code (bar prints the tally / flips red with CODE);</li>
+<li>next <code>&gt;&gt;&gt;</code> only after the terminator; abort = kill+respawn (a <code>cancel</code> line is a later nicety).</li>
+</ol>
+</li>
+<li>Mmap log: file-backed MAP_SHARED (memfd/unlinked temp — session scratch, not a store artifact), append-only, one region per request; large sparse reserve up front (no re-mmap); single-writer single-reader, bytes-before-publish ordering (the pipe line publishes).</li>
+<li>Log content ruling (gritzko 2026-07-18): TLV hunks, NOTHING else — back-to-back dog/HUNK.h 'H' records (T ts / V verb / U uri / X text / K toks), the same bytes <code>--tlv</code> emits; no headers, no markers, no other record kinds, no new serialization. The reader drains with the libdog-specified validation (HUNKTOKLEN/HUNKTOKOOB shape) so a torn/in-flight record rejects instead of corrupting the render.</li>
+<li>Log virtues to keep: the log IS the scrollback (seek/jump/re-render without re-running), crashed producer leaves a readable prefix, no backpressure needed (writer never blocks; pipe lines are tiny).</li>
+<li>Pager side: <code>pol</code> watches the pipe fd (no polling timers); append-tolerant views paint as hunks land; sort/total views (status quad, spot dedup) repaint in place at the terminator; <a href="BRO-034.html">BRO-034</a> yellow bar = stream open, normal at <code>ok</code>, red at <code>err</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Producer lifecycle: spawn/fork at bro launch, respawn on death (worst case one cold load); child closes/never touches the pager tty, writes ONLY its log region, exits via <code>_exit</code>.</li>
+<li><code>io.fork()</code> is a NEW binding (io.cpp, alongside spawn/spawnFds/reap) gated by a threads==1 check (<code>/proc/self/status</code>) at fork time — a future JIT build must fail the gate, not corrupt; spawn (<code>io.spawnFds</code> + shared file / memfd) is the portable path, SAME protocol, pager agnostic.</li>
+<li>Verb contract intact: producer resolves (context, args) via the verb layer / resolve_hash; the pager stays arg-blind and never parses hunk bodies.</li>
+<li>pty legs per the standing rule: incremental paint mid-grind (slow verb), terminator repaint, err path, producer-crash respawn.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> <code>io.fork</code> binding + threads==1 gate; <code>io.reap</code> wiring</li>
+<li><a href="./ .html"> </a> producer main: read <code>&gt;&gt;&gt;</code> lines, run verb with sink → log appends + <code>&lt;&lt;&lt;</code> lines</li>
+<li><a href="./ .html"> </a> log writer/reader: TLV 'H' framing, sparse reserve, per-request regions</li>
+<li><a href="./ .html"> </a> pager: pol on pipe fd, incremental paint, terminator repaint, <a href="BRO-034.html">BRO-034</a> bar states</li>
+<li><a href="./ .html"> </a> spawn fallback leg (same protocol, cold producer) + macOS note</li>
+<li><a href="./ .html"> </a> pty legs: mid-grind paint, ok/err, crash-respawn</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="BRO-034.html">BRO-034</a> (yellow bar) is the visible-state half — land it with or before this.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+(pending)
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

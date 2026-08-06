@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-013</title>
+<title>JS-013: js2c.js generator escaping — unescaped backslash corrupts the emitted C string; no build-time regen</title>
+<meta property="og:title" content="JS-013: js2c.js generator escaping — unescaped backslash corrupts the emitted C string; no build-time regen">
+<meta property="og:description" content="js2c.js escapes &quot; and \n but not backslash, so a literal \ in JS source corrupts the emitted C string literal; identifiers aren't sanitised and the generated .js.c aren't regenerated at build. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-013.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,52 +15,39 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-013 <a href="">LOW</a>: <code>js2c.js</code> generator escaping — unescaped backslash corrupts the emitted C string; no build-time regen</h1>
+<h1>JS-013: <code>js2c.js</code> generator escaping — unescaped backslash corrupts the emitted C string; no build-time regen</h1>
+<div>
+<p>
+Now: STALE
+</p>
+</div>
 <p>
 <code>js2c.js</code> escapes <code>&quot;</code> and <code>\n</code> but not backslash, so a literal <code>\</code> in JS source corrupts the emitted C string literal; identifiers aren't sanitised and the generated <code>.js.c</code> aren't regenerated at build. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>js2c.js:11-12</code> escapes <code>&quot;</code> and <code>\n</code> but NOT backslash (nor <code>\r</code>/<code>\t</code>) → a<p>
-literal <code>\</code> in JS (e.g. a regex <code>\d</code>) corrupts the emitted C string literal.
-</p>
-</li>
+<li><code>js2c.js:11-12</code> escapes <code>&quot;</code> and <code>\n</code> but NOT backslash (nor <code>\r</code>/<code>\t</code>) → a literal <code>\</code> in JS (e.g. a regex <code>\d</code>) corrupts the emitted C string literal.</li>
 <li>Identifiers aren't sanitised → a digit/<code>-</code> produces an invalid C identifier.</li>
-<li>Generated <code>.js.c</code> are checked in with no build-time regeneration → silent drift<p>
-from the <code>.js</code> source.
-</p>
-</li>
+<li>Generated <code>.js.c</code> are checked in with no build-time regeneration → silent drift from the <code>.js</code> source.</li>
 <li><code>WITH_JS</code>-gated WIP; low severity (current <code>.js</code> sources happen to avoid <code>\</code>).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Any JS source (including regexes / control chars) emits a valid C string; the<p>
-generated <code>.js.c</code> track the <code>.js</code> at build.
-</p>
-</li>
+<li>Any JS source (including regexes / control chars) emits a valid C string; the generated <code>.js.c</code> track the <code>.js</code> at build.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Escape <code>\</code> FIRST, then <code>&quot;</code> / control chars; sanitise the identifier; regenerate<p>
-at build.
-</p>
-</li>
+<li>Escape <code>\</code> FIRST, then <code>&quot;</code> / control chars; sanitise the identifier; regenerate at build.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open) Reorder/extend the escape set; sanitise the C identifier; add a build-time<p>
-regen step.
-</p>
-</li>
+<li>(open) Reorder/extend the escape set; sanitise the C identifier; add a build-time regen step.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: feed a <code>.js</code> containing <code>\d</code> and a digit-leading name; assert the<p>
-  emitted <code>.js.c</code> compiles and round-trips.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: feed a <code>.js</code> containing <code>\d</code> and a digit-leading name; assert the emitted <code>.js.c</code> compiles and round-trips.</li>
 <li class="open"><input type="checkbox" disabled> Fix escaping order + identifier sanitising; wire build-time regen.</li>
 </ul>
 <h3>Blockers</h3>
@@ -65,11 +56,19 @@ regen step.
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li><strong>LANDED <code>23d71efc</code></strong> (2026-06-16): js2c.js now escapes <code>\</code> FIRST, then <code>&quot;</code>,<p>
-then <code>\t</code>/<code>\r</code>/other C0 controls (<code>\xNN</code>), preserving the <code>\n&quot;\n&quot;</code> line-split; the C identifier is sanitised (<code>[^A-Za-z0-9_]</code>→<code>_</code>, digit-leading gets a <code>_</code> prefix). Verified by jabc-eval round-trip (backslash/regex/tab/CR/control/ digit-name cases all reconstruct the original bytes; buggy vs fixed shown for a <code>\d</code>-input). Blobs (<code>io.js.c</code>/<code>test.js.c</code>) are NOT regenerated (node absent) and stay byte-identical — they benefit only on the next node-driven regen; currently correct only because the existing <code>.js</code> sources contain no bare backslashes. Build-time regen step deferred (still needs node in the toolchain).
-</p>
-</li>
+<li><strong>LANDED <code>23d71efc</code></strong> (2026-06-16): js2c.js now escapes <code>\</code> FIRST, then <code>&quot;</code>, then <code>\t</code>/<code>\r</code>/other C0 controls (<code>\xNN</code>), preserving the <code>\n&quot;\n&quot;</code> line-split; the C identifier is sanitised (<code>[^A-Za-z0-9_]</code>→<code>_</code>, digit-leading gets a <code>_</code> prefix). Verified by jabc-eval round-trip (backslash/regex/tab/CR/control/ digit-name cases all reconstruct the original bytes; buggy vs fixed shown for a <code>\d</code>-input). Blobs (<code>io.js.c</code>/<code>test.js.c</code>) are NOT regenerated (node absent) and stay byte-identical — they benefit only on the next node-driven regen; currently correct only because the existing <code>.js</code> sources contain no bare backslashes. Build-time regen step deferred (still needs node in the toolchain).</li>
 <li>(filed 2026-06-16 from the js/ 7-lens review)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

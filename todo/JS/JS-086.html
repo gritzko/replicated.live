@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-086</title>
+<title>JS-086: shared/store.js god module split + ref writers take reader.shard</title>
+<meta property="og:title" content="JS-086: shared/store.js god module split + ref writers take reader.shard">
+<meta property="og:description" content="store.js is ~650 lines carrying five responsibilities: object store, LSM index, ref read, ref write, and tree descent. The ref WRITERS (createShard/set/tombstone, folded in from a former refs.js) are free functions exported separately from open()'s reader and key on a RAW fs shard path — so every mutating verb peels reader.shard off the reader and hands it back, leaking the on-disk layout into the verbs. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-086.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,89 +15,70 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-086 <a href="./MED.html">MED</a>: <code>shared/store.js</code> god module split + ref writers take <code>reader.shard</code></h1>
+<h1>JS-086: <code>shared/store.js</code> god module split + ref writers take <code>reader.shard</code></h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
 <p>
 <code>store.js</code> is ~650 lines carrying five responsibilities: object store, LSM index, ref read, ref write, and tree descent.  The ref WRITERS (createShard/set/tombstone, folded in from a former refs.js) are free functions exported separately from <code>open()</code>'s reader and key on a RAW fs shard path — so every mutating verb peels <code>reader.shard</code> off the reader and hands it back, leaking the on-disk layout into the verbs. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>store.js:1-651 — header (:1-39) lists object read + ref read +<p>
-ref writers (:9) + tree descent (descendPath) in ONE module.
-</p>
-</li>
-<li>store.js:625 <code>set(shard,key,sha)</code> / :632 <code>tombstone(shard,key)</code><p>
-/ :618 <code>createShard(shard,key)</code> take a raw fs path, not a reader.
-</p>
-</li>
-<li>put.js:62 <code>store.set(k.shard, branch, cur.sha)</code>; :75-76<p>
-<code>store.createShard(k.shard,branch)</code> + <code>store.set(k.shard,…)</code>.
-</p>
-</li>
+<li>store.js:1-651 — header (:1-39) lists object read + ref read + ref writers (:9) + tree descent (descendPath) in ONE module.</li>
+<li>store.js:625 <code>set(shard,key,sha)</code> / :632 <code>tombstone(shard,key)</code> / :618 <code>createShard(shard,key)</code> take a raw fs path, not a reader.</li>
+<li>put.js:62 <code>store.set(k.shard, branch, cur.sha)</code>; :75-76 <code>store.createShard(k.shard,branch)</code> + <code>store.set(k.shard,…)</code>.</li>
 <li>delete.js:230 <code>store.tombstone(k.shard, target)</code>.</li>
-<li>post.js:242 <code>commitM.writePack(reader.shard,…)</code>; :246<p>
-<code>advanceRef(reader, reader.shard, …)</code> — shard threaded twice.
-</p>
-</li>
+<li>post.js:242 <code>commitM.writePack(reader.shard,…)</code>; :246 <code>advanceRef(reader, reader.shard, …)</code> — shard threaded twice.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Split store.js: <code>shared/store/objects.js</code> (object store + LSM<p>
-index) + <code>shared/refs.js</code> (ref read + write), thin <code>store.js</code> facade re-exporting if callers need one import.
-</p>
-</li>
-<li>Ref writers take the reader/store handle and derive shard<p>
-internally: <code>store.set(reader,key,sha)</code> etc.
-</p>
-</li>
+<li>Split store.js: <code>shared/store/objects.js</code> (object store + LSM index) + <code>shared/refs.js</code> (ref read + write), thin <code>store.js</code> facade re-exporting if callers need one import.</li>
+<li>Ref writers take the reader/store handle and derive shard internally: <code>store.set(reader,key,sha)</code> etc.</li>
 <li>Verbs (<a href="./PUT.html">PUT</a>, <a href="./POST.html">POST</a>, delete) stop touching <code>.shard</code>.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
 <li>libabc + libdog ONLY; on-disk refs ULOG format unchanged.</li>
-<li>Byte-identical <code>.be/refs</code> across put/post/delete repeats<p>
-(the DIS-050 dedup at put.js:68-72 must still hold).
-</p>
-</li>
+<li>Byte-identical <code>.be/refs</code> across put/post/delete repeats (the DIS-050 dedup at put.js:68-72 must still hold).</li>
 <li>Keep parity with keeper/REFS.c set/tombstone semantics.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Reader already holds <code>shard</code>; have set/tombstone read<p>
-<code>reader.shard</code> so callers never name the path.
-</p>
-</li>
-<li>Facade <code>store.js</code> keeps <code>open</code> + re-exports refs writers to<p>
-bound the blast radius of the require-site churn.
-</p>
-</li>
+<li>Reader already holds <code>shard</code>; have set/tombstone read <code>reader.shard</code> so callers never name the path.</li>
+<li>Facade <code>store.js</code> keeps <code>open</code> + re-exports refs writers to bound the blast radius of the require-site churn.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: parity test asserting <code>.be/refs</code> bytes unchanged<p>
- across put/post/delete before and after the split.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: parity test asserting <code>.be/refs</code> bytes unchanged across put/post/delete before and after the split.</li>
 <li class="open"><input type="checkbox" disabled> Carve objects.js + refs.js out of store.js; add facade.</li>
-<li class="open"><input type="checkbox" disabled> Change writer signatures to (reader,key,sha); update put.js:62<p>
- /75-76, delete.js:230, post.js advanceRef (:246) call sites.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Change writer signatures to (reader,key,sha); update put.js:62 /75-76, delete.js:230, post.js advanceRef (:246) call sites.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul class="todo">
 <li class="blocked"><input type="checkbox" disabled> Touches <a href="./PUT.html">PUT</a> + <a href="./POST.html">POST</a> + delete — land behind their parity gates.</li>
 </ul>
 <ul>
-<li>2026-07-07 audit: STILL OPEN (line refs shifted) — no <code>shared/refs.js</code>/<code>store/objects.js</code><p>
-split exists; <code>shared/store.js:633 createShard</code>/<code>:640 set</code>/<code>:647 tombstone</code> still take a raw shard; callers still peel <code>.shard</code> (put.js:90,104; delete.js:272; post.js:685,692).
-</p>
-</li>
+<li>2026-07-07 audit: STILL OPEN (line refs shifted) — no <code>shared/refs.js</code>/<code>store/objects.js</code> split exists; <code>shared/store.js:633 createShard</code>/<code>:640 set</code>/<code>:647 tombstone</code> still take a raw shard; callers still peel <code>.shard</code> (put.js:90,104; delete.js:272; post.js:685,692).</li>
+<li>2026-07-10 revision: still OPEN — store.js 666 lines, no split; set/createShard/tombstone raw shard (store.js:633,640,647); callers put.js:95,108,109 delete.js:279 post.js:688,695</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>(pending)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

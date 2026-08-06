@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIT-023: PACKResolveOfs delta-apply bound uses half, not the target buffer's end</title>
+<meta property="og:title" content="GIT-023: PACKResolveOfs delta-apply bound uses half, not the target buffer's end">
+<meta property="og:description" content="The OFS chain applier (dog/git/PACK.c:263-287) ping-pongs results between the base scratch and the upper half of the delta scratch, but sizes the apply gauge as {dst, dst, dst + half} (half = deltalen/2) for BOTH targets. When dst == base0 the true capacity is baselen. Latent today: every caller sizes the two scratches equal, so half &lt; baselen. Found in the 2026-07-24 dog/git review. Method: work.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GIT/GIT-023.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GIT-023: <code>PACKResolveOfs</code> delta-apply bound uses <code>half</code>, not the target buffer's end</h1>
+<div>
+<p>
+Now: OPEN Sev: LOW
+</p>
+</div>
+<p>
+The OFS chain applier (<code>dog/git/PACK.c:263-287</code>) ping-pongs results between the <code>base</code> scratch and the upper half of the <code>delta</code> scratch, but sizes the apply gauge as <code>{dst, dst, dst + half}</code> (<code>half = deltalen/2</code>) for BOTH targets.  When <code>dst == base[0]</code> the true capacity is <code>baselen</code>.  Latent today: every caller sizes the two scratches equal, so <code>half &lt; baselen</code>. Found in the 2026-07-24 dog/git review.  Method: <a href="../../meta/work.html">work</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>dog/git/PACK.c:278</code> — <code>u8g apply_out = {dst, dst, dst + half};</code> inside the bottom-up apply loop; <code>dst</code> alternates between <code>delta[0]+half</code> and <code>base[0]</code> (PACK.c:283-285).</li>
+<li>Callers size base == delta, masking the bound: keeper (<code>keeper/KEEP.c:723-724</code>, buf1/buf2 both <code>KEEP_BUFSZ</code> 1GB) and the fuzz harness (<code>dog/fuzz/PACKRESOLVE.c:24-27</code>, 4MiB each) — the fuzzer can never reach the overflow, so green fuzz proves nothing here.</li>
+<li>Defect (a): any caller with <code>deltalen &gt; 2*baselen</code> gets a scratch overflow — <code>DELTApply</code>'s room check (<code>DELT.c:32</code>) tests the inflated bound, so the guard itself is what's wrong.</li>
+<li>Defect (b): every delta-chain result is capped at <code>deltalen/2</code> even though <code>base</code> holds <code>baselen</code> — with 1GB keeper buffers, an object resolving via a delta fails NOROOM past 512MB while a raw record of the same size resolves fine.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>The apply gauge's term is the ACTUAL end of whichever buffer <code>dst</code> points into (<code>base[0]+baselen</code> vs <code>delta[0]+deltalen</code>).</li>
+<li>Repro-first: a unit test with <code>deltalen &gt; 2*baselen</code> and a chain whose result exceeds <code>baselen</code>-vs-<code>half</code> (today: OOB write caught by ASAN or a wrong NOROOM); plus a case proving (b)'s cap is lifted.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>dog/git</code> libdog, ABC style; no allocation added (CLAUDE.md §5), the scratch-split contract in <code>PACK.h:145-152</code> stays caller-visible.</li>
+<li><code>dog/test/PACKRESOLVE.c</code> + <code>dog/fuzz/PACKRESOLVE.c</code> stay green; keeper <code>keep_get_packed_rec</code> byte-identical results.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro test in <code>dog/test/PACKRESOLVE.c</code> (asymmetric scratch sizes).</li>
+<li class="open"><input type="checkbox" disabled> Fix the gauge term per-target; re-check the <code>dobj.size &gt; half</code> inflate guard (<code>PACK.c:272</code>) still refers to the delta lower half.</li>
+<li class="open"><input type="checkbox" disabled> ctest green; rerun the PACKRESOLVE fuzzer with asymmetric sizes.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

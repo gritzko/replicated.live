@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GRAF-001: shared/graf.js — cached ahead/behind counts per shard, wh128 pair records</title>
+<meta property="og:title" content="GRAF-001: shared/graf.js — cached ahead/behind counts per shard, wh128 pair records">
+<meta property="og:description" content="Every ahead/behind ask (/todo/WORK/WORK-001 renders a count per wt; status/relate/subs walk too) re-runs a full dag.js ancestor BFS per pair — no result is ever kept, though a (cur,tip) pair's counts are IMMUTABLE (commit ancestry never changes; the cache only grows, never invalidates). - Native graf keeps per-shard .graf.idx wh128 LSM runs (ron60 names, .lock.graf); they DO have entries today (beagle-ext: 2 runs, ~2.3k slots) but are native-written and STALE (newest Jun 30; the /todo/POST/POST-031 staleness ground) — jab neither reads nor writes them, only du counts their bytes. - JS run machinery exists and is keeper.idx-shaped: shared/idxmaint.js (SLOT 16, ladder compaction, landRun/freshRunName), abc.index(&quot;wh128&quot;,{mem}) memtable (shared/relate.js), abc.seekrangewh128 / compactwh128. - shared/dag.js aheadBehind is the compute side; WALKCAP-bounded, tolerant of shallow shards (missing ancestors end a branch quietly).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GRAF/GRAF-001.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GRAF-001: shared/graf.js — cached ahead/behind counts per shard, wh128 pair records</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Every ahead/behind ask (<a href="/todo/WORK/WORK-001.html">WORK-001</a> renders a count per wt; status/relate/subs walk too) re-runs a full dag.js ancestor BFS per pair — no result is ever kept, though a (cur,tip) pair's counts are IMMUTABLE (commit ancestry never changes; the cache only grows, never invalidates).
+</p>
+<ul>
+<li>Native graf keeps per-shard <code>*.graf.idx</code> wh128 LSM runs (ron60 names, <code>.lock.graf</code>); they DO have entries today (beagle-ext: 2 runs, ~2.3k slots) but are native-written and STALE (newest Jun 30; the <a href="/todo/POST/POST-031.html">POST-031</a> staleness ground) — jab neither reads nor writes them, only <code>du</code> counts their bytes.</li>
+<li>JS run machinery exists and is keeper.idx-shaped: shared/idxmaint.js (SLOT 16, ladder compaction, landRun/freshRunName), abc.index(&quot;wh128&quot;,{mem}) memtable (shared/relate.js), abc._seekrange_wh128 / _compact_wh128.</li>
+<li>shared/dag.js aheadBehind is the compute side; WALK_CAP-bounded, tolerant of shallow shards (missing ancestors end a branch quietly).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+<code>shared/graf.js</code>: a per-(store,project)-shard ahead/behind pair cache — lazy, index-first, self-extending.
+</p>
+<ul>
+<li>Record: one wh128 (two u64 halves), layout <code>[type 4|ahbeh 20|hashlet 40][direction 4|ahbeh 20|hashlet 40]</code> — hashlet in the MS 40 bits, count mid, type/direction the LOW nibble (u64 = <code>hashlet&lt;&lt;24 | ahbeh&lt;&lt;4 | nibble</code>, the store.js keyFor shape), one half per commit of the pair.</li>
+<li>Lookup is LAZY: aheadBehind(A,B) seeks the shard index first; a hit returns the counts with NO walk.</li>
+<li>A miss walks — but REUSES the index at every step: a cached (ancestor,B) pair short-circuits the remaining closure (recurrence below), so hundreds of wts sharing a handful of tips converge to O(new commits).</li>
+<li>New pairs land in a small MEMTABLE run (abc.index wh128 mem) and persist as a fresh small run; ladder compaction folds it in.</li>
+<li>Runs join the existing per-shard <code>*.graf.idx</code> family (the &quot;graf index&quot;).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>JS only, shard-local; keeper opened by the caller (resource ownership stays at the top, CLAUDE.md §5 analogue for JS).</li>
+<li>Reuse idxmaint.js machinery (parameterize its keeper.idx EXT) — no second compaction/naming scheme; ron60 run names.</li>
+<li>Best-effort persistence: a read-only store degrades to mem-only cache, never a crash (the idxmaint norm).</li>
+<li>NEVER cache a truncated walk: a WALK_CAP hit or a shallow-shard dead-end yields counts that would poison the immutable cache forever — such results return uncached.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>RULING (chat 2026-07-18), option (a): linear stretches ride the cached-pair recurrence — ahead(A,B)=ahead(p,B)+<a href="./A∉anc(B).html">A∉anc(B)</a>, behind(A,B)=behind(p,B)−<a href="./A∈anc(B).html">A∈anc(B)</a> for single-parent A; a MERGE commit triggers a real bounded walk; NO closure-size second record flavor.</li>
+<li>RULING (chat 2026-07-18): the 20-bit ahbeh SATURATES at 0xFFFFF = &quot;at least that many&quot; — 1M-commit histories happen, but nobody reads huge ah/beh distances; a walk stops counting a side at the cap and the saturated pair IS cacheable (for a fixed pair the truth never changes, so &quot;≥cap&quot; holds forever) — distinct from a shallow-shard dead-end, which under-counts and must stay uncached.</li>
+<li>RULING (chat 2026-07-18): the merge walk is a two-tip paint BFS stopped at COMMON ground — a node reached from both sides is common and stops expanding; terminate when the whole frontier is common. The stop line is the maximal-common-ancestor CUT (plural on criss-cross), not a single NCA; nothing below a common node is exclusive, so side-exclusive paint counts are exact and cost is bounded by the divergence, not history depth.</li>
+<li>(proposed) type nibble: a NEW pair-record type in the shard's wh128 type space, disjoint from keeper's T_COMMIT=1 / 0xF PACK rows; direction nibble distinguishes the ahead half from the behind half / pair orientation. The concrete values need the native graf type registry checked first.</li>
+<li>RULING (chat 2026-07-18): hashlet occupies the MS 40 bits of each u64, so numeric wh128 order == hash order; a (A,B) lookup seeks the contiguous span <code>[A&lt;&lt;24,(A+1)&lt;&lt;24)</code> and matches B in the val's top 40 bits — no scan problem, mirrors keyFor's hash-MS/type-LS shape.</li>
+<li>RULING (chat 2026-07-18): 40-bit hashlets accepted — the in-slot count is worth the identity-space split; collision odds at fleet scale are negligible.</li>
+<li>(question) writing into the native-owned <code>*.graf.idx</code> family: does native graf tolerate foreign type nibbles in its runs (its compactor will merge ours)? If not, a sibling ext (<code>*.ab.graf.idx</code>) keeps families disjoint. Also <code>.lock.graf</code> protocol must be honored either way.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> confirm native graf.idx entry types + compactor tolerance (read C graf; record the type registry in the ticket)</li>
+<li><a href="./ .html"> </a> red-first: repro test — two walks of one pair; the second must be walk-free (index hit), counts equal</li>
+<li><a href="./ .html"> </a> shared/graf.js: open(shard) → {aheadBehind(keeper,A,B)}; seek → memtable → walk with recurrence; complete-walk gate</li>
+<li><a href="./ .html"> </a> memtable flush → small run (idxmaint landRun, EXT parameterized); compaction ladder over the family</li>
+<li><a href="./ .html"> </a> wire the first consumer: WORK-001's per-wt counts (its per-tip memo becomes this module)</li>
+<li><a href="./ .html"> </a> graf index docs: entry format into the shard/store docs + shared/ INDEX coverage</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Layout/identity/family questions above block the record format freeze; everything else can proceed against a mem-only cache.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

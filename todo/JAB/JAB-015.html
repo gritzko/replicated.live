@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-015: HASH bindings never enforce the power-of-2 capacity the native probe requires</title>
+<meta property="og:title" content="JAB-015: HASH bindings never enforce the power-of-2 capacity the native probe requires">
+<meta property="og:description" content="jab/hash.hpp:4 states &quot;length MUST be a power of 2 … the JS constructor guarantees both&quot;, but the constructors (build/bytes/abc.ram/abc.mmap, jab/cont.cpp:407) validate nothing; dog/abc/HASHx.h warns a non-pow2 length silently corrupts the table and may infinite-loop the probe (LMASK = len - 1). abc.ram(&quot;HASHu32&quot;, 100) hands native code a broken table today. Found in the 2026-07-24 jab/ review.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-015.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-015: HASH bindings never enforce the power-of-2 capacity the native probe requires</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
+<p>
+jab/hash.hpp:4 states &quot;length MUST be a power of 2 … the JS constructor guarantees both&quot;, but the constructors (<code>build</code>/<code>bytes</code>/<code>abc.ram</code>/<code>abc.mmap</code>, jab/cont.cpp:407) validate nothing; dog/abc/HASHx.h warns a non-pow2 length silently corrupts the table and may infinite-loop the probe (<code>LMASK = len - 1</code>). <code>abc.ram(&quot;HASHu32&quot;, 100)</code> hands native code a broken table today. Found in the 2026-07-24 jab/ review.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>The comment claims a guarantee no code provides; one bad slots arg is silent corruption, not an error.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>HASH-family construction rejects (or rounds up) non-pow2 slot counts before any native probe touches the region.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first: <code>abc.ram(&quot;HASHu32&quot;, 100)</code> asserts a throw (or a rounded capacity — pick one, document it).</li>
+<li>Zeroing on reuse is separate ground (BASS carve rule); don't conflate.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending — reject vs round-up)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: non-pow2 slots on ram/mmap/over paths.</li>
+<li class="open"><input type="checkbox" disabled> Enforce in one chokepoint (<code>build</code>); align hash.hpp comment.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

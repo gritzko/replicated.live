@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-056: core/loop.js queue-era debris — dead run() shell, orphaned outSort, stale docblocks</title>
+<meta property="og:title" content="BE-056: core/loop.js queue-era debris — dead run() shell, orphaned outSort, stale docblocks">
+<meta property="og:description" content="The 2026-07-24 house-cleaning review found be/core still carrying the retired seed/queue dispatch era: run() is a vestigial shell whose hardcoded result fields orphan GET's edge-sort hook on both ends, registry.build() has zero callers, and the cli()/run() docblocks describe machinery JAB-004 deleted. Sibling findings: BE-057 (behavior bug in the same file), BE-059 (dead code elsewhere), BE-060 (dup clusters).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BE/BE-056.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-056: core/loop.js queue-era debris — dead run() shell, orphaned outSort, stale docblocks</h1>
+<div>
+<p>
+Now: OPEN Sev: LOW
+</p>
+</div>
+<p>
+The 2026-07-24 house-cleaning review found be/core still carrying the retired seed/queue dispatch era: run() is a vestigial shell whose hardcoded result fields orphan GET's edge-sort hook on both ends, registry.build() has zero callers, and the cli()/run() docblocks describe machinery JAB-004 deleted. Sibling findings: <a href="./BE-057.html">BE-057</a> (behavior bug in the same file), <a href="./BE-059.html">BE-059</a> (dead code elsewhere), <a href="./BE-060.html">BE-060</a> (dup clusters).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>loop.js:66 run() hardcodes <code>{ dispatched: 1, order: [verb], outSort: null }</code>; dispatched/order have no production reader.</li>
+<li>The constant <code>outSort: null</code> makes the loop.js:494-495,511 reads (&quot;GET owns its edge sort order&quot;) always pass null, while verbs/get/get.js:473/568/803 set ctx.outSort on an object nothing reads — the sort hook is dead on BOTH ends.</li>
+<li>run() accepts repo/require/sink/flags/mode/args from cli() (loop.js:472-475) and ignores all of them; _nullSink (loop.js:100) is unreachable in production.</li>
+<li>registry.js:33 build() + ~20 lines of GIT-016/JAB-004 doc comments: exported, zero callers; live dispatch is resolveVerb()/verbFile() (loop.js:407). The <code>convention</code> export has internal callers only.</li>
+<li>Docblocks loop.js:294-299 and 46-55 still describe resolve.seedCtx / seed / seedRows, retired per core/resolve.js:1-6; loop.js:404 claims a LEGACY seed→queue path that loop.js:414-415 says is retired.</li>
+<li>test/loop.js:74-121 still pins the retired seedRows/queuePath contract.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>run() returns/accepts only what is actually read; outSort either wired end-to-end for GET or deleted on both ends (decide which).</li>
+<li>registry.build() and its docs deleted; docblocks match JAB-004 reality.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>test/loop.js edits need explicit user permission (<a href="../../meta/work.html">/meta/work</a> §4).</li>
+<li>Pure deletion + comment truth; no dispatch behavior change.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending) outSort: wire or kill — needs a call on whether GET's edge sort was ever meant to reach the pager.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> 1. Trim run() to the read fields; drop dead params + _nullSink.</li>
+<li class="open"><input type="checkbox" disabled> 2. Resolve outSort both ends (wire or delete, incl. get.js setters).</li>
+<li class="open"><input type="checkbox" disabled> 3. Delete registry.build(); keep convention internal.</li>
+<li class="open"><input type="checkbox" disabled> 4. Rewrite cli()/run() docblocks; fix the loop.js:404 contradiction.</li>
+<li class="open"><input type="checkbox" disabled> 5. test/loop.js retired-contract tests — ask user: amend or drop.</li>
+<li class="open"><input type="checkbox" disabled> 6. _cli() (~180 lines, six jobs, loop.js:338-517) — decompose under <a href="../CODE/CODE-027.html">CODE-027</a>'s umbrella, not here.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Open. Filed 2026-07-24 from the be/ house-cleaning review sweep.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

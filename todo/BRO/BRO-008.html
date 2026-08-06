@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BRO-008</title>
+<title>BRO-008: status bar drops the scheme for listing/query views (ls:be → be/#L1); keep it (C + jab parity)</title>
+<meta property="og:title" content="BRO-008: status bar drops the scheme for listing/query views (ls:be → be/#L1); keep it (C + jab parity)">
+<meta property="og:description" content="The bro status bar renders a fragment-less (&quot;cat-style&quot;) hunk URI as &lt;path&gt;#L&lt;line&gt;, DROPPING the scheme: jab ls:be shows be/#L1 (ambiguous — reads like a bare file path) when it should show ls:be/#L1. Same for tree:/status:/grep:/refs:/log:. Both impls AGREE today (verified) — so this is NOT a jab bug but a shared status-bar convention change: keep the scheme for listing/query views so the status URI is unambiguous and re-typeable. RULING (user 2026-06-26): change BOTH C bro and jab, kept at parity. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BRO/BRO-008.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,64 +16,42 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>BRO-008: status bar drops the scheme for listing/query views (<code>ls:be</code> → <code>be/#L1</code>); keep it (C + jab parity)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The bro status bar renders a fragment-less (&quot;cat-style&quot;) hunk URI as <code>&lt;path&gt;#L&lt;line&gt;</code>, DROPPING the scheme: <code>jab ls:be</code> shows <code>be/#L1</code> (ambiguous — reads like a bare file path) when it should show <code>ls:be/#L1</code>. Same for <code>tree:</code>/<code>status:</code>/<code>grep:</code>/<code>refs:</code>/<code>log:</code>. Both impls AGREE today (verified) — so this is NOT a jab bug but a shared status-bar convention change: keep the scheme for listing/query views so the status URI is unambiguous and re-typeable. RULING (user 2026-06-26): change BOTH C bro and jab, kept at parity. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>jab: <code>be/view/bro.js:150</code> <code>statusURI(hunk,line)</code>: `const u = uri._parse(hunk.uri);<p>
-if (!u.path) return hunk.uri; return u.path + &quot;#L&quot; + line;<code> → for </code>ls:be/<code> (u.path=</code>be/<code>) returns </code>be/#L1`, scheme gone.
-</p>
-</li>
-<li>C: <code>bro/BRO.c:1717</code> <code>BROStatusURI</code>: <code>if (!bro_uri_is_line_or_empty(ch)) { …verbatim… }</code><p>
-else <code>BROHunkLoc(&amp;loc,ch); … snprintf(out,&quot;%s#L%u&quot;,loc.path,center)</code>. <code>bro_uri_is_line_or_empty</code> (<code>BRO.c:1646</code>): empty fragment → YES (line-or-empty). <code>BROHunkLoc</code> (<code>BRO.h:50</code>): <code>loc.path</code> = the parsed URI path (<code>be/</code> for <code>ls:be/</code>). So <code>ls:be/</code> (no fragment) → line-or-empty → <code>loc.path#L&lt;center&gt;</code> = <code>be/#L1</code>. Scheme dropped, EXACTLY like jab — they're already at parity on the (undesirable) behavior.
-</p>
-</li>
-<li>The cat-style <code>path#L&lt;n&gt;</code> form is RIGHT for file-content views (cat/diff/blob): an<p>
-editor-like file:line. It's WRONG for listing/query views (ls/lsr/tree/status/grep/ regex/spot/log/refs) where the scheme IS the resource and the path alone is ambiguous / not re-typeable.
-</p>
-</li>
+<li>jab: <code>be/view/bro.js:150</code> <code>statusURI(hunk,line)</code>: <code>const u = uri._parse(hunk.uri); if (!u.path) return hunk.uri; return u.path + &quot;#L&quot; + line;</code> → for <code>ls:be/</code> (u.path=<code>be/</code>) returns <code>be/#L1</code>, scheme gone.</li>
+<li>C: <code>bro/BRO.c:1717</code> <code>BROStatusURI</code>: <code>if (!bro_uri_is_line_or_empty(ch)) { …verbatim… }</code> else <code>BROHunkLoc(&amp;loc,ch); … snprintf(out,&quot;%s#L%u&quot;,loc.path,center)</code>. <code>bro_uri_is_line_or_empty</code> (<code>BRO.c:1646</code>): empty fragment → YES (line-or-empty). <code>BROHunkLoc</code> (<code>BRO.h:50</code>): <code>loc.path</code> = the parsed URI path (<code>be/</code> for <code>ls:be/</code>). So <code>ls:be/</code> (no fragment) → line-or-empty → <code>loc.path#L&lt;center&gt;</code> = <code>be/#L1</code>. Scheme dropped, EXACTLY like jab — they're already at parity on the (undesirable) behavior.</li>
+<li>The cat-style <code>path#L&lt;n&gt;</code> form is RIGHT for file-content views (cat/diff/blob): an editor-like file:line. It's WRONG for listing/query views (ls/lsr/tree/status/grep/ regex/spot/log/refs) where the scheme IS the resource and the path alone is ambiguous / not re-typeable.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>The status bar keeps the scheme for listing/query view URIs: <code>ls:be/#L1</code>,<p>
-<code>tree:&lt;p&gt;#L&lt;n&gt;</code>, <code>status:#L&lt;n&gt;</code>, <code>grep:#&lt;w&gt;…</code>, <code>refs:…</code>, <code>log:…</code>.
-</p>
-</li>
-<li>File-content views (cat/diff/blob) keep the bare <code>&lt;path&gt;#L&lt;line&gt;</code> cat-style form<p>
-(NO regression — <code>be diff:</code>/<code>cat:</code> status unchanged).
-</p>
-</li>
+<li>The status bar keeps the scheme for listing/query view URIs: <code>ls:be/#L1</code>, <code>tree:&lt;p&gt;#L&lt;n&gt;</code>, <code>status:#L&lt;n&gt;</code>, <code>grep:#&lt;w&gt;…</code>, <code>refs:…</code>, <code>log:…</code>.</li>
+<li>File-content views (cat/diff/blob) keep the bare <code>&lt;path&gt;#L&lt;line&gt;</code> cat-style form (NO regression — <code>be diff:</code>/<code>cat:</code> status unchanged).</li>
 <li>C bro (<code>BROStatusURI</code>) and jab (<code>statusURI</code>) stay BYTE-IDENTICAL — fix BOTH.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Pick ONE discriminator and apply it identically in C + jab. Candidate: a small<p>
-&quot;keep-scheme&quot; scheme set (ls/lsr/tree/status/grep/regex/spot/log/refs) vs the cat-style set (cat/diff/blob); single-source the set per impl. (Alt: a hunk property rather than a scheme list — decide what stays parity-clean + readable.)
-</p>
-</li>
+<li>Pick ONE discriminator and apply it identically in C + jab. Candidate: a small &quot;keep-scheme&quot; scheme set (ls/lsr/tree/status/grep/regex/spot/log/refs) vs the cat-style set (cat/diff/blob); single-source the set per impl. (Alt: a hunk property rather than a scheme list — decide what stays parity-clean + readable.)</li>
 <li>Snippet URIs (<code>#'sym'</code>, <code>#abc1234</code>) already render verbatim in C — keep that arm.</li>
 <li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): assert the status string per view, C and jab matching.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(decided) discriminator = explicit keep-scheme scheme-set, single-sourced next to<p>
-<code>BROStatusURI</code>/<code>statusURI</code> (C <code>BRO_KEEP_SCHEME</code>/<code>bro_uri_keep_scheme</code>; jab Set), each with a comment cross-referencing the other side. Easy to keep at byte parity.
-</p>
-</li>
-<li>(decided) form = <code>&lt;scheme&gt;:&lt;path&gt;#L&lt;line&gt;</code> (keep <code>#L</code>), per <code>ls:be/#L1</code>. cat/diff/blob<p>
-stay bare <code>&lt;path&gt;#L&lt;line&gt;</code>.
-</p>
-</li>
+<li>(decided) discriminator = explicit keep-scheme scheme-set, single-sourced next to <code>BROStatusURI</code>/<code>statusURI</code> (C <code>BRO_KEEP_SCHEME</code>/<code>bro_uri_keep_scheme</code>; jab Set), each with a comment cross-referencing the other side. Easy to keep at byte parity.</li>
+<li>(decided) form = <code>&lt;scheme&gt;:&lt;path&gt;#L&lt;line&gt;</code> (keep <code>#L</code>), per <code>ls:be/#L1</code>. cat/diff/blob stay bare <code>&lt;path&gt;#L&lt;line&gt;</code>.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="wontfix"><input type="checkbox" disabled> <del>Repro-first: a test asserting the status URI string for <code>ls:</code>, <code>tree:</code>, <code>status:</code></del><p>
- (scheme kept) AND <code>cat:</code>/<code>diff:</code> (bare path#L kept), C and jab producing the SAME  string. RED today for the listing views (scheme dropped).
-</p>
-</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Repro-first: a test asserting the status URI string for <code>ls:</code>, <code>tree:</code>, <code>status:</code> (scheme kept) AND <code>cat:</code>/<code>diff:</code> (bare path#L kept), C and jab producing the SAME string. RED today for the listing views (scheme dropped).</del></li>
 <li class="wontfix"><input type="checkbox" disabled> <del>jab <code>view/bro.js statusURI</code>: keep the scheme for the listing/query set.</del></li>
 <li class="wontfix"><input type="checkbox" disabled> <del>C <code>bro/BRO.c BROStatusURI</code>: the same discriminator + output (parity).</del></li>
 <li class="wontfix"><input type="checkbox" disabled> <del>be/ suite + beagle bro tests green; cat/diff status unchanged.</del></li>
@@ -80,22 +62,21 @@ stay bare <code>&lt;path&gt;#L&lt;line&gt;</code>.
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED: be <code>ce4c8795</code> (view/bro.js) + beagle <code>9721f532</code> (bro/BRO.c +<p>
-bro/test/STATUS.c) + be/test <code>aedbb0f5</code>.  Discriminator: an explicit keep-scheme set {ls,lsr,tree,status,grep,regex,spot,log,refs} single-sourced per impl (C <code>BRO_KEEP_SCHEME</code> BRO.c:1666 / <code>bro_uri_keep_scheme</code> BRO.c:1674; jab <code>BRO_KEEP_SCHEME</code> Set bro.js:153) with a cross-ref comment each side. The strip only ever fires for path-bearing + fragment-less scheme-carrying hunk URIs; verified empirically these are the listing views (<code>ls:&lt;p&gt;</code>/<code>lsr:&lt;p&gt;</code> from sniff/LS.c; <code>tree:</code>/<code>status:&lt;sub&gt;/</code>). grep/regex/spot emit <code>path#sym:n</code> (no scheme, already verbatim) — set kept for the query family per ticket.
-</p>
-</li>
-<li>Sites: C <code>BROStatusURI</code> BRO.c:1751 keep-scheme branch emits<p>
-<code>&lt;scheme&gt;:&lt;path&gt;#L&lt;center&gt;</code>; jab <code>statusURI</code> bro.js:158 emits <code>&lt;scheme&gt;:&lt;path&gt;#L&lt;line&gt;</code>. cat/diff/blob fall through to bare <code>&lt;path&gt;#L&lt;n&gt;</code> (no regression). Snippet-verbatim arm + BROHunkLoc/bro_uri_is_line_or_empty untouched.
-</p>
-</li>
-<li>Parity test (byte-identical strings, both RED→GREEN): C <code>bro/test/STATUS.c</code><p>
-(<code>STATUStest</code>, drives real BROStatusURI on a 1-line hunk) + jab <code>be/test/bro/status/{run.sh,check.js}</code> (<code>be-js-bro-status</code>). Both assert <code>ls:be/#L1</code> … (scheme kept) and <code>foo.c#L1</code> (cat/diff/blob bare). RED today: both produced <code>be/#L1</code>. GREEN after the fix.
-</p>
-</li>
-<li>Suites: beagle ctest 380/380 green (build/ + build-debug/); be/ ctest green<p>
-bar the pre-existing <code>be-js-bro-universal</code> stale WILL_FAIL xfail. Stopped at the commit boundary in BOTH repos — no be put/post.
-</p>
-</li>
+<li>LANDED: be <code>ce4c8795</code> (view/bro.js) + beagle <code>9721f532</code> (bro/BRO.c + bro/test/STATUS.c) + be/test <code>aedbb0f5</code>.  Discriminator: an explicit keep-scheme set {ls,lsr,tree,status,grep,regex,spot,log,refs} single-sourced per impl (C <code>BRO_KEEP_SCHEME</code> BRO.c:1666 / <code>bro_uri_keep_scheme</code> BRO.c:1674; jab <code>BRO_KEEP_SCHEME</code> Set bro.js:153) with a cross-ref comment each side. The strip only ever fires for path-bearing + fragment-less scheme-carrying hunk URIs; verified empirically these are the listing views (<code>ls:&lt;p&gt;</code>/<code>lsr:&lt;p&gt;</code> from sniff/LS.c; <code>tree:</code>/<code>status:&lt;sub&gt;/</code>). grep/regex/spot emit <code>path#sym:n</code> (no scheme, already verbatim) — set kept for the query family per ticket.</li>
+<li>Sites: C <code>BROStatusURI</code> BRO.c:1751 keep-scheme branch emits <code>&lt;scheme&gt;:&lt;path&gt;#L&lt;center&gt;</code>; jab <code>statusURI</code> bro.js:158 emits <code>&lt;scheme&gt;:&lt;path&gt;#L&lt;line&gt;</code>. cat/diff/blob fall through to bare <code>&lt;path&gt;#L&lt;n&gt;</code> (no regression). Snippet-verbatim arm + BROHunkLoc/bro_uri_is_line_or_empty untouched.</li>
+<li>Parity test (byte-identical strings, both RED→GREEN): C <code>bro/test/STATUS.c</code> (<code>STATUStest</code>, drives real BROStatusURI on a 1-line hunk) + jab <code>be/test/bro/status/{run.sh,check.js}</code> (<code>be-js-bro-status</code>). Both assert <code>ls:be/#L1</code> … (scheme kept) and <code>foo.c#L1</code> (cat/diff/blob bare). RED today: both produced <code>be/#L1</code>. GREEN after the fix.</li>
+<li>Suites: beagle ctest 380/380 green (build/ + build-debug/); be/ ctest green bar the pre-existing <code>be-js-bro-universal</code> stale WILL_FAIL xfail. Stopped at the commit boundary in BOTH repos — no be put/post.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-040</title>
+<title>JS-040: bin/lib/ingest.js — pack ingest (keeper write side)</title>
+<meta property="og:title" content="JS-040: bin/lib/ingest.js — pack ingest (keeper write side)">
+<meta property="og:description" content="Land a received packfile into the shard: resolve every object (incl. REFDELTA against the existing store / in-pack bases), re-encode OFS-only into a fresh NNNNN.keeper pack-log, and index it into the shard's wh128 LSM. Mirrors keeper/UNPK.c + KEEPIngestFile (unlinkable). Part of JS-038.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-040.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,51 +15,38 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-040 <a href="">MED</a>: <code>bin/lib/ingest.js</code> — pack ingest (keeper write side)</h1>
+<h1>JS-040: <code>bin/lib/ingest.js</code> — pack ingest (keeper write side)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 Land a received packfile into the shard: resolve every object (incl. REF_DELTA against the existing store / in-pack bases), re-encode OFS-only into a fresh <code>NNNNN.keeper</code> pack-log, and index it into the shard's wh128 LSM. Mirrors <code>keeper/UNPK.c</code> + <code>KEEPIngestFile</code> (unlinkable). Part of <a href="JS-038.html">JS-038</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>The keeper store is OFS-only pack-logs + an <code>abc.index</code> wh128 lane.<p>
-<code>keeper.js</code> READS them but <code>indexPackByWalk</code> SKIPS REF_DELTA (&quot;unresolvable in pure JS&quot;) — false: <code>_pack_inflate</code> the delta + <code>getObject(baseSha)</code> + <code>git.delta.apply</code> resolves it. Received git packs ARE thin (REF_DELTA).
-</p>
-</li>
+<li>The keeper store is OFS-only pack-logs + an <code>abc.index</code> wh128 lane. <code>keeper.js</code> READS them but <code>indexPackByWalk</code> SKIPS REF_DELTA (&quot;unresolvable in pure JS&quot;) — false: <code>_pack_inflate</code> the delta + <code>getObject(baseSha)</code> + <code>git.delta.apply</code> resolves it. Received git packs ARE thin (REF_DELTA).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>ingest(repo, packBytes)</code>: walk records (<code>_pack_next</code>/<code>_pack_type</code>), resolve<p>
-raw/OFS via <code>_pack_resolve</code>, REF via inflate+apply against in-pack map or <code>keeper.getObject</code>; re-feed full bytes through <code>pack.feed</code> (OFS-only log).
-</p>
-</li>
-<li>Index the new log into the shard (<code>pack.scan</code> → <code>abc.index.put</code>/flush), so a<p>
-follow-up <code>keeper.getObject</code> of any landed sha succeeds.
-</p>
-</li>
+<li><code>ingest(repo, packBytes)</code>: walk records (<code>_pack_next</code>/<code>_pack_type</code>), resolve raw/OFS via <code>_pack_resolve</code>, REF via inflate+apply against in-pack map or <code>keeper.getObject</code>; re-feed full bytes through <code>pack.feed</code> (OFS-only log).</li>
+<li>Index the new log into the shard (<code>pack.scan</code> → <code>abc.index.put</code>/flush), so a follow-up <code>keeper.getObject</code> of any landed sha succeeds.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>libdog+<code>abc</code> ONLY. Write a new <code>NNNNN.keeper</code> beside existing shard packs;<p>
-never mutate a landed pack. Re-encode deflates via <code>pack.feed</code> (or <a href="JS-035.html">JS-035</a>).
-</p>
-</li>
+<li>libdog+<code>abc</code> ONLY. Write a new <code>NNNNN.keeper</code> beside existing shard packs; never mutate a landed pack. Re-encode deflates via <code>pack.feed</code> (or <a href="JS-035.html">JS-035</a>).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Two-pass: pass 1 builds the received pack's sha→offset map (raw+OFS first),<p>
-pass 2 resolves REF bases (map ∪ store) — the UNPK dep-order, in JS.
-</p>
-</li>
+<li>Two-pass: pass 1 builds the received pack's sha→offset map (raw+OFS first), pass 2 resolves REF bases (map ∪ store) — the UNPK dep-order, in JS.</li>
 <li>Un-stub <code>keeper.js</code> REF_DELTA on the read path too (shared resolver helper).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/get/ingest.js</code> (helpers <code>test/js/lib/</code>): ingest a real<p>
-  thin pack (fixture from <code>test/get/</code>), then <code>keeper.getObject</code> each tip   object re-hashes to its sha; OFS-only log re-<code>scan</code>s clean (no REF left).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/get/ingest.js</code> (helpers <code>test/js/lib/</code>): ingest a real thin pack (fixture from <code>test/get/</code>), then <code>keeper.getObject</code> each tip object re-hashes to its sha; OFS-only log re-<code>scan</code>s clean (no REF left).</li>
 <li class="open"><input type="checkbox" disabled> Implement <code>bin/lib/ingest.js</code> + REF resolver; reindex the shard.</li>
 </ul>
 <h3>Blockers</h3>
@@ -66,5 +57,16 @@ pass 2 resolves REF bases (map ∪ store) — the UNPK dep-order, in JS.
 <ul>
 <li>(pending)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

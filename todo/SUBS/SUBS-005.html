@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SUBS-005</title>
+<title>SUBS-005: path-scoped DELETE of a submodule (or sub-interior file) false-positives DELDIRTY</title>
+<meta property="og:title" content="SUBS-005: path-scoped DELETE of a submodule (or sub-interior file) false-positives DELDIRTY">
+<meta property="og:description" content="MEDIUM. There is no working way to remove a submodule, or a file inside one, via be delete &lt;path&gt;. Both be delete vendor/sub (the gitlink dir) and be delete vendor/sub/core.c (a file inside the mount) abort with DELDIRTY (exit 157), leaving the path on disk and nothing staged.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/SUBS/SUBS-005.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,19 +16,18 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>SUBS-005: path-scoped DELETE of a submodule (or sub-interior file) false-positives DELDIRTY</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <strong>MEDIUM.</strong>  There is no working way to remove a submodule, or a file inside one, via <code>be delete &lt;path&gt;</code>.  Both <code>be delete vendor/sub</code> (the gitlink dir) and <code>be delete vendor/sub/core.c</code> (a file inside the mount) abort with <code>DELDIRTY</code> (exit 157), leaving the path on disk and nothing staged.
 </p>
 <h2>Repro</h2>
 <ul>
-<li><code>be get &lt;parent&gt;?master</code>; <code>be delete vendor/sub/core.c</code><p>
-→ <code>delete: vendor/sub/core.c has unstamped changes</code> / DELDIRTY / 157.
-</p>
-</li>
-<li><code>be delete vendor/sub</code><p>
-→ <code>delete: vendor/sub has unstamped changes</code> / DELDIRTY / 157.
-</p>
-</li>
+<li><code>be get &lt;parent&gt;?master</code>; <code>be delete vendor/sub/core.c</code> → <code>delete: vendor/sub/core.c has unstamped changes</code> / DELDIRTY / 157.</li>
+<li><code>be delete vendor/sub</code> → <code>delete: vendor/sub has unstamped changes</code> / DELDIRTY / 157.</li>
 </ul>
 <h2>Root cause</h2>
 <p>
@@ -35,14 +38,8 @@ DELETE's dirty check refuses when a path's mtime is out of the parent stamp-set 
 Path-scoped delete is documented as non-recursing, but it must still have a defined, working behavior for the gitlink case:
 </p>
 <ul>
-<li><code>be delete vendor/sub</code> should remove the submodule — unmount the <code>.be</code><p>
-anchor, remove the worktree files, and stage the gitlink + <code>.gitmodules</code> removal (git <code>git rm</code> of a submodule parity) — or refuse with a clear, sub-aware message, not a spurious DELDIRTY.
-</p>
-</li>
-<li><code>be delete vendor/sub/core.c</code> should either recurse into the sub to delete<p>
-that file, or skip cleanly with a sub-aware message — never DELDIRTY on a byte-clean sub file.
-</p>
-</li>
+<li><code>be delete vendor/sub</code> should remove the submodule — unmount the <code>.be</code> anchor, remove the worktree files, and stage the gitlink + <code>.gitmodules</code> removal (git <code>git rm</code> of a submodule parity) — or refuse with a clear, sub-aware message, not a spurious DELDIRTY.</li>
+<li><code>be delete vendor/sub/core.c</code> should either recurse into the sub to delete that file, or skip cleanly with a sub-aware message — never DELDIRTY on a byte-clean sub file.</li>
 </ul>
 <h2>Fix sketch</h2>
 <p>
@@ -52,5 +49,16 @@ Teach DELETE's dirty check to recognise gitlink paths: a <code>160000</code> tre
 <p>
 <code>test/delete/08-sub-path-scoped-deldirty</code> (<code>WILL_FAIL</code> until fixed); <code>test/delete/07-sub-delete-all-missing</code> (passing control — bare delete-all recurses correctly).
 </p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

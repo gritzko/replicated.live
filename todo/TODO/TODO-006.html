@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TODO-006 DONE: cache the rendered wt status frames in the pager</title>
+<meta property="og:title" content="TODO-006 DONE: cache the rendered wt status frames in the pager">
+<meta property="og:description" content="The todo board renders slow: ~2.6 s of a 3.0 s tty render is the per-wt status work behind the TODO-005 button frames (classifyMerge top ~0.9 s + mounted subs 1.7 s over 88 wts + 81 subs; profile 2026-08-04). Ruling gritzko 2026-08-04 (r3, supersedes r2's rendered-line splice): in the PAGER, cache STRUCTURED per-row data — just the NUMBERS and head fields — and render the tok/TLV array EVERY time from it; native JS values only, never an io.buf/mmap handle. Each row block carries its OWN witness, so a post to the main tree (the upstream most wts track) refreshes only the COMMIT block's ahbeh numbers per wt while the expensive file counts and titles stay cached — never a full rerender. The STATUS-019 rev tree decides the drops: wt changed → file block, ticket changed → title/head, tips moved → commit block. A hit splices stored bytes and touches no classify, no graf, no keeper.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/TODO/TODO-006.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>TODO-006 <a href="./DONE.html">DONE</a>: cache the rendered wt status frames in the pager</h1>
+<div>
+<p>
+Now: DONE Sev: MED Ask: gritzko Rep: ///be/ On1: STATUS-019 See: TODO-005
+</p>
+</div>
+<p>
+The todo board renders slow: <del>2.6 s of a 3.0 s tty render is the per-wt status work behind the TODO-005 button frames (classifyMerge top </del>0.9 s + mounted subs 1.7 s over 88 wts + 81 subs; profile 2026-08-04). Ruling gritzko 2026-08-04 (r3, supersedes r2's rendered-line splice): in the PAGER, cache STRUCTURED per-row data — just the NUMBERS and head fields — and render the tok/TLV array EVERY time from it; native JS values only, never an io.buf/mmap handle.  Each row block carries its OWN witness, so a post to the main tree (the upstream most wts track) refreshes only the COMMIT block's ahbeh numbers per wt while the expensive file counts and titles stay cached — never a full rerender.  The <a href="./STATUS-019.html">STATUS-019</a> rev tree decides the drops: wt changed → file block, ticket changed → title/head, tips moved → commit block. A hit splices stored bytes and touches no classify, no graf, no keeper.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The render path is emitList → wtStat(t.wt) (todo.js:1031) → titleRow → fileFrame + commitFrame (todo.js:976): the frames are a FIXED-width region (1+16+1+10 cells), independent of the row's rails/key lead, so the rendered fragment is relocatable by construction.
+</p>
+<ul>
+<li>span() records ABSOLUTE end offsets (todo.js:704); a cached fragment must store RELATIVE offsets and rebase on splice — the one mechanical prerequisite.</li>
+<li>What the rendered frames depend on: files under the wt (counts), the wt's own wtlog (staged rows, cur tip), the TRACKED tip (ahbeh + the patch arg), the ticket page's title (the ci button's <code>post 'KEY: title'</code> spell), the theme truecolors, and the <code>//&lt;wt&gt;</code> ctx.</li>
+<li>rev(wtDir) witnesses the files AND the wt's own wtlog (<code>.be/</code> is re-admitted); rev(page's topic dir) witnesses the title; theme and ctx are per-process constants — the resident pager holds both.</li>
+<li>The tracked tip is NOT witnessed: refs move below the track target's <code>.be/</code> (unwatched, object churn) — the stale-ahbeh hole already flagged in <a href="./STATUS-019.html">STATUS-019</a>'s bummers.</li>
+<li><a href="./STATUS-019.html">STATUS-019</a> (in <code>//STATUS-019/</code>, unmerged) already memoizes the wtStat MODEL by rev; this ticket puts the RENDERED artifact on top and demotes that memo to the miss path.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+One cached artifact per board row: the WHOLE LINE as emitted, dropped by revs, fingerprinted for what revs cannot see.
+</p>
+<ul>
+<li>Memo in todo.js (consumers own values — the rev tree stores none): ticket file → { bytes(Uint8Array), toks(Uint32Array, relative), head, wtRev, pageRev, tips } surviving across render runs, pager-only, resident-only (no watcher → no memo, ruling 4).</li>
+<li>FIRST a ONE-shot board check: rev(be.todoRoot()) — the ancestor rule makes any ticket edit anywhere bump the todo/ spot, so a standstill proves NO ticket changed: skip listTopics/listTopic/metaidx and every per-row page check, reuse the cached row set as-is, and only the per-wt revs + tips remain to check.</li>
+<li>Row HIT = rev(wtDir) (wt rows only) AND rev(page's topic dir) both stand still AND the <code>tips</code> fingerprint (cur tip + resolved track tip, the status.js <code>state</code> precedent) matches → splice bytes, add the row's base offset to each tok, emit; zero wtStat/registry work, NO ticket-file read.</li>
+<li>The entry stores the pageHead FIELDS the board logic needs (title, prio, closed, Sub, Rep, meta vals) so sorting, family nesting and the <code>cols</code> verdict run over cached heads without touching the file; wt-LESS rows cache too, with just the pageRev check.</li>
+<li>A LINE is shape-dependent: rails (Sub: nesting), the arg line's <a href="./vals.html">vals</a> brackets and the hunk's <code>cols</code> verdict are part of the stored entry — any of them differing from the fresh render run's is a MISS for that row (re-render, keep the head).</li>
+<li>MISS = recompute through the existing wtStat (its STATUS-019 rev memo + foldSubs sub-gating stay as the cheap-miss layer), re-render the line ONCE via the existing titleRow — the cache captures its output, never a second renderer.</li>
+<li>The pager's <code>R</code>/<code>r</code> already bumps the root — every line misses, no extra hook.</li>
+<li>The <code>tips</code> fingerprint resolves per render via work.trackTip through the shared registry (~250 ms/board today for trackTip+ahbeh combined; tips alone are cheaper) — this is the price of never serving a stale ahbeh count; measure it and report.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>ONE row implementation: capture titleRow's output (parts/spans slice, offsets made relative); never fork a cached twin of the span emitters.</li>
+<li>Native JS typed arrays for the stored bytes/toks — never a live io.buf/mmap handle (those are process resources, not values).</li>
+<li>Builds ON the //STATUS-019/ worktree state of cache.js/todo.js — branch that wt or wait for its merge; do not re-implement the rev tree.</li>
+<li>Tests repro-first: a pty leg proving a board re-render hits (object-read counter ~0 for unchanged wts, bytes identical) and that a write under ONE wt re-renders only that row; a tip moved with no fs event must recompute via the fingerprint.  NO other tests edited without permission.</li>
+<li>Verify through the real UI path: a pty click repro on a live board, not TLV probes.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>The board memo keys by (board dir, arg line) — one pager loop reaches more than one project.</li>
+<li>The topic DIR rev is the page witness: one ticket edit misses every row of that topic, other topics still hit.</li>
+<li>Filter listings get the per-row memo but NOT the board short-circuit — their row set rides metaidx + the commit-time sort, which the todo/ spot does not witness.</li>
+<li>The topic header row is not a ticket line — re-emitted each render (one spell); memos drop on any watcher live↔dead transition.</li>
+<li>wtStat's STATUS-019 rev memo now carries the tips fingerprint too — a rev-only layer underneath would hand the line memo stale ahbeh counts on a fingerprint miss.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./x.html">x</a> relative-offset line capture + splice helper around titleRow — SUPERSEDED by r3 (structured cache, render every time)</li>
+<li><a href="./v.html">v</a> the one-shot rev(todoRoot) board check gating all page-side work</li>
+<li><a href="./v.html">v</a> tips fingerprint via work.trackTip; measure its per-board cost</li>
+<li><a href="./ .html"> </a> r3: per-row STRUCTURED entry { head, fileCounts, ahbeh, patch, tips }, one witness per block (wt rev / topic rev / tips); titleRow renders from it every time</li>
+<li><a href="./ .html"> </a> FIX the first-refire miss: the ARMING rev() query must return the spot's real rev, not a token — arm-before-compute is what makes the first stored value valid (field repro 2026-08-04: warm1 misses wholesale at 7.7 s with drops=1, warm2 hits at 0.05 s)</li>
+<li><a href="./ .html"> </a> arming cost: cold pays a SECOND full walk to arm (21247 dirs, 10.5 s cold) — arm off the walk the miss path already does, never a walk of its own</li>
+<li><a href="./ .html"> </a> main-tree post leg: a commit to the upstream refreshes ahbeh numbers only — no classify, no file reads, board re-renders from cached blocks</li>
+<li><a href="./ .html"> </a> pty repro MUST include the field gesture: click a ticket, BACKSPACE back — the FIRST re-fire hits</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The stale-ahbeh hole flagged in <a href="./STATUS-019.html">STATUS-019</a>'s bummers was load-bearing here: the fix (fingerprint inside wtStat) landed in THIS wt; views/status/status.js has the same shape guarded only by its own <code>state</code> string.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+r3 (supersedes the r2 line-splice outcome below):
+</p>
+<ul>
+<li>ROOT CAUSE of the field &quot;rerender no faster&quot;: the rev tree started in Pager.run (pager.js:1391) AFTER the cold render already computed at core/loop.js:478 — the cold render armed nothing, so the FIRST re-fire was the arming render and missed wholesale.  Fixed in core/loop.js: start before a pager-bound view renders (gated to non-mutation verbs — pol.init wipes the fd table), stop when no pager opens; status.js inherited the same hole and the same fix.</li>
+<li>Staged in <code>//TODO-006/</code>: core/loop.js (early start), shared/cache.js (+takeWalk — arm publishes its walk), shared/classify.js (wtWalk reuses it), views/todo/todo.js (r3 per-block memos: fileStat←rev(wtDir), commitStat←tips, topic head memo←rev(topic dir); line-splice layer removed), test/todo/rowcache/* (renamed case: 44+17 legs), test/CMakeLists.txt.</li>
+<li>Field-verified (real board, orchestrator repro): cold 10.6→4.5 s, FIRST re-fire 7.7 s→0.07 s (the click-backspace gesture), warm 0.04 s, R 4.2 s (bumpRoot by design); render-from-numbers 37–55 ms/board; upstream-post leg: ahbeh moves, file frames byte-identical, zero classify, zero ticket reads.</li>
+<li>Honest correction: the duplicate arming walk was <del>0.45 s, not the </del>6 s estimated; suite 350/350, every witness red-verified.</li>
+<li>LEFTOVER: the r2 case files test/todo/linecache/* are staged as adds but gone from disk — needs a <code>be delete</code> (outside the worker's ops).</li>
+<li>Suggested commit: <code>TODO-006: cache the board row's blocks, not its line</code></li>
+</ul>
+<p>
+r2 (superseded): line-splice memo, 49 ms hits but a full miss on any upstream post; measured miss 2.9–3.6 s, hit 49 ms byte-identical; suite 350/350 then.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

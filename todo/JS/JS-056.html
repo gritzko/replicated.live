@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-056</title>
+<title>JS-056: store.js mmap the on-disk keeper.idx instead of rebuilding the object index every open</title>
+<meta property="og:title" content="JS-056: store.js mmap the on-disk keeper.idx instead of rebuilding the object index every open">
+<meta property="og:description" content="be/lib/store.js index() builds an in-RAM abc.index(&quot;wh128&quot;,{mem}) by pk.scan/indexPackByWalk over EVERY pack object — and since a pack is offset-addressed, that forces resolving+SHA-1ing all objects (~11 s / 2.5 GB on the journal's 40 MB pack; this is why jab status looked hung). The keeper ALREADY persists that exact map on disk as NNNNN.keeper.idx LSM/SST runs (Indices). locate() should mmap+range those runs, not rebuild. Proven: abc.index(&quot;wh128&quot;,{dir,ext:&quot;keeper.idx&quot;}) opens the runs and a prefix range returns 707bbbb instantly. JS-030 follow-up. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-056.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,81 +15,64 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-056 <a href="">PERF</a>: <code>store.js</code> mmap the on-disk <code>keeper.idx</code> instead of rebuilding the object index every open</h1>
+<h1>JS-056: <code>store.js</code> mmap the on-disk <code>keeper.idx</code> instead of rebuilding the object index every open</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>be/lib/store.js</code> <code>index()</code> builds an in-RAM <code>abc.index(&quot;wh128&quot;,{mem})</code> by <code>pk.scan</code>/<code>indexPackByWalk</code> over EVERY pack object — and since a pack is offset-addressed, that forces resolving+SHA-1ing all objects (~11 s / 2.5 GB on the journal's 40 MB pack; this is why <code>jab status</code> looked hung). The keeper ALREADY persists that exact map on disk as <code>NNNNN.keeper.idx</code> LSM/SST runs (<a href="../../wiki/Indices.html">Indices</a>). <code>locate()</code> should mmap+range those runs, not rebuild. Proven: <code>abc.index(&quot;wh128&quot;,{dir,ext:&quot;keeper.idx&quot;})</code> opens the runs and a prefix range returns <code>707bbbb</code> instantly. JS-030 follow-up. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>store.js index()</code> uses the in-RAM (<code>{mem}</code>) variant and pipes <code>pk.scan</code><p>
-entries in; on a thin/oversized object scan throws → <code>indexPackByWalk</code> resolves+hashes every object. O(whole store) on every <code>store.open</code>.
-</p>
-</li>
-<li>The on-disk <code>keeper.idx</code> (val <code>offset40|file_id20|flags4</code>, <a href="../../wiki/Indices.html">Indices</a>) is the<p>
-designed read path: &quot;mmap every run and binary-search each&quot;, newest-wins.
-</p>
-</li>
-<li>Verified decode: <code>707bbbb</code> on-disk val <code>669425078370321</code> → `offset = val&gt;&gt;24<p>
-= 39 900 844<code> (matches native </code>locate<code>); </code>file_id=(val&gt;&gt;4)&amp;0xfffff`.
-</p>
-</li>
+<li><code>store.js index()</code> uses the in-RAM (<code>{mem}</code>) variant and pipes <code>pk.scan</code> entries in; on a thin/oversized object scan throws → <code>indexPackByWalk</code> resolves+hashes every object. O(whole store) on every <code>store.open</code>.</li>
+<li>The on-disk <code>keeper.idx</code> (val <code>offset40|file_id20|flags4</code>, <a href="../../wiki/Indices.html">Indices</a>) is the designed read path: &quot;mmap every run and binary-search each&quot;, newest-wins.</li>
+<li>Verified decode: <code>707bbbb</code> on-disk val <code>669425078370321</code> → <code>offset = val&gt;&gt;24 = 39 900 844</code> (matches native <code>locate</code>); <code>file_id=(val&gt;&gt;4)&amp;0xfffff</code>.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>locate()</code> opens/mmaps the on-disk <code>keeper.idx</code> runs (<code>{dir,ext}</code>), ranges<p>
-<code>[h&lt;&lt;4, h&lt;&lt;4|0xf]</code>, decodes the on-disk val layout — NO startup scan/rebuild.
-</p>
-</li>
+<li><code>locate()</code> opens/mmaps the on-disk <code>keeper.idx</code> runs (<code>{dir,ext}</code>), ranges <code>[h&lt;&lt;4, h&lt;&lt;4|0xf]</code>, decodes the on-disk val layout — NO startup scan/rebuild.</li>
 <li><code>getObject</code>/<code>readRecord</code> unchanged: resolve the single hit on demand.</li>
 <li>Fall back to the current scan-build ONLY when no <code>.keeper.idx</code> run exists.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li><code>be/lib/store.js</code> only (beagle-ext shard). Newest-wins across runs (LSM).<p>
-Repro-first (CLAUDE.md §17); <code>be-bin</code>/<code>be-js</code> status parity green; no scan on a store that has an idx.
-</p>
-</li>
+<li><code>be/lib/store.js</code> only (beagle-ext shard). Newest-wins across runs (LSM). Repro-first (CLAUDE.md §17); <code>be-bin</code>/<code>be-js</code> status parity green; no scan on a store that has an idx.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Open via <code>abc.index(&quot;wh128&quot;,{dir:shard, ext:&quot;keeper.idx&quot;})</code>; decode<p>
-<code>offset=val&gt;&gt;24</code>, <code>file_id=(val&gt;&gt;4)&amp;0xfffff</code> (NOT store.js's in-RAM <code>fileIdx&lt;&lt;40|offset</code>). Keep the in-RAM build as a no-idx fallback only.
-</p>
-</li>
+<li>Open via <code>abc.index(&quot;wh128&quot;,{dir:shard, ext:&quot;keeper.idx&quot;})</code>; decode <code>offset=val&gt;&gt;24</code>, <code>file_id=(val&gt;&gt;4)&amp;0xfffff</code> (NOT store.js's in-RAM <code>fileIdx&lt;&lt;40|offset</code>). Keep the in-RAM build as a no-idx fallback only.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Repro: <code>store.open(...).getObject(commit)</code> must NOT scan the pack on a store<p>
-  that has a <code>keeper.idx</code> (assert bounded / ~instant, not O(objects)).
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Repro: <code>store.open(...).getObject(commit)</code> must NOT scan the pack on a store that has a <code>keeper.idx</code> (assert bounded / ~instant, not O(objects)).</li>
 <li class="done"><input type="checkbox" checked disabled> <code>locate()</code>/<code>index()</code>: mmap the on-disk runs + range + on-disk val decode.</li>
 <li class="done"><input type="checkbox" checked disabled> No-idx fallback path; update the store.js header comment.</li>
 <li class="done"><input type="checkbox" checked disabled> Verify <code>jab status</code> on the journal store is fast (no 11 s / 2.5 GB).</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Related to <a href="JS-055.html">JS-055</a> (resolve scratch): lazy lookup stops resolving the 46 MB<p>
-blob per-run, but JS-055 is still needed when a &gt;pack object IS resolved.
-</p>
-</li>
+<li>Related to <a href="JS-055.html">JS-055</a> (resolve scratch): lazy lookup stops resolving the 46 MB blob per-run, but JS-055 is still needed when a &gt;pack object IS resolved.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li><code>locate()</code> now mmaps the on-disk <code>keeper.idx</code> runs via<p>
-<code>abc.index(&quot;wh128&quot;,{dir:shard,ext:&quot;keeper.idx&quot;})</code> (new <code>diskIndex()</code>), ranges <code>[h&lt;&lt;4,h&lt;&lt;4|0xf]</code>, decodes the ON-DISK val <code>offset40|file_id20|flags4</code> (<code>offset=val&gt;&gt;24</code>, <code>file_id=(val&gt;&gt;4)&amp;0xfffff</code>) and maps <code>file_id</code>→pack via <code>fileIdToPackIdx</code>. In-RAM scan-build kept as the no-idx fallback (the two val layouts decode under one <code>onDisk</code> flag). <code>getObject</code>/<code>readRecord</code> untouched.
-</p>
-</li>
-<li>LANDED TWICE — the JS lib is mirrored in two shards: <code>c4c912e9</code> beagle<p>
-<code>bin/lib/store.js</code> (+ <code>test/js/store.js</code>, the JABCstore ctest), and <code>3cad15fb</code> *<strong>beagle-ext</strong>* <code>be/lib/store.js</code> — the latter is the copy <code>jab status</code> actually runs (the upward be/-scan resolves <code>~/beagle-journal/be/</code>, NOT beagle/bin). The first land alone did NOT speed up <code>jab status</code> — the ticket's &quot;beagle-ext shard&quot; constraint was the operative one. See <a href="">[js-ext-runs-from-beagle-ext-shard</a>].
-</p>
-</li>
-<li>Real <code>jab status</code> on the journal store: *<strong>10.9 s → 1.5 s</strong>* (RSS 1.17 GB → 388 MB),<p>
-output <code>1396 ok</code> unchanged. Repro <code>test/js/store.js</code> (spy asserts 0 pack scans); parity 64/64 (JABC 28, be-bin 6, be-js 29). A <code>file_id</code> with no pack degrades to not-found, never crashes (safe under LSM newest-wins).
-</p>
-</li>
+<li><code>locate()</code> now mmaps the on-disk <code>keeper.idx</code> runs via <code>abc.index(&quot;wh128&quot;,{dir:shard,ext:&quot;keeper.idx&quot;})</code> (new <code>diskIndex()</code>), ranges <code>[h&lt;&lt;4,h&lt;&lt;4|0xf]</code>, decodes the ON-DISK val <code>offset40|file_id20|flags4</code> (<code>offset=val&gt;&gt;24</code>, <code>file_id=(val&gt;&gt;4)&amp;0xfffff</code>) and maps <code>file_id</code>→pack via <code>fileIdToPackIdx</code>. In-RAM scan-build kept as the no-idx fallback (the two val layouts decode under one <code>onDisk</code> flag). <code>getObject</code>/<code>readRecord</code> untouched.</li>
+<li>LANDED TWICE — the JS lib is mirrored in two shards: <code>c4c912e9</code> beagle <code>bin/lib/store.js</code> (+ <code>test/js/store.js</code>, the JABCstore ctest), and <code>3cad15fb</code> *<strong>beagle-ext</strong>* <code>be/lib/store.js</code> — the latter is the copy <code>jab status</code> actually runs (the upward be/-scan resolves <code>~/beagle-journal/be/</code>, NOT beagle/bin). The first land alone did NOT speed up <code>jab status</code> — the ticket's &quot;beagle-ext shard&quot; constraint was the operative one. See <a href="./[js-ext-runs-from-beagle-ext-shard.html">[js-ext-runs-from-beagle-ext-shard</a>].</li>
+<li>Real <code>jab status</code> on the journal store: *<strong>10.9 s → 1.5 s</strong>* (RSS 1.17 GB → 388 MB), output <code>1396 ok</code> unchanged. Repro <code>test/js/store.js</code> (spy asserts 0 pack scans); parity 64/64 (JABC 28, be-bin 6, be-js 29). A <code>file_id</code> with no pack degrades to not-found, never crashes (safe under LSM newest-wins).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORK-007: work forest links by TRACKING edge — tracked == upstream</title>
+<meta property="og:title" content="WORK-007: work forest links by TRACKING edge — tracked == upstream">
+<meta property="og:description" content="Live 2026-07-19: the work view hangs //WHY-002 under the store although its wtlog ends get //WHY#43a754a0… — it TRACKS the //WHY wt. Root cause (be tip, views/work/work.js): classify() resolves the pin (be.wtdir) but looks the target up in indexNodes' byWt (:199), which holds ONLY the context-tree skeleton (top wt + gitmodules mounts, nodeAt :156); tracker wts are rows, never nodes, so a wt tracking another work/ wt has nowhere to hang and the &quot;Unresolvable pin&quot; fall-through (:244 — mislabeled, the pin DID resolve) demotes it to block 2 by its store anchor. - The /todo/WORK/WORK-001 model is ONE level deep: trackers hang only off main-tree nodes (the node.wts runs). - attachedBranch (shared/wtlog.js:161) already yields the track edge per wt: URI/wt pin, branch/trunk, or detached.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/WORK/WORK-007.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WORK-007: work forest links by TRACKING edge — tracked == upstream</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Live 2026-07-19: the work view hangs <code>//WHY-002</code> under the store although its wtlog ends <code>get //WHY#43a754a0…</code> — it TRACKS the <code>//WHY</code> wt. Root cause (be tip, views/work/work.js): classify() resolves the pin (be.wtdir) but looks the target up in indexNodes' byWt (:199), which holds ONLY the context-tree skeleton (top wt + gitmodules mounts, nodeAt :156); tracker wts are rows, never nodes, so a wt tracking another work/ wt has nowhere to hang and the &quot;Unresolvable pin&quot; fall-through (:244 — mislabeled, the pin DID resolve) demotes it to block 2 by its store anchor.
+</p>
+<ul>
+<li>The <a href="/todo/WORK/WORK-001.html">WORK-001</a> model is ONE level deep: trackers hang only off main-tree nodes (the node.wts runs).</li>
+<li>attachedBranch (shared/wtlog.js:161) already yields the track edge per wt: URI/wt pin, branch/trunk, or detached.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+RULING (gritzko, chat 2026-07-19): the forest IS the tracking relation — tracked == upstream; every wt hangs under the tree its recentmost get row tracks, RECURSIVELY (work wts are nodes too: WHY-002 → WHY → ///be).
+</p>
+<ul>
+<li>Pin vs base placement: <code>///be/test</code> (slashless) is the GITLINK pin recorded in <code>///be</code> — a wt tracking that pin goes under <code>///be</code>; <code>///be/test/</code> (trailing slash) is the <code>///be/test</code> wt's own base commit — that tracker goes under <code>///be/test</code> (<a href="/wiki/Submodules.html">Submodules</a>, de-jure pin vs de-facto rev).</li>
+<li>A mount's upstream is its parent's gitlink pin, so mounts keep nesting under the parent tree; WORK-001's render rulings (solid vs dotted rails, buttons, ahbeh, fade) ride unchanged.</li>
+<li>Branch trackers land under store → shard → branch, detached wts under the shard, foreign anchors in the foreign block — the WORK-001 hunks stand; only the LINKING model changes.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Supersedes WORK-001's mounts-only attach (classify/indexNodes, views/work/work.js:199-264); WORK-001 stays the umbrella view ticket — crosslinked.</li>
+<li>ALL track/URI resolution via wtlog.attachedBranch + core resolve/wtdir — no regexes, no string surgery; the trailing-slash semantics must come from the resolver, not lexical checks.</li>
+<li>Overlaps the UNLANDED work/WORK-003/004/005/006 wts in views/work/work.js + test/work/view — build on be tip, expect weaves.</li>
+<li>Rulings in force: pty verification through the real UI path; errors in plain words; use URIs to name trees in reports.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending) hunk-1 root: does the top wt stay the root (its own upstream — a store branch — NOT rendered as a parent), or does the forest unify under store→shard→branch?</li>
+<li>(pending) a cycle in the track relation (A tracks B, B tracks A): proposed — break at the name-sorted first node, mark the row in plain words.</li>
+<li>(pending) a track target resolving to NO live tree (deleted wt, work/done/): proposed — fall back to the anchor shard with a plain-words mark, never silently to the store.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> red fixture: a wt-tracks-wt chain plus a pin tracker vs a base tracker (<code>…/sub</code> vs <code>…/sub/</code>); red proved BOTH wrong placements on base, then flipped</li>
+<li><a href="./v.html">v</a> nodes for ALL work/ wts; parent = the track edge (attachedBranch), recursive; breakCycles() guard</li>
+<li><a href="./v.html">v</a> pin vs base: read off the parsed track path's dir-form (the argRel idiom) — NOT wtdir, see the finding below</li>
+<li><a href="./v.html">v</a> trailing slash FINDING: it survives record → URI → attachedBranch().track, but wtdir/resolveInTree COLLAPSES it (<code>shared/util/path.js</code> split) — <code>//X/sub</code> and <code>//X/sub/</code> hit the same dir; pin-vs-base cannot come from wtdir</li>
+<li><a href="./v.html">v</a> green: full test/work/view suite PASS (plain golden, tlv, color fade, pty click, done/dont), re-run by the orchestrator</li>
+<li>Defaults (b) cycle-break and (c) dead-target implemented defensively, marked in plain words, not separately unit-tested</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The classify/indexNodes region churns across four unlanded wts (WORK-003..006) — landing order will force weaves.</li>
+<li>RESOLVED 2026-07-19: the clones materialized without the work view because //WORK tracked slashless <code>///be</code> — the journal's stale de-jure PIN (<code>#43a754a0</code>, pre-forest) — while the forest was landed live in <code>///be/</code> (<code>27d03a26</code> WORK-004+006, <code>e4614c19</code> WORK-005, tip <code>9928a0be</code>); a live instance of this ticket's pin-vs-base subject. Fixed by <code>jab get '///be/'</code> in //WORK + bare get in //WORK-007 (gritzko-authorized); WORK-003 remains the only unlanded overlap.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Staged (put only, NOT posted) in //WORK-007 on base //WORK/#9928a0be: views/work/work.js (~412-line diff: resolveTrack, per-wt nodes, placeWt/breakCycles two-pass, recursive pushWt) + test/work/view/run.sh in the test sub (WORK-007 fixture: slashless pin, slashed base, wt→wt chain).</li>
+<li>Suggested commit: <code>WORK-007: work forest links by tracking edge, pin/base slash</code></li>
+<li>Side find, unfiled: test/work/getctx/getctx.py drives the <code>[get]</code> button retired by WORK-004 — red on the pristine base; retarget it to <code>[-N]</code>/<code>[diff]</code> when WORK-002 rework lands.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

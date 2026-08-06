@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BE-011</title>
+<title>BE-011: wtdir SRCROOT confinement is a lexical prefix check — .. escapes the root</title>
+<meta property="og:title" content="BE-011: wtdir SRCROOT confinement is a lexical prefix check — .. escapes the root">
+<meta property="og:description" content="be.wtdir (core/discover.js:232) confines a nav authority to SRCROOT with a LEXICAL prefix compare (repo.wt.indexOf(top+&quot;/&quot;)===0), but the URI parser does not normalize ..: a host of .. passes authorityRepo's dotless-typo gate (it contains a dot) and u.path may carry ../. io.stat then resolves the dots PHYSICALLY while the confinement compare stays lexical, so //../name and //name/../../.. adopt any anchored tree OUTSIDE SRCROOT. shared/util/path.js safeRel (JS-065's &quot;ONE worktree-confinement guard&quot;) is never applied to host/path — the JS twin of native DOG-009. From the 2026-07-07 be/ review (BE/REVIEW), CONFIRMED with a probe. Method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BE/BE-011.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>BE-011 <a href="./HIGH.html">HIGH</a>: wtdir SRC_ROOT confinement is a lexical prefix check — <code>..</code> escapes the root</h1>
+<h1>BE-011: wtdir SRC_ROOT confinement is a lexical prefix check — <code>..</code> escapes the root</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>be.wtdir</code> (<code>core/discover.js:232</code>) confines a nav authority to <code>SRC_ROOT</code> with a LEXICAL prefix compare (<code>repo.wt.indexOf(top+&quot;/&quot;)===0</code>), but the URI parser does not normalize <code>..</code>: a host of <code>..</code> passes authorityRepo's dotless-typo gate (it contains a dot) and <code>u.path</code> may carry <code>../</code>. <code>io.stat</code> then resolves the dots PHYSICALLY while the confinement compare stays lexical, so <code>//../name</code> and <code>//name/../../..</code> adopt any anchored tree OUTSIDE SRC_ROOT. <code>shared/util/path.js safeRel</code> (JS-065's &quot;ONE worktree-confinement guard&quot;) is never applied to host/path — the JS twin of native DOG-009. From the 2026-07-07 be/ review (<a href="REVIEW.html">BE/REVIEW</a>), CONFIRMED with a probe. Method <a href="../../rule/Issues.html">Issues</a>.
 </p>
@@ -35,12 +44,14 @@
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(pending — normalize the composed path and re-check the SRC_ROOT prefix, or reject any <code>..</code> segment in host/path pre-compose)</li>
+<li>UNIFIED resolver, not a point patch. New segment calculator in <code>shared/util/path.js</code>: <code>split</code>/<code>merge</code> + <code>resolveInTree(base,rel)</code> (normalises <code>.</code>/<code>..</code>, THROWS <code>NAVESCAPE</code> on a climb above the tree root) + <code>wtJoin(wtRoot,rel)</code>. Confinement is a PROPERTY of the compose step, not a post-hoc prefix compare.</li>
+<li><code>core/discover.js</code>: <code>resolve(base,ref)→abs</code> (the <code>context_uri+path→filesystem_path</code> resolver, throws NAVESCAPE on escape); <code>wtdir</code> delegates to it and its lexical <code>indexOf(top+&quot;/&quot;)</code> check is GONE. <code>srcRoot()</code> memoised on <code>be.srcRootDir</code>.</li>
+<li>Spawned a codebase-wide wt-open audit → THREE more live escapes of this class (<a href="./BE-026.html">BE-026</a>/<a href="./BE-027.html">BE-027</a>/<a href="./BE-028.html">BE-028</a>, all landed) + a universal <code>wtJoin</code> routing pass (P2/P3) across views/verbs/shared.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro: <code>//../x</code> and <code>//name/../../x</code> refuse.</li>
-<li class="open"><input type="checkbox" disabled> Confine wtdir via safeRel/normalize; suite green.</li>
+<li class="done"><input type="checkbox" checked disabled> Repro: <code>//../x</code> and <code>//name/../../x</code> refuse — <code>test/uri011/nav-escape/run.sh</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Confine wtdir via resolveInTree/resolve; suite green.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -48,7 +59,20 @@
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(pending)</li>
+<li>RED repro <code>test/uri011/nav-escape/run.sh</code>: <code>//root/../../outside</code> + <code>//../outside</code> physically escaped SRC_ROOT; now REFUSED with NAVESCAPE, <code>//root</code> still resolves.</li>
+<li>Landed: <code>shared/util/path.js</code> (<code>split</code>/<code>merge</code>/<code>resolveInTree</code>/<code>wtJoin</code>); <code>core/discover.js</code> (<code>resolve</code>, <code>wtdir</code> delegate, <code>srcRoot</code> cache). Follow-on escapes <a href="./BE-026.html">BE-026</a>/<a href="./BE-027.html">BE-027</a>/<a href="./BE-028.html">BE-028</a> + P2/P3 <code>wtJoin</code> routing (cat/why/diff/spot, put/delete/get/post/patch, checkout/submount/stage leaf guards).</li>
+<li>Final combined suite: 136 pass / 10 env-skip / 0 fail (<code>bro/view</code>/<code>color</code> are a pre-existing FS-readdir-order golden flake, pager-independent). Working tree left DIRTY — no VC ops.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

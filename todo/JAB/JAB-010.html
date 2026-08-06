@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-010 DONE: require() re-resolves per call — memoize module resolution</title>
+<meta property="og:title" content="JAB-010 DONE: require() re-resolves per call — memoize module resolution">
+<meta property="og:description" content="The jab module loader resolves every require() by re-running the upward jsrc/ shard scan (require.cpp resolveJsrc) even when the module is already loaded: the cache is keyed by RESOLVED path, so resolution — a stat ladder up the directory tree — runs again on every call before the cache can hit. One jab work stats jsrc/core/resolvehash.js 271 times and OPENS it once.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-010.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-010 <a href="./DONE.html">DONE</a>: require() re-resolves per call — memoize module resolution</h1>
+<div>
+<p>
+Now: DONE Sev: MED Rep: ///jab/ See: CODE-028
+</p>
+</div>
+<p>
+The jab module loader resolves every <code>require()</code> by re-running the upward jsrc/ shard scan (require.cpp resolveJsrc) even when the module is already loaded: the cache is keyed by RESOLVED path, so resolution — a stat ladder up the directory tree — runs again on every call before the cache can hit. One <code>jab work</code> stats <code>jsrc/core/resolve_hash.js</code> 271 times and OPENS it once.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Profiled <code>jab work</code> 2026-07-24 (strace, warm cache): 372 stats under <code>jsrc/</code> for a run that loads each module once.
+</p>
+<ul>
+<li><code>jsrc/core/resolve_hash.js</code>: 271 stats, 1 open — hot-path callers <code>require()</code> it per invocation; each call pays the climb, the module cache hits only after.</li>
+<li><code>shared/ingest.js</code> 22 stats, <code>shared/util/path.js</code> 12 — same pattern, milder (top-of-file requires re-evaluated per requirer).</li>
+<li>The climb itself also re-stats intermediate candidates (sibling <code>.be</code> probes interleave in the trace) — resolution cost is a ladder, not one stat.</li>
+<li>JS-side twin: core/registry.js verbFile() climbs per verb lookup — same idiom, smaller volume.</li>
+</ul>
+<p>
+Re-profiled 2026-08-04 on <code>be todo</code> (the title's &quot;re-climbs&quot; is now half-stale — GET-041 froze the jsrc stack, but the per-candidate stat stayed).
+</p>
+<ul>
+<li><code>stat(&quot;…/jsrc/core/resolve_hash.js&quot;)</code> 80,342 times in ONE <code>be --color todo</code>, <code>open</code> once.</li>
+<li><code>load()</code> (require.cpp:88) calls <code>resolve()</code> BEFORE <code>cache[abs]</code>, so even an EXPLICIT <code>./x.js</code> spec pays <code>normalize()</code> + one <code>io.stat</code> per call — not just the bareword climb.</li>
+<li>Microbench under jab: 80,342 repeat <code>require(abs)</code> = 231ms, <code>io.stat</code> alone 190ms.</li>
+<li>The be/ call sites that make the volume are CODE-028's (in-body requires in per-path loops); this ticket is the loader-side cure and stands on its own.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Module resolution costs zero syscalls after the first (requirer shard, relpath) resolution.
+</p>
+<ul>
+<li>require.cpp: memo (requirer dir or shard root, given relpath) → resolved abs path; the existing module cache then hits with no fs touch.</li>
+<li>A jab process is short-lived — no invalidation needed within a run; the memo dies with the process (long-lived pager sessions keep today's staleness behavior, no new promises).</li>
+<li>strace acceptance: <code>jab work</code> jsrc/ stats drop from <del>372 to </del>#modules (one stat per actually-loaded file).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Resolution ORDER must not change (nearest-shard-wins, the require.cpp resolveJsrc contract; JS-119's cwd-independence concern is adjacent — do not worsen it, crosslink).</li>
+<li>C side follows ABC/CLAUDE.md norms; the memo is per-process state in the require machinery, no on-disk cache.</li>
+<li>Behavior parity: module identity (one instance per resolved path) unchanged.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: a counter/strace harness pinning stats-per-require before and after.</li>
+<li><a href="./ .html"> </a> the (requirer, relpath) → abspath memo in require.cpp.</li>
+<li><a href="./ .html"> </a> check registry.js verbFile for the same memo once the C side lands.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>none known.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

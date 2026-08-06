@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SPOT-004: one search-scope calling convention — file, dir, and ext scopes alike in the PATH slot</title>
+<meta property="og:title" content="SPOT-004: one search-scope calling convention — file, dir, and ext scopes alike in the PATH slot">
+<meta property="og:description" content="Design ticket, ordered by gritzko 2026-07-19 (&quot;think of improving the calling convention for file-scoped and dir-scoped and ext-scoped alike&quot;). Today only the ext scope works: be spot &quot;.js#'a = null'&quot; searches the .js family, but a FILE scope (spot &quot;shared/branch.js#'…'&quot;) dies with SPOTNOEXT and grep-mode's file scope is SILENTLY ignored (verified 2026-07-19: grep:shared/branch.js#null scanned the whole tree, 4684 lines starting at core/discover.js). Extend the SPOT-003 path-slot ruling into one uniform grammar: mode:#locator, scope any of file / dir / ext / dir+ext, fragment = locator only.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/SPOT/SPOT-004.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SPOT-004: one search-scope calling convention — file, dir, and ext scopes alike in the PATH slot</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+Design ticket, ordered by gritzko 2026-07-19 (&quot;think of improving the calling convention for file-scoped and dir-scoped and ext-scoped alike&quot;). Today only the ext scope works: <code>be spot &quot;.js#'a = null'&quot;</code> searches the .js family, but a FILE scope (<code>spot &quot;shared/branch.js#'…'&quot;</code>) dies with SPOTNOEXT and grep-mode's file scope is SILENTLY ignored (verified 2026-07-19: <code>grep:shared/branch.js#null</code> scanned the whole tree, 4684 lines starting at core/discover.js). Extend the <a href="SPOT-003.html">SPOT-003</a> path-slot ruling into one uniform grammar: <code>[mode:][scope]#locator</code>, scope any of file / dir / ext / dir+ext, fragment = locator only.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Ruling in force (<a href="SPOT-003.html">SPOT-003</a>, 2026-07-18): scope rides the PATH slot, never the fragment; <code>spot:.c#'…'</code> = ext family, <code>spot:/root/path#'…'</code> = subtree with per-file grammar; the fragment-<code>.ext</code> form is dead.</li>
+<li>Code today (views/spot/search.js): <code>q.ext</code> is set only when the WHOLE path is a bare <code>.ext</code> (:59); the spot gate <code>mode===&quot;spot&quot; &amp;&amp; !q.ext</code> → SPOTNOEXT (:256) predates the ruling; a real path never confines the classify walk (grep evidence above); trail <code>.ext</code> args don't rescue a pathed first arg.</li>
+<li>The locator side is DONE: <a href="SPOT-002.html">SPOT-002</a>'s shared/spot.js parses all four fragment syntaxes (#L123, #needle, #/re/, #'pat'); <a href="SPOT-003.html">SPOT-003</a>'s index gates by path — both compose with any path-slot scope.</li>
+<li>Error texture on misses is the <a href="/todo/BE/BE-003.html">BE-003</a> class (bare <code>SPOTNOEXT</code>, <code>uri.parse: malformed</code> on a spaced bare arg).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Proposed convention (pending gritzko's ruling): the ONE arg is <code>[mode:][scope]#locator</code>; the scope path resolves via resolve(context,base,rel) like every verb arg, then classifies by what it names:
+</p>
+<ul>
+<li>empty scope → whole worktree, each file parsed with its OWN grammar;</li>
+<li><code>.ext</code> (bare extension segment) → that lexer family, whole tree;</li>
+<li>a FILE path → exactly that file, grammar from its own ext — no explicit <code>.ext</code> ever required;</li>
+<li>a DIR path → that subtree, per-file grammar;</li>
+<li><code>dir/.ext</code> (dir prefix + <code>.ext</code> final segment) → subtree AND family filter — bare <code>.ext</code> is just this form at the root.</li>
+<li>SPOTNOEXT retires: a structural locator over a file with no known lexer SKIPS that file (a plain-words note), never a fatal; a nonexistent scope path errs in plain words.</li>
+<li>All three modes (spot/grep/regex) obey the same scope rules — grep's silent whole-tree fallback becomes a red leg.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Scope resolution through resolve(context,base,rel)/core resolve only — verbs resolve args, the pager stays arg-blind; no manual path/URI surgery.</li>
+<li>Fragment stays locator-only (<a href="SPOT-003.html">SPOT-003</a> ruling); the four syntaxes come from <a href="SPOT-002.html">SPOT-002</a> shared/spot.js — no second parser.</li>
+<li>Joins the blocked <a href="SPOT-003.html">SPOT-003</a> TODOs (parseURI scope + search.js candidates/gate wiring) — one wiring pass once SPOT-002/003 land; /wiki/View.mkd §&quot;Search views&quot; gets the hand edit then.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Pending gritzko's ruling on the Goals grammar (esp. <code>dir/.ext</code> composition and the skip-not-fail rule for unknown lexers under spot mode).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> red: file scope confines (spot + grep), dir scope confines, <code>dir/.ext</code> composes, unknown-lexer skip note, plain-words miss — legs per mode.</li>
+<li class="open"><input type="checkbox" disabled> scope classifier in search.js parse (file/dir/ext/dir+ext) off the resolved path; SPOTNOEXT gate removed.</li>
+<li class="open"><input type="checkbox" disabled> wire the classify walk to the scope (and <a href="SPOT-003.html">SPOT-003</a> gate when it lands); suite at baseline.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Lands after <a href="SPOT-002.html">SPOT-002</a>/<a href="SPOT-003.html">SPOT-003</a> merge (same search.js seam); until then this is the design ground.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Pending.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

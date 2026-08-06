@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-029</title>
+<title>MEM-029: LESSDefer leaks mmap+tokens when map table full (spot/LESS.c)</title>
+<meta property="og:title" content="MEM-029: LESSDefer leaks mmap+tokens when map table full (spot/LESS.c)">
+<meta property="og:description" content="LESSDefer is documented to take single-owner ownership of the per-file mmap (mapped) and token buffer (toks) so LESSArenaCleanup can unmap them. When lessnmaps &gt;= LESSMAXMAPS (1024) it returns early WITHOUT storing the descriptors and WITHOUT unmapping them; the dropped pointers are never recorded in lessmaps[]/lesstoks[], so cleanup cannot reclaim them either. All three callers invoke the void-returning LESSDefer in their mapped != NULL branch and do nothing else, assuming transfer. lessnmaps grows monotonically within a scan. The goal is to unmap on the full path so a scan matching &gt;1024 files stops leaking one whole-file mmap plus a ~4×filesize token buffer per file.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-029.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>MEM-029: LESSDefer leaks mmap+tokens when map table full (spot/LESS.c)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>LESSDefer</code> is documented to take single-owner ownership of the per-file mmap (<code>mapped</code>) and token buffer (<code>toks</code>) so <code>LESSArenaCleanup</code> can unmap them. When <code>less_nmaps &gt;= LESS_MAX_MAPS</code> (1024) it returns early WITHOUT storing the descriptors and WITHOUT unmapping them; the dropped pointers are never recorded in <code>less_maps[]</code>/<code>less_toks[]</code>, so cleanup cannot reclaim them either. All three callers invoke the void-returning <code>LESSDefer</code> in their <code>mapped != NULL</code> branch and do nothing else, assuming transfer. <code>less_nmaps</code> grows monotonically within a scan. The goal is to unmap on the full path so a scan matching &gt;1024 files stops leaking one whole-file mmap plus a ~4×filesize token buffer per file.
 </p>
@@ -39,5 +48,16 @@ Never silently drop owned resources.
 <li>Fix <code>LESS.c:47</code>: on the full path <code>FILEUnMap(mapped); if (toks[0]) u32bUnMap(toks);</code> then return.</li>
 <li>Verify under a leak build; consider raising <code>LESS_MAX_MAPS</code> or returning a status so callers can free if mid-scan accumulation past 1024 is expected.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

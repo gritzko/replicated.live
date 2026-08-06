@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-030</title>
+<title>MEM-030: servestatic leaks mmap on full conn ring (woof/CONN.c)</title>
+<meta property="og:title" content="MEM-030: servestatic leaks mmap on full conn ring (woof/CONN.c)">
+<meta property="og:description" content="servestatic maps the whole static asset via FILEMapRO and only releases it at :326 FILEUnMap. The intervening call(staticenvelope) and call(u8bFeed) feed the file-sized body into the ~3MB conn out ring; u8bFeed returns BNOROOM when ring idle &lt; body and PRO.h call() returns from servestatic before FILEUnMap, leaking one file-sized VMA plus fd per request. Repeatable and attacker-triggerable for any larger-than-ring static file, exhausting address space / fds. The goal is to never let a call() between map and unmap escape — unmap on every path.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-030.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>MEM-030: serve_static leaks mmap on full conn ring (woof/CONN.c)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>serve_static</code> maps the whole static asset via <code>FILEMapRO</code> and only releases it at <code>:326 FILEUnMap</code>. The intervening <code>call(static_envelope)</code> and <code>call(u8bFeed)</code> feed the file-sized body into the ~3MB conn out ring; <code>u8bFeed</code> returns BNOROOM when ring idle &lt; body and PRO.h <code>call()</code> returns from <code>serve_static</code> before <code>FILEUnMap</code>, leaking one file-sized VMA plus fd per request. Repeatable and attacker-triggerable for any larger-than-ring static file, exhausting address space / fds. The goal is to never let a <code>call()</code> between map and unmap escape — unmap on every path.
 </p>
@@ -39,5 +48,16 @@ Unmap on every exit.
 <li>Restructure so post-<code>FILEMapRO</code> steps unmap on every exit: <code>callsafe(..., (void)FILEUnMap(mapped))</code> for envelope+feed, or capture results then unmap unconditionally before propagating.</li>
 <li>Ensure no plain <code>call()</code> remains between <code>FILEMapRO</code> (:313) and <code>FILEUnMap</code>; re-run repro + woof tests.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

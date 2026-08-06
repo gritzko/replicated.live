@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>COMMIT-001</title>
+<title>COMMIT-001: commit: projection should surface the diff after the metadata</title>
+<meta property="og:title" content="COMMIT-001: commit: projection should surface the diff after the metadata">
+<meta property="og:description" content="be commit:?&lt;sha&gt; (keeper projector, see Projector) emits only the commit object body — headers then message — so it shows who/when/why but never what changed. git show folds the diff in; beagle keeps them split, forcing a second be diff:?&lt;sha&gt;. This ticket surfaces the diff from commit:.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/COMMIT/COMMIT-001.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,75 +16,61 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>COMMIT-001: <code>commit:</code> projection should surface the diff after the metadata</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>be commit:?&lt;sha&gt;</code> (keeper projector, see <a href="../../wiki/Projector.html">Projector</a>) emits only the commit object body — headers then message — so it shows who/when/why but never what changed.  <code>git show</code> folds the diff in; beagle keeps them split, forcing a second <code>be diff:?&lt;sha&gt;</code>.  This ticket surfaces the diff from <code>commit:</code>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>commit:</code> is keeper-owned and emits headers + message only; <code>diff:</code> is a<p>
-separate graf-owned projector. There is no single &quot;show this commit&quot; view.
-</p>
-</li>
+<li><code>commit:</code> is keeper-owned and emits headers + message only; <code>diff:</code> is a separate graf-owned projector. There is no single &quot;show this commit&quot; view.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>After the commit metadata, surface the commit's diff so <code>commit:</code> reads<p>
-like <code>git show</code>.
-</p>
-</li>
-<li><strong>Preferred:</strong> emit a navigable link to <code>diff:?&lt;sha&gt;</code> (graf's projector)<p>
-that <a href="../../wiki/Bro.html">Bro</a> can follow — keeps <code>commit:</code> single-purpose, reuses graf's diff renderer, no diff code in keeper.
-</p>
-</li>
+<li>After the commit metadata, surface the commit's diff so <code>commit:</code> reads like <code>git show</code>.</li>
+<li><strong>Preferred:</strong> emit a navigable link to <code>diff:?&lt;sha&gt;</code> (graf's projector) that <a href="../../wiki/Bro.html">Bro</a> can follow — keeps <code>commit:</code> single-purpose, reuses graf's diff renderer, no diff code in keeper.</li>
 <li>Alternative: inline graf's unified diff right after the message.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Respect projector composition and the dog boundary: keeper owns <code>commit:</code>,<p>
-graf owns <code>diff:</code>. Do NOT re-roll diff rendering inside keeper — link to (or invoke) graf's <code>diff:</code>.
-</p>
-</li>
-<li>Read-only <code>dog/HUNK</code> stream for Bro; no mutation; all four URI slots still<p>
-compose.
-</p>
-</li>
+<li>Respect projector composition and the dog boundary: keeper owns <code>commit:</code>, graf owns <code>diff:</code>. Do NOT re-roll diff rendering inside keeper — link to (or invoke) graf's <code>diff:</code>.</li>
+<li>Read-only <code>dog/HUNK</code> stream for Bro; no mutation; all four URI slots still compose.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Link vs inline: recommend the <strong>link</strong> — keeper stays diff-free, one clean<p>
-dog boundary; inlining would force keeper to call graf or duplicate diff logic. (User leaning: link.)
-</p>
-</li>
+<li>Link vs inline: recommend the <strong>link</strong> — keeper stays diff-free, one clean dog boundary; inlining would force keeper to call graf or duplicate diff logic. (User leaning: link.)</li>
 <li>Link target = <code>diff:?&lt;sha&gt;</code> for the sha the <code>commit:</code> URI resolved to.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
 <li class="done"><input type="checkbox" checked disabled> Decided: <strong>link</strong> (keeper stays diff-free).</li>
-<li class="done"><input type="checkbox" checked disabled> Localized: <code>KEEPProjCommit</code> (<code>keeper/PROJ.c</code>), <code>diff:</code> query form is the<p>
-  one that triggers graf's commit-show (<code>#</code> fragment renders empty).
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Implemented: append a <code>diff:?&lt;sha40&gt;</code> <code>U</code> tok32 click-target after the<p>
-  headers+message; Bro follows it (existing link primitive, no new dep).
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Localized: <code>KEEPProjCommit</code> (<code>keeper/PROJ.c</code>), <code>diff:</code> query form is the one that triggers graf's commit-show (<code>#</code> fragment renders empty).</li>
+<li class="done"><input type="checkbox" checked disabled> Implemented: append a <code>diff:?&lt;sha40&gt;</code> <code>U</code> tok32 click-target after the headers+message; Bro follows it (existing link primitive, no new dep).</li>
 <li class="done"><input type="checkbox" checked disabled> Test <code>test/commit/01-diff-link</code>.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>A linked diff inherits whatever <code>diff:</code> shows — now fixed for sub-pin-bump<p>
-commits by <a href="../DIFF/DIFF-001.html">DIFF-001</a> (landed <code>018a59c4</code>).
-</p>
-</li>
+<li>A linked diff inherits whatever <code>diff:</code> shows — now fixed for sub-pin-bump commits by <a href="../DIFF/DIFF-001.html">DIFF-001</a> (landed <code>018a59c4</code>).</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED <code>dac9dab7</code> — <code>commit:</code> appends a navigable <code>diff:?&lt;sha&gt;</code> link (query<p>
-form) via bro's <code>U</code> click-target; keeper gains no diff logic / no graflib dep, dog boundary intact. 289/289 green.
-</p>
-</li>
+<li>LANDED <code>dac9dab7</code> — <code>commit:</code> appends a navigable <code>diff:?&lt;sha&gt;</code> link (query form) via bro's <code>U</code> click-target; keeper gains no diff logic / no graflib dep, dog boundary intact. 289/289 green.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

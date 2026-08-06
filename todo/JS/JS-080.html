@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-080</title>
+<title>JS-080: verbs/put/put.js appendAndAssign is O(N^2) + re-rolls ulog ts</title>
+<meta property="og:title" content="JS-080: verbs/put/put.js appendAndAssign is O(N^2) + re-rolls ulog ts">
+<meta property="og:description" content="be put a b c … lowers each path arg to its own handler call, and each call's commitOps invokes appendAndAssign, which DRAINS the whole wtlog, concatenates the new rows, and rewrites the entire file (temp + fsync + rename) — once per arg. A wide arg list is quadratic plus N temp-file cycles. It also HAND-ROLLS ulog's monotonic-stamp policy (nowAfter(tail) then +1 per row) instead of calling the shared writer, so any future ts-policy change diverges silently. ulog.appendInPlace/feedRows exist for exactly this. Output is correct today (put rows carry no per-row ts in the tree), so the divergence is latent. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-080.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,91 +15,68 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-080 <a href="./MED.html">MED</a>: <code>verbs/put/put.js</code> <code>appendAndAssign</code> is O(N^2) + re-rolls ulog ts</h1>
+<h1>JS-080: <code>verbs/put/put.js</code> <code>appendAndAssign</code> is O(N^2) + re-rolls ulog ts</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>be put a b c …</code> lowers each path arg to its own handler call, and each call's <code>commitOps</code> invokes <code>appendAndAssign</code>, which DRAINS the whole wtlog, concatenates the new rows, and rewrites the entire file (temp + fsync + rename) — once per arg. A wide arg list is quadratic plus N temp-file cycles. It also HAND-ROLLS ulog's monotonic-stamp policy (<code>nowAfter(tail)</code> then <code>+1</code> per row) instead of calling the shared writer, so any future ts-policy change diverges silently. <code>ulog.appendInPlace</code>/<code>feedRows</code> exist for exactly this. Output is correct today (put rows carry no per-row ts in the tree), so the divergence is latent. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>verbs/put/put.js:152</code> <code>commitOps</code> calls `appendAndAssign(repo.bePath, rows,<p>
-floorTs)` per non-silent arg-batch.
-</p>
-</li>
-<li><code>:170-174</code> <code>appendAndAssign</code> re-reads ALL old rows via <code>ulog.each</code> into<p>
-<code>old[]</code> every call (the O(N) drain).
-</p>
-</li>
-<li><code>:175-184</code> re-derives <code>tail</code>, <code>ulog.nowAfter(tail)</code>, the <code>floorTs</code> floor,<p>
-and the per-row <code>ts = ts + 1n</code> bump — a copy of <code>ulog.feedRows</code>/<code>append</code>.
-</p>
-</li>
-<li><code>:185</code> <code>ulog.write(bePath, old.concat(fresh))</code> rewrites the whole ULOG<p>
-(temp <code>_stage</code> + <code>io.rename</code>) — the O(N) write, paid once per arg → O(N^2).
-</p>
-</li>
-<li><code>shared/ulog.js:181</code> <code>appendInPlace(path, rows, ts)</code> books ONE container and<p>
-feeds at the watermark (no whole-file drain); <code>:190</code> <code>feedRows</code> owns the <code>nowAfter</code>+floor+<code>+1</code> stamp policy <code>appendAndAssign</code> re-implements.
-</p>
-</li>
+<li><code>verbs/put/put.js:152</code> <code>commitOps</code> calls <code>appendAndAssign(repo.bePath, rows, floorTs)</code> per non-silent arg-batch.</li>
+<li><code>:170-174</code> <code>appendAndAssign</code> re-reads ALL old rows via <code>ulog.each</code> into <code>old[]</code> every call (the O(N) drain).</li>
+<li><code>:175-184</code> re-derives <code>tail</code>, <code>ulog.nowAfter(tail)</code>, the <code>floorTs</code> floor, and the per-row <code>ts = ts + 1n</code> bump — a copy of <code>ulog.feedRows</code>/<code>append</code>.</li>
+<li><code>:185</code> <code>ulog.write(bePath, old.concat(fresh))</code> rewrites the whole ULOG (temp <code>_stage</code> + <code>io.rename</code>) — the O(N) write, paid once per arg → O(N^2).</li>
+<li><code>shared/ulog.js:181</code> <code>appendInPlace(path, rows, ts)</code> books ONE container and feeds at the watermark (no whole-file drain); <code>:190</code> <code>feedRows</code> owns the <code>nowAfter</code>+floor+<code>+1</code> stamp policy <code>appendAndAssign</code> re-implements.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Staging a put no longer rewrites the entire wtlog per arg; one open<p>
-container (or one streaming append) carries the batch.
-</p>
-</li>
-<li>The ts policy routes through <code>ulog</code> (<code>feedRows</code>/<code>appendInPlace</code>), not a<p>
-second hand-rolled copy in put.js.
-</p>
-</li>
+<li>Staging a put no longer rewrites the entire wtlog per arg; one open container (or one streaming append) carries the batch.</li>
+<li>The ts policy routes through <code>ulog</code> (<code>feedRows</code>/<code>appendInPlace</code>), not a second hand-rolled copy in put.js.</li>
 <li>Still return the ASSIGNED ts per row (the restamp at <code>:159-160</code> reads it).</li>
 <li>A repro asserting the staged ts == the restamp ts under a multi-arg put.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li><code>verbs/put/put.js</code> + maybe a small <code>shared/ulog.js</code> helper; keep the row<p>
-shapes (<code>put &lt;path&gt;</code> / <code>put &lt;path&gt;#&lt;dst&gt;</code>) and <code>floorTs</code> cohort behaviour.
-</p>
-</li>
+<li><code>verbs/put/put.js</code> + maybe a small <code>shared/ulog.js</code> helper; keep the row shapes (<code>put &lt;path&gt;</code> / <code>put &lt;path&gt;#&lt;dst&gt;</code>) and <code>floorTs</code> cohort behaviour.</li>
 <li>libabc+libdog ONLY; byte-equivalent wtlog to native <code>be put a b c</code>.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Either (a) call <code>ulog.appendInPlace</code> once for the whole batch and re-read<p>
-the tail to recover assigned ts, or (b) add an <code>ulog</code> helper that feeds and RETURNS the assigned ts array (the one bit <code>appendAndAssign</code> needs that <code>feedRows</code> does not expose) — preferred, kills the duplication outright.
-</p>
-</li>
+<li>Either (a) call <code>ulog.appendInPlace</code> once for the whole batch and re-read the tail to recover assigned ts, or (b) add an <code>ulog</code> helper that feeds and RETURNS the assigned ts array (the one bit <code>appendAndAssign</code> needs that <code>feedRows</code> does not expose) — preferred, kills the duplication outright.</li>
 <li><code>appendAndAssign</code> then becomes a thin wrapper over the shared helper.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/put/*</code>: multi-arg <code>put a b c</code> asserts each file's<p>
- restamp mtime == its staged row ts, and the wtlog is byte-identical to  native; instrument to confirm ONE write, not N.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Add <code>ulog.feedRowsAssign</code> (feed + return assigned ts) or reuse<p>
- <code>appendInPlace</code>; route <code>appendAndAssign</code> through it.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/put/*</code>: multi-arg <code>put a b c</code> asserts each file's restamp mtime == its staged row ts, and the wtlog is byte-identical to native; instrument to confirm ONE write, not N.</li>
+<li class="open"><input type="checkbox" disabled> Add <code>ulog.feedRowsAssign</code> (feed + return assigned ts) or reuse <code>appendInPlace</code>; route <code>appendAndAssign</code> through it.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> <code>appendInPlace</code> does not currently return assigned ts — needs the small<p>
- helper or a tail re-read; pick one.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> <code>appendInPlace</code> does not currently return assigned ts — needs the small helper or a tail re-read; pick one.</li>
 </ul>
 <ul>
-<li>2026-07-07 audit: STILL OPEN, but the proposed fix API IS GONE — <a href="./JSQUE-020.html">JSQUE-020</a> <code>928aaad5</code><p>
-RETIRED <code>ulog.appendInPlace</code>/<code>feedRows</code> with <code>core/job.js</code> (<code>shared/ulog.js:246</code> note). <code>verbs/put/put.js:198 appendAndAssign</code> still drains all rows (<code>ulog.each:200</code>) + rewrites the whole file (<code>ulog.write:213</code>), called per arg-batch (<code>:449,:502,:660,:681</code>). The fix must re-introduce a streaming append helper (they no longer exist) or add one to ulog.js.
-</p>
-</li>
+<li>2026-07-07 audit: STILL OPEN, but the proposed fix API IS GONE — <a href="./JSQUE-020.html">JSQUE-020</a> <code>928aaad5</code> RETIRED <code>ulog.appendInPlace</code>/<code>feedRows</code> with <code>core/job.js</code> (<code>shared/ulog.js:246</code> note). <code>verbs/put/put.js:198 appendAndAssign</code> still drains all rows (<code>ulog.each:200</code>) + rewrites the whole file (<code>ulog.write:213</code>), called per arg-batch (<code>:449,:502,:660,:681</code>). The fix must re-introduce a streaming append helper (they no longer exist) or add one to ulog.js.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>(pending)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

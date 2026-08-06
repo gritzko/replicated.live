@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ABC-014</title>
+<title>ABC-014: PACK/PAGE/SLOG/NEST stores: untrusted trailer, self-corruption</title>
+<meta property="og:title" content="ABC-014: PACK/PAGE/SLOG/NEST stores: untrusted trailer, self-corruption">
+<meta property="og:description" content="Store-format batch (2026-07-07 review). A crafted PACK trailer drives pointer construction via a wrapping u64; PACKClose leaks everything on an ENOSPC; the SLOG writer can emit skip records its own reader cannot expand; NESTFeed keeps copying after its mark log has eaten the room it checked.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/ABC/ABC-014.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,88 +15,72 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>ABC-014: <a href="./HIGH.html">HIGH</a> PACK/PAGE/SLOG/NEST stores: untrusted trailer, self-corruption</h1>
+<h1>ABC-014: PACK/PAGE/SLOG/NEST stores: untrusted trailer, self-corruption</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
 <p>
 Store-format batch (2026-07-07 review). A crafted PACK trailer drives pointer construction via a wrapping u64; PACKClose leaks everything on an ENOSPC; the SLOG writer can emit skip records its own reader cannot expand; NESTFeed keeps copying after its mark log has eaten the room it checked.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>PACK.c:189-216</code> PACKOpen — <code>p-&gt;datalen = trailer[0]</code> (untrusted);<p>
-<code>datalen</code> near u64max wraps <code>(datalen + PAGESIZE - 1)</code> → tiny npages passes the <code>idxsize == PACKIdxSize(npages)</code> check with a matching crafted idxsize; then <code>buf[2] = buf[0] + datalen</code> is a wild DATA terminator — consumers read far OOB. Bound datalen against file size.
-</p>
-</li>
-<li><code>PACK.c:120-144</code> PACKClose — <code>call(PACKFlush)</code>, <code>call(PACKWritePage)</code>,<p>
-two <code>test(w == ...)</code> all early-return before cleanup: ENOSPC at close leaks fd + PAGE mapping + index mmap. PACKAbort exists; Close doesn't use the wrapper+worker pattern (abc.mkd §Resource lifecycle).
-</p>
-</li>
-<li><code>SLOG.c:22-27</code> vs <code>SLOG.c:117</code> — writer clamps the flush count to 64<p>
-only when stack len ≥ 128, so 65..127-offset 'k' records are emittable; reader expands into <code>a_pad(u64, tmp, 64)</code> → NOROOM on an intact log. Writer cap and reader pad must agree.
-</p>
-</li>
-<li><code>SLOG.c:214-218</code> <code>SLOGu8sFeedSkips</code> — reclen byte stored without a room<p>
-check: if ZINTu8sFeedBlocked fills the 1024 pad EXACTLY, the store is a 1-byte OOB stack write and fullbody<a href="./1.html">1</a> points past the pad. Overfill by ≥1 fails safely; only exact fill is unsafe.
-</p>
-</li>
-<li><code>SLOG.h:88</code> vs <code>SLOG.c:186</code> — decl says <code>u8gp data</code>, def says `u8sp<p>
-into<code>; compiles only because both erase to u8**. SLOG.md still documents 'i'/SLOG_I and a </code>$cmpfn<code> seek; code has 'c'/SLOG_C + </code>u8zs`.
-</p>
-</li>
-<li><code>NEST.c:96-115</code> NESTFeed — one up-front <code>$len(idle) &lt; $len(insert)</code><p>
-check, then per-char unchecked copies while <code>NESTaddvar</code> shrinks idle<a href="./1.html">1</a> by 16 per variable (same cell as log<a href="./0.html">0</a>): literals + 16*nvars over IDLE smashes stored mark128s; corrupted marks then drive NESTRenderTree's a_part whose bound check is assert-only (NDEBUG → wild-length OOB read). Once crossed, <code>$size(idle)</code> underflows and the 16-byte guard stops guarding.
-</p>
-</li>
-<li><code>NEST.h:16</code> — <code>NESTInsert</code> declared, defined nowhere (INDEX.md:374<p>
-advertises it): link error for any caller. <code>NEST.c:26</code> mark128 stores are 16-byte-strided down from an unaligned buffer end — misaligned u64 stores, UBSan/strict-alignment trap.
-</p>
-</li>
-<li><code>PAGE.c:235/253</code> PAGEStreamFd — returns OK on EAGAIN with <code>need</code><p>
-unmet: EnsureIdle/EnsureData report success with a false postcondition.
-</p>
-</li>
+<li><code>PACK.c:189-216</code> PACKOpen — <code>p-&gt;datalen = trailer[0]</code> (untrusted); <code>datalen</code> near u64max wraps <code>(datalen + PAGESIZE - 1)</code> → tiny npages passes the <code>idxsize == PACKIdxSize(npages)</code> check with a matching crafted idxsize; then <code>buf[2] = buf[0] + datalen</code> is a wild DATA terminator — consumers read far OOB. Bound datalen against file size.</li>
+<li><code>PACK.c:120-144</code> PACKClose — <code>call(PACKFlush)</code>, <code>call(PACKWritePage)</code>, two <code>test(w == ...)</code> all early-return before cleanup: ENOSPC at close leaks fd + PAGE mapping + index mmap. PACKAbort exists; Close doesn't use the wrapper+worker pattern (abc.mkd §Resource lifecycle).</li>
+<li><code>SLOG.c:22-27</code> vs <code>SLOG.c:117</code> — writer clamps the flush count to 64 only when stack len ≥ 128, so 65..127-offset 'k' records are emittable; reader expands into <code>a_pad(u64, tmp, 64)</code> → NOROOM on an intact log. Writer cap and reader pad must agree.</li>
+<li><code>SLOG.c:214-218</code> <code>SLOGu8sFeedSkips</code> — reclen byte stored without a room check: if ZINTu8sFeedBlocked fills the 1024 pad EXACTLY, the store is a 1-byte OOB stack write and fullbody<a href="./1.html">1</a> points past the pad. Overfill by ≥1 fails safely; only exact fill is unsafe.</li>
+<li><code>SLOG.h:88</code> vs <code>SLOG.c:186</code> — decl says <code>u8gp data</code>, def says <code>u8sp into</code>; compiles only because both erase to u8**. SLOG.md still documents 'i'/SLOG_I and a <code>$cmpfn</code> seek; code has 'c'/SLOG_C + <code>u8zs</code>.</li>
+<li><code>NEST.c:96-115</code> NESTFeed — one up-front <code>$len(idle) &lt; $len(insert)</code> check, then per-char unchecked copies while <code>NESTaddvar</code> shrinks idle<a href="./1.html">1</a> by 16 per variable (same cell as log<a href="./0.html">0</a>): literals + 16*nvars over IDLE smashes stored mark128s; corrupted marks then drive NESTRenderTree's a_part whose bound check is assert-only (NDEBUG → wild-length OOB read). Once crossed, <code>$size(idle)</code> underflows and the 16-byte guard stops guarding.</li>
+<li><code>NEST.h:16</code> — <code>NESTInsert</code> declared, defined nowhere (INDEX.md:374 advertises it): link error for any caller. <code>NEST.c:26</code> mark128 stores are 16-byte-strided down from an unaligned buffer end — misaligned u64 stores, UBSan/strict-alignment trap.</li>
+<li><code>PAGE.c:235/253</code> PAGEStreamFd — returns OK on EAGAIN with <code>need</code> unmet: EnsureIdle/EnsureData report success with a false postcondition.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Repro-first: crafted-trailer PACKOpen (fuzz corpus entry), 65-offset<p>
-SLOG seek, exact-fill FeedSkips, NESTFeed template sized to overrun.
-</p>
-</li>
-<li>Validate datalen; wrapper+worker Close; agree the 64 cap; room-check<p>
-the reclen store; re-check room in the NESTFeed loop (or precompute literal+mark cost); define or delete NESTInsert.
-</p>
-</li>
+<li>Repro-first: crafted-trailer PACKOpen (fuzz corpus entry), 65-offset SLOG seek, exact-fill FeedSkips, NESTFeed template sized to overrun.</li>
+<li>Validate datalen; wrapper+worker Close; agree the 64 cap; room-check the reclen store; re-check room in the NESTFeed loop (or precompute literal+mark cost); define or delete NESTInsert.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>PACK/SLOG are on-disk formats — readers must keep accepting existing<p>
-valid files; only writer caps and validation change.
-</p>
-</li>
+<li>PACK/SLOG are on-disk formats — readers must keep accepting existing valid files; only writer caps and validation change.</li>
 <li>Review-gated abc/.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open)</li>
+<li>No PACK fuzz target exists (only SLOGfuzz) — the crafted trailer landed as a TEST (PACKtestTrailerWrap), per the ticket's conditional.</li>
+<li>NESTInsert decl DELETED (never defined, INDEX.md updated).</li>
+<li>Misaligned mark128 store → memcpy form.</li>
+<li>SLOG exact-fill got a guard only (test 4 impractical to hand- craft); the other three repros verified discriminating by revert-rebuild-fail-restore.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> repros: PACK trailer fuzz, SLOG 65-offset, exact-fill, NEST overrun</li>
-<li class="open"><input type="checkbox" disabled> PACKOpen datalen bound; PACKClose try/done cleanup; EINTR (see<p>
- <a href="ABC-013.html">ABC-013</a> sweep)
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> SLOG writer clamp == reader pad; reclen room check; header/doc sync</li>
-<li class="open"><input type="checkbox" disabled> NESTFeed room accounting; NESTInsert define/delete; mark alignment</li>
-<li class="open"><input type="checkbox" disabled> PAGEStreamFd EAGAIN contract</li>
+<li class="done"><input type="checkbox" checked disabled> repros: PACKtestTrailerWrap (OK pre-fix → PACKCORRUPT), SLOG10 (65..127-offset), NESTtest3 (overrun returned OK); exact-fill = guard only</li>
+<li class="done"><input type="checkbox" checked disabled> PACKOpen datalen/npages bounds vs file size; PACKClose split into wrapper+worker (PACKCloseWrite), /dev/full leak test; EINTR left to <a href="ABC-013.html">ABC-013</a></li>
+<li class="done"><input type="checkbox" checked disabled> SLOG writer clamp count&gt;64 == reader pad; reclen room check; SLOG.h u8sp decl fixed; SLOG.md 'c'/SLOG_C + u8zs sync</li>
+<li class="done"><input type="checkbox" checked disabled> NESTFeed per-char room re-check both copy sites; NESTInsert deleted; mark128 memcpy</li>
+<li class="done"><input type="checkbox" checked disabled> PAGEStreamFd EAGAIN → fail(FILEAGAIN) both paths</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>OVERTURNED 2026-07-19 → <a href="/todo/ABC/ABC-020.html">ABC-020</a>: close-after-mmap is unviable — the fd number is the FILE_WANT_BUFS registry key (FILE.c:706, FILE.h:662), early close collides reused fds; the real fix is an explicit unmap binding wired into abc.close</del></li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>(none)</li>
+<li>WITH_ASAN unusable on the musl/Alpine host (libasan undefined reference, pre-existing) — ran without ASAN.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(open)</li>
+<li>UNCOMMITTED in work/ABC-014 per the no-post order: 11 mod (~+224/-64 incl 3 repro tests), suite 46/46; decoders still accept existing valid files (SLOG0-9, PACK, NEST green); orchestrator re-verified. Suggested commit: <code>ABC-014: store trailer/cap validation</code>. NOTE worktree is behind 1: the tracked ///jab/dog/abc/ ref advanced (sibling ABC posts share the store).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

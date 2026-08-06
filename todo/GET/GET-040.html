@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GET-040</title>
+<title>GET-040: non-force get DELETES untracked files — only get! may clean</title>
+<meta property="og:title" content="GET-040: non-force get DELETES untracked files — only get! may clean">
+<meta property="og:description" content="A plain (non-force) jab get must MERGE dirty tracked files and LEAVE UNTRACKED files alone; only jab get! may clean the worktree (GET wiki: &quot;be get! resets the worktree to a clean state, all local changes discarded&quot;). It does not: a non-force get that recurses into a submodule RESET the sub and SILENTLY DELETED every UNTRACKED file in it. Verified this session: in a beagle-ext worktree, test/ is the beagle-ext-tests store-backed submodule; a non-force jab get swept 7 dirs of untracked, newly-authored test files (left empty), while tracked files survived — silent data loss. Suspected locus: get's del-sweep / prune (verbs/get/get.js fanoutWholeTree + delSweep) unlinks worktree paths absent from newTree WITHOUT checking they were TRACKED (in oldTree), and/or the submodule recursion does a wholesale clean re-checkout of the sub (should be read-only, DIS-058). JS only (be/, via jab). Evidence: cost the GIT-016 T1–T4 tests. Method: work; siblings JGET-001/DIS-058/JGET-013.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-040.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>GET-040 <a href="./JS.html">JS</a> <a href="./HIGH.html">HIGH</a>: non-force <code>get</code> DELETES untracked files — only <code>get!</code> may clean</h1>
+<h1>GET-040: non-force <code>get</code> DELETES untracked files — only <code>get!</code> may clean</h1>
+<div>
+<p>
+Now: DONT
+</p>
+</div>
 <p>
 A plain (non-force) <code>jab get</code> must MERGE dirty tracked files and LEAVE UNTRACKED files alone; only <code>jab get!</code> may clean the worktree (<a href="../../wiki/GET.html">GET</a> wiki: &quot;<code>be get!</code> resets the worktree to a clean state, all local changes discarded&quot;). It does not: a non-force <code>get</code> that recurses into a submodule RESET the sub and SILENTLY DELETED every UNTRACKED file in it. Verified this session: in a <code>beagle-ext</code> worktree, <code>test/</code> is the <code>beagle-ext-tests</code> store-backed submodule; a non-force <code>jab get</code> swept 7 dirs of untracked, newly-authored test files (left empty), while tracked files survived — silent data loss. Suspected locus: get's del-sweep / prune (<code>verbs/get/get.js</code> <code>fanoutWholeTree</code> + <code>delSweep</code>) unlinks worktree paths absent from <code>newTree</code> WITHOUT checking they were TRACKED (in <code>oldTree</code>), and/or the submodule recursion does a wholesale clean re-checkout of the sub (should be read-only, <a href="../DIS/DIS-058.html">DIS-058</a>). JS only (<code>be/</code>, via <code>jab</code>). Evidence: cost the <a href="../GIT/GIT-016.html">GIT-016</a> T1–T4 tests. Method: <a href="../../meta/work.html">work</a>; siblings <a href="../JGET/JGET-001.html">JGET-001</a>/<a href="../DIS/DIS-058.html">DIS-058</a>/<a href="../JGET/JGET-013.html">JGET-013</a>.
 </p>
@@ -60,5 +69,26 @@ A plain (non-force) <code>jab get</code> must MERGE dirty tracked files and LEAV
 <li>Repro/regression <code>test/sub/untracked/run.sh</code> (two arms: non-force preserve, force clean-reset).</li>
 <li>Audit 2026-07-07: guards verified present in the current tree (checkout.js/submount.js as of <code>50e90012</code>); suite not re-run (read-only audit) — green per <code>d80bdb5c</code>.</li>
 </ul>
+<h2>Regression 2026-07-31 (incident <code>//DIS-082-jab</code>, evidence tree frozen)</h2>
+<ul>
+<li>A 10:59 <code>post ?#5d31a147</code> moved the base, so the 11:32 bare <code>jab get '///jab/'</code> ran the DIVERGED path; <code>verbs/get/get.js</code> treats ANY diverged non-force get as a <a href="/todo/GET/GET-048.html">GET-048</a> switch-reset — deletes ours-only files, resurrects ours-deletes, clean-overwrites clean-vs-local-head files to theirs. Correct for an explicit <code>?br</code> switch, data loss for a track UPDATE. The 0092271c guards are intact and were never the locus.</li>
+<li>FIX STAGED in <code>//GET-040</code> (get.js only, NOT landed): a diverged non-force TRACK UPDATE (<code>trackUpdate</code> flag: bare get, wt-operand/cross-source update, track re-fetch) 3-way merges against the MERGE-BASE tree — local-only adds stay, ours-deleted+theirs-unchanged stays deleted, theirs-unchanged keeps ours, theirs' changes weave. Explicit <code>?br</code>/<code>?sha</code>/pin switches keep GET-048 reset.</li>
+<li>Also hardened <code>oldTipOf()</code> (get.js:145): only get/post rows move the base — a staged sub pin <code>put dog#&lt;sha&gt;</code> could read back as the parent's old tip.</li>
+<li>Repro <code>test/get/divergent-track-update/run.sh</code> RED pre-fix, GREEN after; ctest 328/328 (orchestrator re-ran the divergent bucket 6/6).</li>
+<li>RECOVERY: commit <code>5d31a147</code> is intact in the main jab store (<code>jab cat</code> verified cfold.hpp, test/weave.js, test/bass.js bytes; weave.hpp correctly absent); dog sub commit <code>e118a411</code> + pin and all 17 put/delete rows still sit in the incident wt's ulog — that ground is <a href="/todo/GET/GET-053.html">GET-053</a>'s.</li>
+<li>RULING NEEDED before merge: <a href="/todo/GET/GET-053.html">GET-053</a> rules bare get FF-only, under which a DIVERGED bare get would REFUSE, not merge — accept this 3-way merge now or hold for the FF-only redesign.</li>
+<li>Suggested commit: <code>GET-040: diverged track update merges vs merge base, never resets</code></li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

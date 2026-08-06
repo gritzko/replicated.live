@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>POST-006</title>
+<title>POST-006: be post POSTCFLCT false-fires on conflict-marker strings in tracked source comments/literals</title>
+<meta property="og:title" content="POST-006: be post POSTCFLCT false-fires on conflict-marker strings in tracked source comments/literals">
+<meta property="og:description" content="be post scans staged tracked files for WEAVE conflict markers (&lt;&lt;&lt;&lt; / |||| / &gt;&gt;&gt;&gt;) and refuses with POSTCFLCT if a full triple is found. But a source file that legitimately CONTAINS those marker strings — e.g. sniff/PATCH.c, the conflict-handling code itself, whose comments show &lt;&lt;&lt;&lt;theirs||||ours&gt;&gt;&gt;&gt; at :339-340 — false-fires, blocking the commit and forcing be post --force. Hit this session committing the picked-header move: the triple is documentation, not an unresolved merge. Resolution: best-effort detect the real WEAVE output shape so obvious doc/literal markers don't refuse; where a file genuinely contains a full conflict-shaped block we cannot disambiguate, be post! (the bang/--force override, DIS-030/031) is the sanctioned escape — accepted, not a bug. See POST, PATCH, CLAUDE.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/POST/POST-006.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -40,40 +44,33 @@ Best-effort detect the real WEAVE output shape; where undetectable, <code>be pos
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Partial mitigation already in-tree: <code>SNIFFHasConflictMarker</code> (<code>sniff/PATCH.c:397</code>)<p>
-now requires the ordered open→mid→close shape with nested-open abort, so a BARE <code>&lt;&lt;&lt;&lt;</code> / <code>&gt;&gt;&gt;&gt;</code> in prose no longer fires. An inline full triple in a comment (e.g. PATCH.c's own doc line <code>&lt;&lt;&lt;&lt;theirs||||ours&gt;&gt;&gt;&gt;</code> at <code>PATCH.c:385</code>) STILL fires — confirmed live 2026-06-27 (the <a href="POST-023.html">POST-023</a> land needed <code>be post!</code>).
-</p>
-</li>
-<li>New lever since filing: DIS-046 (<code>6d7ee04f</code>) sizes REAL WEAVE fences ONE LONGER<p>
-than the longest <code>&lt;</code>/<code>|</code>/<code>&gt;</code> run in the whole merged content (<code>graf/WEAVE.c::weave_fence_run_max</code>, :1145-1215). A genuine unresolved conflict in a file quoting a 4-char triple therefore carries fences ≥5 — the post pre-flight scan can use that invariant to clear doc/literal triples.
-</p>
-</li>
+<li>Partial mitigation already in-tree: <code>SNIFFHasConflictMarker</code> (<code>sniff/PATCH.c:397</code>) now requires the ordered open→mid→close shape with nested-open abort, so a BARE <code>&lt;&lt;&lt;&lt;</code> / <code>&gt;&gt;&gt;&gt;</code> in prose no longer fires. An inline full triple in a comment (e.g. PATCH.c's own doc line <code>&lt;&lt;&lt;&lt;theirs||||ours&gt;&gt;&gt;&gt;</code> at <code>PATCH.c:385</code>) STILL fires — confirmed live 2026-06-27 (the <a href="POST-023.html">POST-023</a> land needed <code>be post!</code>).</li>
+<li>New lever since filing: DIS-046 (<code>6d7ee04f</code>) sizes REAL WEAVE fences ONE LONGER than the longest <code>&lt;</code>/<code>|</code>/<code>&gt;</code> run in the whole merged content (<code>graf/WEAVE.c::weave_fence_run_max</code>, :1145-1215). A genuine unresolved conflict in a file quoting a 4-char triple therefore carries fences ≥5 — the post pre-flight scan can use that invariant to clear doc/literal triples.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first (<code>test/post/</code>): stage a <code>.c</code> with an inline <code>&lt;&lt;&lt;&lt;a||||b&gt;&gt;&gt;&gt;</code><p>
- triple in a <code>//</code> comment → <code>be post</code> must NOT refuse; a WEAVE-shaped  unresolved block (DIS-046-sized fences) still refuses. RED today.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Teach the pre-flight scan (<code>sniff/POST.c:1288</code> / <code>:2755</code>) the DIS-046<p>
- invariant: a real conflict's fence run is strictly longer than every other  marker run in the file — clear a triple whose fence length ties the file max.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Keep <code>be post!</code> as the sanctioned escape for the residual undecidable case;<p>
- don't regress <code>test/post/42-refuse-atomic-store</code> (POST-017 atomicity).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first (<code>test/post/</code>): stage a <code>.c</code> with an inline <code>&lt;&lt;&lt;&lt;a||||b&gt;&gt;&gt;&gt;</code> triple in a <code>//</code> comment → <code>be post</code> must NOT refuse; a WEAVE-shaped unresolved block (DIS-046-sized fences) still refuses. RED today.</li>
+<li class="open"><input type="checkbox" disabled> Teach the pre-flight scan (<code>sniff/POST.c:1288</code> / <code>:2755</code>) the DIS-046 invariant: a real conflict's fence run is strictly longer than every other marker run in the file — clear a triple whose fence length ties the file max.</li>
+<li class="open"><input type="checkbox" disabled> Keep <code>be post!</code> as the sanctioned escape for the residual undecidable case; don't regress <code>test/post/42-refuse-atomic-store</code> (POST-017 atomicity).</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>None. (The old top-board line pointed at <a href="../DIS/DIS-040.html">DIS-040</a>; the DIS-046 fence sizing is<p>
-the piece that actually unblocks a precise fix.)
-</p>
-</li>
+<li>None. (The old top-board line pointed at <a href="../DIS/DIS-040.html">DIS-040</a>; the DIS-046 fence sizing is the piece that actually unblocks a precise fix.)</li>
 </ul>
 <h2>Outcome</h2>
 <p>
 (pending)
 </p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

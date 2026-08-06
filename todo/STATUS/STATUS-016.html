@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STATUS-016: patch column stays lit after the consuming post — clean tree sums &quot;4 patch&quot;</title>
+<meta property="og:title" content="STATUS-016: patch column stays lit after the consuming post — clean tree sums &quot;4 patch&quot;">
+<meta property="og:description" content="Incident 2026-07-19, work/WORK-004 (spine 85587f18 → d0a4784e → f168d856, jab diff EMPTY, byte-clean): jab status | cat renders .vv. view/bro.js, .vv. views/work/work.js, .vv. test, ..v. views/diff/diff.js, summary 3 base, 4 patch (ahead 2). Per /wiki/Status the 3rd column is &quot;refs absorbed by PATCH since the base, pending for the next post&quot; — this wt's only patch row (patch #896ed3d8) was consumed by the very next post (?#d0a4784e), then another post followed; nothing is pending, the patch column must be all-. and the summary patch segment omitted. gritzko read the clean tree's &quot;patches applied&quot; summary as dirt — exactly the misread the quad was meant to kill.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/STATUS/STATUS-016.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>STATUS-016: patch column stays lit after the consuming post — clean tree sums &quot;4 patch&quot;</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+Incident 2026-07-19, work/WORK-004 (spine <code>85587f18 → d0a4784e → f168d856</code>, <code>jab diff</code> EMPTY, byte-clean): <code>jab status | cat</code> renders <code>.vv. view/bro.js</code>, <code>.vv. views/work/work.js</code>, <code>.vv. test</code>, <code>..v. views/diff/diff.js</code>, summary <code>3 base, 4 patch  (ahead 2)</code>. Per <a href="/wiki/Status.html">Status</a> the 3rd column is &quot;refs absorbed by PATCH since the base, pending for the next post&quot; — this wt's only patch row (<code>patch #896ed3d8</code>) was consumed by the very next post (<code>?#d0a4784e</code>), then another post followed; nothing is pending, the patch column must be all-<code>.</code> and the summary patch segment omitted. gritzko read the clean tree's &quot;patches applied&quot; summary as dirt — exactly the misread the quad was meant to kill.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The wtlog rows (work/WORK-004/.be): <code>... patch #896ed3d8 → put view/bro.js → put views/work/work.js → put test#31a0c06a → post ?#d0a4784e → put views/work/work.js → put test#882cc3ed → post ?#85587f18</code>. Status still buckets 4 files into the patch column two posts later.
+</p>
+<ul>
+<li>Control: work/WORK-005 (puts+post, NO patch row; spine <code>2e02815a → f168d856</code>, diff empty) shows <code>.v.. test</code>, <code>.v.. view/bro.js</code>, <code>.v.. view/render.js</code>, <code>.v.. views/work/work.js</code>, <code>4 base (ahead 1)</code> — per-spec (committed-ahead reads <code>.v..</code>), so the base axis is fine; only the patch axis leaks.</li>
+<li>False member: <code>views/diff/diff.js</code> reads <code>..v.</code> yet was NOT in <code>#896ed3d8</code>'s delta AND is byte-identical to base (verified via <code>jab cat 'views/diff/diff.js?f168d856'</code>). It was checked out by the divergent <code>get ///be/#f168d856</code> minutes before the patch — suspect the DIS-057 mtime stamp-band consult (shared/classify.js:180-192 patchStamps, mtime→{pat,mrg,cnf} buckets) catching a bystander mtime, or the same stale-scope walk.</li>
+<li>In-scope-ness is the shared suspect: classify/patchStamps read &quot;each in-scope patch row&quot; — the scope test apparently does not stop at a consuming <code>post</code> row, so the band outlives the post.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+A patch row consumed by a subsequent post contributes NOTHING to status: no patch-column <code>v</code>, no <code>N patch</code> summary segment; byte-parity with a never-patched wt otherwise.
+</p>
+<ul>
+<li>Repro red-first in the test/status layout: patch a behind-commit, post, assert the post-post status has an empty patch column (and the pre-post status keeps it lit — that leg stays green).</li>
+<li>The <code>views/diff/diff.js</code> bystander leg: a file checked out by get, untouched by the patch, byte-equal to base must read <code>....</code> (omitted) — pin it, whatever the mechanism turns out to be.</li>
+<li><a href="/todo/STATUS/STATUS-012.html">STATUS-012</a> pinned the COMMIT-row leg (&quot;a POSTed absorption is not listed at all&quot;); this ticket is the FILE-column + summary leg of the same consumption rule; <a href="/todo/STATUS/STATUS-013.html">STATUS-013</a> is the umbrella for the between-patch-and-post cases — link, don't overlap.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Display/classification only — no wtlog/store writes; status stays read-only (STATUS-013 constraint).</li>
+<li>The quad vocabulary and column semantics are <a href="/wiki/Status.html">Status</a> — normative, not up for reinterpretation here.</li>
+<li>mtime-stamp mechanics (DIS-057 bands) are shared with the patch verb — do not change the stamping side, only the reading scope.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>ROOT CAUSE is the patch-scope FLOOR, not the stamp band.  <code>wtlog.boundaries().patch</code> (via <code>patchFloor</code>) advanced only on a GET or a <strong>commit-all</strong> POST — a SELECTIVE post (a <code>put</code> staged before it, as WORK-004 has: <code>patch → put… → post</code>) did NOT advance it, so the consumed <code>patch</code> row stayed in scope.  <code>patchTheirs()</code> then kept feeding the absorbed theirs tree to <code>quad.patchUlog</code>, lighting column 3 for every path where theirs ≠ root (incl. the byte-clean <code>views/diff/diff.js</code> bystander).  The <code>..v.</code>/<code>.vv.</code> are ALL the theirs-tree comparison; the DIS-057 stamp band was NOT the culprit (it rides the wt column, and WORK-004's wt is clean).</li>
+<li>FIX (read-scope only, <a href="/shared/wtlog">wtlog</a> <code>boundaries</code>): the patch floor = the latest get/post ts, same as <code>pd</code>.  Justified by <a href="/wiki/PATCH.html">PATCH</a> &quot;records the absorbed sha(s) … for the next POST to consume&quot; + verbs/post/post.js:809-816,955 — EVERY committing post folds ALL in-scope <code>patchOrigins()</code> into the commit's parents (no selective/narrow guard), so any post consumes the patches.  Bare-advance / <code>//wt</code> / host posts write NO local post row (they <code>advanceRef</code>/append to the target's bePath), so a local post row is always a committing post → safe to end the scope there.  Removed the now-dead <code>postIsCommitAll</code> helper; <code>pd</code> and <code>patch</code> are one ts.</li>
+<li>Patch verb / stamping side UNCHANGED; status stays read-only.  STATUS-012 fixed the COMMIT-row leg, this fixes the FILE-column + summary leg of the same consumption rule.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./x.html">x</a> red repro: patch → put → post → status still lights the patch column (test/status/patchpost)</li>
+<li><a href="./x.html">x</a> scope fix: patch rows (and their stamp bands, via <code>patchFloor</code>) end at the consuming post</li>
+<li><a href="./x.html">x</a> bystander leg: get-refreshed, patch-untouched, base-equal file reads <code>....</code></li>
+<li><a href="./x.html">x</a> green: post-post status byte-par with a never-patched wt; pre-post legs stay</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Reproducing the CLEAN-tree leak needs root ≠ base (a resolvable track that stays at root while base advances locally); the test mints trunk@R (<code>post ?</code>) then commits ahead of it, all in ONE wt — no clone (the <code>file://</code> clone path hits the retired keeper here).</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+UNCOMMITTED — staged in work/STATUS-016 (<code>jab put</code>, no post), user to commit.
+</p>
+<p>
+Changed (staged):
+</p>
+<ul>
+<li><code>shared/wtlog.js</code> — <code>boundaries()</code> patch floor advances on ANY get/post (was get / commit-all-post); removed dead <code>postIsCommitAll</code>; comment refresh.</li>
+<li><code>test/status/patchpost/run.sh</code> — NEW case (patch #F1 → put → selective post): pre-post <code>..vv fileA</code> + <code>1 patch</code>; post-post <code>.v.. fileA</code>, patch column + <code>N patch</code> segment gone, byte-par with a never-patched wt; bystander fileC <code>....</code> throughout.</li>
+</ul>
+<p>
+Evidence: RED at tip (<code>.vv. fileA</code> + <code>1 base, 1 patch</code>) → GREEN.  Suites green: test/status/* (13), test/work/* (2), test/bro/pager, test/patch/* (26), patchband.js, statusfast.js.  Pre-existing unrelated reds: test/bro/{color,view} (readdir-order goldens). LIVE flip (read-only, my code on work/WORK-004): <code>patchTheirs=[]</code>, <code>3 base</code> only, rows <code>.v.. {test,view/bro.js,views/work/work.js}</code>, bystander <code>views/diff/diff.js</code> omitted — matches the WORK-005 control.
+</p>
+<p>
+Suggested commit message:
+</p>
+<div>
+<p>
+STATUS-016: end patch scope at the next post, not commit-all
+</p>
+</div>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

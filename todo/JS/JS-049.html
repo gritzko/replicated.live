@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-049</title>
+<title>JS-049: bin/put.js + bin/lib/stage.js — the staging engine</title>
+<meta property="og:title" content="JS-049: bin/put.js + bin/lib/stage.js — the staging engine">
+<meta property="og:description" content="be put as JS: stage files for the next commit (write put rows + restamp) and the ref-write forms (?br create, ?br#sha set). The shared staging engine stage.js (bare-walk / named-classify / dir-expand / move-pair) backs both put and JS-050 delete. ← JS-047+JS-048. Part of JS-046. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-049.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,54 +15,38 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-049 <a href="./MED.html">MED</a>: <code>bin/put.js</code> + <code>bin/lib/stage.js</code> — the staging engine</h1>
+<h1>JS-049: <code>bin/put.js</code> + <code>bin/lib/stage.js</code> — the staging engine</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>be put</code> as JS: stage files for the next commit (write <code>put</code> rows + restamp) and the ref-write forms (<code>?br</code> create, <code>?br#sha</code> set). The shared staging engine <code>stage.js</code> (bare-walk / named-classify / dir-expand / move-pair) backs both put and <a href="JS-050.html">JS-050</a> delete. ← <a href="JS-047.html">JS-047</a>+<a href="JS-048.html">JS-048</a>. Part of <a href="JS-046.html">JS-046</a>. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Native <code>sniff/PUT.c</code>: bare put walks the baseline tree, stages every tracked<p>
-file whose mtime ∉ stamp-set AND on-disk sha ≠ baseline (<code>put_visit_tracked :69</code>); named put drives SNIFFClassify (<code>put_classify_step :189</code>); dir-form expands per-file; move-form <code>&lt;old&gt;#&lt;new&gt;</code> renames on disk, row frag = dst.
-</p>
-</li>
-<li>Ref forms (<code>SNIFF.exe.c:1021</code>): <code>?br</code>→create-at-cur (PUTDUP if exists),<p>
-<code>?br#sha</code>/<code>?#sha</code>/<code>?&lt;40hex&gt;</code>→set OUTRIGHT (non-FF, the reflog escape hatch).
-</p>
-</li>
+<li>Native <code>sniff/PUT.c</code>: bare put walks the baseline tree, stages every tracked file whose mtime ∉ stamp-set AND on-disk sha ≠ baseline (<code>put_visit_tracked :69</code>); named put drives SNIFFClassify (<code>put_classify_step :189</code>); dir-form expands per-file; move-form <code>&lt;old&gt;#&lt;new&gt;</code> renames on disk, row frag = dst.</li>
+<li>Ref forms (<code>SNIFF.exe.c:1021</code>): <code>?br</code>→create-at-cur (PUTDUP if exists), <code>?br#sha</code>/<code>?#sha</code>/<code>?&lt;40hex&gt;</code>→set OUTRIGHT (non-FF, the reflog escape hatch).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>bin/lib/stage.js</code>: bare-walk, named-classify (reuse classify.js), dir-expand,<p>
-move auto-pair (<code>put_detect_moves</code>, PUTAMBIG on non-1:1) + explicit move.
-</p>
-</li>
-<li><code>bin/put.js</code>: slot dispatch; stage → <code>put</code> rows (<a href="JS-048.html">JS-048</a>) + io.setMtime<p>
-(<a href="JS-047.html">JS-047</a>); refs via <a href="JS-048.html">JS-048</a>; the <code>put:</code> banner (render.js). Skip meta paths.
-</p>
-</li>
+<li><code>bin/lib/stage.js</code>: bare-walk, named-classify (reuse classify.js), dir-expand, move auto-pair (<code>put_detect_moves</code>, PUTAMBIG on non-1:1) + explicit move.</li>
+<li><code>bin/put.js</code>: slot dispatch; stage → <code>put</code> rows (<a href="JS-048.html">JS-048</a>) + io.setMtime (<a href="JS-047.html">JS-047</a>); refs via <a href="JS-048.html">JS-048</a>; the <code>put:</code> banner (render.js). Skip meta paths.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>libabc+libdog ONLY. Byte-equivalent to native <code>be put</code>: wtlog rows + file<p>
-mtimes + REFS. No push (<code>//remote</code> deferred). No patch interaction.
-</p>
-</li>
+<li>libabc+libdog ONLY. Byte-equivalent to native <code>be put</code>: wtlog rows + file mtimes + REFS. No push (<code>//remote</code> deferred). No patch interaction.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Reuse classify.js's wtScan/wtEqBase/baseline-load; stage.js is the put/delete<p>
-shared core (<a href="JS-050.html">JS-050</a> delete adds unlink + the dirty-gate).
-</p>
-</li>
+<li>Reuse classify.js's wtScan/wtEqBase/baseline-load; stage.js is the put/delete shared core (<a href="JS-050.html">JS-050</a> delete adds unlink + the dirty-gate).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Repro-first parity <code>test/js/put/*</code> (fixtures from <code>test/put/</code>): stage one<p>
-  file / dir / move / bare-all; ref create + set — JS put vs native <code>be put</code>:   same wtlog rows, same file mtimes, same REFS. (Now <code>be/test/put/*</code>, 10 cases   incl. bare/dir/move/ref-create/ref-set/ref-set-sha.)
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Repro-first parity <code>test/js/put/*</code> (fixtures from <code>test/put/</code>): stage one file / dir / move / bare-all; ref create + set — JS put vs native <code>be put</code>: same wtlog rows, same file mtimes, same REFS. (Now <code>be/test/put/*</code>, 10 cases incl. bare/dir/move/ref-create/ref-set/ref-set-sha.)</li>
 <li class="done"><input type="checkbox" checked disabled> Implement stage.js + put.js. (<code>e6e47128</code>.)</li>
 </ul>
 <h3>Blockers and bummers</h3>
@@ -67,10 +55,18 @@ shared core (<a href="JS-050.html">JS-050</a> delete adds unlink + the dirty-gat
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED <code>e6e47128</code> (<code>bin/put.js</code> + <code>stage.js</code>, be put as JS). Today at<p>
-<code>be/verbs/put/put.js</code> + <code>be/shared/stage.js</code> (beagle-ext shard; <code>08a58be0</code> dropped the beagle bin/ dup); parity suite <code>be/test/put/*</code>. Audited 2026-07-07.
-</p>
-</li>
+<li>LANDED <code>e6e47128</code> (<code>bin/put.js</code> + <code>stage.js</code>, be put as JS). Today at <code>be/verbs/put/put.js</code> + <code>be/shared/stage.js</code> (beagle-ext shard; <code>08a58be0</code> dropped the beagle bin/ dup); parity suite <code>be/test/put/*</code>. Audited 2026-07-07.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JSQUE-021: resident session exhausts file descriptors — verb load dies mid-session</title>
+<meta property="og:title" content="JSQUE-021: resident session exhausts file descriptors — verb load dies mid-session">
+<meta property="og:description" content="2026-07-18 live, a long-running jab work pager session (the day's WORK-002/WORK-003 clicking): a spell died with err: the verb 'get' failed to load from /home/gritzko/src/journal/work/WORK-003/jsrc/verbs/get/get.js: Error: No — gritzko confirms the full underlying error is &quot;No file descriptors available&quot;. The resident process leaked fds until require itself could not open a .js file. - The loader message is the /todo/WORK/WORK-003 plain-words registry fix doing its job; the status line TRUNCATED the cause at &quot;Error: No&quot; — the full text must survive to the user. - Every click/spell in the resident loop opens stores (packs), wtlogs, dirs; nothing visibly closes them per drive — JSQUE-002's pay-once process turns any per-drive open into a leak. - The native side already has known fd leaks the session would amplify: /todo/ABC/ABC-013 (FSW watches never removed, kqueue leaks an fd per watch), /todo/ABC/ABC-014 (PACKClose leaks fd + PAGE mapping + index mmap on error paths). - MEASURED (orchestrator pty probe, 2026-07-18, jab work from work/WORK-003, j/k navigation only): 212 fds at launch, then +1 fd per keypress — 90 keys → 290 fds, ALL 80 new fds are re-opens of the LAUNCH tree's .be (/proc/&lt;pid&gt;/fd readlink); the work view re-opens the wtlog on every redraw and never closes it. - Baseline hog: the 212 launch fds are ~200 ~/.be/beagle-ext/.keeper pack files ALL held open simultaneously by the store reader — the open set scales with store history, so long sessions start near the ulimit before the per-keypress leak even begins.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JSQUE/JSQUE-021.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JSQUE-021: resident session exhausts file descriptors — verb load dies mid-session</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+2026-07-18 live, a long-running <code>jab work</code> pager session (the day's WORK-002/WORK-003 clicking): a spell died with <code>err: the verb 'get' failed to load from /home/gritzko/src/journal/work/WORK-003/jsrc/verbs/get/get.js: Error: No</code> — gritzko confirms the full underlying error is &quot;No file descriptors available&quot;. The resident process leaked fds until <code>require</code> itself could not open a .js file.
+</p>
+<ul>
+<li>The loader message is the <a href="/todo/WORK/WORK-003.html">WORK-003</a> plain-words registry fix doing its job; the status line TRUNCATED the cause at &quot;Error: No&quot; — the full text must survive to the user.</li>
+<li>Every click/spell in the resident loop opens stores (packs), wtlogs, dirs; nothing visibly closes them per drive — JSQUE-002's pay-once process turns any per-drive open into a leak.</li>
+<li>The native side already has known fd leaks the session would amplify: <a href="/todo/ABC/ABC-013.html">ABC-013</a> (FSW watches never removed, kqueue leaks an fd per watch), <a href="/todo/ABC/ABC-014.html">ABC-014</a> (PACKClose leaks fd + PAGE mapping + index mmap on error paths).</li>
+<li>MEASURED (orchestrator pty probe, 2026-07-18, <code>jab work</code> from work/WORK-003, j/k navigation only): 212 fds at launch, then +1 fd per keypress — 90 keys → 290 fds, ALL 80 new fds are re-opens of the LAUNCH tree's <code>.be</code> (<code>/proc/&lt;pid&gt;/fd</code> readlink); the work view re-opens the wtlog on every redraw and never closes it.</li>
+<li>Baseline hog: the 212 launch fds are <del>200 `</del>/.be/beagle-ext/*.keeper` pack files ALL held open simultaneously by the store reader — the open set scales with store history, so long sessions start near the ulimit before the per-keypress leak even begins.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+A resident session's fd count stays bounded across arbitrarily many spells/clicks; verb loads never die of fd exhaustion.
+</p>
+<ul>
+<li>Red-first repro: drive a resident session (pty or direct loop harness) through N spells, watch <code>/proc/self/fd</code> count — today it grows per drive; after the fix it plateaus.</li>
+<li>Find the actual leak site(s): per-drive store/pack/wtlog/dir opens without close, FSW watches, pty/child fds — measure, don't guess.</li>
+<li>Error display: the status line must carry the full cause line, not a width-truncated &quot;Error: No&quot;.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>RULING (gritzko, chat 2026-07-18): &quot;why does jk open a file? should just rerender a buffer&quot; — j/k navigation must RERENDER from the in-memory buffer; no file opens, no data-pass re-run per keypress. Data refresh happens on explicit events (launch, spell completion), not on cursor motion.</li>
+<li>Native-side fixes belong to ABC-013/ABC-014 — if the leak is wholly native, this ticket wires the JS-side close discipline and links the rest there; don't fork into libabc without need.</li>
+<li>Rulings in force: errors in plain words; no unrelated edits; the JSQUE-020 queue-drop rework may collide — check it before restructuring the loop.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> fd-growth repro red as a TEST (probe exists: scratchpad fdtrace.py shape) — N keys → +N fds on the launch <code>.be</code>; assert plateau after fix</li>
+<li><a href="./ .html"> </a> wtlog: open once per session (or close per redraw) — the per-keypress <code>.be</code> re-open is the active leak</li>
+<li><a href="./ .html"> </a> split out 2026-07-19: native release = <a href="/todo/ABC/ABC-020.html">ABC-020</a> (real abc.close unmap binding), JS close+reuse = <a href="/todo/BE/BE-050.html">BE-050</a> (close after drain, authority/navTree/treeAt memos)</li>
+<li><a href="./-.html">-</a> keeper packs: NOT fixable JS-side (abc.close only nulls the GC pin, no deterministic fd close; bounding would re-add churn) — native close(fd)-after-mmap proposal filed in <a href="/todo/ABC/ABC-014.html">ABC-014</a></li>
+<li><a href="./ .html"> </a> un-truncate the status-line cause text</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

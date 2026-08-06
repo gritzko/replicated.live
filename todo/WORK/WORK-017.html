@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORK-017: work view stats 88 .be files per render — cache tracked ref + base in a root .be-ref ulog</title>
+<meta property="og:title" content="WORK-017: work view stats 88 .be files per render — cache tracked ref + base in a root .be-ref ulog">
+<meta property="og:description" content="Every work render walks work/ and be.treeAt(dir)-opens each wt's .be to read its tracked ref and base commit — 88 wts in this tree today, plus a .be per mount. The read is pure re-derivation: a wt's .be is append-only, so an unchanged size+mtime means last render's answer still holds. Cache the resolved (ref, base) per wt in ONE append-only ulog at the project root, .be-ref, validated by stat(); only stat-mismatched wts get opened. Complements /todo/WORK/WORK-011 (ahbeh via graf, not a DAG walk) — same render, the other half of its cost.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/WORK/WORK-017.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WORK-017: work view stats 88 <code>.be</code> files per render — cache tracked ref + base in a root <code>.be-ref</code> ulog</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+Every <code>work</code> render walks <code>work/</code> and <code>be.treeAt(dir)</code>-opens each wt's <code>.be</code> to read its tracked ref and base commit — 88 wts in this tree today, plus a <code>.be</code> per mount. The read is pure re-derivation: a wt's <code>.be</code> is append-only, so an unchanged size+mtime means last render's answer still holds. Cache the resolved (ref, base) per wt in ONE append-only ulog at the project root, <code>.be-ref</code>, validated by <code>stat()</code>; only stat-mismatched wts get opened. Complements <a href="/todo/WORK/WORK-011.html">WORK-011</a> (ahbeh via graf, not a DAG walk) — same render, the other half of its cost.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Scan today: <code>listWork</code> (work.js:71-86) stats <code>&lt;wt&gt;/.be</code> per name, then <code>be.treeAt(dir)</code> opens+parses it (work.js:179, again work.js:762).</li>
+<li><code>isMount</code> (work.js:88-95) stats a <code>.be</code> per gitmodules path per wt — the per-mount multiplier on top of 88.</li>
+<li><code>ls -d work/*/</code> = 88 wts in //journal as of 2026-07-20; the <a href="/todo/WORK/WORK-001.html">WORK-001</a> survey counted ~65.</li>
+<li>Per-render memos exist (keeper/ancestors/metas per shardKey, work.js:99-150) but die with the process — nothing survives to the next render.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A render whose wts are all unchanged opens ZERO <code>.be</code> files: one <code>.be-ref</code> read + 88 <code>stat()</code>s.</li>
+<li>A render after N wts changed opens exactly those N.</li>
+<li>Rendered ref/base values are byte-identical to the uncached path on the same tree state.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>.be-ref</code> is PURE CACHE: absent, truncated, or garbage tail ⇒ every key is a miss and the view rebuilds. The work view must never fail on it.</li>
+<li>Ref/base resolution stays in <code>be/core/resolve_hash.js</code> — the cache stores its OUTPUT, never a second resolver.</li>
+<li>Rows name trees by URI (<code>//WT/</code>), not prose paths.</li>
+<li>Cache lives at the project root, beside <code>.be</code>, and is never committed.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>One append-only ulog <code>.be-ref</code> at projectRoot, keyed by the wt URI, latest row wins on replay.</li>
+<li>Row = <code>//WT/ &lt;tracked-ref-uri&gt; #&lt;base-hash&gt; &lt;size&gt; &lt;mtime&gt;</code> — size/mtime of THAT wt's <code>.be</code>.</li>
+<li>Validator is size+mtime of <code>&lt;wt&gt;/.be</code>: append-only, so size alone nearly suffices; mtime catches replace.</li>
+<li>Vanished wt = tombstone row (empty ref), so it is not a permanent miss on every later render.</li>
+<li>Compact (replay → temp → rename) when rows exceed 4x live wts; never in the read path.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> red: test/work/beref — render twice over a fixture forest, assert 2nd render does 0 <code>.be</code> opens and the same rows; touch one wt ⇒ exactly 1 open.</li>
+<li class="open"><input type="checkbox" disabled> VERIFY FIRST: is <code>.be</code> strictly append-only on every mutation path (get, attach, rebase)? An in-place equal-size rewrite breaks size+mtime — then key on the last row's ts instead.</li>
+<li class="open"><input type="checkbox" disabled> <code>.be-ref</code> reader/writer + replay map, tombstones.</li>
+<li class="open"><input type="checkbox" disabled> wire into the work view scan: stat-gate before <code>be.treeAt</code>, append rows for misses.</li>
+<li class="open"><input type="checkbox" disabled> compaction at 4x live wts.</li>
+<li class="open"><input type="checkbox" disabled> extend the gate to the per-mount <code>isMount</code> stats, or ticket separately if it needs its own key shape.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None yet.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Pending.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

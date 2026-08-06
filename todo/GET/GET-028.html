@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GET-028</title>
+<title>GET-028: be execs a stale keeper helper → opaque ZINFFAIL clone</title>
+<meta property="og:title" content="GET-028: be execs a stale keeper helper → opaque ZINFFAIL clone">
+<meta property="og:description" content="be get ssh://host/repo?/branch aborts mid-ingest with KEEPIngestStream failed: ZINFFAIL / WIRECLFL even on a healthy remote (all 19250 objects transfer). The ingest CODE is fine — current source ingests the pack clean. Root cause is a build gap: be execs a SEPARATE keeper binary, but the be-cli CMake target declares no dependency on keeper-cli (nor spot/ graf/sniff). ninja be recompiles the shared keeplib objects yet never relinks the keeper exe, so iterating on be runs a NEW be against an OLD keeper whose ingest predates a landed fix. Relates to GET-009.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-028.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,52 +16,36 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>GET-028: <code>be</code> execs a stale <code>keeper</code> helper → opaque ZINFFAIL clone</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>be get ssh://host/repo?/branch</code> aborts mid-ingest with <code>KEEPIngestStream failed: ZINFFAIL</code> / <code>WIRECLFL</code> even on a healthy remote (all 19250 objects transfer). The ingest CODE is fine — current source ingests the pack clean. Root cause is a build gap: <code>be</code> execs a SEPARATE <code>keeper</code> binary, but the <code>be-cli</code> CMake target declares no dependency on <code>keeper-cli</code> (nor <code>spot</code>/ <code>graf</code>/<code>sniff</code>). <code>ninja be</code> recompiles the shared keeplib objects yet never relinks the <code>keeper</code> exe, so iterating on <code>be</code> runs a NEW <code>be</code> against an OLD <code>keeper</code> whose ingest predates a landed fix. Relates to <a href="GET-009.html">GET-009</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Repro: <code>be get ssh://localhost/src/dogs?/main</code> → counts/compresses 19250<p>
-objects, then <code>be: KEEPIngestStream failed: ZINFFAIL</code>, <code>Error: WIRECLFL</code>.
-</p>
-</li>
-<li><code>strace -f -e execve</code> shows <code>be</code> execs <code>build/bin/keeper</code>, which execs<p>
-<code>ssh</code> + <code>git upload-pack</code>; the failing ingest is wholly in the keeper child.
-</p>
-</li>
-<li>Instrumenting both <code>ZINFFAIL</code> returns in <code>dog/git/ZINF.c</code> and rebuilding<p>
-ONLY <code>be</code> never fired — proof the ingest runs in the un-rebuilt keeper exe.
-</p>
-</li>
-<li><code>ninja keeper</code> (relink from the current keeplib objects) → clone succeeds,<p>
-27 entries checked out, exit 0; pristine source (diagnostics reverted) green.
-</p>
-</li>
+<li>Repro: <code>be get ssh://localhost/src/dogs?/main</code> → counts/compresses 19250 objects, then <code>be: KEEPIngestStream failed: ZINFFAIL</code>, <code>Error: WIRECLFL</code>.</li>
+<li><code>strace -f -e execve</code> shows <code>be</code> execs <code>build/bin/keeper</code>, which execs <code>ssh</code> + <code>git upload-pack</code>; the failing ingest is wholly in the keeper child.</li>
+<li>Instrumenting both <code>ZINFFAIL</code> returns in <code>dog/git/ZINF.c</code> and rebuilding ONLY <code>be</code> never fired — proof the ingest runs in the un-rebuilt keeper exe.</li>
+<li><code>ninja keeper</code> (relink from the current keeplib objects) → clone succeeds, 27 entries checked out, exit 0; pristine source (diagnostics reverted) green.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>ninja be</code> co-builds every dog binary <code>be</code> execs (keeper, spot, graf,<p>
-sniff) so a partial build can't ship a version-skewed helper.
-</p>
-</li>
+<li><code>ninja be</code> co-builds every dog binary <code>be</code> execs (keeper, spot, graf, sniff) so a partial build can't ship a version-skewed helper.</li>
 <li>Clone <code>be get ssh://localhost/src/dogs?/main</code> lands a full worktree, exit 0.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Build/verify WITH_SSH=ON, WITH_INET=OFF (<a href="./build-with-ssh-not-inet.html">build-with-ssh-not-inet</a>); the<p>
-clone uses ssh-localhost upload-pack.
-</p>
-</li>
+<li>Build/verify WITH_SSH=ON, WITH_INET=OFF (<a href="./build-with-ssh-not-inet.html">build-with-ssh-not-inet</a>); the clone uses ssh-localhost upload-pack.</li>
 <li>CMake-only change; do NOT touch the (already-correct) ingest code.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li><code>be-cli</code> links keeplib for in-proc calls but spawns the dog EXES at run<p>
-time; those spawn targets were unmodeled build deps. Add <code>add_dependencies(be-cli keeper-cli spot-cli graf-cli sniff-cli)</code> in <code>beagle/CMakeLists.txt</code> (all four exist when <code>beagle/</code> is configured — the top CMakeLists adds it after them). The dog clis already depend on their own libs, so co-building keeps them current.
-</p>
-</li>
+<li><code>be-cli</code> links keeplib for in-proc calls but spawns the dog EXES at run time; those spawn targets were unmodeled build deps. Add <code>add_dependencies(be-cli keeper-cli spot-cli graf-cli sniff-cli)</code> in <code>beagle/CMakeLists.txt</code> (all four exist when <code>beagle/</code> is configured — the top CMakeLists adds it after them). The dog clis already depend on their own libs, so co-building keeps them current.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -68,15 +56,23 @@ time; those spawn targets were unmodeled build deps. Add <code>add_dependencies(
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>None — the remote store/pack are intact and the ingest fix already landed;<p>
-only the helper binary was stale.
-</p>
-</li>
+<li>None — the remote store/pack are intact and the ingest fix already landed; only the helper binary was stale.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>LANDED beagle <code>39641d17</code> &quot;GET-028 be co-builds spawned dog helpers&quot;: <code>add_dependencies(be-cli keeper-cli spot-cli graf-cli sniff-cli)</code> in <code>beagle/CMakeLists.txt:18</code> (+ the GET-028 comment at :15).</li>
 <li>Verified in-tree 2026-07-07 (audit): the dependency line is present; clone verification was done pre-land (see TODOs).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-057: authorityRepo swallows treeAt failure — silent fall-through to the cwd repo</title>
+<meta property="og:title" content="BE-057: authorityRepo swallows treeAt failure — silent fall-through to the cwd repo">
+<meta property="og:description" content="In be/core/loop.js authorityRepo, a //X wtdir miss throws LOUD NAVNONE (loop.js:211, per BE-033/BE-037 &quot;must never reach the verb verbatim&quot;), but on the next line a treeAt throw is catch (e) { continue; } — a //X that resolves to a real dir yet fails to anchor silently falls through to the cwd repo, exactly the silent whole-wt degrade the adjacent comment forbids. Found in the 2026-07-24 house-cleaning sweep; sibling BE-056 cleans the same file's dead code.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BE/BE-057.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-057: authorityRepo swallows treeAt failure — silent fall-through to the cwd repo</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
+<p>
+In be/core/loop.js authorityRepo, a <code>//X</code> wtdir miss throws LOUD NAVNONE (loop.js:211, per BE-033/BE-037 &quot;must never reach the verb verbatim&quot;), but on the next line a treeAt throw is <code>catch (e) { continue; }</code> — a <code>//X</code> that resolves to a real dir yet fails to anchor silently falls through to the cwd repo, exactly the silent whole-wt degrade the adjacent comment forbids. Found in the 2026-07-24 house-cleaning sweep; sibling <a href="./BE-056.html">BE-056</a> cleans the same file's dead code.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>loop.js:212-213: treeAt failure after a successful wtdir lookup is catch/continue'd; the un-rewritten <code>//X</code> arg reaches the verb verbatim under the cwd repo.</li>
+<li>contextRepo (loop.js:265) handles the same failure loudly: records _ctxMiss, returns null, ends in the WORK-002 refusal — the two scope paths disagree on the same error.</li>
+<li>BE-037 (DONE) fixed only the wtdir-miss arm; this arm was left silent.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A <code>//X</code> that names a real dir but fails treeAt errors loudly (plain words + code), same as the wtdir-miss arm; never a silent cwd degrade.</li>
+<li>authorityRepo and contextRepo agree on treeAt-failure semantics.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro first: a wt dir whose tree cannot anchor (e.g. gutted .be), then a mutation verb with a <code>//X</code> arg — assert loud refusal, not cwd write.</li>
+<li>Error text in plain words (<a href="../DIS/DIS-079.html">Errors</a> ruling), not a bare code.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> 1. Repro test: anchored-dir/broken-tree <code>//X</code> arg falls to cwd today.</li>
+<li class="open"><input type="checkbox" disabled> 2. Replace catch/continue with the loud NAVNONE-style refusal.</li>
+<li class="open"><input type="checkbox" disabled> 3. Align contextRepo/_ctxMiss wording with the new arm.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Open. Filed 2026-07-24 from the be/ house-cleaning review sweep.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

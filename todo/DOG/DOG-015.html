@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DOG-015</title>
+<title>DOG-015: IGNOGlob catastrophic backtracking — ReDoS from an untrusted .gitignore</title>
+<meta property="og:title" content="DOG-015: IGNOGlob catastrophic backtracking — ReDoS from an untrusted .gitignore">
+<meta property="og:description" content="dog/git/IGNO.c's IGNOGlob (IGNO.c:24-66) recurses on EVERY / suffix with no memoization and no step budget: for(;;){ if(IGNOGlob(pat,tail)) return YES; if(empty) break; used1(tail); } (:36-40, :46-51). A single crafted pattern like aaa…ab matched against a long non-matching path is exponential-time, and nesting compounds it. .gitignore files come from cloned/untrusted repositories, and every worktree scan (be status, diff, post) routes through IGNOMatch per chain-file × per pattern (≤256) × per path prefix — so a hostile repo shipping a crafted .gitignore hangs the process. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DOG/DOG-015.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,45 +15,35 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>DOG-015 <a href="./MED.html">MED</a>: <code>IGNOGlob</code> catastrophic backtracking — ReDoS from an untrusted <code>.gitignore</code></h1>
+<h1>DOG-015: <code>IGNOGlob</code> catastrophic backtracking — ReDoS from an untrusted <code>.gitignore</code></h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
 <p>
 <code>dog/git/IGNO.c</code>'s <code>IGNOGlob</code> (<code>IGNO.c:24-66</code>) recurses on EVERY <code>*</code>/<code>**</code> suffix with no memoization and no step budget: <code>for(;;){ if(IGNOGlob(pat,tail)) return YES; if(empty) break; used1(tail); }</code> (<code>:36-40</code>, <code>:46-51</code>). A single crafted pattern like <code>*a*a*a*…*a*b</code> matched against a long non-matching path is exponential-time, and <code>**</code> nesting compounds it. <code>.gitignore</code> files come from cloned/untrusted repositories, and every worktree scan (<code>be status</code>, diff, post) routes through <code>IGNOMatch</code> per chain-file × per pattern (≤256) × per path prefix — so a hostile repo shipping a crafted <code>.gitignore</code> hangs the process. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>IGNO.c:24-66</code> recursive matcher; pattern length bounded only by the mmap'd<p>
-file, so ~40 wildcards effectively hangs.
-</p>
-</li>
-<li>Untrusted source: <code>.gitignore</code> from a clone; <code>IGNOMatch</code> fans it across chain<p>
-files, ≤256 patterns, and path prefixes.
-</p>
-</li>
+<li><code>IGNO.c:24-66</code> recursive matcher; pattern length bounded only by the mmap'd file, so ~40 wildcards effectively hangs.</li>
+<li>Untrusted source: <code>.gitignore</code> from a clone; <code>IGNOMatch</code> fans it across chain files, ≤256 patterns, and path prefixes.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Linear-time star matching (single backtrack pointer, the standard `git<p>
-wildmatch` technique) OR a hard recursion/step budget that fails closed.
-</p>
-</li>
+<li>Linear-time star matching (single backtrack pointer, the standard <code>git wildmatch</code> technique) OR a hard recursion/step budget that fails closed.</li>
 <li>Match semantics unchanged for the well-formed patterns the tests cover.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
 <li><code>dog/git</code> libdog, ABC style; behaviour-preserving on the existing IGNO tests.</li>
-<li>The pointer-poke rewrite of the SAME matcher is tracked under <a href="../PTR/PTR-002.html">PTR-002</a>; do the<p>
-algorithm fix and the slice cleanup together to avoid touching it twice.
-</p>
-</li>
+<li>The pointer-poke rewrite of the SAME matcher is tracked under <a href="../PTR/PTR-002.html">PTR-002</a>; do the algorithm fix and the slice cleanup together to avoid touching it twice.</li>
 </ul>
 <h2>WIP</h2>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> T1 repro: property/fuzz case timing <code>*a*…*b</code> against a long non-match; assert<p>
- it completes under a step budget (dog/fuzz has no IGNO target today).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> T1 repro: property/fuzz case timing <code>*a*…*b</code> against a long non-match; assert it completes under a step budget (dog/fuzz has no IGNO target today).</li>
 <li class="open"><input type="checkbox" disabled> T2 replace recursion with the iterative wildmatch (or add a step budget).</li>
 <li class="open"><input type="checkbox" disabled> T3 fold in the <a href="../PTR/PTR-002.html">PTR-002</a> slice cleanup of the same function.</li>
 </ul>
@@ -61,5 +55,16 @@ algorithm fix and the slice cleanup together to avoid touching it twice.
 <ul>
 <li>OPEN — filed 2026-07-06, the libdog code-quality review session.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GET-014</title>
+<title>GET-014: head/get/patch against a divergent ticket remote silently resets local trunk ? (non-ff clobber, drops landed commits)</title>
+<meta property="og:title" content="GET-014: head/get/patch against a divergent ticket remote silently resets local trunk ? (non-ff clobber, drops landed commits)">
+<meta property="og:description" content="While landing the DIS-034 ticket worktree, the parent repo (~/beagle, trunk 4e8f5770) ran read/merge verbs against the DIS-034 clone remote — be head be://localhost/todo/DIS-034?…, be patch be://localhost/todo/DIS-034?/dogs, and file:///…/todo/DIS-034/.be?… forms. One of those operations appended a get ?#97a0ddc9 row to the parent store's refs, moving local trunk ? from 4e8f5770 to the divergent 97a0ddc9 (whose parent is the older 479fcc96). That silently dropped the four already-landed commits ABC-002 / POST-014 / SUBS-017 / DIS-035 off trunk; the worktree was then re-synced to the wrong base, masking the loss. No object data was lost (everything stayed in the pool); only the trunk ref was mispositioned. Recovered with be put '?#4e8f5770' (a reflog tip-set — note be get and be get --force both refused to move the divergent ref, only re-syncing the worktree). See GET, HEAD, Issues, CLAUDE.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-014.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>GET-014: head/get/patch against a divergent ticket remote silently resets local trunk <code>?</code> (non-ff clobber, drops landed commits)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 While landing the DIS-034 ticket worktree, the parent repo (<code>~/beagle</code>, trunk <code>4e8f5770</code>) ran read/merge verbs against the DIS-034 clone remote — <code>be head be://localhost/todo/DIS-034?…</code>, <code>be patch be://localhost/todo/DIS-034?/dogs</code>, and <code>file:///…/todo/DIS-034/.be?…</code> forms. One of those operations appended a <code>get  ?#97a0ddc9</code> row to the <strong>parent</strong> store's <code>refs</code>, moving local trunk <code>?</code> from <code>4e8f5770</code> to the divergent <code>97a0ddc9</code> (whose parent is the older <code>479fcc96</code>). That silently dropped the four already-landed commits <strong>ABC-002 / POST-014 / SUBS-017 / DIS-035</strong> off trunk; the worktree was then re-synced to the wrong base, masking the loss. No object data was lost (everything stayed in the pool); only the trunk ref was mispositioned. Recovered with <code>be put '?#4e8f5770'</code> (a reflog tip-set — note <code>be get</code> and <code>be get --force</code> both <strong>refused</strong> to move the divergent ref, only re-syncing the worktree). See <a href="../../wiki/GET.html">GET</a>, <a href="../../wiki/HEAD.html">HEAD</a>, <a href="../../rule/Issues.html">Issues</a>, <a href="../../../beagle/CLAUDE.md">CLAUDE</a>.
 </p>
@@ -27,13 +36,13 @@ A non-mutating-by-contract or remote-fetch verb moved the local trunk branch <co
 </ul>
 <h2>Blockers</h2>
 <p>
-<del>The exact triggering verb + URI shape is not yet pinned</del> <strong>PINNED 2026-06-11.</strong> Hermetic repro (<code>~/tmp</code>, two independent stores <code>parent</code>@T and <code>ticket</code>@C sharing base B, divergent): from a worktree backed by <code>parent</code>, the project-scoped divergent fetch clobbers <code>?</code>→C for <strong><code>be head</code></strong> and <strong><code>be patch</code></strong> (<code>file://&lt;ticket&gt;/.be?/&lt;proj&gt;</code>, rc=0), while <strong><code>be get</code></strong> is clean (<code>?</code> stays T — it already refuses the non-ff move). So the offenders are <code>be head</code> (egregious — the GET dry-run is NOT read-only) and <code>be patch</code> (resets to C instead of cherry-picking onto T / refusing); <code>be get</code> is the correct model.
+~~The exact triggering verb + URI shape is not yet pinned~~ <strong>PINNED 2026-06-11.</strong> Hermetic repro (<code>~/tmp</code>, two independent stores <code>parent</code>@T and <code>ticket</code>@C sharing base B, divergent): from a worktree backed by <code>parent</code>, the project-scoped divergent fetch clobbers <code>?</code>→C for <strong><code>be head</code></strong> and <strong><code>be patch</code></strong> (<code>file://&lt;ticket&gt;/.be?/&lt;proj&gt;</code>, rc=0), while <strong><code>be get</code></strong> is clean (<code>?</code> stays T — it already refuses the non-ff move). So the offenders are <code>be head</code> (egregious — the GET dry-run is NOT read-only) and <code>be patch</code> (resets to C instead of cherry-picking onto T / refusing); <code>be get</code> is the correct model.
 </p>
 <p>
-<strong>Root cause CONFIRMED 2026-06-11 (tip-resolution, not a write):</strong> a single <code>be head &lt;divergent&gt;</code> moves <code>?</code>→C while writing <strong>zero</strong> new rows to the store <code>refs</code> AND the worktree wtlog (full before/after file snapshot: nothing changes during the verb). The fetch only lands C's commit OBJECT in the pool; the next <code>.refs.idx</code> regeneration then recomputes the branch tip and picks C over T because the ancestor walk can't tell C is divergent. So there is no targetable write/read to suppress — the clobber IS the <a href="">DIS-038</a> reachability defect surfacing in tip-resolution. <strong>Fix location:</strong> <code>DAGAncestorsTunable</code> (<code>graf/DAG.c:219</code>) must gain the DAG-miss keeper-commit-body fallback that <code>graf log</code> already has (<code>graf/LOG.c:329</code> — &quot;DAG miss → parse commit body for first <code>parent &lt;40hex&gt;</code>&quot;), so a fetched-but-unindexed tip's ancestry resolves and a divergent C is correctly rejected as the branch tip / refused non-ff. Core reachability used by BLAME/GET/PATCH/POST — change with care + adversarial divergence tests.
+<strong>Root cause CONFIRMED 2026-06-11 (tip-resolution, not a write):</strong> a single <code>be head &lt;divergent&gt;</code> moves <code>?</code>→C while writing <strong>zero</strong> new rows to the store <code>refs</code> AND the worktree wtlog (full before/after file snapshot: nothing changes during the verb). The fetch only lands C's commit OBJECT in the pool; the next <code>.refs.idx</code> regeneration then recomputes the branch tip and picks C over T because the ancestor walk can't tell C is divergent. So there is no targetable write/read to suppress — the clobber IS the <a href="./DIS-038.html">DIS-038</a> reachability defect surfacing in tip-resolution. <strong>Fix location:</strong> <code>DAGAncestorsTunable</code> (<code>graf/DAG.c:219</code>) must gain the DAG-miss keeper-commit-body fallback that <code>graf log</code> already has (<code>graf/LOG.c:329</code> — &quot;DAG miss → parse commit body for first <code>parent &lt;40hex&gt;</code>&quot;), so a fetched-but-unindexed tip's ancestry resolves and a divergent C is correctly rejected as the branch tip / refused non-ff. Core reachability used by BLAME/GET/PATCH/POST — change with care + adversarial divergence tests.
 </p>
 <p>
-Mechanism: all three run <code>BEActKeeperGet</code> → <code>KEEPGetRemote</code> → <code>WIREFetch</code>, whose post-fetch <code>wcli_record_ref</code> journals the fetched divergent tip; the tip-resolver then treats that fetched-but-unindexed commit as the branch head. Per <a href="../../../beagle/keeper/REFS.c">REFS</a> semantics a <code>get</code> row is a <strong>remote observation</strong> (&quot;peer's ref K was at V&quot;) and must NOT advance local <code>?</code> (only <code>post</code> = local move may). Fix must keep peer-tracking <code>get</code> rows from moving local <code>?</code> (resolve local <code>?</code> from <code>post</code> rows / ancestor-gated <code>get</code>), make <code>be head</code> side-effect-free on refs, and gate <code>be patch</code>'s advance behind ff. Overlaps <a href="">DIS-038</a> (fetched-but-not-DAG-indexed peer tip). Deep keeper ref-resolver change — fix deferred to focused work, not a marathon-session rush (this is the area that originally clobbered trunk).
+Mechanism: all three run <code>BEActKeeperGet</code> → <code>KEEPGetRemote</code> → <code>WIREFetch</code>, whose post-fetch <code>wcli_record_ref</code> journals the fetched divergent tip; the tip-resolver then treats that fetched-but-unindexed commit as the branch head. Per <a href="../../../beagle/keeper/REFS.c">REFS</a> semantics a <code>get</code> row is a <strong>remote observation</strong> (&quot;peer's ref K was at V&quot;) and must NOT advance local <code>?</code> (only <code>post</code> = local move may). Fix must keep peer-tracking <code>get</code> rows from moving local <code>?</code> (resolve local <code>?</code> from <code>post</code> rows / ancestor-gated <code>get</code>), make <code>be head</code> side-effect-free on refs, and gate <code>be patch</code>'s advance behind ff. Overlaps <a href="./DIS-038.html">DIS-038</a> (fetched-but-not-DAG-indexed peer tip). Deep keeper ref-resolver change — fix deferred to focused work, not a marathon-session rush (this is the area that originally clobbered trunk).
 </p>
 <h2>Planned</h2>
 <p>
@@ -50,22 +59,21 @@ Repro-first (<a href="../../../beagle/CLAUDE.md">CLAUDE</a> §17), then refuse t
 The Blockers finding &quot;<code>be get</code> is the clean model&quot; is FALSE for a 2nd arm: a <code>be get</code> from a far-behind worktree silently regressed the shared <code>beagle</code> trunk tip BACKWARD (linear, not divergent), orphaning 3 already-landed commits.
 </p>
 <ul>
-<li>Live repro: trunk advanced <code>9e80e5f0</code> → <code>c3fbdda5</code>(JS-035) → <code>742c06ff</code><p>
-(JS-036) → <code>d7eaf5c4</code>(SUBS-030, just posted+verified as tip). A <code>be get --nosub</code> in <code>~/todo/DIS-048</code> (pinned at June-21 commits) then resolved trunk back to <code>9e80e5f0</code> and rewrote <code>.be/beagle/refs</code> — dropping all 3. Recovered with <code>graf index</code>. Full timeline in <a href="">DIS-038</a> &quot;Evidence (live 2026-06-22…)&quot;.
-</p>
-</li>
-<li>Same regen root, NOT covered by the landed fix: the DIS-038 Layer-1 keeper<p>
-fallback (<code>graf/DAG.c</code>, on trunk since mid-June) handles head/patch, but the newer tip <code>d7eaf5c4</code> was in keeper yet NOT graf-indexed, so the <code>.refs.idx</code> regen picked the older INDEXED leaf <code>9e80e5f0</code> — a backward FF-able regress.
-</p>
-</li>
-<li>Fix: DIS-038 Layer-2 was done only for <code>be patch</code> (lazy <code>GRAFIndexFromTips</code>),<p>
-never <code>be get</code>. Make <code>be get</code>'s fetch ingest the fetched tip's closure into graf (<code>GRAFIndex</code> / <code>GRAFIndexFromTips</code> + <code>KEEPEachRemote</code>), OR make the refs-regen leaf-pick reachability-aware. Repro-first, hermetic. <a href="">DIS-038</a>.
-</p>
-</li>
-<li>LANDED <code>b89011fa</code>: chose the reachability-aware route (no indexing-on-get).<p>
-<code>sniff/GET.c</code> FF-gates the TRUNK re-sync via <code>KEEPIsAncestor</code> (keeper-body BFS, self-sufficient on unindexed tips) → refuses backward/divergent, allows forward FF; <code>keeper/REFS.c::REFSResolve</code> keeps the latest LOCAL move tip unless the peer tip descends it (a behind/divergent <code>get</code> row can't win). Repro <code>test/get/57</code>, adversarial <code>test/get/58</code>; head/patch clobber preserved.
-</p>
-</li>
+<li>Live repro: trunk advanced <code>9e80e5f0</code> → <code>c3fbdda5</code>(JS-035) → <code>742c06ff</code> (JS-036) → <code>d7eaf5c4</code>(SUBS-030, just posted+verified as tip). A <code>be get --nosub</code> in <code>~/todo/DIS-048</code> (pinned at June-21 commits) then resolved trunk back to <code>9e80e5f0</code> and rewrote <code>.be/beagle/refs</code> — dropping all 3. Recovered with <code>graf index</code>. Full timeline in <a href="./DIS-038.html">DIS-038</a> &quot;Evidence (live 2026-06-22…)&quot;.</li>
+<li>Same regen root, NOT covered by the landed fix: the DIS-038 Layer-1 keeper fallback (<code>graf/DAG.c</code>, on trunk since mid-June) handles head/patch, but the newer tip <code>d7eaf5c4</code> was in keeper yet NOT graf-indexed, so the <code>.refs.idx</code> regen picked the older INDEXED leaf <code>9e80e5f0</code> — a backward FF-able regress.</li>
+<li>Fix: DIS-038 Layer-2 was done only for <code>be patch</code> (lazy <code>GRAFIndexFromTips</code>), never <code>be get</code>. Make <code>be get</code>'s fetch ingest the fetched tip's closure into graf (<code>GRAFIndex</code> / <code>GRAFIndexFromTips</code> + <code>KEEPEachRemote</code>), OR make the refs-regen leaf-pick reachability-aware. Repro-first, hermetic. <a href="./DIS-038.html">DIS-038</a>.</li>
+<li>LANDED <code>b89011fa</code>: chose the reachability-aware route (no indexing-on-get). <code>sniff/GET.c</code> FF-gates the TRUNK re-sync via <code>KEEPIsAncestor</code> (keeper-body BFS, self-sufficient on unindexed tips) → refuses backward/divergent, allows forward FF; <code>keeper/REFS.c::REFSResolve</code> keeps the latest LOCAL move tip unless the peer tip descends it (a behind/divergent <code>get</code> row can't win). Repro <code>test/get/57</code>, adversarial <code>test/get/58</code>; head/patch clobber preserved.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

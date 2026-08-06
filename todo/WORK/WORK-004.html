@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORK-004: work view — ahbeh counts become +N/-N buttons, get retired</title>
+<meta property="og:title" content="WORK-004: work view — ahbeh counts become +N/-N buttons, get retired">
+<meta property="og:description" content="Split out of /todo/WORK/WORK-003 (gritzko, chat 2026-07-19): the ahbeh-buttons ruling was filed inside WORK-003's WIP but is a separate UI feature, not part of that ticket's post-dispatch defect. Evidence, be tip (///be): - views/work/work.js:363-371 ahbehSpans renders +N/-N as TEXT only (tags G/M), right-aligned to 7, render-clamped at 99. - work.js:379-393: three fixed button slots (&quot;get &quot; 6, &quot;diff &quot; 7, &quot;post &quot; 7, work.js:345-347); get mints get ///&lt;relpath&gt;, diff mints diff //KEY, post mints post '&lt;ticket title&gt;' (title via todo.pageTitle, work.js:333-339). - Palette: tags at work.js:47-53; THEME in view/bro.js:93-112 — G = green(32), M = bright red(91), W = green, E = yellow, Y = blue. - The UNLANDED work/WORK-003 wt carries a partial cut (its work.js:366-380: bare-post/bare-get O-invites on the count spans, commit-only post) — counts there are UNbracketed/unpadded and get still renders; reference read-only. - The view test be/test/work/view/ (check.js, run.sh) pins the row layout byte-exactly; test/work/getctx is the pty harness shape.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/WORK/WORK-004.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WORK-004: work view — ahbeh counts become <a href="./+N.html">+N</a>/<a href="./-N.html">-N</a> buttons, <a href="./get.html">get</a> retired</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Split out of <a href="/todo/WORK/WORK-003.html">WORK-003</a> (gritzko, chat 2026-07-19): the ahbeh-buttons ruling was filed inside WORK-003's WIP but is a separate UI feature, not part of that ticket's post-dispatch defect. Evidence, be tip (<code>///be</code>):
+</p>
+<ul>
+<li>views/work/work.js:363-371 <code>ahbehSpans</code> renders <code>+N</code>/<code>-N</code> as TEXT only (tags G/M), right-aligned to 7, render-clamped at 99.</li>
+<li>work.js:379-393: three fixed button slots (&quot;<a href="./get.html">get</a> &quot; 6, &quot;<a href="./diff.html">diff</a> &quot; 7, &quot;<a href="./post.html">post</a> &quot; 7, work.js:345-347); <code>[get]</code> mints <code>get ///&lt;relpath&gt;</code>, <code>[diff]</code> mints <code>diff //KEY</code>, <code>[post]</code> mints <code>post '&lt;ticket title&gt;'</code> (title via todo.pageTitle, work.js:333-339).</li>
+<li>Palette: tags at work.js:47-53; THEME in view/bro.js:93-112 — <code>G</code> = green(32), <code>M</code> = bright red(91), <code>W</code> = green, <code>E</code> = yellow, <code>Y</code> = blue.</li>
+<li>The UNLANDED work/WORK-003 wt carries a partial cut (its work.js:366-380: bare-post/bare-get O-invites on the count spans, commit-only <a href="./post.html">post</a>) — counts there are UNbracketed/unpadded and <code>[get]</code> still renders; reference read-only.</li>
+<li>The view test be/test/work/view/ (check.js, run.sh) pins the row layout byte-exactly; test/work/getctx is the pty harness shape.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+RULING (gritzko, chat 2026-07-19): the ahead/behind indicator IS the button row — bare get / bare post correspond 1:1 to the behind/ahead states.
+</p>
+<ul>
+<li><code>[+N]</code> mints bare <code>post</code> (advance the track); <code>[-N]</code> mints bare <code>get</code> (pull); each an O-invite in the ROW's ctx (<code>//KEY</code>); a zero side shows no button.</li>
+<li><code>[post]</code> mints ONLY the commit, <code>post '&lt;ticket title&gt;'</code>; no title — no button.</li>
+<li><code>[get]</code> button goes away entirely (slot and all); <code>[diff]</code> stays as is.</li>
+<li>Render: counts are bracketed padded buttons <code>[+3]</code>/<code>[-2]</code>; render clamps at two digits, <code>[+99]</code> max (counts themselves stay unclamped).</li>
+<li>Colors: <code>+</code> side salad green, <code>-</code> side salmon (NOT the current green-32/bright-red-91 — pick nearer 256-color shades in the THEME idiom).</li>
+<li>In plain (no-pager) output the counts stay text as today.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Overlaps the UNLANDED work/WORK-003 wt in views/work/work.js and the view test; do NOT copy from it, build on be tip; expect a weave when both land.</li>
+<li>Amending be/test/work/view/check.js to the new row is AUTHORIZED by the ruling; no other test edits.</li>
+<li>Rulings in force: verbs resolve args via resolve(context,base,rel), pager arg-blind; //authority from arg0 only; pty-click verification through the real UI path, not TLV probes.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>ahbeh cell (work.js <code>ahbehSpans</code>): plain/repo rows keep TEXT <code>+N</code>/<code>-N</code> padded to 7; a pager WT row (btns+ctx) renders <code>[+N]</code>/<code>[-N]</code> buttons padded to 11.</li>
+<li><code>[+N]</code> mints bare <code>post</code>, <code>[-N]</code> bare <code>get</code> as <code>//KEY/: verb</code> O-invites; the zero side shows nothing, two-digit clamp; <code>[post]</code> stays the titled commit.</li>
+<li>Colours: the tok tag space is FULL (only 'A'/'S' free, 'S' is default).  So ahead reuses the green slot 'G' refreshed 32→salad-256(149); behind gets the NEW 'A'=salmon-256(209).  'M' kept at 91 — <code>bro/pager/verbcolor</code> pins it and conflicts stay bright-red.  Collateral: pager string-green softens to salad.</li>
+<li>pty-click check lives in test/work/view/clickpty.py (getctx is off-limits).</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> red: view test pinned the OLD <code>[get]</code>/text-ahbeh row; captured the new row</li>
+<li><a href="./v.html">v</a> retired <code>[get]</code>+SLOT_GET; BTNW=14, ahbeh col aligns (check.js <a href="./diff.html">diff</a>/#hash)</li>
+<li><a href="./v.html">v</a> bracketed padded <code>[+N]</code>/<code>[-N]</code> fixed-width button, two-digit clamp</li>
+<li><a href="./v.html">v</a> salad-green <code>+</code> (G→256) / salmon <code>-</code> (new 'A') THEME slots in view/bro.js</li>
+<li><a href="./v.html">v</a> green: view test passes; real-click + pty mint bare post/get, titled <a href="./post.html">post</a> in the row ctx (the LANDING of bare get/post is WORK-003's dispatch, not here)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>test/work/getctx (WORK-002, off-limits) clicks the retired <code>[get]</code> → now RED; rework it to click <code>[-N]</code> when WORK-002/003/004 weave together.</li>
+<li>clone went behind 1 mid-session: DIFF-014 (f168d856, diff.js) landed upstream, unmerged; my commit is ahead 1 — left for the user to weave/merge.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Local commit <code>896ed3d8</code> (///be) + <code>2e5e51ac</code> (//WORK-004/test sub), ahead 1; NOT landed/merged.  Files: views/work/work.js, view/bro.js, test/work/view/ {check.js, run.sh, clickpty.py}.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

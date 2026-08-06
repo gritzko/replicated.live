@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>URI-010</title>
+<title>URI-010 DONE: relative URI paths (path-rooted or .//../) must resolve against the wt root via cwd</title>
+<meta property="og:title" content="URI-010 DONE: relative URI paths (path-rooted or .//../) must resolve against the wt root via cwd">
+<meta property="og:description" content="A URI with a RELATIVE path — path-rooted (no scheme/authority: .?, dir/file?) or opening .//../ — MUST resolve its path against the current cwd, then re-express it relative to the WORKTREE ROOT. Example: from the be/test submodule dir, jab post .? resolves . → be/test, so the effective URI is be/test? and the be/test submodule posts onto its trunk. Today be/ does the opposite: the ./-strip pattern (verbs/put/put.js:46, verbs/delete/delete.js:55, and DIS-054's new makeNarrow verbs/post/fold-decide.js:90) drops the ./ and matches wt-ROOT-relative leaves with NO cwd rebasing — cwd is read only by core/discover.js:find() to locate the .be anchor — so .?/./foo from a subdir silently hit the wrong path. First consumer: be/ post/put/delete narrowing (DIS-054); the pure URI parser stays cwd-agnostic. Method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/URI/URI-010.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>URI-010 <a href="./HIGH.html">HIGH</a>: relative URI paths (path-rooted or <code>./</code>/<code>../</code>) must resolve against the wt root via cwd</h1>
+<h1>URI-010 <a href="./DONE.html">DONE</a>: relative URI paths (path-rooted or <code>./</code>/<code>../</code>) must resolve against the wt root via cwd</h1>
+<div>
+<p>
+Now: DONE Sev: HIGH
+</p>
+</div>
 <p>
 A URI with a RELATIVE path — path-rooted (no scheme/authority: <code>.?</code>, <code>dir/file?</code>) or opening <code>./</code>/<code>../</code> — MUST resolve its path against the current cwd, then re-express it relative to the WORKTREE ROOT. Example: from the <code>be/test</code> submodule dir, <code>jab post .?</code> resolves <code>.</code> → <code>be/test</code>, so the effective URI is <code>be/test?</code> and the <code>be/test</code> submodule posts onto its trunk. Today <code>be/</code> does the opposite: the <code>./</code>-strip pattern (<code>verbs/put/put.js:46</code>, <code>verbs/delete/delete.js:55</code>, and DIS-054's new <code>makeNarrow</code> <code>verbs/post/fold-decide.js:90</code>) drops the <code>./</code> and matches wt-ROOT-relative leaves with NO cwd rebasing — cwd is read only by <code>core/discover.js:find()</code> to locate the <code>.be</code> anchor — so <code>.?</code>/<code>./foo</code> from a subdir silently hit the wrong path. First consumer: be/ post/put/delete narrowing (<a href="../DIS/DIS-054.html">DIS-054</a>); the pure URI parser stays cwd-agnostic. Method <a href="../../rule/Issues.html">Issues</a>.
 </p>
@@ -43,7 +52,9 @@ A URI with a RELATIVE path — path-rooted (no scheme/authority: <code>.?</code>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>One shared <code>resolveWtPath(uriPath, cwdRelRoot)</code> in <code>shared/util/path.js</code>, applied once per command before verbs read <code>u.path</code>; verbs stop <code>./</code>-stripping ad hoc.</li>
+<li>SUPERSEDED 2026-07-14 — the shape survived, the API did not: the &quot;one shared resolver applied once per command&quot; is now <code>discover.argRel(repo, raw)</code> over <code>_ctxSub(repo)</code>/<code>be.ctxDir</code> (<a href="./BE-032.html">BE-032</a>), NOT <code>resolveWtPath(uriPath, cwdRelRoot)</code> in <code>path.js</code>. <code>be.ctxDir</code> (<code>core/loop.js:405</code>) is <code>io.cwd()</code> for a CLI run and the nav'd dir on pager reentry, so CLI and TUI share ONE context — this ticket's goal, reached by another road.</li>
+<li>CORRECTED 2026-07-14: &quot;verbs stop <code>./</code>-stripping ad hoc&quot; is right for the RESOLVE step and WRONG for the decode step — a downstream <code>./</code>-shed (<code>fold-decide.js</code> <code>makeNarrow</code>, and the same pattern in <code>put.js:78</code>/<code>delete.js:66</code> <code>normRel</code>) decodes argRel's dir-form output and must stay.</li>
+<li>One shared <code>resolveWtPath(uriPath, cwdRelRoot)</code> in <code>shared/util/path.js</code>, applied once per command before verbs read <code>u.path</code>; verbs stop <code>./</code>-stripping ad hoc. <a href="./the original 2026-06-28 decision, kept for the record.html">the original 2026-06-28 decision, kept for the record</a></li>
 <li>Trigger = relative path: path-rooted URI (no scheme &amp;&amp; no authority) OR path opens <code>./</code>/<code>../</code>. Absolute <code>/…</code> and scheme/authority URIs bypass.</li>
 <li>Orthogonal to <a href="URI-009.html">URI-009</a> but both feed <a href="../DIS/DIS-054.html">DIS-054</a> slot detection: <a href="URI-009.html">URI-009</a> tells a bare <code>.</code> path from an absent one, this ticket then anchors it to cwd.</li>
 </ul>
@@ -51,9 +62,11 @@ A URI with a RELATIVE path — path-rooted (no scheme/authority: <code>.?</code>
 <ul class="todo">
 <li class="done"><input type="checkbox" checked disabled> Repro <code>test/put/subdir-cwd</code> (golden authored PRE-fix, ran RED: &quot;no eligible paths&quot;+PUTNONE) — <code>cd blog &amp;&amp; jab put escher.mkd</code> stages <code>blog/escher.mkd</code>.</li>
 <li class="done"><input type="checkbox" checked disabled> Repro <code>test/post/subdir-narrow</code> — <code>cd sub &amp;&amp; jab post . '#msg'</code> narrows to <code>sub</code> (pre-fix <code>.</code> was swallowed as a message word, BOTH files committed). NOTE: uses <code>post . '#msg'</code>, not <code>.?</code> — Path-slot + bare-<code>?</code> trunk needs <a href="URI-009.html">URI-009</a> presence detection in isBareTrunkQuery (left as-is).</li>
-<li class="done"><input type="checkbox" checked disabled> <code>resolveWtPath</code> + <code>cwdRel</code> in <code>shared/util/path.js</code> (join cwd, normalize dots, re-anchor, <code>URICLIMB</code> on climb-above; absolute/&quot;&quot; bypass, dir-form <code>/</code> kept).</li>
-<li class="done"><input type="checkbox" checked disabled> Routed put (putRun args + move-dst), delete (normRel), post narrow (isPathSlot takes bare <code>.</code>/<code>..</code>; resolve before decide), log (parseArg strip dropped); <code>fold-decide.js</code> <code>./</code>-strip retired. spell.js/pager untouched (out of scope).</li>
-<li class="done"><input type="checkbox" checked disabled> Green: 148/149 in wt <code>//URI-010</code> (only the pre-existing be-js-bro-view listing-order golden drift); probes: <code>put ../../x</code> → URICLIMB, <code>put ./e.mkd</code> → <code>blog/e.mkd</code>.</li>
+<li class="wontfix"><input type="checkbox" disabled> <del><code>resolveWtPath</code> + <code>cwdRel</code> — DEAD 2026-07-14: <a href="./BE-011.html">BE-011</a> shipped <code>resolveInTree</code>/<code>wtJoin</code> (<code>NAVESCAPE</code>) and <a href="./BE-032.html">BE-032</a> shipped <code>argRel</code>/<code>ctxSub</code> instead. Main's <code>argRel(repo, raw)</code> = <code>resolveInTree(_ctxSub(repo), raw)</code> IS this ticket's routing, dir-form and all. Do not merge the old helpers.</del></li>
+<li class="done"><input type="checkbox" checked disabled> Routed put/delete/log — LANDED IN MAIN via <a href="./BE-032.html">BE-032</a> (a DIFFERENT API): <code>put.js:676/678</code>, <code>delete.js:332</code>, <code>log.js:494</code> all call <code>discover.argRel</code>; <code>test/put/subdir-multi</code> is this ticket's put repro, landed and green. The <code>cd blog &amp;&amp; jab put escher.mkd</code> symptom is FIXED in main — re-verified 2026-07-14.</li>
+<li class="done"><input type="checkbox" checked disabled> post narrow — landed in wt <code>//URI-016-cwd</code> under <a href="./URI-016.html">URI-016</a> (2026-07-14): <code>isPathSlot</code> takes bare <code>.</code>/<code>..</code>, <code>slots.narrow = discover.argRel(info, …)</code> once after <code>parseSlots</code>. Repro <code>test/post/subdir-narrow</code> lifted from the old tree. ORCHESTRATOR-VERIFIED: same test file RED on main (commits root.txt AND sub/s.txt, <code>2 ok</code>) / GREEN on the wt; post bucket main 11/12 vs wt 12/12, no regressions.</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>&quot;<code>fold-decide.js</code> <code>./</code>-strip retired&quot; — WRONG, do NOT do this. <code>argRel</code> PRESERVES dir-form and emits <code>./</code> for the wt root, and <code>makeNarrow</code>'s strip is what decodes that to &quot;no narrow&quot;. Retiring it makes <code>cd &lt;root&gt; &amp;&amp; jab post . '#msg'</code> match nothing → <code>POSTNONE: no changes since base</code>. It is not a cwd-blind strip; <code>argRel</code> rebases upstream. Guarded by <code>test/post/rootdot-narrow</code>.</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>&quot;Green: 148/149, bro-view golden drift&quot; — stale: the tree has moved to 190 cases; the 7 failures are network/env-shaped (<code>get-be</code>, <code>get-http</code>, <code>get-oddname</code>, <code>sub-wtsrc</code>, <code>wire-http</code>×3), no bro drift.</del></li>
 <li class="open"><input type="checkbox" disabled> Cross-check native <code>be</code> CLI; split a beagle/ ticket if it diverges.</li>
 <li class="open"><input type="checkbox" disabled> Merge wt <code>//URI-010</code> (pending human gate).</li>
 </ul>
@@ -64,10 +77,25 @@ A URI with a RELATIVE path — path-rooted (no scheme/authority: <code>.?</code>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>IMPLEMENTED in wt <code>//URI-010</code> (2026-07-07, worker agent; orchestrator re-ran the suite + inspected the diff) — UNCOMMITTED, pending review/merge. Native <code>be</code> CLI cross-check still open.</li>
+<li>AUDIT 2026-07-14: the wt is NOT <code>work/URI-010</code> (no such hive cell — that name in this ticket is stale); it survives as the OLD FLAT tree <code>/home/gritzko/src/URI-010/</code> (<code>be -&gt; .</code> self-symlink). Still unmerged: no URI-010 commit in the be log.</li>
+<li>SUPERSEDED IN PART 2026-07-14: main has MOVED PAST this patch. <a href="./BE-011.html">BE-011</a> replaced <code>cwdRel</code>/<code>resolveWtPath</code> with the segment calculator <code>split</code>/<code>merge</code>/<code>resolveInTree(base, rel)</code>/<code>wtJoin</code> (<code>NAVESCAPE</code>, not <code>URICLIMB</code>) — the better engine, and it already does this ticket's dot-normalisation + climb-out refusal. So the HELPER half of the patch is dead; do NOT merge it.</li>
+<li>The ROUTING half is still LIVE and is the whole remaining value: main DROPPED <code>cwdRel</code> (only a local duplicate survives at <code>views/status/status.js:505</code>, cf. <a href="./CODE-020.html">CODE-020</a>), and EVERY <code>resolveInTree</code> call in main passes base <code>&quot;&quot;</code> or a view path, NEVER the cwd (<code>shared/project.js:59</code>) — i.e. <a href="./BE-032.html">BE-032</a>'s symptom, live. Being ported onto main's API under <a href="./URI-016.html">URI-016</a> in wt <code>//URI-016-cwd</code>, lifting this tree's repros (<code>test/put/subdir-cwd</code>, <code>test/post/subdir-narrow</code>) per gritzko's 2026-07-14 authorisation.</li>
+<li>WATCH: this tree's <code>resolveWtPath</code> PRESERVED the trailing-slash dir-form; main's <code>resolveInTree</code> drops it via <code>merge(segs)</code>. Any consumer depending on dir-form is a port hazard.</li>
+<li>IMPLEMENTED in wt (2026-07-07, worker agent; orchestrator re-ran the suite + inspected the diff) — UNCOMMITTED. Native <code>be</code> CLI cross-check still open.</li>
 <li>AUDIT 2026-07-07: confirmed NOT merged — <code>resolveWtPath</code> present in <code>/home/gritzko/src/URI-010/be/shared/util/path.js</code> (+put/delete/post/log call sites) but ABSENT from <code>~/src/journal/be</code>; no URI-010 commit in the be log. Still open.</li>
 <li>Worker side-findings (not fixed there): (1) fresh colocated wt <code>mkdir .be; jab put f; jab post 'm'</code> → JS exception <code>Not a directory</code> in <code>writePack→book→_mmap</code> — ticket-worthy 3-command repro; (2) after a narrowed post, an out-of-scope STAGED file reads back <code>mod</code> (its put row seems consumed) — intended fold semantics or a bug, needs a ruling.</li>
 <li>Filed 2026-06-28 from the <code>jab post .?</code> (be/test submodule onto trunk) rule. Pins POST.mkd's underspecified Path-slot cwd semantics to git-like cwd resolution, re-anchored at the wt root.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

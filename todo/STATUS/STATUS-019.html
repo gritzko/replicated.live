@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STATUS-019: per-dir rev tree, the universal fs change witness</title>
+<meta property="og:title" content="STATUS-019: per-dir rev tree, the universal fs change witness">
+<meta property="og:description" content="Views recompute fs-derived state on every render; a todo re-render in the resident pager pays ~2.6 s of classifyMerge over 88 wts + 81 subs. Ruling gritzko 2026-08-04: replace BRO-043's per-repo value buckets with ONE cheap universal change witness — a rev tree like { &quot;be&quot;: { rev: 3, sub: { &quot;core&quot;: { rev: 2 } } } }: one shared counter, any fsw event increments it and stamps the event's dir AND every ancestor up the tree. shared/cache.js stores no view values anymore; each consumer keeps its own memo and compares the subtree rev it saw. Bigger views (todo, work) can then track many spots and skip recompute where the rev stands still.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/STATUS/STATUS-019.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>STATUS-019: per-dir rev tree, the universal fs change witness</h1>
+<div>
+<p>
+Now: OPEN Sev: MED Ask: gritzko Rep: ///be/ See: BRO-043 On1: JAB-032
+</p>
+</div>
+<p>
+Views recompute fs-derived state on every render; a <code>todo</code> re-render in the resident pager pays ~2.6 s of classifyMerge over 88 wts + 81 subs. Ruling gritzko 2026-08-04: replace <a href="./BRO-043.html">BRO-043</a>'s per-repo value buckets with ONE cheap universal change witness — a rev tree like <code>{ &quot;be&quot;: { rev: 3, sub: { &quot;core&quot;: { rev: 2 } } } }</code>: one shared counter, any fsw event increments it and stamps the event's dir AND every ancestor up the tree. <code>shared/cache.js</code> stores no view values anymore; each consumer keeps its own memo and compares the subtree rev it saw. Bigger views (todo, work) can then track many spots and skip recompute where the rev stands still.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+<a href="./JAB-032.html">JAB-032</a> landed (jab ed75d4ce): <code>fsw.dir</code> returns a real signed wd and every drained record carries it, so ONE watcher fd serves the whole tree with a wd→dir map doing attribution — cache.js's one-fd-per-repo trick is dead weight now.
+</p>
+<ul>
+<li>Consumers today: views/status/status.js gatherRepo (peek + state fingerprint + take, status.js:282); todo and work cache NOTHING — todo's per-wt wtStat (classifyMerge + foldSubs) recomputes on every render (todo.js:555 runReset).</li>
+<li><code>be todo</code> tty profile 2026-08-04: classifyMerge top ~0.9 s + mounted subs 1.7 s (hash-unstamped 716 + 529 ms inside those); the board itself 76 ms.</li>
+<li>fsw contract (jab/fsw.cpp): a record is {wd signed, name}; <code>wd === fsw.OVERFLOW</code> (-1) = the kernel dropped events; a drain Buf too small for the burst is the SAME fact; kqueue names are &quot;&quot; = rescan-this-dir; <code>fsw.unwatch</code> leaves the kernel watch alive (ABC-013), unclaimed wds keep firing — ignore them.</li>
+<li>io.readdir grew a skip-subtree option (jab 496278f2) — the arming walk should use it.</li>
+<li>Cold runs are OUT of scope: ruling 4 stands (no persisted form), the cold 3 s is a hashing/build problem (unstamped pre-2026-07-17 clones), not a caching one.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+The module shrinks to the rev tree; values move out to the consumers.
+</p>
+<ul>
+<li>shared/cache.js API: <code>start(root)</code>, <code>poll()</code>, <code>rev(path)</code> — arm lazily on the first query, answer the spot's rev (a live-watcher token when unarmed) — plus <code>bumpRoot()</code>, <code>stop()</code>, <code>stats()</code>; <code>take</code>/<code>peek</code>/<code>drop</code>/<code>dropAll</code> and the per-repo buckets GO AWAY.</li>
+<li>On any event: bump the shared counter once, stamp the event dir's spot and every ancestor spot with it; siblings and descendants keep their revs.</li>
+<li>OVERFLOW or a lost burst bumps the ROOT spot (every rev under it moves — all consumers miss); the pager's <code>R</code>/<code>r</code> maps to <code>bumpRoot()</code> (pager.js:568).</li>
+<li>Ruling 4 verbatim: revs exist ONLY under a live watcher; failed <code>start</code> → <code>rev()</code> says so and every consumer recomputes; a missed event is never read as truth.</li>
+<li>Port status.js: gatherRepo keeps its own <code>{rows, state, rev}</code> memo; the <code>state</code> fingerprint STAYS — shard refs move below <code>.be/</code> (unwatched, object dirs churn), revs cannot witness them.</li>
+<li>todo: memoize wtStat per wt keyed by <code>rev(wtDir)</code>; gate foldSubs on the sub boundary's rev — the &quot;cheap dirty probe&quot; from the 2026-08-04 profile, item 2.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Reuse classify.wtWalk, util/ignore.js, discover.wtpath for the arming walk; <code>.be/</code> re-admitted, everything below it ignored — exactly as today.</li>
+<li>Keep the ONE globalThis state slot (the jsrc-symlink double-instance hazard, cache.js:42).</li>
+<li>Rework test/cache.js and test/status/cache/drive.js to the new API, repro-first; NO other tests edited without explicit permission.</li>
+<li>Probe the RUNNING jab for JAB-032 first (<code>fsw.dir</code> returns a nonzero wd); a stale jab = stop and report, never improvise.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>No watcher / unarmable dir → <code>rev()</code> hands out a FRESH never-repeating token, so a plain <code>===</code> compare always recomputes; a pre-JAB-032 jab (wd=0) yields tokens only, never an unwitnessed rev.</li>
+<li><code>bumpRoot()</code> stamps EVERY spot; the arming walk re-runs only when that spot's own rev moved.</li>
+<li>stats() hits/misses tally at the rev level (same rev answered twice = hit), drops = bumps — keeps the pager's stats line and the untouched pty test meaningful.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> rev-tree core in shared/cache.js (one wfd, wd→dir map, bump-ancestors)</li>
+<li><a href="./v.html">v</a> status.js port (own memo keyed by rev + state fingerprint)</li>
+<li><a href="./v.html">v</a> todo wtStat per-wt rev gating + foldSubs boundary probe</li>
+<li><a href="./v.html">v</a> tests reworked (test/cache.js, test/status/cache/drive.js), repro first</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>todo's wtStat memo is rev-keyed ONLY (per this ticket): a track tip moved by another wt on a shared store (below unwatched <code>.be/</code>) can leave a stale ahbeh count on the board until something under the wt changes — status.js's <code>state</code> fingerprint has no twin here; ticket candidate.</li>
+<li>Wiring io.readdir's <code>&quot;skip&quot;</code> into the arming walk means changing classify.wtWalk itself (shared with wtScan) — left alone, ticket candidate.</li>
+<li>test/cache.js goes red under a pre-JAB-032 jab (tokens never stand still) — the SAFE direction, but the installed <code>~/bin/jab</code> (07:38) must be updated to a JAB-032 build before the suite is run against it.</li>
+<li>FIELD BUG (fixed in //TODO-006/): the rev tree started in Pager.run AFTER the cold render computed (core/loop.js:478), so the first re-fire always missed wholesale — status.js consumers included; the loop.js early-start fix lands with <a href="./TODO-006.html">TODO-006</a>.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Staged in <code>//STATUS-019/</code> (nothing committed): shared/cache.js (rev-tree rewrite), views/status/status.js, views/todo/todo.js, views/bro/pager.js (<code>R</code>/<code>r</code> → bumpRoot), test/cache.js, test/status/cache/drive.js.</li>
+<li>Full be suite vs jab/build/bin/jab (07:58, JAB-032): 349/349 pass, orchestrator-verified via ctest -DJAB_BIN=; a pty probe of a live <code>todo</code> board showed per-wt hits with only the written wt's row moving.</li>
+<li>Suggested commit: <code>STATUS-019: per-dir rev tree replaces the view cache</code></li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

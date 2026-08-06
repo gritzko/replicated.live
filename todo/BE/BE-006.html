@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BE-006</title>
+<title>BE-006 DONT: a single failed push reports as a stack of Error / raw lines</title>
+<meta property="og:title" content="BE-006 DONT: a single failed push reports as a stack of Error / raw lines">
+<meta property="og:description" content="One unreachable-remote push prints FIVE lines for ONE failure: a raw ssh: stderr leak, a be: remote … unreachable line, then Error: WIREUNRCH and Error: BEDOGEXIT twice (one per spawned be process level). Collapse to ONE uniform error line — name + verb + URI + code, single-sourced (the BE-003 contract). See BE-003, POST-020.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BE/BE-006.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>BE-006: a single failed push reports as a stack of Error / raw lines</h1>
+<h1>BE-006 <a href="./DONT.html">DONT</a>: a single failed push reports as a stack of Error / raw lines</h1>
+<div>
+<p>
+Now: DONT
+</p>
+</div>
 <p>
 One unreachable-remote push prints FIVE lines for ONE failure: a raw <code>ssh:</code> stderr leak, a <code>be: remote … unreachable</code> line, then <code>Error: WIREUNRCH</code> and <code>Error: BEDOGEXIT</code> twice (one per spawned <code>be</code> process level). Collapse to ONE uniform error line — name + verb + URI + code, single-sourced (the <a href="BE-003.html">BE-003</a> contract). See <a href="BE-003.html">BE-003</a>, <a href="../POST/POST-020.html">POST-020</a>.
 </p>
@@ -21,51 +30,24 @@ One unreachable-remote push prints FIVE lines for ONE failure: a raw <code>ssh:<
 <code>be post ssh://localhost/src/dogs</code> to an unreachable git remote, verbatim:
 </p>
 <ul>
-<li><code>ssh: connect to host github.com port 22: Connection refused</code> — the ssh<p>
-subprocess's OWN stderr, inherited through the transport.
-</p>
-</li>
-<li><code>be: remote &lt;url&gt; is unreachable (transport refused or timed out).</code> —<p>
-<code>keeper/WIRECLI.c:86</code>; the same failure, restated.
-</p>
-</li>
-<li><code>Error: WIREUNRCH</code> then <code>Error: BEDOGEXIT</code> ×2 — <code>abc/PRO.h:384</code>'s <code>MAIN</code><p>
-error printer fires once PER spawned <code>be</code> process (sub-recursion), so the code re-announces at every level as the exit propagates up.
-</p>
-</li>
-<li>Recurred 2026-06-22 (JS-053 reconcile) on OTHER verbs, same stacked spray:<p>
-<code>be head be://…?/beagle</code> (abc sub) → <code>HOMENOPROJ</code>+<code>WIRENOTRP</code>+<code>BEDOGEXIT</code> ×2; <code>be patch '?6a0ce1b7!'</code> → <code>WIREUNRCH</code>+<code>BEDOGEXIT</code>. Not just post (see <a href="./SUBS-032.html">SUBS-032</a>).
-</p>
-</li>
+<li><code>ssh: connect to host github.com port 22: Connection refused</code> — the ssh subprocess's OWN stderr, inherited through the transport.</li>
+<li><code>be: remote &lt;url&gt; is unreachable (transport refused or timed out).</code> — <code>keeper/WIRECLI.c:86</code>; the same failure, restated.</li>
+<li><code>Error: WIREUNRCH</code> then <code>Error: BEDOGEXIT</code> ×2 — <code>abc/PRO.h:384</code>'s <code>MAIN</code> error printer fires once PER spawned <code>be</code> process (sub-recursion), so the code re-announces at every level as the exit propagates up.</li>
+<li>Recurred 2026-06-22 (JS-053 reconcile) on OTHER verbs, same stacked spray: <code>be head be://…?/beagle</code> (abc sub) → <code>HOMENOPROJ</code>+<code>WIRENOTRP</code>+<code>BEDOGEXIT</code> ×2; <code>be patch '?6a0ce1b7!'</code> → <code>WIREUNRCH</code>+<code>BEDOGEXIT</code>. Not just post (see <a href="./SUBS-032.html">SUBS-032</a>).</li>
 </ul>
 <h3>Goals</h3>
 <p>
 A failed push (or any error exit) reports ONCE, uniformly.
 </p>
 <ul>
-<li>One <code>name + verb + URI + code</code> line per failure (<a href="BE-003.html">BE-003</a>); no `Error:<p>
-&lt;code&gt;<code> stack from nested </code>be` processes.
-</p>
-</li>
-<li>The real cause (<code>WIREUNRCH</code>) wins; the generic <code>BEDOGEXIT</code> re-throws from<p>
-parent frames are suppressed or collapsed.
-</p>
-</li>
-<li>Raw transport (<code>ssh:</code>) stderr is captured/labelled, not leaked alongside the<p>
-be-level <code>unreachable</code> line (one transport message, not two).
-</p>
-</li>
+<li>One <code>name + verb + URI + code</code> line per failure (<a href="BE-003.html">BE-003</a>); no <code>Error: &lt;code&gt;</code> stack from nested <code>be</code> processes.</li>
+<li>The real cause (<code>WIREUNRCH</code>) wins; the generic <code>BEDOGEXIT</code> re-throws from parent frames are suppressed or collapsed.</li>
+<li>Raw transport (<code>ssh:</code>) stderr is captured/labelled, not leaked alongside the be-level <code>unreachable</code> line (one transport message, not two).</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>General form of <a href="BE-003.html">BE-003</a>; the <code>PRO.h</code> <code>MAIN</code> printer is process-global, so the<p>
-fix must gate per-process re-printing or thread the code up without re-announcing.
-</p>
-</li>
-<li>A child <code>be</code>'s exit code must still propagate (BEDOGEXIT carries the failure),<p>
-only its user-facing line is suppressed at non-root levels.
-</p>
-</li>
+<li>General form of <a href="BE-003.html">BE-003</a>; the <code>PRO.h</code> <code>MAIN</code> printer is process-global, so the fix must gate per-process re-printing or thread the code up without re-announcing.</li>
+<li>A child <code>be</code>'s exit code must still propagate (BEDOGEXIT carries the failure), only its user-facing line is suppressed at non-root levels.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
@@ -78,14 +60,8 @@ only its user-facing line is suppressed at non-root levels.
 </p>
 <ul class="todo">
 <li class="open"><input type="checkbox" disabled> Repro: <code>be post</code> to an unreachable remote; assert exactly one error line.</li>
-<li class="open"><input type="checkbox" disabled> Suppress nested-process <code>Error:</code> re-prints: gate <code>dog/abc/PRO.h:384</code> (or the<p>
-  <code>BERun</code>/<code>bepost_spawn_sub</code> spawn layer, <code>BE.cli.c:393</code>) so only the root   <code>be</code> announces; child exit codes still propagate via <code>BE_NONE_LOW_BYTE</code>.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Capture/label raw <code>ssh:</code> transport stderr instead of leaking it, then drop<p>
-  the duplicate <code>keeper/WIRECLI.c:87</code> restatement into the one <a href="BE-003.html">BE-003</a> line.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Suppress nested-process <code>Error:</code> re-prints: gate <code>dog/abc/PRO.h:384</code> (or the <code>BERun</code>/<code>bepost_spawn_sub</code> spawn layer, <code>BE.cli.c:393</code>) so only the root <code>be</code> announces; child exit codes still propagate via <code>BE_NONE_LOW_BYTE</code>.</li>
+<li class="open"><input type="checkbox" disabled> Capture/label raw <code>ssh:</code> transport stderr instead of leaking it, then drop the duplicate <code>keeper/WIRECLI.c:87</code> restatement into the one <a href="BE-003.html">BE-003</a> line.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <p>
@@ -95,5 +71,16 @@ only its user-facing line is suppressed at non-root levels.
 <p>
 (pending)
 </p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

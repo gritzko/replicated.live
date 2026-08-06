@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WHY-002: machine-readable plain why — verbatim body, runs/commits footer, fragment scoping</title>
+<meta property="og:title" content="WHY-002: machine-readable plain why — verbatim body, runs/commits footer, fragment scoping">
+<meta property="og:description" content="The colour why: view bakes attribution into hidden O tokens (#rrggbb commit ?&lt;hashlet&gt;, WHY-001); --plain (view/bro.js whyPlain) strips U/O and emits bare file bytes, so a pipe consumer (LLM agent, grep, CI) gets NO attribution at all. Agents read byte streams only — the alt-screen TUI is invisible to them (BRO-027).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/WHY/WHY-002.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WHY-002: machine-readable plain <code>why</code> — verbatim body, runs/commits footer, fragment scoping</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The colour <code>why:</code> view bakes attribution into hidden <code>O</code> tokens (<code>#rrggbb commit ?&lt;hashlet&gt;</code>, <a href="WHY-001.html">WHY-001</a>); <code>--plain</code> (view/bro.js whyPlain) strips <code>U</code>/<code>O</code> and emits bare file bytes, so a pipe consumer (LLM agent, grep, CI) gets NO attribution at all. Agents read byte streams only — the alt-screen TUI is invisible to them (<a href="../BRO/BRO-027.html">BRO-027</a>).
+</p>
+<ul>
+<li>Dispatch is already per-hunk JS: renderHunkLog sniffs hasWhyRuns and routes plain why hunks to whyPlain — the change is local, the sink/hunk contract stays untouched.</li>
+<li>Attribution truth is token RUNS (one line can carry several origins), so any line-prefix blame column is lossy; emit runs, derive projections later if wanted.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Plain why output an agent reads in one pass — self-contained, greppable, three parts:
+</p>
+<ul>
+<li>Banner <code>why &lt;uri&gt;</code> (verb form); body = file bytes behind a <code>cat -n</code>-style gutter (6 right-aligned + 2 spaces), ABSOLUTE file line numbers even for a scoped fragment.</li>
+<li><code>why-runs</code> footer: one line per origin commit, 8-char hashlet, <code>line.col-line.col</code> spans, <code>*</code> marks a run crossing a line boundary, <code>wt......</code> = the unattributed working-tree layer.</li>
+<li><code>why-commits</code> legend: <code>hashlet date5 author title</code> per contributing commit; date5 is the 5-char <code>DDMon</code> / current-week <code>DowDD</code> form <code>jab log</code> prints.</li>
+<li>Fragment scoping: <code>why &lt;path&gt;#L41</code> (line anchor) and <code>why &lt;path&gt;#authorIdent</code> / <code>#authorIdent:L41</code> (symbol anchor, the HUNKu8sMakeURI convention) narrow the hunk; WITH a fragment the body defaults to ONE PAGE, without — the full file. Locator resolution is <a href="../SPOT/SPOT-001.html">/todo/SPOT/SPOT-001</a>'s shared/spot.js, not why-local code.</li>
+<li><code>?a..b</code> range mode keeps the same shape; surfaced deleted runs carry a <code>-</code> mark in why-runs.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fragment grammar must not collide with hashlets: 6..40-hex resolves as a hashlet FIRST (<a href="../../be/core/resolve_hash.js">resolve_hash</a> order is mandatory); non-hex symbols and <code>L</code>/<code>:L</code> forms are locators.</li>
+<li>Locator parsing + resolution live in shared/spot.js (<a href="../SPOT/SPOT-001.html">/todo/SPOT/SPOT-001</a>); why.js only maps the returned byte span onto the weave's alive view and picks the page window.</li>
+<li>whyPlain already walks <code>[visible][O]</code> pairs with byte offsets in hand; line.col comes from counting newlines in that SAME walk — no second scan, no new engine.</li>
+<li>&quot;One page&quot; is a constant to pick: pager rows when a tty is present, a fixed default (e.g. 48 body lines centered on the anchor) in pipe mode.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Body stays verbatim modulo the fixed-width gutter — a mechanical 8-column strip recovers the exact file bytes.</li>
+<li>Footer section headers are column-0 barewords (<code>why-runs</code>, <code>why-commits</code>): one pass splits the hunk, <code>grep &lt;hashlet&gt;</code> pulls both spans and legend.</li>
+<li>The anchor grammar is URI-level, not verb-level — <code>cat:</code>/<code>diff:</code> can adopt the same fragments later (file a separate ticket if pursued).</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> whyPlain: line gutter + why-runs + why-commits emission</li>
+<li><a href="./ .html"> </a> parseArg: fragment → shared/spot.js locator (<a href="../SPOT/SPOT-001.html">/todo/SPOT/SPOT-001</a>), one-page default with fragment</li>
+<li><a href="./ .html"> </a> range mode: <code>-</code> marks on deleted runs in why-runs</li>
+<li><a href="./ .html"> </a> repro: golden plain-output check under be/test/why/ (buildBody + whyPlain, no loop drive)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<p>
+(none yet)
+</p>
+<h2>Outcome</h2>
+<p>
+(pending)
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

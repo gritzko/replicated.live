@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MARK-011: rendered pages carry no OG meta and a filename &lt;title&gt; — Bluesky link cards come up blank</title>
+<meta property="og:title" content="MARK-011: rendered pages carry no OG meta and a filename &lt;title&gt; — Bluesky link cards come up blank">
+<meta property="og:description" content="A Bluesky link to https://replicated.live/blog/worktree.html shows no title and no preview image: the page head has no Open Graph annotations at all, and OG-family scrapers (Bluesky, Slack, Mastodon...) read nothing else. renderDoc (verbs/mark/render.js:426-442) emits only charset, viewport and &lt;title&gt;; the injected html/head.html is just the stylesheet link; BOTH callers pass the filename stem as the title (verbs/mark/mark.js:74, verbs/rss/rss.js:137) — so the page ships &lt;title&gt;worktree&lt;/title&gt; and nothing else. Compounding: metaOf (verbs/rss/rss.js:53-69) matches only H1 openers (/^#\s+/) while blog posts open with ## — the title loop runs its index to EOF, so the intro loop starts at EOF and collects nothing. One regex miss, two symptoms: filename titles AND an empty &lt;description&gt; in html/feed.rss (verified live for the worktree item, 2026-07-20). No code path extracts a post image, though siteBase() (verbs/rss/rss.js:83-86, reads html/CNAME) already yields the absolute base an og:image needs. Orchestrator-verified diagnosis, 2026-07-20. Method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MARK/MARK-011.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>MARK-011: rendered pages carry no OG meta and a filename <code>&lt;title&gt;</code> — Bluesky link cards come up blank</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
+<p>
+A Bluesky link to <code>https://replicated.live/blog/worktree.html</code> shows no title and no preview image: the page head has no Open Graph annotations at all, and OG-family scrapers (Bluesky, Slack, Mastodon...) read nothing else. <code>renderDoc</code> (<code>verbs/mark/render.js:426-442</code>) emits only charset, viewport and <code>&lt;title&gt;</code>; the injected <code>html/head.html</code> is just the stylesheet link; BOTH callers pass the filename stem as the title (<code>verbs/mark/mark.js:74</code>, <code>verbs/rss/rss.js:137</code>) — so the page ships <code>&lt;title&gt;worktree&lt;/title&gt;</code> and nothing else.  Compounding: <code>metaOf</code> (<code>verbs/rss/rss.js:53-69</code>) matches only H1 openers (<code>/^#\s+/</code>) while blog posts open with <code>##</code> — the title loop runs its index to EOF, so the intro loop starts at EOF and collects nothing.  One regex miss, two symptoms: filename titles AND an empty <code>&lt;description&gt;</code> in <code>html/feed.rss</code> (verified live for the worktree item, 2026-07-20).  No code path extracts a post image, though <code>siteBase()</code> (<code>verbs/rss/rss.js:83-86</code>, reads <code>html/CNAME</code>) already yields the absolute base an <code>og:image</code> needs. Orchestrator-verified diagnosis, 2026-07-20.  Method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Live evidence: <code>html/blog/worktree.html</code> head = charset + viewport + <code>&lt;title&gt;worktree&lt;/title&gt;</code> + stylesheet; feed item for it has <code>&lt;title&gt;worktree&lt;/title&gt;</code> and <code>&lt;description&gt;&lt;/description&gt;</code>.</li>
+<li>The first image of that post is reference-style with a layout fragment: <code>![alt][1]</code> ... <code>[1]: ./img/darwin.jpg#rightw30</code> — image extraction must resolve through refdefs, strip the fragment, and resolve the page-relative path against the page's directory (<code>/blog/img/darwin.jpg</code>).</li>
+<li><code>mark</code> and <code>rss</code> share <code>renderDoc</code> but only <code>rss</code> has <code>metaOf</code>; <code>mark</code> passes no meta at all — both verbs must emit the same head.</li>
+</ul>
+<h3>Goals (gritzko's order, 2026-07-20)</h3>
+<ol>
+<li>The post's opening heading (<code>#</code> or <code>##</code>) becomes the HTML <code>&lt;title&gt;</code>, in both <code>mark</code> and <code>rss</code> renders.  The feed item <code>&lt;title&gt;</code> follows.</li>
+<li>The first image of the post is the preview: <code>og:image</code> with an ABSOLUTE url (<code>siteBase()</code> + resolved page-relative path), refdef-resolved, <code>#fragment</code> stripped.</li>
+<li>Add the annotation block to the head: <code>og:title</code>, <code>og:description</code> (the intro paragraph, markup stripped), <code>og:type</code> = <code>article</code>, <code>og:url</code>.</li>
+<li>Fix <code>metaOf</code>: accept <code>#</code>/<code>##</code> openers; intro extraction must not depend on a matched heading (fixes the empty feed <code>&lt;description&gt;</code>).</li>
+</ol>
+<h3>Constraints</h3>
+<ul>
+<li>Minimal fix.  ONE shared meta extractor used by both verbs (lift into <code>render.js</code> or <code>shared/</code> — implementer's call, keep it small).</li>
+<li>No <code>html/CNAME</code> → no absolute base: OMIT <code>og:url</code>/<code>og:image</code> (OG requires absolute urls) but still emit <code>&lt;title&gt;</code>/<code>og:title</code>/<code>og:description</code>.</li>
+<li>RULING (gritzko, 2026-07-20): verifying against the REAL journal tree is sanctioned — <code>html/</code> and <code>feed.rss</code> are generated artifacts. <code>projectRoot()</code> climbs to the topmost <code>.be</code>, so a render run from the worktree anchors at the journal root and rewrites the live output; that is fine, no <code>BE_ROOT</code> fixture pinning required.</li>
+<li>End-to-end verify on the real post: run the MODIFIED verbs (worktree jsrc) on <code>blog/worktree.mkd</code>; assert in <code>html/blog/worktree.html</code> the <code>&lt;title&gt;</code> equals the heading text, <code>og:image</code> is absolute and fragment-free (<code>https://replicated.live/blog/img/darwin.jpg</code>), <code>og:description</code> is the intro; assert the feed item <code>&lt;description&gt;</code> is non-empty.  A <code>test/</code> regression case (run.sh pattern, <code>BE_ROOT</code>-pinned fixture — <code>test/bro/ticket/run.sh:69</code>) is welcome if cheap, not required.</li>
+<li>Regenerating the real posts and re-posting is NOT part of this ticket (Bluesky snapshots cards at compose time; old skeets stay bare).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>The ONE shared extractor lives in <code>verbs/mark/render.js</code> (both verbs already <code>require</code> it): <code>pageMeta(src, fallback) -&gt; {title, intro, image}</code>, all pure (no fs).  title = the FIRST heading opener at ANY level (<code>#{1,6}</code> — so <code>#</code> and <code>##</code> both work; the old H1-only regex was the bug); intro = the first prose paragraph scanned INDEPENDENTLY of a matched heading (skips blank / heading / image-only / refdef lines), so a missed opener no longer runs the index to EOF; image = the first <code>![alt][label]</code>/<code>![alt](url)</code>, label resolved through the same <code>[key]: url</code> refdefs, <code>#fragment</code> stripped, kept page-relative.  <code>plain()</code> moved from rss.js into render.js (single copy).</li>
+<li>Absolute-url + head assembly is ALSO pure and in render.js: <code>absImage(site, pageRel, rel)</code> resolves the page-relative image against the page's dir via the existing <code>normPath</code>; <code>headMeta(meta, site, outRel)</code> builds the head values (<code>title/intro/url/image</code>) and drops <code>url</code>+<code>image</code> when <code>site===&quot;&quot;</code>. Only <code>siteBase()</code> (reads <code>html/CNAME</code>) does fs, so it stays in the verbs — render.js keeps its pure-JS charter.  mark.js gained a <code>siteBase()</code> copy (4 lines) matching rss.js's.</li>
+<li><code>renderDoc</code> now takes <code>opts.meta</code> (the headMeta result): <code>&lt;title&gt;</code> = the heading (filename stem only as fallback), then an OG block — <code>og:title</code>, <code>og:description</code> (when intro non-empty), <code>og:type=article</code>, then <code>og:url</code> and <code>og:image</code> ONLY when an absolute base exists.</li>
+<li>Both verbs call <code>render.pageMeta</code> once; rss reuses the same <code>meta</code> for the feed item <code>&lt;title&gt;</code>/<code>&lt;description&gt;</code>, so page head and feed never diverge.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Shared meta extractor: title (<code>#</code>/<code>##</code>), intro, first image via refdefs.</li>
+<li class="done"><input type="checkbox" checked disabled> <code>renderDoc</code> head: heading <code>&lt;title&gt;</code> + OG annotation block.</li>
+<li class="done"><input type="checkbox" checked disabled> Both verbs wired; feed item reuses the same meta.</li>
+<li class="done"><input type="checkbox" checked disabled> Real-tree verify: render <code>blog/worktree.mkd</code>, assert head + feed.</li>
+<li class="done"><input type="checkbox" checked disabled> <code>jab put</code> in the worktree; report; suggested commit subject in Outcome.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None.  Note: the live <code>blog/worktree.mkd</code> opens with a single <code>#</code>, so the real-post verification exercises the H1 path; the <code>##</code>-opener bug (the exact <code>metaOf</code> miss) is exercised by the optional <code>test/mark/og</code> fixture.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+Changed (tree-relative, in <code>///be/</code>):
+</p>
+<ul>
+<li><code>verbs/mark/render.js</code> — added <code>pageMeta</code>, <code>plain</code>, <code>absImage</code>, <code>headMeta</code> (exported); <code>renderDoc</code> now emits the heading <code>&lt;title&gt;</code> + OG block from <code>opts.meta</code>.</li>
+<li><code>verbs/mark/mark.js</code> — added <code>siteBase</code>; builds <code>opts.meta</code> via <code>render.pageMeta</code>+<code>render.headMeta</code>, passes it to <code>renderDoc</code>.</li>
+<li><code>verbs/rss/rss.js</code> — deleted the H1-only <code>metaOf</code> and the local <code>plain</code>; uses <code>render.pageMeta</code> for both the page head (<code>opts.meta</code>) and the feed item <code>&lt;title&gt;</code>/<code>&lt;description&gt;</code>.</li>
+</ul>
+<p>
+In <code>//MARK-011/test</code>:
+</p>
+<ul>
+<li><code>test/mark/og/run.sh</code> — new end-to-end case (glob-registered be-js-mark-og); fixture project, real <code>jab rss</code>+<code>jab mark</code>, asserts head + feed + no-CNAME.</li>
+</ul>
+<p>
+Verified — real post, from the worktree so the modified verbs resolve (<code>jab rss blog/worktree.mkd</code>, projectRoot anchoring at the journal root):
+</p>
+<ul>
+<li><code>html/blog/worktree.html</code> head: <code>&lt;title&gt;Tree-of-life and evolution of code&lt;/title&gt;</code> <code>og:title</code> = same; <code>og:type</code> = <code>article</code>; <code>og:url</code>   = <code>https://replicated.live/blog/worktree.html</code>; <code>og:image</code> = <code>https://replicated.live/blog/img/darwin.jpg</code><div>
+<div>
+<div>
+<p>
+   (absolute, <code>#rightw30</code> stripped);
+</p>
+</div>
+</div>
+</div>
+<p>
+  <code>og:description</code> = the intro paragraph (&quot;Beagle is a git-compatible SCM
+</p>
+<div>
+<div>
+<div>
+<p>
+   for modern workflows. ... steering their activity towards an objective.&quot;), markup stripped, non-empty.
+</p>
+</div>
+</div>
+</div>
+</li>
+<li><code>html/feed.rss</code> worktree item: <code>&lt;title&gt;Tree-of-life and evolution of code</code>, <code>&lt;description&gt;</code> non-empty (the same intro).</li>
+<li><code>jab mark blog/worktree.mkd</code> emits the SAME head (both verbs share the extractor).</li>
+<li>Fixture <code>test/mark/og/run.sh</code> (a <code>##</code> opener + refdef image with <code>#frag</code>): <code>PASS [mark/og]</code> — heading <code>&lt;title&gt;</code>, absolute fragment-free <code>og:image</code>, intro-only <code>og:description</code>, non-empty feed <code>&lt;description&gt;</code>, and the no-CNAME degradation (og:url/og:image dropped, title/description kept).</li>
+</ul>
+<p>
+Suggested commit subject:
+</p>
+<div>
+<p>
+MARK-011: OG link-card meta + heading titles for rendered pages
+</p>
+</div>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

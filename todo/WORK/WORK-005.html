@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORK-005: work view — wt rows fade with age, black to grey by the day</title>
+<meta property="og:title" content="WORK-005: work view — wt rows fade with age, black to grey by the day">
+<meta property="og:description" content="Follow-up to the /todo/WORK/WORK-004 button row (gritzko, chat 2026-07-19). Work-view wt rows currently render their text in the default fg regardless of age; nothing signals which trees are stale. Evidence, be tip (///be): - views/work/work.js:396 renders the row's ts via render.dateCol(d.ts||0n) (repo rows :425 alike); d.ts is the wt's tip commit ts (ron60). - Age idiom exists: view/render.js:41 relAge(ts, now) compares ron60 ts vs ron60 now via ronToMs. - &quot;now&quot; is be.now — the run's start ts, refreshed per verb invocation (core/loop.js:461, POST-029 ruling); never scavenge time elsewhere. - The tok tag palette (view/bro.js THEME) is FULL — WORK-004 took the last free tag 'A'; nine grey shades can NOT be nine tags. - UNLANDED overlap: work/WORK-004 (///be#896ed3d8) rewrites the same row-render region (ahbehSpans/wtSpans) and test/work/view/check.js; work/WORK-003 also touches work.js.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/WORK/WORK-005.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WORK-005: work view — wt rows fade with age, black to grey by the day</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Follow-up to the <a href="/todo/WORK/WORK-004.html">WORK-004</a> button row (gritzko, chat 2026-07-19). Work-view wt rows currently render their text in the default fg regardless of age; nothing signals which trees are stale. Evidence, be tip (<code>///be</code>):
+</p>
+<ul>
+<li>views/work/work.js:396 renders the row's ts via <code>render.dateCol(d.ts||0n)</code> (repo rows :425 alike); <code>d.ts</code> is the wt's tip commit ts (ron60).</li>
+<li>Age idiom exists: view/render.js:41 <code>relAge(ts, now)</code> compares ron60 ts vs ron60 now via <code>ronToMs</code>.</li>
+<li>&quot;now&quot; is <code>be.now</code> — the run's start ts, refreshed per verb invocation (core/loop.js:461, POST-029 ruling); never scavenge time elsewhere.</li>
+<li>The tok tag palette (view/bro.js THEME) is FULL — WORK-004 took the last free tag 'A'; nine grey shades can NOT be nine tags.</li>
+<li>UNLANDED overlap: work/WORK-004 (<code>///be#896ed3d8</code>) rewrites the same row-render region (ahbehSpans/wtSpans) and test/work/view/check.js; work/WORK-003 also touches work.js.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+RULING (gritzko, chat 2026-07-19): each wt line's fg reflects the ENTRY's freshness.
+</p>
+<ul>
+<li>Age &lt; 24h: black <code>#000</code>; then ONE grey shade per each further 24h: <code>#111</code>, <code>#222</code>, ...; top off at <code>#888</code> for age over a week.</li>
+<li>Shade = <code>#111 * min(floor(age/24h), 8)</code> — 9 levels, days 0..7 then the 8+ cap.</li>
+<li>Age = <code>be.now</code> minus the row's ts (<code>d.ts</code>, the wt tip commit ts).</li>
+<li>The fade paints the row's TEXT (key, leader, time, hashlet, subject); buttons/O-invites keep their own colors.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Tag space is full — the shade needs a per-row fg mechanism (e.g. direct SGR in the theme idiom), not new tok tags; keep the plain (btns=false) path sane.</li>
+<li>Overlaps UNLANDED work/WORK-004 and work/WORK-003 in views/work/work.js + test/work/view/; build on be tip, reference those wts read-only, expect a weave.</li>
+<li>Amending test/work/view/check.js to pin the fade is AUTHORIZED; no other test edits.</li>
+<li>Rulings in force: be.now is the truth for &quot;now&quot; (no log read-back); pty verification through the real UI path; errors in plain words.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Mechanism = the WHY-001 idiom, fg twin: the work hunk already carries <code>O</code> tokens (button spells) so the pager paints it via view/bro.js paintWhyRow. Each pager wt row now leads with a hidden bare <code>#rrggbb</code> <code>O</code> marker; a new rowFgAt reads it and tints ONLY THEME-default cells (fm/fg==0), so buttons/ ahbeh/invites keep their colours.  No new tok tag (space full).</li>
+<li>fadeHex(d.ts) in work.js: level = min(floor((be.now-ts)/24h), 8), channel = level*0x11; emitted only when btns (pager), so the plain path stays sane.</li>
+<li>render.js exports ronToMs (the age idiom) for the day delta.</li>
+<li>Fixtures pin ages by seed COMMIT ts (SOURCE_DATE_EPOCH), never mock now; the plain date-normalizer gained the this-week <code>Dow15</code> form (ext two ~3.5d).</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> red: new check.js fade asserts fail on tip (<code>got null</code>) before the fix</li>
+<li><a href="./v.html">v</a> the day-shade function: ron60 ts + be.now → grey level 0..8 (fadeHex)</li>
+<li><a href="./v.html">v</a> paint wt-row text with the shade; buttons/invites untouched (paintWhyRow)</li>
+<li><a href="./v.html">v</a> green: check.js pins fresh #000000, 3-day #333333, 8+day #888888; a real-pager (pager.paintRow) + end-to-end <code>work --color</code> fade assertion</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Pre-existing reds at tip UNRELATED to this change (verified with lib reverted): test/bro/color, test/bro/view (golden mismatch, fixture readdir order).</li>
+<li>Overlaps UNLANDED work/WORK-004 (same wtSpans/check.js region) — a weave is expected; built on be tip f168d856 without it.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Local commit <code>2e02815a</code> (///be) + <code>2d4617ff</code> (//WORK-005/test sub); NOT landed/merged.  Files: view/bro.js, view/render.js, views/work/work.js, test/work/view/{check.js, run.sh}.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

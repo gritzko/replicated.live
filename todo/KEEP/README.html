@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>README</title>
+<title>KEEP — keeper dog tickets</title>
+<meta property="og:title" content="KEEP — keeper dog tickets">
+<meta property="og:description" content="The keeper owns the flat per-project object pool (git blobs/trees/commits; branches/tags/remotes are refs into it). Tickets here cover the object store, tree/commit walks, refs, and the wire pack paths. Plan-shaped, cleared via the Issues loop.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/KEEP/README.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -17,9 +21,21 @@ The keeper owns the flat per-project object pool (git blobs/trees/commits; branc
 </p>
 <h2>Active tickets</h2>
 <ul>
+<li><a href="./KEEP-006.html">KEEP-006</a> <strong>OPEN</strong> — a <code>NNNNN.keeper</code> log has no upper bound, so <a href="./GET-044.html">GET-044</a> landed a durable 6.0 GB log no reader can open (<code>io.mmap</code> truncated silently past 2^31, JSC aborted past 4 GiB). RULING: cap at 2 GB (<code>2^31-1</code>, the only bound that survives the whole path); log splitting is fine, indexes already take multiple files. Crossing deltas re-anchor as REF — measured +0.38% of pack on linux.git vs +2.56% for all-REF, and all-REF would also turn 46M chain hops into 46M index lookups and cost the logs their standalone resolvability. Mapper-side guard already in <code>jab/io.cpp</code> (<code>JABC_MAP_MAX</code>).</li>
 <li><a href="KEEP-003.html">KEEP-003</a> <strong>OPEN</strong> — <code>keeper post</code> self-deadlocks: holds the per-shard <code>&lt;store&gt;/&lt;shard&gt;/.lock</code> WRITE flock, then its forked <code>keeper receive-pack</code> blocks acquiring that SAME flock while the parent waits on the child's pipe — permanent deadlock that wedges the shard (hit on libabc, blocked a beagle clone). Fix: avoid the double-acquire.</li>
 <li><a href="KEEP-002.html">KEEP-002</a> <strong>LANDED <code>8f7233c3</code></strong> — torn <code>.keeper.idx</code> (concurrent posters sharing a pid-less temp) served as <code>KEEPNONE</code> for in-pack objects; fix = per-pid temp index names + <code>keep_rebuild_torn_idx</code> rebuilds a short index from the pack on rw-open (which also auto-recovered the live store). Hermetic repro <code>sniff/test/keep002-torn-idx.sh</code>, 282/282.</li>
 <li><a href="KEEP-001.html">KEEP-001</a> <strong>LANDED <code>0eb0afab</code></strong> — converged FOUR near-duplicate tree-walkers (<code>WALK.c</code>, <code>KEEP.c</code> dead chain, <code>WIRECLI.c</code>, <code>CLOSE.c</code>) into one visitor-driven <code>KEEPWalkTree</code> (<code>WALK.h:66</code>); shape B (bounded recursion + hard <code>WALK_MAX_DEPTH</code> cap + right-sized carve, so it also delivers the unlanded MEM-023/024 safety goal), have/close-set dedup as a <code>WALKSKIP</code> visitor return; dead <code>keep_walk_tree</code>/<code>KEEPPush</code> chain deleted. New <code>CLOSEtest</code>, 396/396.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

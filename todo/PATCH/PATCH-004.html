@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PATCH-004</title>
+<title>PATCH-004: be patch '#&lt;sha&gt;' (named-commit cherry-pick) ASAN container-overflow crash</title>
+<meta property="og:title" content="PATCH-004: be patch '#&lt;sha&gt;' (named-commit cherry-pick) ASAN container-overflow crash">
+<meta property="og:description" content="be patch '#&lt;sha&gt;' — cherry-pick ONE named commit onto cur — ABORTS with an ASAN container-overflow (memory corruption) when the named commit is a SIBLING of cur (the two diverged at a common base). Live: from the beagle tree at d6f7e138 (DIS-053, off base 25851a5a), be patch '#ae64dc7f' (SUBS-036, also off 25851a5a — a sibling) → Container overflow / ==NNNN==ABORTING → BEDOGEXIT; the patch applied nothing (the tree was unharmed). So the named-commit cherry-pick / weave path has a real memory bug. The bootstrap binary is ASAN/debug, so it CAUGHT the overflow and aborted — a release build might corrupt silently. Found 2026-06-26 reconciling a fork. Kin of DIS-042's noted PATCH/RESOLVE-side fragility. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PATCH/PATCH-004.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,74 +16,60 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>PATCH-004: <code>be patch '#&lt;sha&gt;'</code> (named-commit cherry-pick) ASAN container-overflow crash</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>be patch '#&lt;sha&gt;'</code> — cherry-pick ONE named commit onto cur — ABORTS with an ASAN container-overflow (memory corruption) when the named commit is a SIBLING of cur (the two diverged at a common base). Live: from the beagle tree at <code>d6f7e138</code> (DIS-053, off base <code>25851a5a</code>), <code>be patch '#ae64dc7f'</code> (SUBS-036, also off <code>25851a5a</code> — a sibling) → <code>Container overflow</code> / <code>==NNNN==ABORTING</code> → <code>BEDOGEXIT</code>; the patch applied nothing (the tree was unharmed). So the named-commit cherry-pick / weave path has a real memory bug. The bootstrap binary is ASAN/debug, so it CAUGHT the overflow and aborted — a release build might corrupt silently. Found 2026-06-26 reconciling a fork. Kin of <a href="../DIS/DIS-042.html">DIS-042</a>'s noted PATCH/RESOLVE-side fragility. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Live repro (bootstrap ASAN binary): beagle wt at <code>d6f7e138</code> (off <code>25851a5a</code>);<p>
-<code>be patch '#ae64dc7f'</code> (<code>ae64dc7f</code> off <code>25851a5a</code>, a sibling) → ASAN &quot;Container overflow&quot; abort + <code>Error: BEDOGEXIT</code>. No partial apply (tree clean after).
-</p>
-</li>
-<li>A named-commit cherry-pick weaves the one commit against base = <code>parent(theirs)</code><p>
-(<a href="../../wiki/PATCH.html">PATCH</a> §&quot;Merge base: full stack vs single commit&quot;). The overflow is somewhere in that path — the graf weave / candidate set / a slice feed.
-</p>
-</li>
-<li><a href="../DIS/DIS-042.html">DIS-042</a> already flagged PATCH/RESOLVE fragility (the branch-form <code>?A</code> resolve<p>
-shadowing); this is a DISTINCT hard CRASH in the <code>#&lt;sha&gt;</code> (cherry-pick) form.
-</p>
-</li>
-<li>Impact: <code>be patch '#&lt;sha&gt;'</code> (cherry-pick, and the reconcile path that uses it) is<p>
-unusable on a real divergent/sibling commit — it crashes instead of weaving.
-</p>
-</li>
+<li>Live repro (bootstrap ASAN binary): beagle wt at <code>d6f7e138</code> (off <code>25851a5a</code>); <code>be patch '#ae64dc7f'</code> (<code>ae64dc7f</code> off <code>25851a5a</code>, a sibling) → ASAN &quot;Container overflow&quot; abort + <code>Error: BEDOGEXIT</code>. No partial apply (tree clean after).</li>
+<li>A named-commit cherry-pick weaves the one commit against base = <code>parent(theirs)</code> (<a href="../../wiki/PATCH.html">PATCH</a> §&quot;Merge base: full stack vs single commit&quot;). The overflow is somewhere in that path — the graf weave / candidate set / a slice feed.</li>
+<li><a href="../DIS/DIS-042.html">DIS-042</a> already flagged PATCH/RESOLVE fragility (the branch-form <code>?A</code> resolve shadowing); this is a DISTINCT hard CRASH in the <code>#&lt;sha&gt;</code> (cherry-pick) form.</li>
+<li>Impact: <code>be patch '#&lt;sha&gt;'</code> (cherry-pick, and the reconcile path that uses it) is unusable on a real divergent/sibling commit — it crashes instead of weaving.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>be patch '#&lt;sha&gt;'</code> cherry-picks the named commit WITHOUT crashing — a clean weave<p>
-for a sibling/divergent commit (disjoint OR overlapping files), at parity with the branch-form (<code>?br</code>) patch.
-</p>
-</li>
+<li><code>be patch '#&lt;sha&gt;'</code> cherry-picks the named commit WITHOUT crashing — a clean weave for a sibling/divergent commit (disjoint OR overlapping files), at parity with the branch-form (<code>?br</code>) patch.</li>
 <li>A repro under <code>test/</code> (cherry-pick a sibling commit) that ASAN-crashes today, green after.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>The ASAN/debug build is the gate (it catches the overflow). Find the overflowing<p>
-buffer (a graf weave/candidate buffer or an <code>sFeed</code> target) and size/grow it; use ABC bounds-checking, no fixed cap that just moves the cliff. Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17).
-</p>
-</li>
+<li>The ASAN/debug build is the gate (it catches the overflow). Find the overflowing buffer (a graf weave/candidate buffer or an <code>sFeed</code> target) and size/grow it; use ABC bounds-checking, no fixed cap that just moves the cliff. Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open) Localize the container-overflow: run the ASAN repro and read the stack;<p>
-likely <code>graf/WEAVE.c</code> / <code>MERGE.c</code> / <code>JOIN.c</code> / <code>REBASE.c</code> or the cherry-pick base-computation / candidate set.
-</p>
-</li>
+<li>(open) Localize the container-overflow: run the ASAN repro and read the stack; likely <code>graf/WEAVE.c</code> / <code>MERGE.c</code> / <code>JOIN.c</code> / <code>REBASE.c</code> or the cherry-pick base-computation / candidate set.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: hermetic two-branch fork (base <code>v0</code>; <code>cur=C</code> off <code>v0</code>; sibling <code>T</code><p>
- off <code>v0</code>); <code>be patch '#&lt;Tsha&gt;'</code> → ASAN container-overflow today (RED).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: hermetic two-branch fork (base <code>v0</code>; <code>cur=C</code> off <code>v0</code>; sibling <code>T</code> off <code>v0</code>); <code>be patch '#&lt;Tsha&gt;'</code> → ASAN container-overflow today (RED).</li>
 <li class="open"><input type="checkbox" disabled> Localize the overflow from the ASAN stack; fix the buffer sizing / bounds.</li>
 <li class="open"><input type="checkbox" disabled> Green: the cherry-pick lands <code>T</code>'s delta onto cur; ASAN-clean; full ctest.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Landing the canonical <code>be://localhost?</code> ref needs the wire push (ssh),<p>
-disabled here (<code>WIRECLFL</code>); <code>keeper put //remote</code> is &quot;not implemented&quot;. Commit landed on the store's bare <code>?</code> trunk as a clean ff (sibling of the other in-flight workers); <code>be://localhost?</code> advance is the human merge step (cf. the <code>213c9003</code> &quot;COMMIT-005 merge&quot; tip). <a href="./GET-033.html">GET-033</a>.
-</p>
-</li>
+<li>Landing the canonical <code>be://localhost?</code> ref needs the wire push (ssh), disabled here (<code>WIRECLFL</code>); <code>keeper put //remote</code> is &quot;not implemented&quot;. Commit landed on the store's bare <code>?</code> trunk as a clean ff (sibling of the other in-flight workers); <code>be://localhost?</code> advance is the human merge step (cf. the <code>213c9003</code> &quot;COMMIT-005 merge&quot; tip). <a href="./GET-033.html">GET-033</a>.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>FIXED + landed <code>#3852ffe1</code> (ff onto trunk <code>213c9003</code>). Root cause was<p>
-NOT a weave container-overflow — it was a stack-use-after-scope: the <code>#&lt;sha&gt;</code> cherry path expanded a short hashlet into an <code>if</code>-scoped <code>sha1hex hex40</code> and aliased <code>frag</code> into it, then <code>resolve_cherry</code> read <code>frag</code> after the block (PATCH.c:1195 ← :1608; RESOLVE.c:231). The full-40-hex pick (test 11) skipped the block, so only a hashlet repro'd. Fix: hoist <code>hex40</code> to outlive <code>resolve_cherry</code> (sniff/PATCH.c ~1602). Repro test test/patch/36-cherry-pick-hashlet (RED→GREEN); live <code>be patch '#ae64dc7f'</code> onto <code>d6f7e138</code> now clean; full ctest 348/348 ASAN-clean. <code>be://localhost?</code> push blocked (wire off) — see Blockers.
-</p>
-</li>
+<li>FIXED + landed <code>#3852ffe1</code> (ff onto trunk <code>213c9003</code>). Root cause was NOT a weave container-overflow — it was a stack-use-after-scope: the <code>#&lt;sha&gt;</code> cherry path expanded a short hashlet into an <code>if</code>-scoped <code>sha1hex hex40</code> and aliased <code>frag</code> into it, then <code>resolve_cherry</code> read <code>frag</code> after the block (PATCH.c:1195 ← :1608; RESOLVE.c:231). The full-40-hex pick (test 11) skipped the block, so only a hashlet repro'd. Fix: hoist <code>hex40</code> to outlive <code>resolve_cherry</code> (sniff/PATCH.c ~1602). Repro test test/patch/36-cherry-pick-hashlet (RED→GREEN); live <code>be patch '#ae64dc7f'</code> onto <code>d6f7e138</code> now clean; full ctest 348/348 ASAN-clean. <code>be://localhost?</code> push blocked (wire off) — see Blockers.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

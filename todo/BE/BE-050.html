@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-050: work/status views re-mmap .be per row, never close — close after drain + reuse memos</title>
+<meta property="og:title" content="BE-050: work/status views re-mmap .be per row, never close — close after drain + reuse memos">
+<meta property="og:description" content="Read-only investigation 2026-07-19 of ///be/, parent incident /todo/JSQUE/JSQUE-021; the native half is /todo/ABC/ABC-020 (abc.close is a resource no-op today — release is GC-only, so every mmap below pins an fd until GC). - Every map funnels through shared/ulog.js:42-48 each(): abc.mmap(&quot;ULOG&quot;,…), drain, drop to GC — NO caller closes; ditto withRO (ulog.js:262-267, its comment promises a close the code never does) and book's snapshot (:239). - resolvehash.treeAt (core/resolvehash.js:161-178) = anchors climb (:61-70, 1 mmap) + discover row0Row (core/discover.js:85-91, 1 mmap) — 2 uncached mmaps of a wt's .be per call, no memo anywhere in the chain. - DOMINANT (~890 maps in one status //WT drive): status mints a navLink per FILE ROW (views/status/status.js:326-327, hunk :298) → shared/nav.js:15-22 authority() → be.navTree → core/discover.js:328-334 runs THREE separate treeAt climbs = 6 mmaps of the same .be per file row. - work view (views/work/work.js): classify + wtlog.open = 3-5 mmaps × N rows per drive (:216,:218; pin/URI-track rows add :227,:232,:237); registry() rebuilt every drive (:570 — packs, idx runs, refs redone); root wtlog opened twice (:468 after nodeTip); nodeAt per tree node (:157,:161). - pager status line probes the context per keypress (views/bro/pager.js:460-461, 858-864 → discover.wtdir → treeAt) = 2-4 mmaps even on j/k — which otherwise correctly repaint from the row cache (:391-401, :527-528) and re-drive nothing. - store.open (shared/store.js:160) builds a fresh reader per call (git.pack.mmap per keeper pack :183, idx :226, refs drain :419); ~200 packs held open = the 212-fd launch baseline. gitmodules.parse (shared/gitmodules.js:20): io.mmap, unclosed, no memo.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BE/BE-050.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-050: work/status views re-mmap .be per row, never close — close after drain + reuse memos</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Read-only investigation 2026-07-19 of <code>///be/</code>, parent incident <a href="/todo/JSQUE/JSQUE-021.html">JSQUE-021</a>; the native half is <a href="/todo/ABC/ABC-020.html">ABC-020</a> (abc.close is a resource no-op today — release is GC-only, so every mmap below pins an fd until GC).
+</p>
+<ul>
+<li>Every map funnels through shared/ulog.js:42-48 each(): abc.mmap(&quot;ULOG&quot;,…), drain, drop to GC — NO caller closes; ditto <em>withRO (ulog.js:262-267, its comment promises a close the code never does) and </em>book's snapshot (:239).</li>
+<li>resolve_hash.treeAt (core/resolve_hash.js:161-178) = anchors climb (:61-70, 1 mmap) + discover row0Row (core/discover.js:85-91, 1 mmap) — 2 uncached mmaps of a wt's <code>.be</code> per call, no memo anywhere in the chain.</li>
+<li>DOMINANT (~890 maps in one <code>status //WT</code> drive): status mints a navLink per FILE ROW (views/status/status.js:326-327, hunk :298) → shared/nav.js:15-22 authority() → be.navTree → core/discover.js:328-334 runs THREE separate treeAt climbs = 6 mmaps of the same <code>.be</code> per file row.</li>
+<li>work view (views/work/work.js): classify + wtlog.open = 3-5 mmaps × N rows per drive (:216,:218; pin/URI-track rows add :227,:232,:237); registry() rebuilt every drive (:570 — packs, idx runs, refs redone); root wtlog opened twice (:468 after nodeTip); nodeAt per tree node (:157,:161).</li>
+<li>pager status line probes the context per keypress (views/bro/pager.js:460-461, 858-864 → discover.wtdir → treeAt) = 2-4 mmaps even on j/k — which otherwise correctly repaint from the row cache (:391-401, :527-528) and re-drive nothing.</li>
+<li>store.open (shared/store.js:160) builds a fresh reader per call (git.pack.mmap per keeper pack :183, idx :226, refs drain :419); ~200 packs held open = the 212-fd launch baseline. gitmodules.parse (shared/gitmodules.js:20): io.mmap, unclosed, no memo.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+A resident session's fd count plateaus; one <code>status //WT</code> drive costs O(1) mmaps of the target <code>.be</code> instead of 6×fileRows; j/k costs zero file opens (the JSQUE-021 ruling).
+</p>
+<ul>
+<li>Red-first pty repro (recreate the shape of the lost fdcount/clickback tests): keypress loop and a <code>status //WT</code> drive under a lowered RLIMIT_NOFILE — exhausts/grows today, plateaus after.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Rulings in force: j/k rerenders from the buffer, no opens; pager context changes ONLY by navigation (BRO-024) so context-keyed memos invalidate on nav, and per-drive memos reset at drive start (mutating verbs!); one-line status bar — message inline + trimmed, never a second inverse row.</li>
+<li>ALL URI/hash resolution stays on be/core/resolve_hash.js — memoize AROUND the canonical calls; never reimplement, fork, or bypass them.</li>
+<li>FORBIDDEN: any parallel ULOG read path (whole-file byte copies etc.) — the 2026-07-19 attempt of that got its whole worktree rm -rf-ed; mmap remains the one read mechanism and closing rides <a href="/todo/ABC/ABC-020.html">ABC-020</a> abc.close.</li>
+<li>abc.close is inert until ABC-020 lands — order the work so the reuse memos deliver the ~10× map-count cut on their own; the close calls are correct-by-construction now and activate with ABC-020.</li>
+<li>No unrelated edits, no edits to other tests; bro/color + bro/view goldens have pre-existing readdir-order flakiness — cross-check an untouched clone before blaming your diff.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> red pty repro test (test/work/fdcount shape): (a) j/k keypress loop → fd count flat; (b) one <code>status //WT</code> drive → bounded mmaps of the target <code>.be</code>; both red today</li>
+<li><a href="./ .html"> </a> shared/ulog.js: abc.close after drain in each() (:44); same for <em>withRO (:262) and the </em>book snapshot (:239)</li>
+<li><a href="./ .html"> </a> shared/nav.js:15 authority(): memo per be.context, invalidated on context change / drive start</li>
+<li><a href="./ .html"> </a> core/discover.js:328-334 navTree: collapse the three treeAt climbs into one</li>
+<li><a href="./ .html"> </a> core/resolve_hash.js:161 treeAt (+ anchors :61 / discover row0Row :87): per-drive anchor-dir memo wrapped around the canonical resolve — zero cross-drive staleness</li>
+<li><a href="./ .html"> </a> views/work/work.js: fold wtlog/treeAt lookups into the per-drive registry (:570); kill the root wtlog double-open (:468)</li>
+<li><a href="./ .html"> </a> views/bro/pager.js status line (:461, :858): per-ctx kind/missing memo (redo of the lost JSQUE-021 fix); a live io.stat may remain to red-paint a vanished dir</li>
+<li><a href="./ .html"> </a> shared/store.js:160: (storePath,project)-keyed reader reuse per drive; measure the 212-fd pack baseline before/after</li>
+<li><a href="./ .html"> </a> shared/gitmodules.js:20 parse(): close after parse or per-wt memo</li>
+<li><a href="./ .html"> </a> full suite + the new pty repro green; report fd plateau numbers</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

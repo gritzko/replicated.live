@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CFOLD-001 DONE: EXPECTED refolds whole history per path — LCA floor + tree-sha prune</title>
+<meta property="og:title" content="CFOLD-001 DONE: EXPECTED refolds whole history per path — LCA floor + tree-sha prune">
+<meta property="og:description" content="jab status takes 6.7s in a patched worktree and 0.13s in the same tree with no patch row in scope. The cost is the EXPECTED reading (/todo/STATUS/STATUS-017): per dirty patch-touched path, classify.js:expectedSha makes a PRIVATE weave.makeCtx(reader, path) and weave.build replays the FULL commit ancestry of the base tip and of every theirs tip, and weave.js:blobShaAt reads each commit's tree through treeMap — a readTreeRecursive FLATTEN of every leaf, per commit, per path. So the work is paths x commits x whole-tree, redone from scratch for each path, and each surviving fold burns a fresh 16 MiB abc.ram(&quot;WEAVE&quot;) through CFOLD. This is the JS twin of /todo/BLAME/BLAME-001, fixed on the C side by top-down OID descent (landed 1a5acce8); the cure is the same shape — walk down to the LCA only, and prune on an equal tree sha before any object is read.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CFOLD/CFOLD-001.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>CFOLD-001 <a href="./DONE.html">DONE</a>: EXPECTED refolds whole history per path — LCA floor + tree-sha prune</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH Ask: gritzko Env: musl/JSC jab, <code>//DIS-082-jab-3</code> (jab wt with one <code>patch</code> row in scope) Rev: ///be#978b8a52
+</p>
+</div>
+<p>
+<code>jab status</code> takes 6.7s in a patched worktree and 0.13s in the same tree with no <code>patch</code> row in scope. The cost is the EXPECTED reading (<a href="../STATUS/STATUS-017.html">/todo/STATUS/STATUS-017</a>): per dirty patch-touched path, <code>classify.js:expectedSha</code> makes a PRIVATE <code>weave.makeCtx(reader, path)</code> and <code>weave.build</code> replays the FULL commit ancestry of the base tip and of every theirs tip, and <code>weave.js:blobShaAt</code> reads each commit's tree through <code>treeMap</code> — a <code>readTreeRecursive</code> FLATTEN of every leaf, per commit, per path. So the work is paths x commits x whole-tree, redone from scratch for each path, and each surviving fold burns a fresh 16 MiB <code>abc.ram(&quot;WEAVE&quot;)</code> through CFOLD. This is the JS twin of <a href="../BLAME/BLAME-001.html">/todo/BLAME/BLAME-001</a>, fixed on the C side by top-down OID descent (landed <code>1a5acce8</code>); the cure is the same shape — walk down to the LCA only, and prune on an equal tree sha before any object is read.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Measured on <code>//DIS-082-jab-3</code> (1583 files, root 28 patch rows, <code>dog</code> 14, ~300 commits of dog history).
+</p>
+<ul>
+<li><code>work/DIS-082-jab</code> (no patch row, same 1583 files) 0.13s vs <code>work/DIS-082-jab-3</code> (patch row) 6.7s — 45x, entirely the EXPECTED axis.</li>
+<li>Per-file: <code>status dog/WEAVE.c</code> (no EXPECTED) 0.07s, <code>dog/CFOLD.h</code> 0.52s, <code>dog/INDEX.md</code> 0.82s; <code>status dog/</code> 6.4s ~= the sum of its <code>..vv</code>/<code>..oo</code> rows — nothing is shared between paths.</li>
+<li>Not I/O, not GC: <code>strace -c</code> gives 0.69s sys of 6.8s wall; <code>JSC_logGC=1</code> gives 126 GCs / 199ms; 13.5k mmap/munmap pairs are the per-native-call 16 MiB BASS/WEAVE arenas.</li>
+<li><code>JSC_useJIT=0</code> makes it 10.5s, so the 6s is JIT'd JS + native fold, not engine warmup.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Make the EXPECTED reading cost O(commits that touch the path, above the LCA), not O(paths x total history x tree size).
+</p>
+<ul>
+<li>A new own module <code>shared/pathdag.js</code>: LCA floor, condensed per-path commit DAG, tree-sha prune — proposed API in &quot;Design decisions&quot;.</li>
+<li><code>weave.build</code> folds only the retained commits, seeded at the floor; <code>blobShaAt</code>/<code>treeMap</code> leave the weave hot path.</li>
+<li>One per-RUN cache threaded through every path from <code>classify.js:classifyMerge</code> (today each path gets a private <code>treeCache</code>).</li>
+<li>A repro-first test asserting object reads/folds are O(changes), not O(ancestry) — the <a href="../BLAME/BLAME-001.html">/todo/BLAME/BLAME-001</a> Step 0 shape.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Reuse what exists; no parallel readers, no new descent code (<a href="../../wiki/ABC.html">/wiki/ABC</a> reuse rule).
+</p>
+<ul>
+<li>LCA is <code>dag.mergeBase</code> (GET-047), folded pairwise for N tips; walk cap stays <code>dag.js</code> <code>WALK_CAP</code>.</li>
+<li>Path descent is <code>store.js:descendPath</code> (the KEEPTreeDescend twin) — do NOT hand-roll a tree walker.</li>
+<li><code>weave.treeMap</code> stays for <code>classifyMerge</code>'s base/theirs tree ulogs, which genuinely want every leaf.</li>
+<li>Status byte-parity: the emitted rows/buckets must not change on any tree, patched or not.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+<code>pathdag.of</code> returns a CONDENSED DAG (only commits that change the path, edges collapsed through the pruned ones), which is exactly what <code>foldCommit</code> consumes.
+</p>
+<ul>
+<li><code>pathdag.of(reader, path, tips[], cache, opts)</code> -&gt; <code>{ floor, seed:{blob,mode}|undefined, nodes:{sha-&gt;{blob,mode,parents:[sha]}}, order:[sha], truncated }</code>, <code>order</code> topo oldest-first.</li>
+<li><code>pathdag.at(reader, commitSha, path, cache)</code> -&gt; <code>{sha,mode,kind}|undefined</code> — <code>descendPath</code> by segment, memoised on <code>(treeSha, seg)</code>: O(depth), replacing <code>blobShaAt</code>+<code>treeMap</code>.</li>
+<li><code>pathdag.same(reader, path, treeA, treeB, cache)</code> -&gt; bool — lockstep descend, EQUAL subtree sha at any level returns true at once; this is the prune, and the reason <code>at</code>-per-commit alone is not enough.</li>
+<li><code>pathdag.cache()</code> -&gt; per-RUN object keyed by TREE sha (not commit sha), so hits cross paths and cross tips; <code>classifyMerge</code> owns one and passes it down.</li>
+<li>A retained merge survives only when its parents disagree on the path; an untouched merge collapses, so <code>nodes[].parents</code> are the retained parents.</li>
+<li><code>opts.floor:&quot;lca&quot;</code> seeds the weave from <code>seed</code> under the floor commit's <code>weaveId</code> — correct for EXPECTED/patch (only alive bytes are read), WRONG for <code>why:</code>/blame attribution, so blame passes <code>floor:&quot;&quot;</code> and gets the prune without the seed.</li>
+<li><code>foldCommit</code> then never calls <code>blobShaAt</code>: it takes <code>node.blob</code> straight to <code>blobBytes</code>, and the <code>alive()</code>+<code>bytesEq</code> adjacent-equal skip (<code>weave.js:256</code>, which today pays a full render per untouched commit) can go — by construction no retained node equals its parent.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Step 0: repro test — object-read/fold counters, assert O(changes) not O(ancestry), on a fixture with a deep history and a shallow-history file.</li>
+<li class="open"><input type="checkbox" disabled> Step 1: <code>shared/pathdag.js</code> with <code>at</code>/<code>same</code>/<code>cache</code> over <code>descendPath</code> + <code>dag.mergeBase</code>.</li>
+<li class="open"><input type="checkbox" disabled> Step 2: <code>pathdag.of</code> condensed DAG (LCA floor, prune, collapsed merge edges).</li>
+<li class="open"><input type="checkbox" disabled> Step 3: <code>weave.build</code> consumes <code>order</code>/<code>nodes</code>; drop <code>blobShaAt</code> from the hot path.</li>
+<li class="open"><input type="checkbox" disabled> Step 4: thread ONE <code>pathdag.cache()</code> from <code>classifyMerge</code> into <code>expectedSha</code> (<a href="../STATUS/STATUS-017.html">/todo/STATUS/STATUS-017</a>) and <code>expected.js:expectedOf</code>; <code>verbs/patch/patch.js</code> shares it.</li>
+<li class="open"><input type="checkbox" disabled> Step 5: re-measure <code>//DIS-082-jab-3</code> (target: sub-second) and confirm status byte-parity on a patched and an unpatched tree.</li>
+<li class="open"><input type="checkbox" disabled> Cheap interim if the above is deferred: pass the existing shared <code>treeCache</code> at <code>classify.js:227</code> — removes the x-paths factor alone.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known; JS-side only, no on-disk format change, each step lands green on its own.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

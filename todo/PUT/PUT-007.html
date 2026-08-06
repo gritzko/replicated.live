@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PUT-007</title>
+<title>PUT-007: JS multi-path be put is O(N²) — re-preps + rewrites the whole wtlog per arg</title>
+<meta property="og:title" content="PUT-007: JS multi-path be put is O(N²) — re-preps + rewrites the whole wtlog per arg">
+<meta property="og:description" content="The JS (jab) be put path... handler (be/verbs/put/put.js) processed each path arg independently: for EVERY arg it re-ran stage.prep (a whole working-tree wtScan + the baseline tree read twice) AND commitOps→appendAndAssign (read the whole wtlog, then rewrite the whole wtlog). So be put todo//.mkd (517 matches) &quot;starts anew for each file&quot; — O(N²) in the wtlog rewrite plus O(N×tree) rescans. The JS-side perf analogue of PUT-003's native &quot;per-path, not aggregated&quot;.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PUT/PUT-007.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>PUT-007 <a href="./MED.html">MED</a>: JS multi-path <code>be put</code> is O(N²) — re-preps + rewrites the whole wtlog per arg</h1>
+<h1>PUT-007: JS multi-path <code>be put</code> is O(N²) — re-preps + rewrites the whole wtlog per arg</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The JS (jab) <code>be put path...</code> handler (<code>be/verbs/put/put.js</code>) processed each path arg independently: for EVERY arg it re-ran <code>stage.prep</code> (a whole working-tree <code>wtScan</code> + the baseline tree read twice) AND <code>commitOps</code>→<code>appendAndAssign</code> (read the whole wtlog, then rewrite the whole wtlog). So <code>be put todo/*/*.mkd</code> (517 matches) &quot;starts anew for each file&quot; — O(N²) in the wtlog rewrite plus O(N×tree) rescans. The JS-side perf analogue of <a href="PUT-003.html">PUT-003</a>'s native &quot;per-path, not aggregated&quot;.
 </p>
@@ -19,57 +28,27 @@ The JS (jab) <code>be put path...</code> handler (<code>be/verbs/put/put.js</cod
 <h3>Context</h3>
 <ul>
 <li>Reported: <code>jab put todo/*/*.mkd</code> runs far too long, as if it restarts per file.</li>
-<li><code>putRun</code> (put.js) looped <code>for (uri of pathUris) putOne(...)</code>; <code>putOne</code> did a<p>
-fresh <code>stage.prep(repo, wtlog.open(repo), k)</code> + <code>commitOps</code> PER arg.
-</p>
-</li>
-<li><code>stage.prep</code> scans the ENTIRE wt (<code>classify.wtScan</code>: recursive readdir + lstat)<p>
-and reads the baseline tree twice — none of it arg-specific, redone N times.
-</p>
-</li>
-<li><code>appendAndAssign</code> reads the whole wtlog (<code>ulog.each</code>) then rewrites it whole<p>
-(<code>ulog.write</code> → temp + rename) for EACH arg → O(N²) log rewrites.
-</p>
-</li>
-<li>Measured (scratch, native-seeded, all-dirty): 120 files 3.57s, 240 files 12.38s<p>
-(3.5× time for 2× files → super-linear/quadratic).
-</p>
-</li>
+<li><code>putRun</code> (put.js) looped <code>for (uri of pathUris) putOne(...)</code>; <code>putOne</code> did a fresh <code>stage.prep(repo, wtlog.open(repo), k)</code> + <code>commitOps</code> PER arg.</li>
+<li><code>stage.prep</code> scans the ENTIRE wt (<code>classify.wtScan</code>: recursive readdir + lstat) and reads the baseline tree twice — none of it arg-specific, redone N times.</li>
+<li><code>appendAndAssign</code> reads the whole wtlog (<code>ulog.each</code>) then rewrites it whole (<code>ulog.write</code> → temp + rename) for EACH arg → O(N²) log rewrites.</li>
+<li>Measured (scratch, native-seeded, all-dirty): 120 files 3.57s, 240 files 12.38s (3.5× time for 2× files → super-linear/quadratic).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Aggregate a multi-path put into ONE staging pass: prep the engine ONCE, write<p>
-the wtlog ONCE for the whole arg batch; output + rows byte-identical.
-</p>
-</li>
+<li>Aggregate a multi-path put into ONE staging pass: prep the engine ONCE, write the wtlog ONCE for the whole arg batch; output + rows byte-identical.</li>
 <li>Restore ~linear scaling so a many-file <code>be put</code> completes in well under a second.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>No product-behaviour change: same <code>put:</code> rows/skips, same wtlog rows, the<p>
-mtime==row-ts restamp invariant intact; keep the be/ put suite green (<a href="../../meta/work.html">Issues</a>).
-</p>
-</li>
-<li>Sub-crossing args (<a href="../SUBS/SUBS-039.html">SUBS-039</a>) still stage inside the sub's OWN wtlog — they<p>
-can't share the parent engine/commit; leave them per-arg.
-</p>
-</li>
+<li>No product-behaviour change: same <code>put:</code> rows/skips, same wtlog rows, the mtime==row-ts restamp invariant intact; keep the be/ put suite green (<a href="../../meta/work.html">Issues</a>).</li>
+<li>Sub-crossing args (<a href="../SUBS/SUBS-039.html">SUBS-039</a>) still stage inside the sub's OWN wtlog — they can't share the parent engine/commit; leave them per-arg.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Hoist <code>stage.prep</code> + <code>wtlog.open</code> above the <code>pathUris</code> loop; reuse one engine<p>
-for every file/dir/move arg (native runs one PUTStage snapshot over all args).
-</p>
-</li>
-<li><code>putOne</code> no longer commits: it classifies against the shared engine and RETURNS<p>
-its ops; <code>putRun</code> concatenates them and calls <code>commitOps</code> ONCE for the batch.
-</p>
-</li>
-<li><code>appendAndAssign</code> left as-is (now called once) — the batching, not an in-place<p>
-append, removes the O(N²); minimal-diff, lower risk.
-</p>
-</li>
+<li>Hoist <code>stage.prep</code> + <code>wtlog.open</code> above the <code>pathUris</code> loop; reuse one engine for every file/dir/move arg (native runs one PUTStage snapshot over all args).</li>
+<li><code>putOne</code> no longer commits: it classifies against the shared engine and RETURNS its ops; <code>putRun</code> concatenates them and calls <code>commitOps</code> ONCE for the batch.</li>
+<li><code>appendAndAssign</code> left as-is (now called once) — the batching, not an in-place append, removes the O(N²); minimal-diff, lower risk.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -79,17 +58,22 @@ append, removes the O(N²); minimal-diff, lower risk.
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>ctest can't drive the suite as-is: <code>beagle/build/bin/be</code> (the harness SEED +<p>
-BIN) vanished mid-session; ran cases directly with the <code>build-trace</code> native seeder + <code>build/bin/jab</code> (sanctioned seed, <a href="../TEST/TEST-003.html">TEST-003</a> secondary axis).
-</p>
-</li>
+<li>ctest can't drive the suite as-is: <code>beagle/build/bin/be</code> (the harness SEED + BIN) vanished mid-session; ran cases directly with the <code>build-trace</code> native seeder + <code>build/bin/jab</code> (sanctioned seed, <a href="../TEST/TEST-003.html">TEST-003</a> secondary axis).</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED <code>1b7c9934</code> (be/, 2026-07-06; the commit's own message — &quot;Thanks to<p>
-PUT-007, this was staged and posted by jab&quot; — was staged BY the fix; wtlog: <code>put verbs/put/put.js</code> → <code>post ?#1b7c9934</code>): <code>be/verbs/put/put.js</code> — <code>putRun</code> preps the staging engine once and batches all args into one <code>commitOps</code>; <code>putOne</code> takes the shared engine and returns ops. After: 120 files 0.28s (12.7×), 240 files 0.30s (41×), flat across N (O(N²)→O(N)); correct row counts. Green: put/{bare,file,dir,move,unchanged,dir-clean-unstamped,ref-create, ref-set,ref-set-sha}, sub/{bareput,bareput-nested}, uri011/put-nav-bind, put/wire-refguard.
-</p>
-</li>
+<li>LANDED <code>1b7c9934</code> (be/, 2026-07-06; the commit's own message — &quot;Thanks to PUT-007, this was staged and posted by jab&quot; — was staged BY the fix; wtlog: <code>put verbs/put/put.js</code> → <code>post ?#1b7c9934</code>): <code>be/verbs/put/put.js</code> — <code>putRun</code> preps the staging engine once and batches all args into one <code>commitOps</code>; <code>putOne</code> takes the shared engine and returns ops. After: 120 files 0.28s (12.7×), 240 files 0.30s (41×), flat across N (O(N²)→O(N)); correct row counts. Green: put/{bare,file,dir,move,unchanged,dir-clean-unstamped,ref-create, ref-set,ref-set-sha}, sub/{bareput,bareput-nested}, uri011/put-nav-bind, put/wire-refguard.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

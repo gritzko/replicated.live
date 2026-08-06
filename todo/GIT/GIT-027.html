@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIT-027: stock-git push into a Beagle store — thin-pack land + git-receive-pack entry parity</title>
+<meta property="og:title" content="GIT-027: stock-git push into a Beagle store — thin-pack land + git-receive-pack entry parity">
+<meta property="og:description" content="The be:// receive-pack serves the JAB client only (POST-028 serve.js receivePack: v0 advert, raw NON-thin pack, bare-path selector). A stock git push differs on two counts: send-pack ships a THIN pack by default (REFDELTA against objects only the server holds — ingest.js defers exactly that: &quot;OFS re-encode + REF-base resolve, a follow-up&quot;), and ssh spawns git-receive-pack '&lt;path&gt;', a name jab does not answer to. Close both and a git-only colleague pushes into a .be store with no jab on their side — the highest-leverage wire-compat direction.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GIT/GIT-027.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GIT-027: stock-git push into a Beagle store — thin-pack land + <code>git-receive-pack</code> entry parity</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+The be:// receive-pack serves the JAB client only (<a href="../POST/POST-028.html">POST-028</a> <code>serve.js</code> <code>receivePack</code>: v0 advert, raw NON-thin pack, bare-path selector). A stock <code>git push</code> differs on two counts: send-pack ships a THIN pack by default (REF_DELTA against objects only the server holds — <code>ingest.js</code> defers exactly that: &quot;OFS re-encode + REF-base resolve, a follow-up&quot;), and ssh spawns <code>git-receive-pack '&lt;path&gt;'</code>, a name jab does not answer to. Close both and a git-only colleague pushes into a <code>.be</code> store with no jab on their side — the highest-leverage wire-compat direction.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>serve.js</code> <code>receivePack</code> <del>124: v0, caps <code>report-status ofs-delta</code>, cmd parse strips caps after <code>\0</code> (tolerates <code>agent=</code>), drain → <code>ingest.land</code> → per-ref CAS + FF gate → report-status. Entry: <code>core/loop.js</code> </del>315.</li>
+<li><code>ingest.js</code> header: a verbatim full-clone pack lands as an OFS-only log; thin packs (REF_DELTA) are explicitly a follow-up — no REF-base resolve.</li>
+<li>Stock git: send-pack pushes <code>--thin</code> by default; only <code>--no-thin</code> avoids REF_DELTA. Deletes arrive as zero-sha <code>new</code>; tags as <code>refs/tags/*</code>.</li>
+<li><code>refUpdate</code> (<a href="../POST/POST-028.html">POST-028</a>) serves <code>refs/heads</code> only, refuses deletion, FF-only with CAS — the policy stays; only the wording is user-facing.</li>
+<li>The jab-client direction (jab → git remote) already works: <a href="GIT-013.html">GIT-013</a> push, <a href="GIT-012.html">GIT-012</a> transports. This ticket is the reverse arrow.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>git push</code> into a <code>.be</code> store lands green over local exec and ssh: the initial (full) push AND the incremental (thin) push; report-status ok.</li>
+<li>Refused moves (non-FF, delete, <code>refs/tags/*</code>) come back as plain-words report-status lines, not bare error codes.</li>
+<li>A stock client reaches the serve loop without jab-specific flags on the remote: a <code>git-receive-pack</code> spawn form (PATH shim or documented <code>remote.&lt;name&gt;.receivepack=jab receive-pack</code> config), path arg mapped.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Reuse <code>ingest.js</code>/<code>pkt.js</code>/<code>serve.js</code>; NO second pack or framing impl.</li>
+<li>The store invariant holds: OFS-only logs — REF_DELTA is re-encoded on land, never stored (<a href="GIT-002.html">GIT-002</a> format law, <a href="GIT-003.html">GIT-003</a> is the native shape).</li>
+<li>Protocol v0, no side-band (current contract); jab-client parity must not regress (<code>test/serve/*</code> stays green).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Thin-fix on land: extend <code>ingest.land</code> — index the incoming pack, resolve each REF_DELTA base via the store reader, re-encode the object OFS/full into the log (the <a href="GIT-003.html">GIT-003</a> ingest re-encoder, done in JS).</li>
+<li>Entry naming: keep ONE serve loop; <code>git-receive-pack</code> is a spawn-name alias resolving to <code>jab receive-pack</code> with the git-style quoted path mapped by the <a href="../POST/POST-028.html">POST-028</a> bare-path contract.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> 1. Thin-pack land in <code>ingest.js</code>: REF-base resolve + OFS re-encode; repro first — a hand-built REF_DELTA pack refused/mislanded today.</li>
+<li class="open"><input type="checkbox" disabled> 2. Command-list hardening: zero-sha delete and <code>refs/tags/*</code> refused with plain-words report-status lines; caps-tail parse kept tolerant.</li>
+<li class="open"><input type="checkbox" disabled> 3. <code>git-receive-pack</code> spawn form + path-arg mapping; document the <code>receivepack=</code> config fallback.</li>
+<li class="open"><input type="checkbox" disabled> 4. Tests with STOCK git as client: full push, thin incremental push, non-FF refusal — local exec now, ssh loopback rides <a href="GIT-022.html">GIT-022</a>.</li>
+<li class="open"><input type="checkbox" disabled> 5. Smoke the fetch twin: stock <code>git clone -u 'jab upload-pack'</code>; if red, file its own ticket — NOT absorbed here.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><code>git push --no-thin</code> is a workable interim for demos, but the default path MUST land thin packs or the compat claim is hollow.</li>
+<li>Zero-sha in a command line must not hit the sha-resolve path — it is a delete marker, not an object.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Open. Filed 2026-07-29 from the git-compat-layer design discussion; the be://-wire serve halves predate it (<a href="GIT-020.html">GIT-020</a> fetch, <a href="../POST/POST-028.html">POST-028</a> push, <a href="GIT-022.html">GIT-022</a> ssh spawn + test flips).</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

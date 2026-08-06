@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORK-009: entered-worktree get click refuses — &quot;NAVNONE: context //X is no worktree&quot; for an existing wt</title>
+<meta property="og:title" content="WORK-009: entered-worktree get click refuses — &quot;NAVNONE: context //X is no worktree&quot; for an existing wt">
+<meta property="og:description" content="2026-07-19, live (gritzko): from the work view, entering //SUBFETCH-REPRO works (nav + view render fine), but a get click there dies: err: NAVNONE: context //SUBFETCH-REPRO is no worktree //:work. The tree EXISTS: work/SUBFETCH-REPRO/ is a be clone (main.js, core/, verbs/, jsrc/…) with a .be wtlog of five get ?#… rows (2026-07-14, alternating e7ae2927/9edfebcc re-pins). - Refusal site: core/loop.js:449 (the WORK-002 loud-refusal leg) — fires when contextRepo(opts2.context) returns null for a mutation verb. - contextRepo (loop.js:253-271): uri.parse → be.wtdir(navStr) (NAVESCAPE→null) → be.treeAt(dir) — any miss collapses to the same null, so the error cannot say WHICH step missed. - The asymmetry is the lead: the pager NAV path resolved //SUBFETCH-REPRO fine seconds earlier (the user was inside it); only the mutation-context path missed. Two resolution paths disagree about the same URI in the same session (resolvehash is the mandated single path — check whether wtdir/contextRepo composition diverges from what nav used, incl. where the session was launched from and how //name composes off it). - The trailing //:work in the error line is the view's own address token riding the arg echo (same welding the WORK-002 diff defect showed) — possibly cosmetic, possibly the actual corrupted context string; must be established.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/WORK/WORK-009.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WORK-009: entered-worktree <a href="./get.html">get</a> click refuses — &quot;NAVNONE: context //X is no worktree&quot; for an existing wt</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+2026-07-19, live (gritzko): from the work view, entering <code>//SUBFETCH-REPRO</code> works (nav + view render fine), but a <code>[get]</code> click there dies: <code>err: NAVNONE: context //SUBFETCH-REPRO is no worktree  //:work</code>. The tree EXISTS: <code>work/SUBFETCH-REPRO/</code> is a be clone (main.js, core/, verbs/, jsrc/…) with a <code>.be</code> wtlog of five <code>get ?#…</code> rows (2026-07-14, alternating e7ae2927/9edfebcc re-pins).
+</p>
+<ul>
+<li>Refusal site: core/loop.js:449 (the WORK-002 loud-refusal leg) — fires when <code>contextRepo(opts2.context)</code> returns null for a mutation verb.</li>
+<li><code>contextRepo</code> (loop.js:253-271): <code>uri._parse</code> → <code>be.wtdir(navStr)</code> (NAVESCAPE→null) → <code>be.treeAt(dir)</code> — any miss collapses to the same null, so the error cannot say WHICH step missed.</li>
+<li>The asymmetry is the lead: the pager NAV path resolved <code>//SUBFETCH-REPRO</code> fine seconds earlier (the user was inside it); only the mutation-context path missed. Two resolution paths disagree about the same URI in the same session (<a href="./resolve_hash.html">resolve_hash</a> is the mandated single path — check whether wtdir/contextRepo composition diverges from what nav used, incl. where the session was launched from and how <code>//name</code> composes off it).</li>
+<li>The trailing <code>  //:work</code> in the error line is the view's own address token riding the arg echo (same welding the WORK-002 <code>[diff]</code> defect showed) — possibly cosmetic, possibly the actual corrupted context string; must be established.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+A <code>[get]</code>/<code>[-N]</code> click inside an entered worktree runs in that worktree; <code>contextRepo</code> resolves any URI the nav path resolves. When a context genuinely anchors nothing, the refusal names the failing step (parse / wtdir / treeAt), not a blanket &quot;no worktree&quot;.
+</p>
+<ul>
+<li>Red-first pty repro: work view → enter a wt row → click the get button; assert the get row lands in that wt's <code>.be</code>.</li>
+<li>Establish whether the context string handed to <code>_actSpell</code> was already mangled (the <code>//:work</code> tail) or clean and mis-resolved.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Rulings in force: all resolution through resolve_hash/discover (<a href="./resolve_hash.html">resolve_hash</a> mandatory, no reimplementation); context changes only by navigation (BRO-024); //authority off arg0 only; verify through the real UI path (pty), not TLV probes.</li>
+<li>Errors in plain words for the user-facing line (no bare NAVNONE).</li>
+<li>Related: <a href="/todo/WORK/WORK-002.html">WORK-002</a> (context execution, landed 1075739f), <a href="/todo/JS/JS-119.html">JS-119</a> (cwd-pin ruling), <a href="/todo/JS/JS-074.html">JS-074</a> (error masking).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>2026-07-19 investigation (opus, pty fixture + instrumented /tmp copy): a HEALTHY existing wt does NOT reproduce — from project root, inside another wt, and inside the clone itself, the <code>[-1]</code> click resolves and the get runs. NAVNONE fires only on a genuine miss (wt dir or its <code>.be</code> removed post-paint), i.e. the WORK-002 refusal working as intended.</li>
+<li>The nav (enter) and click paths are CODE-IDENTICAL: <code>status //KEY</code> operand → authorityRepo → be.wtdir/treeAt (loop.js:206-212) vs contextRepo → be.wtdir/treeAt (loop.js:259-261); be.projectRootDir caches once (resolve_hash.js:106), driveSpell never chdirs — one process cannot disagree with itself about <code>//X</code>.</li>
+<li><code>  //: work</code> tail = COSMETIC status-line echo: pager.js:478 prepends <code>message + &quot;  &quot; + view-address</code>. Refines the WORK-002 <code>[diff]</code> note — nothing is welded onto the spell/context; context at the throw is exactly <code>//SUBFETCH-REPRO</code> (parseOspell strips the invite slash, spell.js:154).</li>
+<li>The step that missed: <code>be.wtdir(navStr)</code> → null (loop.js:259-260); treeAt never reached. Distinct causes collapse: no dir; <code>.be</code> gone → treeAt climbs to the MAIN tree and discover.js:295's prefix check rejects → null. The refusal cannot name which.</li>
+<li>LIVE-failure hypotheses REFUTED by session facts (gritzko 2026-07-19): pager launched from the JOURNAL ROOT (tip code via the climb), session NEW, and a restart cleared the error. Not old-tree code, not long-lived cache drift — some per-process transient made be.wtdir null once for a URI the same process had just resolved. No known mechanism; unreproducible cold.</li>
+<li>Deliverable therefore = the diagnosable refusal below: the next live occurrence must name its failing step and echo the cached projectRootDir/workRoot in the message, which pinpoints the transient.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> pty repro attempt: healthy wt does not flip; forced-miss NAVNONE captured with clean ctx string</li>
+<li class="done"><input type="checkbox" checked disabled> the diagnosable refusal: contextRepo stashes a per-return miss reason, the throw names the step + workRoot — APPLIED in the main tree be/core/loop.js (explicit permission, 2026-07-19); verified via the pty getctx suite (refuse + healthy legs) PASS. Uncommitted.</li>
+<li class="done"><input type="checkbox" checked disabled> live session facts (journal root, new session, restart cleared) → hypotheses refuted; next occurrence self-diagnoses via the new message</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>A cold-process repro of the healthy-wt refusal does not exist; until the live session shape is known, only the error-message fix is actionable.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Main-tree edit (uncommitted): be/core/loop.js — contextRepo miss reasons + step-naming refusal. Suggested commit: <code>WORK-009: context refusal names the failing step</code></li>
+<li>The healthy-wt NAVNONE itself remains unexplained (per-process transient); this ticket stays open until a self-diagnosed occurrence lands or the transient is caught.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

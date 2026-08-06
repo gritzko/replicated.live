@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ABC-012</title>
+<title>ABC-012: socket layer: NETInfo returns garbage, dual-stack bind broken</title>
+<meta property="og:title" content="ABC-012: socket layer: NETInfo returns garbage, dual-stack bind broken">
+<meta property="og:description" content="NET/TCP/UDP/CURL-integration batch (2026-07-07 review). NETInfo reports OK without ever copying the resolved host into the output buffer; the aNETAddress macro memcpys past a stack pad on long hosts; the bind walk aborts on the first EADDRNOTAVAIL instead of trying the next address. CURL's event-loop glue can stall transfers. Most of this is unreachable by tests today because WITHINET is never on in CI (ABC-017).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/ABC/ABC-012.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,93 +15,73 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>ABC-012: <a href="./HIGH.html">HIGH</a> socket layer: NETInfo returns garbage, dual-stack bind broken</h1>
+<h1>ABC-012: socket layer: NETInfo returns garbage, dual-stack bind broken</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
 <p>
 NET/TCP/UDP/CURL-integration batch (2026-07-07 review). <code>NETInfo</code> reports OK without ever copying the resolved host into the output buffer; the <code>aNETAddress</code> macro memcpys past a stack pad on long hosts; the bind walk aborts on the first EADDRNOTAVAIL instead of trying the next address. CURL's event-loop glue can stall transfers. Most of this is unreachable by tests today because WITH_INET is never on in CI (<a href="ABC-017.html">ABC-017</a>).
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>NET.h:40-54</code> <code>NETInfo</code> — getnameinfo writes stack locals <code>host</code>/<p>
-<code>service</code>; <code>Bu8rewind(text, range)</code> only moves boundary pointers, no memcpy into <code>text</code> ever happens → OK with stale/zero payload. Uncalled in-tree (hence unnoticed); exported API.
-</p>
-</li>
-<li><code>NET.h:29-38</code> <code>aNETAddress</code> — <code>Bu8rewind</code> return ignored; the two<p>
-memcpys run unconditionally → stack OOB write for host ≥ 254 bytes, misplaced port on smaller failures. Hand-assembled pad vs typed feeds.
-</p>
-</li>
-<li><code>NET.c:12</code> — <code>a_pad(u8, host, 64)</code> vs NETmaxhost 222 / DNS max 253:<p>
-legal hostnames &gt; 63 chars make Resolve/Connect/Listen fail SNOROOM.
-</p>
-</li>
-<li><code>TCP.c:50-56</code> + <code>UDP.c:19-25</code> — first <code>bind()</code> failure returns TCPFAIL<p>
-instead of trying the next addrinfo (dual-stack v6-first breaks v4); dead <code>if (rc == 0) break;</code> betrays the mangled loop.
-</p>
-</li>
-<li><code>TCP.c:9</code> — <code>TCPConnect(..., b8 nonblocking)</code> param silently ignored<p>
-(INDEX.md advertises it); POL callers get a blocking connect.
-</p>
-</li>
-<li><code>TCP.h:12-18</code> <code>TCPAccept</code> — accept's addrlen discarded, no<p>
-<code>Bu8rewind(addr, ...)</code> (cf. UDP.h:25) → NETraw(addr) stays empty; no EINTR retry; EAGAIN == hard TCPFAIL. <code>UDP.h:20-36</code>: same EINTR/EAGAIN collapse + no MSG_TRUNC check (silent datagram truncation).
-</p>
-</li>
-<li><code>TCP.c:64</code> <code>TCPListen</code> — no SO_REUSEADDR: EADDRINUSE for the whole<p>
-TIME_WAIT window on restart.
-</p>
-</li>
-<li><code>CURL.c:26-38</code> — write/header callbacks ignore <code>u8bReserve</code>/<code>u8bFeed</code><p>
-failures and return <code>bytes</code> → on OOM, truncated body delivered with HTTP 200. Return 0/CURL_WRITEFUNC_ERROR instead.
-</p>
-</li>
-<li><code>CURL.c:44-59</code> <code>curl_pol_cb</code> — returns the PRE-action events mask,<p>
-clobbering interest changes curl made during <code>socket_action</code> → stalls on IN→OUT transitions. <code>CURL.c:77</code> POLTrackEvents return dropped.
-</p>
-</li>
-<li><code>CURL.c:8-9,83</code> — process-global <code>curl_multi</code>/<code>curl_running</code>/timer vs<p>
-POL's thread_local queue: cross-thread use silently corrupts.
-</p>
-</li>
-<li><code>POL.c:34</code> — <code>pollerbAllocate</code> return unchecked in POLInit; <code>POL.c:301</code><p>
-<code>int pollms</code> overflows for multi-week deadlines → negative timeout → poll blocks forever.
-</p>
-</li>
+<li><code>NET.h:40-54</code> <code>NETInfo</code> — getnameinfo writes stack locals <code>host</code>/ <code>service</code>; <code>Bu8rewind(text, range)</code> only moves boundary pointers, no memcpy into <code>text</code> ever happens → OK with stale/zero payload. Uncalled in-tree (hence unnoticed); exported API.</li>
+<li><code>NET.h:29-38</code> <code>aNETAddress</code> — <code>Bu8rewind</code> return ignored; the two memcpys run unconditionally → stack OOB write for host ≥ 254 bytes, misplaced port on smaller failures. Hand-assembled pad vs typed feeds.</li>
+<li><code>NET.c:12</code> — <code>a_pad(u8, host, 64)</code> vs NETmaxhost 222 / DNS max 253: legal hostnames &gt; 63 chars make Resolve/Connect/Listen fail SNOROOM.</li>
+<li><code>TCP.c:50-56</code> + <code>UDP.c:19-25</code> — first <code>bind()</code> failure returns TCPFAIL instead of trying the next addrinfo (dual-stack v6-first breaks v4); dead <code>if (rc == 0) break;</code> betrays the mangled loop.</li>
+<li><code>TCP.c:9</code> — <code>TCPConnect(..., b8 nonblocking)</code> param silently ignored (INDEX.md advertises it); POL callers get a blocking connect.</li>
+<li><code>TCP.h:12-18</code> <code>TCPAccept</code> — accept's addrlen discarded, no <code>Bu8rewind(addr, ...)</code> (cf. UDP.h:25) → NETraw(addr) stays empty; no EINTR retry; EAGAIN == hard TCPFAIL. <code>UDP.h:20-36</code>: same EINTR/EAGAIN collapse + no MSG_TRUNC check (silent datagram truncation).</li>
+<li><code>TCP.c:64</code> <code>TCPListen</code> — no SO_REUSEADDR: EADDRINUSE for the whole TIME_WAIT window on restart.</li>
+<li><code>CURL.c:26-38</code> — write/header callbacks ignore <code>u8bReserve</code>/<code>u8bFeed</code> failures and return <code>bytes</code> → on OOM, truncated body delivered with HTTP 200. Return 0/CURL_WRITEFUNC_ERROR instead.</li>
+<li><code>CURL.c:44-59</code> <code>curl_pol_cb</code> — returns the PRE-action events mask, clobbering interest changes curl made during <code>socket_action</code> → stalls on IN→OUT transitions. <code>CURL.c:77</code> POLTrackEvents return dropped.</li>
+<li><code>CURL.c:8-9,83</code> — process-global <code>curl_multi</code>/<code>curl_running</code>/timer vs POL's thread_local queue: cross-thread use silently corrupts.</li>
+<li><code>POL.c:34</code> — <code>pollerbAllocate</code> return unchecked in POLInit; <code>POL.c:301</code> <code>int pollms</code> overflows for multi-week deadlines → negative timeout → poll blocks forever.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Repro where feasible (loopback tests behind WITH_INET; fault-inject the<p>
-CURL callbacks). Fix per item; EINTR/EAGAIN policy consistent with FILE.c's retry convention.
-</p>
-</li>
+<li>Repro where feasible (loopback tests behind WITH_INET; fault-inject the CURL callbacks). Fix per item; EINTR/EAGAIN policy consistent with FILE.c's retry convention.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
 <li>Requires <a href="ABC-017.html">ABC-017</a>'s WITH_INET CI lane to keep any of this tested.</li>
-<li>Lifecycle items in CURL.c belong to <a href="../MEM/MEM-010.html">MEM-010</a> — don't collide; this<p>
-ticket touches the callbacks/event glue only.
-</p>
-</li>
+<li>Lifecycle items in CURL.c belong to <a href="../MEM/MEM-010.html">MEM-010</a> — don't collide; this ticket touches the callbacks/event glue only.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open)</li>
+<li>EAGAIN is a NEW soft code <code>NETAGAIN</code> (ok64-generated) on TCPAccept/UDPDrain; EINTR retries in place; UDP MSG_TRUNC → NETNOSPACE.</li>
+<li>New <code>POLEvents(fd, *events)</code> getter (POL.h/.c, INDEX.md) so curl_pol_cb returns the POST-socket_action mask.</li>
+<li>No repro seam for CURL cb OOM / POL multi-week deadline — defensive fixes guarded by the existing CURL/POL suites.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> NETInfo copy + repro; aNETAddress checked feeds</li>
-<li class="open"><input type="checkbox" disabled> host pad 253; bind walk continues; SO_REUSEADDR; nonblocking honored</li>
-<li class="open"><input type="checkbox" disabled> TCPAccept addr rewind + EINTR/EAGAIN policy; UDP MSG_TRUNC</li>
-<li class="open"><input type="checkbox" disabled> CURL cb failure propagation; pol mask return; document threading</li>
-<li class="open"><input type="checkbox" disabled> POL init check + pollms clamp</li>
+<li class="done"><input type="checkbox" checked disabled> NETInfo copies via checked Bu8rewind (NETtestInfo); aNETAddress checked, oversize → empty (NETtestAddressOversize)</li>
+<li class="done"><input type="checkbox" checked disabled> host pad 254 (NETtestResolveLongHost); bind walk continues (TCP/UDPtestBindWalk, real ::1→127.0.0.1); SO_REUSEADDR (TCPtestReuseAddr); nonblocking honored (TCPtestNonblock)</li>
+<li class="done"><input type="checkbox" checked disabled> TCPAccept addr rewind + NETAGAIN (TCPtestAcceptAgain); UDP EAGAIN + MSG_TRUNC (UDPtestAgain/Trunc)</li>
+<li class="done"><input type="checkbox" checked disabled> CURL cb failures → CURL_WRITEFUNC_ERROR; pol post-action mask; thread_local mismatch documented (2-line comment)</li>
+<li class="done"><input type="checkbox" checked disabled> POLInit alloc checked; poll timeout clamped 60s</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Untestable in CI until WITH_INET exists there (<a href="ABC-017.html">ABC-017</a>).</li>
+<li>Untestable in CI until WITH_INET exists there (<a href="ABC-017.html">ABC-017</a>); verified locally with -DWITH_INET=ON (cache var, CMake untouched).</li>
+<li>WITH_ASAN unusable on the Alpine host (libasan link error, pre-existing) — suite ran without ASAN.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(open)</li>
+<li>LANDED by gritzko as <code>?ce0c1d9b</code> &quot;ABC-012: assorted fixes to the networking code&quot; — but the post MISSES <code>test/NET.c</code> (was unk, never put): the commit carries the NETtest CMake target with no source, so WITH_INET failed to configure until ABC-017 guarded the block with if(EXISTS). RECOVERY: <code>jab put test/NET.c</code> + post from work/ABC-012 (file still sits there), then drop ABC-017's guard note. Suite was 53/53 x4 with WITH_INET=ON pre-landing.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

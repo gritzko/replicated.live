@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-073</title>
+<title>JS-073: ingest.add rewrites the refs ULOG non-atomically + restamps the reflog</title>
+<meta property="og:title" content="JS-073: ingest.add rewrites the refs ULOG non-atomically + restamps the reflog">
+<meta property="og:description" content="ingest.add lands a re-get pack into an existing shard and updates refs (ingest.js:108-128). It drains the old reflog then rewrites the WHOLE file via writeUlog→writeBytes, which does io.resize(fd,0) then io.writeAll(fd,b) IN PLACE (ingest.js:24-32) — no temp file, no sync, no rename. A crash in that window leaves refs empty, losing every tip; the re-get path reaches it (get.js:126). The crash-safe ulog.write (temp+sync+rename) exists and is bypassed. Worse, writeUlog re-feeds rows with NO ts (ingest.js:37), restamping every surviving reflog row. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-073.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,86 +15,66 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-073 <a href="">HIGH</a>: <code>ingest.add</code> rewrites the refs ULOG non-atomically + restamps the reflog</h1>
+<h1>JS-073: <code>ingest.add</code> rewrites the refs ULOG non-atomically + restamps the reflog</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>ingest.add</code> lands a re-get pack into an existing shard and updates <code>refs</code> (<code>ingest.js:108-128</code>).  It drains the old reflog then rewrites the WHOLE file via <code>writeUlog</code>→<code>writeBytes</code>, which does <code>io.resize(fd,0)</code> then <code>io.writeAll(fd,b)</code> IN PLACE (<code>ingest.js:24-32</code>) — no temp file, no sync, no rename.  A crash in that window leaves <code>refs</code> empty, losing every tip; the re-get path reaches it (<code>get.js:126</code>).  The crash-safe <code>ulog.write</code> (temp+sync+rename) exists and is bypassed.  Worse, <code>writeUlog</code> re-feeds rows with NO ts (<code>ingest.js:37</code>), restamping every surviving reflog row.  Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>ingest.js:24-32</code> <code>writeBytes</code>: <code>io.resize(fd,0)</code> then <code>io.writeAll(fd,b)</code><p>
-on the live file — a destructive in-place truncate-and-rewrite.
-</p>
-</li>
-<li><code>ingest.js:35-40</code> <code>writeUlog</code>: <code>log.feed(r.verb, r.uri)</code> — drops ts, so<p>
-every drained reflog row is restamped to &quot;now&quot; on rewrite.
-</p>
-</li>
-<li><code>ingest.js:119-127</code> <code>add</code>: drains <code>refs</code> (no ts captured —<p>
-<code>{verb,uri}</code> only, line 122) then <code>writeUlog(refs, old.concat(...))</code>.
-</p>
-</li>
+<li><code>ingest.js:24-32</code> <code>writeBytes</code>: <code>io.resize(fd,0)</code> then <code>io.writeAll(fd,b)</code> on the live file — a destructive in-place truncate-and-rewrite.</li>
+<li><code>ingest.js:35-40</code> <code>writeUlog</code>: <code>log.feed(r.verb, r.uri)</code> — drops ts, so every drained reflog row is restamped to &quot;now&quot; on rewrite.</li>
+<li><code>ingest.js:119-127</code> <code>add</code>: drains <code>refs</code> (no ts captured — <code>{verb,uri}</code> only, line 122) then <code>writeUlog(refs, old.concat(...))</code>.</li>
 <li><code>get.js:126</code>: the non-fresh re-get calls <code>ingest.add</code> — this IS reached.</li>
-<li><code>ulog.js</code> <code>write</code>/<code>_stage</code>: temp sibling + <code>io.sync</code> + <code>io.rename</code><p>
-(<code>ulog.js:107-126</code>), the crash-safe writer that <code>add</code> bypasses.
-</p>
-</li>
-<li><code>ulog.append</code> preserves each row's original ts (<code>ulog.js:131-143</code>);<p>
-<code>test/ulog.js:62-63</code> asserts &quot;old rows keep their ORIGINAL timestamps&quot;.
-</p>
-</li>
+<li><code>ulog.js</code> <code>write</code>/<code>_stage</code>: temp sibling + <code>io.sync</code> + <code>io.rename</code> (<code>ulog.js:107-126</code>), the crash-safe writer that <code>add</code> bypasses.</li>
+<li><code>ulog.append</code> preserves each row's original ts (<code>ulog.js:131-143</code>); <code>test/ulog.js:62-63</code> asserts &quot;old rows keep their ORIGINAL timestamps&quot;.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>ingest.add</code> writes <code>refs</code> crash-safely (temp+sync+rename): a kill after<p>
-the truncate leaves the OLD <code>refs</code> byte-intact, no tip loss.
-</p>
-</li>
-<li>Surviving reflog rows keep their ORIGINAL ts; only the new tip rows<p>
-get a fresh monotonic ts.
-</p>
-</li>
+<li><code>ingest.add</code> writes <code>refs</code> crash-safely (temp+sync+rename): a kill after the truncate leaves the OLD <code>refs</code> byte-intact, no tip loss.</li>
+<li>Surviving reflog rows keep their ORIGINAL ts; only the new tip rows get a fresh monotonic ts.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Route through <code>ulog.write</code>/<code>ulog.append</code> (already temp+rename + ts-aware);<p>
-capture each drained row's <code>log.time</code> and feed it back.
-</p>
-</li>
-<li>libabc+libdog ONLY; keep the <code>0000000001.keeper</code> pack-log write path<p>
-(<code>writeBytes</code> for the pack itself, content-addressed, is fine).
-</p>
-</li>
+<li>Route through <code>ulog.write</code>/<code>ulog.append</code> (already temp+rename + ts-aware); capture each drained row's <code>log.time</code> and feed it back.</li>
+<li>libabc+libdog ONLY; keep the <code>0000000001.keeper</code> pack-log write path (<code>writeBytes</code> for the pack itself, content-addressed, is fine).</li>
 <li>Scope to ingest.js; do not change the <code>clone</code> fresh-store path's intent.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Replace the <code>add</code> refs rewrite with <code>ulog.write(refs, old+new)</code> carrying<p>
-each old row's <code>ts</code>, OR <code>ulog.append(refs, newRows)</code> (drains+preserves).
-</p>
-</li>
+<li>Replace the <code>add</code> refs rewrite with <code>ulog.write(refs, old+new)</code> carrying each old row's <code>ts</code>, OR <code>ulog.append(refs, newRows)</code> (drains+preserves).</li>
 <li>Keep pack-log bytes on <code>writeBytes</code>; only <code>refs</code> needs the ULOG writer.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/ingest/*</code>: kill-after-resize on <code>refs</code> leaves it<p>
- intact (no empty refs / no lost tip).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/ingest/*</code>: kill-after-resize on <code>refs</code> leaves it intact (no empty refs / no lost tip).</li>
 <li class="open"><input type="checkbox" disabled> Repro: surviving reflog rows keep their original ts after <code>add</code>.</li>
-<li class="open"><input type="checkbox" disabled> Reroute <code>add</code>'s refs write through <code>ulog.write</code>/<code>append</code>; drop the<p>
- in-place <code>writeUlog</code> for <code>refs</code>.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Reroute <code>add</code>'s refs write through <code>ulog.write</code>/<code>append</code>; drop the in-place <code>writeUlog</code> for <code>refs</code>.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul class="todo">
-<li class="blocked"><input type="checkbox" disabled> ← shares the <code>ulog.js</code> writer surface; keep parity with <a href="">JS-048</a> writers.</li>
+<li class="blocked"><input type="checkbox" disabled> ← shares the <code>ulog.js</code> writer surface; keep parity with <a href="./JS-048.html">JS-048</a> writers.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>(pending)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

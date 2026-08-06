@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-092</title>
+<title>JS-092: hunk.feed writes the TOK TLV at 1/4 the byte length</title>
+<meta property="og:title" content="JS-092: hunk.feed writes the TOK TLV at 1/4 the byte length">
+<meta property="og:description" content="js/hunk.hpp JABChunkFeed sets the toks slice END pointer with token-COUNT byte arithmetic instead of BYTE length: hk.toks1 = (tok32c)(toks0 + $len(toks)/sizeof(tok32)). toks0 is a u8, so + N advances N BYTES, but $len(toks)/sizeof(tok32) is the token COUNT — so the TOK TLV is written with numtokens bytes, a QUARTER of the real numtokens4. Result: a fed hunk with N tok32 spans drains back only N/4 toks (rounded), and HUNKu8sDrain FAILS outright (next() → false, the record vanishes) unless 4 | N — because hunkdraintoks rejects a 'K' length not a multiple of sizeof(tok32). Surfaced fixing COMMIT-003. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-092.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,84 +15,61 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-092 <a href="">MED</a>: <code>hunk.feed</code> writes the TOK TLV at 1/4 the byte length</h1>
+<h1>JS-092: <code>hunk.feed</code> writes the TOK TLV at 1/4 the byte length</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>js/hunk.hpp</code> <code>JABChunkFeed</code> sets the toks slice END pointer with token-COUNT byte arithmetic instead of BYTE length: <code>hk.toks[1] = (tok32c*)(toks[0] + $len(toks)/sizeof(tok32))</code>. <code>toks[0]</code> is a <code>u8*</code>, so <code>+ N</code> advances N BYTES, but <code>$len(toks)/sizeof(tok32)</code> is the token COUNT — so the TOK TLV is written with <code>numtokens</code> bytes, a QUARTER of the real <code>numtokens*4</code>. Result: a fed hunk with N tok32 spans drains back only <code>N/4</code> toks (rounded), and <code>HUNKu8sDrain</code> FAILS outright (<code>next()</code> → false, the record vanishes) unless <code>4 | N</code> — because <code>hunk_drain_toks</code> rejects a <code>'K'</code> length not a multiple of <code>sizeof(tok32)</code>. Surfaced fixing <a href="../COMMIT/COMMIT-003.html">COMMIT-003</a>. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>js/hunk.hpp:62-63</code> `hk.toks<a href="">0</a> = (tok32c*)toks<a href="">0</a>; hk.toks<a href="">1</a> =<p>
-(tok32c<strong>)(toks<a href="">0</a> + $len(toks) / sizeof(tok32));` — END = start + COUNT bytes; should be start + COUNT</strong>sizeof(tok32) (= the toks byte length).
-</p>
-</li>
-<li>Repro (jab): feed a HUNK record with 4 valid monotonic spans, <code>next()</code> then<p>
-<code>log.toks.length</code> → 1 (fed 4); feed 8 → 2. Feed 1/2/3/5/15 → <code>next()</code> false (drain rejects the non-4-multiple <code>'K'</code> length, <code>dog/HUNK.c:152</code> HUNKTOKLEN).
-</p>
-</li>
-<li><code>dog/HUNK.c</code> HUNKu8sFeed (the C producer) is CORRECT — it builds <code>tkb</code> from<p>
-<code>hk-&gt;toks</code> as a typed <code>tok32cs</code> slice, so <code>$len</code>*sizeof is implicit; only the JS binding's manual end-pointer math is wrong.
-</p>
-</li>
-<li>Live impact masked: <code>cat</code>/<code>blob</code>/<code>grep</code> feed toks ONLY in --color (plain<p>
-feeds EMPTY toks), and the --color HUNK render is not byte-asserted — so the plain parity suite never exercised a non-empty toks round-trip until commit:.
-</p>
-</li>
+<li><code>js/hunk.hpp:62-63</code> <code>hk.toks[0] = (tok32c*)toks[0]; hk.toks[1] = (tok32c*)(toks[0] + $len(toks) / sizeof(tok32));</code> — END = start + COUNT bytes; should be start + COUNT*sizeof(tok32) (= the toks byte length).</li>
+<li>Repro (jab): feed a HUNK record with 4 valid monotonic spans, <code>next()</code> then <code>log.toks.length</code> → 1 (fed 4); feed 8 → 2. Feed 1/2/3/5/15 → <code>next()</code> false (drain rejects the non-4-multiple <code>'K'</code> length, <code>dog/HUNK.c:152</code> HUNKTOKLEN).</li>
+<li><code>dog/HUNK.c</code> HUNKu8sFeed (the C producer) is CORRECT — it builds <code>tkb</code> from <code>hk-&gt;toks</code> as a typed <code>tok32cs</code> slice, so <code>$len</code>*sizeof is implicit; only the JS binding's manual end-pointer math is wrong.</li>
+<li>Live impact masked: <code>cat</code>/<code>blob</code>/<code>grep</code> feed toks ONLY in --color (plain feeds EMPTY toks), and the --color HUNK render is not byte-asserted — so the plain parity suite never exercised a non-empty toks round-trip until commit:.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>hunk.feed(uri, text, toks)</code> round-trips ALL N spans: <code>next()</code> succeeds for<p>
-any N and <code>log.toks.length === N</code>, with each span's value preserved.
-</p>
-</li>
-<li>Repro under <code>js/test/hunk.js</code>: feed K spans, assert <code>next()</code> + `toks.length<p>
-== K` + the span values; cover K not a multiple of 4.
-</p>
-</li>
+<li><code>hunk.feed(uri, text, toks)</code> round-trips ALL N spans: <code>next()</code> succeeds for any N and <code>log.toks.length === N</code>, with each span's value preserved.</li>
+<li>Repro under <code>js/test/hunk.js</code>: feed K spans, assert <code>next()</code> + <code>toks.length == K</code> + the span values; cover K not a multiple of 4.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li><code>js/hunk.hpp</code> only (the binding); no <code>dog/HUNK.c</code> change (the C side is<p>
-right). Use the typed-slice length, not manual pointer arithmetic (CLAUDE.md §10). <code>JABChunkDogenize</code> (<code>:98-99</code>) builds toks from a <code>u32*</code> pair correctly — mirror that.
-</p>
-</li>
+<li><code>js/hunk.hpp</code> only (the binding); no <code>dog/HUNK.c</code> change (the C side is right). Use the typed-slice length, not manual pointer arithmetic (CLAUDE.md §10). <code>JABChunkDogenize</code> (<code>:98-99</code>) builds toks from a <code>u32*</code> pair correctly — mirror that.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>FIXED: <code>hk.toks[1] = (tok32c*)toks[1]</code> (toks is a <code>u8s</code>, so <code>toks[1]</code> already<p>
-IS the byte-end — <code>JABCBytesOf</code> sets <code>out[1] = base+off+len</code>).  <code>$len(hk.toks)</code> then equals the token count; K=1,2,3,4,7 all round-trip.
-</p>
-</li>
-<li>SECOND bug found mid-fix (co-fixed here, surfaced by COMMIT-005's commit:<p>
-pager once toks drained): the empty-URI <code>_hunk_uri</code> getter computed <code>NULL - buf[0]</code> (an empty uri/text is never written to the TLV, HUNK.c:129), so <code>JABCSubU8</code> threw <code>RangeError: Length out of range of buffer</code>.  New helper <code>JABChunkField</code> returns an empty Uint8Array for an empty/NULL field (uri+text).
-</p>
-</li>
+<li>FIXED: <code>hk.toks[1] = (tok32c*)toks[1]</code> (toks is a <code>u8s</code>, so <code>toks[1]</code> already IS the byte-end — <code>JABCBytesOf</code> sets <code>out[1] = base+off+len</code>).  <code>$len(hk.toks)</code> then equals the token count; K=1,2,3,4,7 all round-trip.</li>
+<li>SECOND bug found mid-fix (co-fixed here, surfaced by COMMIT-005's commit: pager once toks drained): the empty-URI <code>_hunk_uri</code> getter computed <code>NULL - buf[0]</code> (an empty uri/text is never written to the TLV, HUNK.c:129), so <code>JABCSubU8</code> threw <code>RangeError: Length out of range of buffer</code>.  New helper <code>JABChunkField</code> returns an empty Uint8Array for an empty/NULL field (uri+text).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Repro-first in <code>js/test/hunk.js</code>: feed K=1,2,3,4,7 spans; assert <code>next()</code> +<p>
- <code>toks.length == K</code> + values.  RED pre-fix (next() false at K=1), GREEN post-fix.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Fix the END pointer to the byte length + the empty-field getter; JABC + ctest<p>
- re-run 377/377 green.
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Repro-first in <code>js/test/hunk.js</code>: feed K=1,2,3,4,7 spans; assert <code>next()</code> + <code>toks.length == K</code> + values.  RED pre-fix (next() false at K=1), GREEN post-fix.</li>
+<li class="done"><input type="checkbox" checked disabled> Fix the END pointer to the byte length + the empty-field getter; JABC + ctest re-run 377/377 green.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Built in an isolated <code>~/todo/COMMIT-005</code> worktree (the main beagle tree is<p>
- occupied by DIS-053).  The be/ plain-mode EMPTY-toks workaround (<a href="../COMMIT/COMMIT-003.html">COMMIT-003</a>)  stays — it keeps plain output colour-free, independent of this fix.
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Built in an isolated <code>~/todo/COMMIT-005</code> worktree (the main beagle tree is occupied by DIS-053).  The be/ plain-mode EMPTY-toks workaround (<a href="../COMMIT/COMMIT-003.html">COMMIT-003</a>) stays — it keeps plain output colour-free, independent of this fix.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>PENDING-COMMIT (co-landed with <a href="">COMMIT-005</a>; human gates).  Changed:<p>
-<code>js/hunk.hpp</code> (toks byte-end + empty uri/text getter), <code>js/test/hunk.js</code> (the K-span repro).  C side (<code>dog/HUNK.c</code>) untouched — the producer was correct.
-</p>
-</li>
+<li>PENDING-COMMIT (co-landed with <a href="./COMMIT-005.html">COMMIT-005</a>; human gates).  Changed: <code>js/hunk.hpp</code> (toks byte-end + empty uri/text getter), <code>js/test/hunk.js</code> (the K-span repro).  C side (<code>dog/HUNK.c</code>) untouched — the producer was correct.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

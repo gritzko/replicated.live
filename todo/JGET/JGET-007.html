@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JGET-007</title>
+<title>JGET-007: submodule fetch by EXACT PIN fails when the pin is not the advertised tip</title>
+<meta property="og:title" content="JGET-007: submodule fetch by EXACT PIN fails when the pin is not the advertised tip">
+<meta property="og:description" content="jab get of a parent whose gitlink pins a sub at a NON-tip historical commit fails to mount the sub: submount.tryFetch asks the wire for the exact pin sha, the git upload-pack server refuses (not our ref &lt;pin&gt;), the fetch returns null, all candidates fail, and the whole get throws SUBFETCH … child unreachable (rc=1, sub absent). Native fetches the sub's BRANCH and resolves the pin from history. This blocks the entire submodules.sh fixture family (the standard pin = SUBC2 non-tip). Part of JGET-001; method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JGET/JGET-007.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,47 +15,34 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JGET-007 <a href="./HIGH.html">HIGH</a>: submodule fetch by EXACT PIN fails when the pin is not the advertised tip</h1>
+<h1>JGET-007: submodule fetch by EXACT PIN fails when the pin is not the advertised tip</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
 <p>
 <code>jab get</code> of a parent whose gitlink pins a sub at a NON-tip historical commit fails to mount the sub: <code>submount.tryFetch</code> asks the wire for the exact pin sha, the git <code>upload-pack</code> server refuses (<code>not our ref &lt;pin&gt;</code>), the fetch returns null, all candidates fail, and the whole get throws <code>SUBFETCH … child unreachable</code> (rc=1, sub absent). Native fetches the sub's BRANCH and resolves the pin from history. This blocks the entire <code>submodules.sh</code> fixture family (the standard pin = SUB_C2 non-tip). Part of <a href="JGET-001.html">JGET-001</a>; method <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Native <code>beagle/test/get/{05,11,12,13,15,16,17,20,53}</code> (parent+sub, pin=SUB_C2<p>
-non-tip). When the pin == the advertised tip, jab mounts cleanly (verified case <code>c0511tip</code>, rc=0) — so it is specifically the pin≠tip path.
-</p>
-</li>
-<li>Repro: standard submodules.sh shape (parent gitlink SUB_C2, bare sub advertises<p>
-only <code>master</code>=C3); <code>jab get &lt;parent&gt;</code> → <code>git upload-pack: not our ref &lt;C2&gt;</code> → <code>be get: SUBFETCH … child unreachable</code>. Evidence <code>~/todo/JSGET-cases/c0511/wk/jT.err</code>.
-</p>
-</li>
-<li>Root: <code>be/shared/submount.js:128-138</code> <code>tryFetch</code> → <code>wire.fetch(uri, pin)</code><p>
-requests the exact pin; no branch-fetch + ancestry-resolve fallback.
-</p>
-</li>
+<li>Native <code>beagle/test/get/{05,11,12,13,15,16,17,20,53}</code> (parent+sub, pin=SUB_C2 non-tip). When the pin == the advertised tip, jab mounts cleanly (verified case <code>c0511tip</code>, rc=0) — so it is specifically the pin≠tip path.</li>
+<li>Repro: standard submodules.sh shape (parent gitlink SUB_C2, bare sub advertises only <code>master</code>=C3); <code>jab get &lt;parent&gt;</code> → <code>git upload-pack: not our ref &lt;C2&gt;</code> → <code>be get: SUBFETCH … child unreachable</code>. Evidence <code>~/todo/JSGET-cases/c0511/wk/jT.err</code>.</li>
+<li>Root: <code>be/shared/submount.js:128-138</code> <code>tryFetch</code> → <code>wire.fetch(uri, pin)</code> requests the exact pin; no branch-fetch + ancestry-resolve fallback.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>A sub pinned at a non-tip commit mounts: fetch the sub's advertised branch(es),<p>
-then resolve the pin from the fetched history (as native does), and check out the pin. Pin == tip keeps working.
-</p>
-</li>
+<li>A sub pinned at a non-tip commit mounts: fetch the sub's advertised branch(es), then resolve the pin from the fetched history (as native does), and check out the pin. Pin == tip keeps working.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Reuse <code>dag</code>/graf history resolution. ssh-gated cases self-SKIP without<p>
-localhost ssh. Repro-first. Likely sequence AFTER <a href="./JGET-006.html">JGET-006</a> (empty-<code>.be</code> mask).
-</p>
-</li>
+<li>Reuse <code>dag</code>/graf history resolution. ssh-gated cases self-SKIP without localhost ssh. Repro-first. Likely sequence AFTER <a href="./JGET-006.html">JGET-006</a> (empty-<code>.be</code> mask).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>In <code>tryFetch</code>/<code>submount</code>: if an exact-pin fetch is refused, fall back to fetching<p>
-the branch (or the advertised refs) into the sub shard, then verify the pin is reachable and check it out. Keep exact-pin as the fast path when the server allows it.
-</p>
-</li>
+<li>In <code>tryFetch</code>/<code>submount</code>: if an exact-pin fetch is refused, fall back to fetching the branch (or the advertised refs) into the sub shard, then verify the pin is reachable and check it out. Keep exact-pin as the fast path when the server allows it.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -67,5 +58,16 @@ the branch (or the advertised refs) into the sub shard, then verify the pin is r
 <ul>
 <li>(open) Filed 2026-06-29.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

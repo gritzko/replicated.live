@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BLAME-003</title>
+<title>BLAME-003: parallelize blame's inflate-bound fetch across cores</title>
+<meta property="og:title" content="BLAME-003: parallelize blame's inflate-bound fetch across cores">
+<meta property="og:description" content="blame's fetch/descent is inflate-bound and embarrassingly parallel (independent per commit), while the weave fold is small and sequential. After the per-commit work is minimized (BLAME-001/BLAME-002), the residual descent+inflate can be sharded across the 16 cores: a parallel pass resolves each commit's leaf blob sha, a parallel pass inflates the distinct changed blobs, then a serial pass folds them in topo order. The blocker is that the keeper/graf read path uses shared singleton scratch buffers; those must become per-thread (or caller-owned) first. This layers on top of — and is gated by — the single-thread wins. See Plan.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BLAME/BLAME-003.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -43,11 +47,8 @@ Phase the work, make the read path reentrant by passing scratch as parameters (C
 <h2>WIP</h2>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Re-measure post-<a href="../todo/BLAME-002.html">BLAME-002</a>: run <code>blame:</code> with <code>GRAF_BLAME_STATS</code> (<code>graf/BLAME.c:579</code>) + <code>graf/test/blame-perf.sh</code> on a hot file — with the index-served descent (<code>1a5acce8</code>, zero re-inflate on unchanged trees) the residual inflate count is ~folds, not ~nord; quantify the parallelizable remainder BEFORE any threading work.</li>
-<li class="blocked"><input type="checkbox" disabled> Ruling (blocked on gritzko), pick one:<p>
- (a) WONTFIX/moot — BLAME-002 evaporated the ROI (residual inflates ≈ changed blobs only);  (b) fork-based workers + shared-mmap emit, the precedent that NOW EXISTS in <code>keeper/UNPK.c</code> Phase B (round-robin roots, per-worker scratch, no pthread dependency) — the ticket's &quot;no threading exists anywhere&quot; premise is stale;  (c) C11 <code>&lt;threads.h&gt;</code> per the original plan (new build dependency + reentrancy work on <code>GRAF.obj_buf</code>/<code>tree_buf</code>, keeper <code>buf1..4</code>).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Re-measure post-<a href="../todo/BLAME-002.html">BLAME-002</a>: run <code>blame:</code> with <code>GRAF_BLAME_STATS</code> (<code>graf/BLAME.c:579</code>) + <code>graf/test/blame-perf.sh</code> on a hot file — with the index-served descent (<code>1a5acce8</code>, zero re-inflate on unchanged trees) the residual inflate count is <del>folds, not </del>nord; quantify the parallelizable remainder BEFORE any threading work.</li>
+<li class="blocked"><input type="checkbox" disabled> Ruling (blocked on gritzko), pick one: (a) WONTFIX/moot — BLAME-002 evaporated the ROI (residual inflates ≈ changed blobs only); (b) fork-based workers + shared-mmap emit, the precedent that NOW EXISTS in <code>keeper/UNPK.c</code> Phase B (round-robin roots, per-worker scratch, no pthread dependency) — the ticket's &quot;no threading exists anywhere&quot; premise is stale; (c) C11 <code>&lt;threads.h&gt;</code> per the original plan (new build dependency + reentrancy work on <code>GRAF.obj_buf</code>/<code>tree_buf</code>, keeper <code>buf1..4</code>).</li>
 <li class="open"><input type="checkbox" disabled> Only after the ruling: phase the work per <code>## Planned</code> (or close the ticket).</li>
 </ul>
 <h3>Blockers and bummers</h3>
@@ -59,5 +60,16 @@ Phase the work, make the read path reentrant by passing scratch as parameters (C
 <p>
 None yet.
 </p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

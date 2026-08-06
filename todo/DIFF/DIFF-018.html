@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIFF-018: fold aligner spends rm+in on identical tokens — phantom doubled bracket</title>
+<meta property="og:title" content="DIFF-018: fold aligner spends rm+in on identical tokens — phantom doubled bracket">
+<meta property="og:description" content="Same source as /todo/DIFF/DIFF-017 (gritzko reviewing jab diff //POST-035/shared/wtlog.js#L328, 2026-07-29): old if (p &amp;&amp; !seen.has(p)) { vs new if (p &amp;&amp; !seen.has(p) &amp;&amp; !acked.has(p)) { renders as …!acked.has(p))) — a green inserted ) glued to a red removed ). Each bracket IS a token (doghili confirms), but the wt-fold aligner anchored greedily: at the first mismatch (old ) vs new &amp;&amp;) it inserted the run INCLUDING its trailing ) and removed the old if-closer, instead of sliding the insertion boundary one token left and keeping the shared ) EQ. One needless edit pair of byte-identical tokens; the doubled bracket reads as a syntax error.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIFF/DIFF-018.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIFF-018: fold aligner spends rm+in on identical tokens — phantom doubled bracket</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+Same source as <a href="/todo/DIFF/DIFF-017.html">DIFF-017</a> (gritzko reviewing <code>jab diff //POST-035/shared/wtlog.js#L328</code>, 2026-07-29): old <code>if (p &amp;&amp; !seen.has(p)) {</code> vs new <code>if (p &amp;&amp; !seen.has(p) &amp;&amp; !acked.has(p)) {</code> renders as <code>…!acked.has(p)))</code> — a green inserted <code>)</code> glued to a red removed <code>)</code>. Each bracket IS a token (doghili confirms), but the wt-fold aligner anchored greedily: at the first mismatch (old <code>)</code> vs new <code>&amp;&amp;</code>) it inserted the run INCLUDING its trailing <code>)</code> and removed the old if-closer, instead of sliding the insertion boundary one token left and keeping the shared <code>)</code> EQ. One needless edit pair of byte-identical tokens; the doubled bracket reads as a syntax error.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro: <code>jab diff --color '//POST-035/shared/wtlog.js' | cat</code>, the <code>conflicts()</code> hunk (~L336): row = EQ <code>!seen.has(p)</code> + green <code> &amp;&amp; !acked.has(p))</code> (bg194) + red <code>)</code> (bg224) + EQ <code> {</code>.</li>
+<li>The alignment happens where wt bytes are folded against the base weave (weave fold's token diff), not in the renderer — DIFF-017's row splitting can't fix a wrong weave: the rm/in pair is real in the fold, and the two <code>)</code>s get distinct weave ids permanently.</li>
+<li>Minimal alignment exists (insert 8 tokens, remove 0) but the differ resyncs greedily past ambiguous repeated closers; no common-suffix trim, no slide heuristic. Line-level analog is git's indent/slider heuristic.</li>
+</ul>
+<h3>Goals</h3>
+<ol>
+<li>The fold's token diff never pays rm+in for byte-identical tokens at an insertion/removal boundary: either common-prefix/suffix trimming inside the mismatch window, or a post-pass that slides edit-run boundaries across equal tokens (canonical position — prefer widening EQ; pick one, document).</li>
+<li>The wtlog.js shape renders as pure insertion: <code>…!seen.has(p)</code> EQ + green <code> &amp;&amp; !acked.has(p)</code> + EQ <code>) {</code>. Repeated-closer cases (<code>))</code>, <code>}}</code>, <code>]]</code>) covered by tests.</li>
+<li>Determinism: same bytes → same fold on every replica (the slide rule must be canonical, no tie-break on anything positional-random).</li>
+</ol>
+<h3>Constraints</h3>
+<ul>
+<li>Fix at the fold/diff layer (shared/weave.js foldWt path or the token-diff it calls), NOT the renderer; DIFF-017's lineKind rule stays as is.</li>
+<li>Beware stored weaves: already-folded commits keep their alignment — the fix changes only new folds; no rewriting history.</li>
+<li>C twin: the dog-side weave/diff (beagle) has the same greedy anchor — record the exact fn for lockstep, C is read-only in the journal tree.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro test: the wtlog.js shape distilled (append <code>&amp;&amp; call(x))</code> before a shared closer), assert pure-insertion render, plus <code>}}</code>/<code>]]</code> legs</li>
+<li class="open"><input type="checkbox" disabled> slide/suffix-trim rule in the fold token diff; determinism note</li>
+<li class="open"><input type="checkbox" disabled> C twin fn recorded (or fixed where legal)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

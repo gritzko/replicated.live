@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DOG-010</title>
+<title>DOG-010: ULOG row injection + one-bad-line permanent rebuild DoS</title>
+<meta property="og:title" content="DOG-010: ULOG row injection + one-bad-line permanent rebuild DoS">
+<meta property="og:description" content="dog/ULOG.c emits log rows with plain URIutf8Feed (ULOG.c:40) — nothing rejects or escapes \n, \t, SP, or # in URI components, even though abc ships URIutf8FeedSafe (abc/URI.h:62-71) for exactly this trust boundary and worktree FILENAMES flow into rec-&gt;uri.path. A file named x\n0\tdel\t?refs/heads/main forges a complete extra attribution row. Worse, any malformed/non-monotonic line bricks the log: ulogscanlog (ULOG.c:233-235) aborts on the FIRST ULOGBADFMT/ULOGCLOCK, so once the sidecar goes stale (clone, sidecar deleted, RO anon fallback, crash) EVERY subsequent ULOGOpen fails permanently — one crafted filename is a durable DoS on the wtlog. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DOG/DOG-010.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,45 +15,29 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>DOG-010 <a href="./HIGH.html">HIGH</a>: ULOG row injection + one-bad-line permanent rebuild DoS</h1>
+<h1>DOG-010: ULOG row injection + one-bad-line permanent rebuild DoS</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
 <p>
 <code>dog/ULOG.c</code> emits log rows with plain <code>URIutf8Feed</code> (<code>ULOG.c:40</code>) — nothing rejects or escapes <code>\n</code>, <code>\t</code>, SP, or <code>#</code> in URI components, even though abc ships <code>URIutf8FeedSafe</code> (<code>abc/URI.h:62-71</code>) for exactly this trust boundary and worktree FILENAMES flow into <code>rec-&gt;uri.path</code>. A file named <code>x\n0\tdel\t?refs/heads/main</code> forges a complete extra attribution row. Worse, any malformed/non-monotonic line bricks the log: <code>ulog_scan_log</code> (<code>ULOG.c:233-235</code>) aborts on the FIRST <code>ULOGBADFMT</code>/<code>ULOGCLOCK</code>, so once the sidecar goes stale (clone, sidecar deleted, RO anon fallback, crash) EVERY subsequent <code>ULOGOpen</code> fails permanently — one crafted filename is a durable DoS on the wtlog. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Emit boundary: <code>ULOGu8sFeed</code> (<code>ULOG.c:28-43</code>) uses <code>URIutf8Feed</code>, not<p>
-<code>URIutf8FeedSafe</code>; callers <code>ULOGAppendAt</code> (<code>:657-682</code>), <code>ulog_wt_cb</code> (<code>:1156</code>).
-</p>
-</li>
-<li>Fail-hard rebuild: <code>ulog_scan_log</code> (<code>:233-235</code>) refuses the whole log on the<p>
-first bad row instead of skip-and-continue.
-</p>
-</li>
-<li>ron60 token overflow: ts/verb drain via <code>RONutf8sDrain</code> (<code>ULOG.c:89,104</code>) has<p>
-no 10-char cap; an 11+ char token silently aliases to an arbitrary ron60 that can still pass monotonicity. <code>ULOG.md:23</code> promises ≤10 chars but nothing gates.
-</p>
-</li>
-<li>Sidecar offsets trusted after only sentinel + last-row checks<p>
-(<code>ulog_idx_is_fresh</code> <code>:420-433</code>); intermediate 40-bit offsets are used by <code>ULOGRow</code> (<code>:700-708</code>) / <code>ulog_row_key_bytes</code> (<code>:767-790</code>) to form slices up to 2^40 past a 1 GiB booking — safe only incidentally.
-</p>
-</li>
+<li>Emit boundary: <code>ULOGu8sFeed</code> (<code>ULOG.c:28-43</code>) uses <code>URIutf8Feed</code>, not <code>URIutf8FeedSafe</code>; callers <code>ULOGAppendAt</code> (<code>:657-682</code>), <code>ulog_wt_cb</code> (<code>:1156</code>).</li>
+<li>Fail-hard rebuild: <code>ulog_scan_log</code> (<code>:233-235</code>) refuses the whole log on the first bad row instead of skip-and-continue.</li>
+<li>ron60 token overflow: ts/verb drain via <code>RONutf8sDrain</code> (<code>ULOG.c:89,104</code>) has no 10-char cap; an 11+ char token silently aliases to an arbitrary ron60 that can still pass monotonicity. <code>ULOG.md:23</code> promises ≤10 chars but nothing gates.</li>
+<li>Sidecar offsets trusted after only sentinel + last-row checks (<code>ulog_idx_is_fresh</code> <code>:420-433</code>); intermediate 40-bit offsets are used by <code>ULOGRow</code> (<code>:700-708</code>) / <code>ulog_row_key_bytes</code> (<code>:767-790</code>) to form slices up to 2^40 past a 1 GiB booking — safe only incidentally.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Validate/escape at <code>ULOGu8sFeed</code>: route URI through <code>URIutf8FeedSafe</code> and<p>
-reject ts/verb/URI bytes outside the row alphabet (tab/newline/<code>#</code>/SP).
-</p>
-</li>
-<li>Rebuild survives a bad row: <code>ulog_scan_log</code> skips-and-continues on<p>
-<code>ULOGBADFMT</code> (log a warning) rather than refusing the entire log.
-</p>
-</li>
+<li>Validate/escape at <code>ULOGu8sFeed</code>: route URI through <code>URIutf8FeedSafe</code> and reject ts/verb/URI bytes outside the row alphabet (tab/newline/<code>#</code>/SP).</li>
+<li>Rebuild survives a bad row: <code>ulog_scan_log</code> skips-and-continues on <code>ULOGBADFMT</code> (log a warning) rather than refusing the entire log.</li>
 <li>Enforce the ≤10-char ron60 cap in <code>ULOGu8sDrain</code> (fail <code>ULOGBADFMT</code> past 10).</li>
-<li>Bounds-check <code>off &lt; u8bDataLen(data)</code> before forming a row slice in <code>ULOGRow</code><p>
-and <code>ulog_row_key_bytes</code>.
-</p>
-</li>
+<li>Bounds-check <code>off &lt; u8bDataLen(data)</code> before forming a row slice in <code>ULOGRow</code> and <code>ulog_row_key_bytes</code>.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
@@ -59,24 +47,15 @@ and <code>ulog_row_key_bytes</code>.
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Escaping vs rejection: prefer REJECT (a filename with a raw newline is already<p>
-pathological) so the on-disk row grammar stays trivially greppable (the greppability rule per <a href="../../meta/todo.html">Tickets</a>).
-</p>
-</li>
+<li>Escaping vs rejection: prefer REJECT (a filename with a raw newline is already pathological) so the on-disk row grammar stays trivially greppable (the greppability rule per <a href="../../meta/todo.html">Tickets</a>).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> T1 repro: property/fuzz case feeding a filename with <code>\n</code>/<code>\t</code> through<p>
- <code>ULOGu8sFeed</code>→scan; assert no forged row and no permanent-fail rebuild.  (dog/fuzz has no <code>ULOGu8sDrain</code> target today — TOK/WEAVE/NEIL only.)
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> T1 repro: property/fuzz case feeding a filename with <code>\n</code>/<code>\t</code> through <code>ULOGu8sFeed</code>→scan; assert no forged row and no permanent-fail rebuild. (dog/fuzz has no <code>ULOGu8sDrain</code> target today — TOK/WEAVE/NEIL only.)</li>
 <li class="open"><input type="checkbox" disabled> T2 escape/reject at the feed; ≤10-char ron60 cap at the drain.</li>
 <li class="open"><input type="checkbox" disabled> T3 skip-and-continue rebuild in <code>ulog_scan_log</code>.</li>
 <li class="open"><input type="checkbox" disabled> T4 offset bounds in <code>ULOGRow</code>/<code>ulog_row_key_bytes</code>.</li>
-<li class="open"><input type="checkbox" disabled> T5 fix stale docs (<code>ULOG.h:170-172</code>, <code>ULOG.md:46-48</code>): monotonicity guarantee<p>
- is now conditional (fresh sidecar / <code>idx==NULL</code> skip the scan).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> T5 fix stale docs (<code>ULOG.h:170-172</code>, <code>ULOG.md:46-48</code>): monotonicity guarantee is now conditional (fresh sidecar / <code>idx==NULL</code> skip the scan).</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -87,5 +66,16 @@ pathological) so the on-disk row grammar stays trivially greppable (the greppabi
 <ul>
 <li>OPEN — filed 2026-07-06, the libdog code-quality review session.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

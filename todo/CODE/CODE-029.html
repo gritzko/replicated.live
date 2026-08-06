@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-029: top-level require(X).prop freezes undefined when X is a cycle member</title>
+<meta property="og:title" content="CODE-029: top-level require(X).prop freezes undefined when X is a cycle member">
+<meta property="og:description" content="17 modules grab a FUNCTION off a module at load time — const wtpath = require(&quot;../core/discover.js&quot;).wtpath; — instead of holding the module object and calling discover.wtpath(). CODE-028 puts core/discover.js and core/resolvehash.js into load cycles cured by Object.assign(module.exports, {…}), which fills the exports object at the END of the body. A property grabbed while the target is mid-load therefore captures undefined and stays undefined for the process. NOTHING IS BROKEN TODAY: none of the 17 sits in discover/resolvehash's own 11-module load chain. The guard is accidental, and the failure is silent.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-029.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>CODE-029: top-level <code>require(X).prop</code> freezes <code>undefined</code> when X is a cycle member</h1>
+<div>
+<p>
+Now: OPEN Sev: MED Rep: ///be/ On1: CODE-028 See: JAB-010
+</p>
+</div>
+<p>
+17 modules grab a FUNCTION off a module at load time — <code>const wtpath = require(&quot;../core/discover.js&quot;).wtpath;</code> — instead of holding the module object and calling <code>discover.wtpath()</code>. CODE-028 puts <code>core/discover.js</code> and <code>core/resolve_hash.js</code> into load cycles cured by <code>Object.assign(module.exports, {…})</code>, which fills the exports object at the END of the body. A property grabbed while the target is mid-load therefore captures <code>undefined</code> and stays <code>undefined</code> for the process. NOTHING IS BROKEN TODAY: none of the 17 sits in discover/resolve_hash's own 11-module load chain. The guard is accidental, and the failure is silent.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Found auditing CODE-028's cycle cures 2026-08-04; verified by walking the top-level require graph of the CODE-028 worktree.
+</p>
+<ul>
+<li>12 sites grab <code>discover.wtpath</code>, 5 grab <code>resolve_hash.resolve_hash</code> — both targets are cycle members after CODE-028.</li>
+<li><code>core/recurse.js:29</code>, <code>shared/cache.js:42</code>, <code>shared/checkout.js:25</code>, <code>shared/classify.js:54</code>, <code>shared/gitmodules.js:12</code>, <code>shared/stage.js:36</code>, <code>shared/subs.js:40</code> — <code>.wtpath</code>.</li>
+<li><code>views/list/list.js:24</code>, <code>views/spot/search.js:30</code>, <code>verbs/post/fold-commit.js:34</code>, <code>verbs/post/fold-decide.js:37</code> — <code>.wtpath</code>.</li>
+<li><code>verbs/get/get.js:41</code>, <code>verbs/head/head.js:36</code>, <code>verbs/patch/patch.js:42</code>, <code>verbs/post/post.js:38</code>, <code>views/cat/cat.js:17</code>, <code>views/tree/tree.js:37</code> — <code>.resolve_hash</code>.</li>
+<li>The accidental guard: discover+resolve_hash load only branch, ingest, memidx, store, ulog, util/path, util/sha, util/stats, wtlog — no extractor among them.</li>
+<li>The day any of those nine gains a require of gitmodules/cache/classify/recurse, all 17 go <code>undefined</code> with no error at load.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+No module captures a cycle member's PROPERTY at load time; the shape is enforced, not remembered.
+</p>
+<ul>
+<li>The 17 sites hold the module object and call the member at CALL time.</li>
+<li>A check refuses a new top-level <code>require(X).prop</code> whose X is reachable in a require cycle.</li>
+<li>The check is a TEST, not a habit: CODE-028's cures are invisible at the call site and this trap will be re-laid otherwise.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Pure refactor, same as CODE-028: no behaviour change, no output bytes, no module identity change.
+</p>
+<ul>
+<li>Do not re-introduce in-body <code>require()</code> — CODE-028 ruled that out; this is the OTHER half of the same shape.</li>
+<li>The extra property lookup per call is not a concern (the callers are already per-path).</li>
+<li>The 18 property-grab sites whose target is NOT a cycle member are out of scope unless the check flags them.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Cure: <code>const discover = require(&quot;../core/discover.js&quot;);</code> + <code>discover.wtpath(…)</code> — what discover/resolve_hash's own cycle partners already do, and why they survive.</li>
+<li>A local alias assigned INSIDE a function (<code>const wtpath = discover.wtpath;</code>) is fine — by then the exports object is filled.</li>
+<li>The check belongs where the cycle detector lives; a cycle is not an error, a property grab ACROSS one is.</li>
+<li>NOT an identity bug: <code>cache[abs]</code> is inserted before eval, so every <code>require(X)</code> for one resolved X already returns ONE object; it is EMPTY at that instant, and a property grab copies the empty slot.</li>
+<li>The invariant: a cycle member FILLS <code>module.exports</code>, never REPLACES it — then identity is stable from byte one and holding the object is always safe.</li>
+<li>A replacing member hands out DIFFERENT objects at different moments mid-cycle (<code>{}</code> before the line, the fn after); that is why CODE-028 had to move <code>module.exports = get;</code> above the fetchleg require.</li>
+<li>Rejected: publishing exports at the TOP of the body — <code>function</code> declarations hoist, but <code>resolve_hash.js:125</code> <code>const workRoot = under(&quot;work&quot;), todoRoot…, metaRoot…</code> are load-time consts and would publish <code>undefined</code>, silently.</li>
+<li>Rejected: a Proxy forwarding property reads until the fill — it breaks <code>typeof</code>/<code>in</code> and makes an honest <code>undefined</code> indistinguishable from a not-yet-filled one.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: a load-order harness proving one of the 17 captures <code>undefined</code> when its module is pulled into the target's load chain.</li>
+<li><a href="./ .html"> </a> rewrite the 17 sites to hold the module object.</li>
+<li><a href="./ .html"> </a> the graph check as a test: top-level <code>require(X).prop</code> where X is in a cycle fails.</li>
+<li><a href="./ .html"> </a> <code>ctest -j16</code> green; view output byte-identical.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Waits on CODE-028: the cycles it cures are what make these 17 unsafe, and it is unmerged.</li>
+<li><code>core/loop.js</code>'s <code>_here + &quot;/…&quot;</code> specs are invisible to a literal-spec graph walk — the check will miss that edge, say so rather than claim total coverage.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-011</title>
+<title>MEM-011: FILEFlush grows DATA into uninitialized IDLE (abc/FILE.c)</title>
+<meta property="og:title" content="MEM-011: FILEFlush grows DATA into uninitialized IDLE (abc/FILE.c)">
+<meta property="og:description" content="After writing, FILEFlush calls u8bFed(buf, r) — which advances the DATA→IDLE boundary (grows DATA into uninitialized IDLE) instead of consuming the written prefix; the PAST→DATA boundary is never advanced, so DATA is never actually consumed and on the next flush the buffer re-writes the already-flushed bytes plus r bytes of never-initialized memory to the file. The goal is to consume the written prefix and handle r==0.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-011.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>MEM-011: FILEFlush grows DATA into uninitialized IDLE (abc/FILE.c)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 After writing, <code>FILEFlush</code> calls <code>u8bFed(buf, r)</code> — which advances the DATA→IDLE boundary (grows DATA into uninitialized IDLE) instead of consuming the written prefix; the PAST→DATA boundary is never advanced, so DATA is never actually consumed and on the next flush the buffer re-writes the already-flushed bytes plus <code>r</code> bytes of never-initialized memory to the file. The goal is to consume the written prefix and handle <code>r==0</code>.
 </p>
@@ -36,5 +45,16 @@ Consume, don't extend.
 <li>Repro first: drive a <code>FILE_WANT_BUFS</code> stream past PAGESIZE, flush twice, assert the file equals the fed bytes (no duplication/garbage).</li>
 <li>Replace <code>u8bFed(buf,r)</code> with <code>u8bUsed(buf,(size_t)r)</code> (advance <code>buf[1]</code>), keep the <code>u8bShift</code> compaction, and guard <code>r==0</code> (avoid an infinite no-op flush).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

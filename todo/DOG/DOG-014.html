@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DOG-014</title>
+<title>DOG-014: PACKResolveOfs ping-pong sizing — undocumented invariant, latent heap overflow</title>
+<meta property="og:title" content="DOG-014: PACKResolveOfs ping-pong sizing — undocumented invariant, latent heap overflow">
+<meta property="og:description" content="dog/git/PACK.c's PACKResolveOfs applies the delta chain bottom-up, ping-ponging the apply result between delta0+half and base0 (PACK.c:265-285), where half = deltalen/2 (:213). Every DELTApply output gauge is {dst,dst,dst+half} (:278), so when dst == base0 up to half bytes may be written into the base scratch — which is baselen bytes. Safety therefore REQUIRES half &lt;= baselen, i.e. deltalen &lt;= 2baselen, and NOTHING checks or documents it. A symmetric over-read exists via bsl = {src, src+outsz} (:277). Latent today (keeper KEEP.c:428-429 and the tests size both scratches equally, so half = baselen/2 &lt; baselen), but a future caller giving a larger delta scratch than base scratch gets an attacker-resultsz-driven heap overflow. Distinct from the keeper-side MEM-022/GIT-004 resolver work — this bug is in the surviving OFS apply loop in dog/git. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DOG/DOG-014.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,56 +15,40 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>DOG-014 <a href="./MED.html">MED</a>: <code>PACKResolveOfs</code> ping-pong sizing — undocumented invariant, latent heap overflow</h1>
+<h1>DOG-014: <code>PACKResolveOfs</code> ping-pong sizing — undocumented invariant, latent heap overflow</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
 <p>
 <code>dog/git/PACK.c</code>'s <code>PACKResolveOfs</code> applies the delta chain bottom-up, ping-ponging the apply result between <code>delta[0]+half</code> and <code>base[0]</code> (<code>PACK.c:265-285</code>), where <code>half = deltalen/2</code> (<code>:213</code>). Every <code>DELTApply</code> output gauge is <code>{dst,dst,dst+half}</code> (<code>:278</code>), so when <code>dst == base[0]</code> up to <code>half</code> bytes may be written into the <code>base</code> scratch — which is <code>baselen</code> bytes. Safety therefore REQUIRES <code>half &lt;= baselen</code>, i.e. <code>deltalen &lt;= 2*baselen</code>, and NOTHING checks or documents it. A symmetric over-read exists via <code>bsl = {src, src+outsz}</code> (<code>:277</code>). Latent today (keeper <code>KEEP.c:428-429</code> and the tests size both scratches equally, so <code>half = baselen/2 &lt; baselen</code>), but a future caller giving a larger delta scratch than base scratch gets an attacker-<code>result_sz</code>-driven heap overflow. Distinct from the keeper-side <a href="../MEM/MEM-022.html">MEM-022</a>/<a href="../GIT/GIT-004.html">GIT-004</a> resolver work — this bug is in the surviving OFS apply loop in <code>dog/git</code>. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>PACK.c:213</code> <code>half = deltalen/2</code>; apply gauge <code>:278</code> bounded by <code>half</code>, not by<p>
-<code>base</code>'s real capacity <code>baselen</code>; ping-pong flip <code>:285</code>.
-</p>
-</li>
-<li><code>DELTApply</code> bounds writes by <code>u8gRestLen(out)==half</code> (<code>DELT.c:32</code>), so it can<p>
-fill <code>half</code> bytes into a <code>baselen</code>-byte buffer if <code>half&gt;baselen</code>.
-</p>
-</li>
+<li><code>PACK.c:213</code> <code>half = deltalen/2</code>; apply gauge <code>:278</code> bounded by <code>half</code>, not by <code>base</code>'s real capacity <code>baselen</code>; ping-pong flip <code>:285</code>.</li>
+<li><code>DELTApply</code> bounds writes by <code>u8gRestLen(out)==half</code> (<code>DELT.c:32</code>), so it can fill <code>half</code> bytes into a <code>baselen</code>-byte buffer if <code>half&gt;baselen</code>.</li>
 <li>Current callers safe by convention only (equal buffers) — no guard, no doc.</li>
-<li>Related: <code>DELTApply</code> reads <code>base_sz</code> (<code>DELT.c:29</code>) but never validates it<p>
-against <code>$size(base)</code> (git does); harmless memory-wise (copy opcodes are bounds-checked at <code>DELT.c:52-53</code>) but lets malformed deltas through.
-</p>
-</li>
+<li>Related: <code>DELTApply</code> reads <code>base_sz</code> (<code>DELT.c:29</code>) but never validates it against <code>$size(base)</code> (git does); harmless memory-wise (copy opcodes are bounds-checked at <code>DELT.c:52-53</code>) but lets malformed deltas through.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Add <code>if (half &gt; baselen) return NOROOM;</code> (or size the apply gauge to<p>
-<code>min(half, baselen)</code>), and state the <code>deltalen &lt;= 2*baselen</code> contract in PACK.h.
-</p>
-</li>
+<li>Add <code>if (half &gt; baselen) return NOROOM;</code> (or size the apply gauge to <code>min(half, baselen)</code>), and state the <code>deltalen &lt;= 2*baselen</code> contract in PACK.h.</li>
 <li>Validate <code>base_sz == $size(base)</code> in <code>DELTApply</code> and fail malformed deltas.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li><code>dog/git</code> libdog, ABC style; success path byte-identical for equal-buffer<p>
-callers (keeper, tests).
-</p>
-</li>
+<li><code>dog/git</code> libdog, ABC style; success path byte-identical for equal-buffer callers (keeper, tests).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Prefer the explicit guard + documented invariant over silently clamping, so a<p>
-mis-sized caller fails loudly instead of truncating a valid object.
-</p>
-</li>
+<li>Prefer the explicit guard + documented invariant over silently clamping, so a mis-sized caller fails loudly instead of truncating a valid object.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> T1 repro: a <code>PACKResolveOfs</code> call with <code>deltalen &gt; 2*baselen</code> and a delta<p>
- whose intermediate <code>result_sz</code> lands in <code>(baselen, half]</code>; assert it errors  rather than overflowing (ASan). Add to <code>dog/fuzz/PACKRESOLVE.c</code>.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> T1 repro: a <code>PACKResolveOfs</code> call with <code>deltalen &gt; 2*baselen</code> and a delta whose intermediate <code>result_sz</code> lands in <code>(baselen, half]</code>; assert it errors rather than overflowing (ASan). Add to <code>dog/fuzz/PACKRESOLVE.c</code>.</li>
 <li class="open"><input type="checkbox" disabled> T2 add the <code>half &lt;= baselen</code> guard + PACK.h invariant note.</li>
 <li class="open"><input type="checkbox" disabled> T3 <code>base_sz</code> validation in <code>DELTApply</code>.</li>
 </ul>
@@ -73,5 +61,16 @@ mis-sized caller fails loudly instead of truncating a valid object.
 <ul>
 <li>OPEN — filed 2026-07-06, the libdog code-quality review session.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

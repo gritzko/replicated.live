@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-059: dead/retired code sweep — shared/, verbs/, views/ leftovers from landed tickets</title>
+<meta property="og:title" content="BE-059: dead/retired code sweep — shared/, verbs/, views/ leftovers from landed tickets">
+<meta property="og:description" content="The 2026-07-24 house-cleaning sweep found ~15 dead spots: functions their retiring tickets (JS-116/JS-117/JSQUE-020/JS-073, put/delete bindRest fix) forgot to delete, unused requires with misleading justification comments, and write-only state. Pure deletions, no behavior change; each item was verified caller-less by grep. core/loop.js debris is BE-056; dup clusters are BE-060.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BE/BE-059.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-059: dead/retired code sweep — shared/, verbs/, views/ leftovers from landed tickets</h1>
+<div>
+<p>
+Now: OPEN Sev: LOW
+</p>
+</div>
+<p>
+The 2026-07-24 house-cleaning sweep found ~15 dead spots: functions their retiring tickets (JS-116/JS-117/JSQUE-020/JS-073, put/delete bindRest fix) forgot to delete, unused requires with misleading justification comments, and write-only state. Pure deletions, no behavior change; each item was verified caller-less by grep. core/loop.js debris is <a href="./BE-056.html">BE-056</a>; dup clusters are <a href="./BE-060.html">BE-060</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>shared/ingest.js:311-349,458 reindexShard: retired per fetchleg.js JS-116 comments, still exported, no caller.</li>
+<li>shared/ulog.js:131+ retired JS-writer cluster: <em>stage/buildUlog (only test/ulog.js pokes </em>stage), <em>book/</em>trim (:242,:258 — own comment says JSQUE-020 retired their callers), prevRow/<em>withRO/</em>row (:267-290, zero callers); header :22-32 still documents the pre-native rewrite append.</li>
+<li>shared/spell.js:133 bindRest + :125 dirOfPath: both former callers (put.js:661, delete.js:381) note retiring it FIXED the cross-dir mis-scope; only test/bro/pager/driver.js:233 pins the retired behavior.</li>
+<li>shared/checkout.js:237 scanWt export unused externally; :233-234 cites nonexistent bin/patch.js; :216-217 comment &quot;io has no rmdir leaf&quot; contradicted by io.rmdir at :65.</li>
+<li>verbs/patch/patch.js:407 rc.outBuf/aliveBuf (2×1 MiB) + weaveCap allocated, never read (PATCH-012 moved to io.ram); patchSubs :494 unused fMap/oMap/tMap params; aliveOf :221 ignores rc.</li>
+<li>verbs/post/fold-commit.js:129-138,223 nextLogName dead since JS-117 (ingest.appendTarget); treeBody export internal-only.</li>
+<li>verbs/post/fold-decide.js: skipMeta fn :49-53 (the OPTION of the same name does the work), libDir :231-233, join alias :40 — all unused.</li>
+<li>verbs/mark/render.js:384 st.paraOpener/h1Seen written, never read.</li>
+<li>verbs/put/put.js:37 render require + :57 join alias unused; verbs/done/done.js:22 miss() wrapper unused.</li>
+<li>views/list/list.js:22-25 join, views/cat/cat.js:15 pathlib, views/commit/commit.js:46 frameSha — dead requires with stale justifying comments; views/why/why.js:37 TAG_U unused.</li>
+<li>views/spot/{search,match,ext}.js:1 headers still say verbs/ paths; views/size/size.js:126 no-op ambient.format() call (&quot;for parity&quot;).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>All listed symbols/requires/comments deleted or corrected; grep finds no caller regressions; full test suite stays green.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Deletion only — no refactors riding along; test edits (test/ulog.js _stage poke, pager driver bindRest) need explicit user permission.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> 1. shared/: ingest, ulog (+header), spell, checkout items.</li>
+<li class="open"><input type="checkbox" disabled> 2. verbs/: patch bufs/params, fold-commit, fold-decide, mark render state, put/done leftovers.</li>
+<li class="open"><input type="checkbox" disabled> 3. views/: dead requires, spot headers, size ambient no-op, TAG_U.</li>
+<li class="open"><input type="checkbox" disabled> 4. Ask user about the two tests pinning retired paths.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Open. Filed 2026-07-24 from the be/ house-cleaning review sweep.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

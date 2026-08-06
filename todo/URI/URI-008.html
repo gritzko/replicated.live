@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>URI-008</title>
+<title>URI-008: be:-local must fetch submodule objects (recursive-clone parity)</title>
+<meta property="og:title" content="URI-008: be:-local must fetch submodule objects (recursive-clone parity)">
+<meta property="og:description" content="Host-less be: (St.1's local keeper) recurses into submodules but fetches only the sub's refs+pack, NOT its objects — so be get be:&lt;parent-with-sub&gt; aborts rc 157 sub checkout: object not found … KEEPNONE, while file:&lt;parent&gt; clones clean. A second gap: a co-resident-shard clone-from-subdir (be:&lt;git2&gt; into an existing-store subdir) silently lands no shard where file: did. Both are pre-existing on trunk (2ea762c2), URI-007-class. They block URI-006 St.2: removing the file: clone path forces ~20 sub/clone tests onto be:-local, which can't yet serve sub objects. Decision (user 2026-06-22): be: MUST fetch submodule objects. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/URI/URI-008.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,36 +15,26 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>URI-008 <a href="">HIGH</a>: be:-local must fetch submodule objects (recursive-clone parity)</h1>
+<h1>URI-008: be:-local must fetch submodule objects (recursive-clone parity)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 Host-less <code>be:</code> (St.1's local keeper) recurses into submodules but fetches only the sub's refs+pack, NOT its objects — so <code>be get be:&lt;parent-with-sub&gt;</code> aborts rc 157 <code>sub checkout: object not found … KEEPNONE</code>, while <code>file:&lt;parent&gt;</code> clones clean. A second gap: a co-resident-shard clone-from-subdir (<code>be:&lt;git2&gt;</code> into an existing-store subdir) silently lands no shard where <code>file:</code> did. Both are pre-existing on trunk (<code>2ea762c2</code>), URI-007-class. They block <a href="URI-006.html">URI-006</a> St.2: removing the <code>file:</code> clone path forces ~20 sub/clone tests onto <code>be:</code>-local, which can't yet serve sub objects. Decision (user 2026-06-22): <code>be:</code> MUST fetch submodule objects. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Surfaced by <a href="URI-006.html">URI-006</a> St.2: with <code>file:</code>-clone removed, 20 tests must use <code>be:</code><p>
-and go red — get/21,31,33,37,44,45,47,50; head/19,25; post/23,38,41,43,48; blame/01; commit/03; diff/08,09,10. Trunk-binary repro, not a St.2 regression.
-</p>
-</li>
-<li><code>be get be:&lt;parent-with-submodule&gt;</code> → rc 157, `sub checkout: object not found<p>
-… project=&lt;sub&gt; KEEPNONE<code>; the sub fetch pulls refs+pack but not objects. </code>file:&lt;parent&gt;` succeeds rc 0 — that is the parity baseline to match.
-</p>
-</li>
-<li>Co-resident-shard gap: <code>be:&lt;git2&gt;</code> cloned into an existing-store subdir (get/21)<p>
-lands no shard; <code>file:</code> did. Distinct arm from the sub-object gap.
-</p>
-</li>
-<li><code>be://host</code> (ssh) sub recursion fetches by PIN sha and works (<a href="../../wiki/URI.html">spot-keeper</a>);<p>
-the be:-local recursion arm is what <a href="URI-007.html">URI-007</a> did not cover.
-</p>
-</li>
+<li>Surfaced by <a href="URI-006.html">URI-006</a> St.2: with <code>file:</code>-clone removed, 20 tests must use <code>be:</code> and go red — get/21,31,33,37,44,45,47,50; head/19,25; post/23,38,41,43,48; blame/01; commit/03; diff/08,09,10. Trunk-binary repro, not a St.2 regression.</li>
+<li><code>be get be:&lt;parent-with-submodule&gt;</code> → rc 157, <code>sub checkout: object not found … project=&lt;sub&gt; KEEPNONE</code>; the sub fetch pulls refs+pack but not objects. <code>file:&lt;parent&gt;</code> succeeds rc 0 — that is the parity baseline to match.</li>
+<li>Co-resident-shard gap: <code>be:&lt;git2&gt;</code> cloned into an existing-store subdir (get/21) lands no shard; <code>file:</code> did. Distinct arm from the sub-object gap.</li>
+<li><code>be://host</code> (ssh) sub recursion fetches by PIN sha and works (<a href="../../wiki/URI.html">spot-keeper</a>); the be:-local recursion arm is what <a href="URI-007.html">URI-007</a> did not cover.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>be get be:&lt;parent&gt;</code> recurses submodules and fetches their objects by pin (sha),<p>
-at parity with <code>file:&lt;parent&gt;</code> and <code>be://host</code> (ssh) recursion.
-</p>
-</li>
+<li><code>be get be:&lt;parent&gt;</code> recurses submodules and fetches their objects by pin (sha), at parity with <code>file:&lt;parent&gt;</code> and <code>be://host</code> (ssh) recursion.</li>
 <li>Co-resident-shard clone-from-subdir over <code>be:</code>-local lands the shard like <code>file:</code>.</li>
 <li>The 20 <a href="URI-006.html">URI-006</a> St.2 migrations go green; full ctest green (be-post-relpath aside).</li>
 </ul>
@@ -53,34 +47,33 @@ at parity with <code>file:&lt;parent&gt;</code> and <code>be://host</code> (ssh)
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Localize (repro-first) where be:-local recursion drops the object fetch; St.1 seam:<p>
-<code>BE.cli.c</code> be_be_local_route, <code>KEEP.exe.c</code> hostless_local, <code>WIRECLI.c</code> wcli_spawn local-exec — contrast the working ssh by-pin sub fetch.
-</p>
-</li>
+<li>Localize (repro-first) where be:-local recursion drops the object fetch; St.1 seam: <code>BE.cli.c</code> be_be_local_route, <code>KEEP.exe.c</code> hostless_local, <code>WIRECLI.c</code> wcli_spawn local-exec — contrast the working ssh by-pin sub fetch.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
 <li class="done"><input type="checkbox" checked disabled> Repro the be:-local sub-object gap (rc 157 / KEEPNONE) as a failing test (get/63).</li>
 <li class="done"><input type="checkbox" checked disabled> Fix be:-local recursion to fetch sub objects by pin; verify get parity.</li>
 <li class="done"><input type="checkbox" checked disabled> Fix co-resident-shard clone-from-subdir (get/64 arm).</li>
-<li class="blocked"><input type="checkbox" disabled> Confirm the 20 St.2 migrations green: 19/20 pass; post/43 still red on a SEPARATE<p>
-POST-side gap (SUBS-020 official-url sub-push) — its own decision.
-</p>
-</li>
+<li class="blocked"><input type="checkbox" disabled> Confirm the 20 St.2 migrations green: 19/20 pass; post/43 still red on a SEPARATE POST-side gap (SUBS-020 official-url sub-push) — its own decision.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>None now (LANDED). Surfaced a POST follow-up: post/43 (SUBS-020 git-<code>.git</code>→official<p>
-sub-push) is the last St.2 blocker; user leans manual/<code>--force</code> (own ticket TBD).
-</p>
-</li>
+<li>None now (LANDED). Surfaced a POST follow-up: post/43 (SUBS-020 git-<code>.git</code>→official sub-push) is the last St.2 blocker; user leans manual/<code>--force</code> (own ticket TBD).</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED <code>fa31e6f6</code> — symmetric scheme probe: <code>sniff/SUBS.c</code> subs_loc_cb now path-<p>
-probes <code>be:</code>/<code>keeper:</code> like <code>file:</code> (no bogus want-by-hash to a git peer); and <code>beagle/BE.cli.c</code> hoists the <code>be:</code>→authority rewrite before <code>be_sub_shard_setup</code> so a host-less <code>be:</code> clone mints the co-resident shard. Repro get/63 + get/64; ctest 388/389 (<code>be-post-relpath</code> ssh aside).
-</p>
-</li>
+<li>LANDED <code>fa31e6f6</code> — symmetric scheme probe: <code>sniff/SUBS.c</code> subs_loc_cb now path- probes <code>be:</code>/<code>keeper:</code> like <code>file:</code> (no bogus want-by-hash to a git peer); and <code>beagle/BE.cli.c</code> hoists the <code>be:</code>→authority rewrite before <code>be_sub_shard_setup</code> so a host-less <code>be:</code> clone mints the co-resident shard. Repro get/63 + get/64; ctest 388/389 (<code>be-post-relpath</code> ssh aside).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

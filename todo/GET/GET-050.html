@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-050: get must stamp carried/woven files by PATCH's band rules — stale put stamps false-clean them</title>
+<meta property="og:title" content="GET-050: get must stamp carried/woven files by PATCH's band rules — stale put stamps false-clean them">
+<meta property="og:description" content="RULING (gritzko, chat 2026-07-19): GET uses the SAME stamping rules PATCH uses for merged files (the DIS-057 band) — the follow-up /todo/GET/GET-049's constraint explicitly anticipated (&quot;route merge outputs to the DIS-057-style band&quot;). Today a bare get that carries an uncommitted edit leaves the file wearing its OLD put row's restamp; that ts stays in the wtlog stamp-set, so the /todo/STATUS/STATUS-011 has(mtime) fast path validates the file clean against a base that moved — dirt that status and bare diff HIDE, and a post would silently not commit.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-050.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-050: get must stamp carried/woven files by PATCH's band rules — stale put stamps false-clean them</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<p>
+RULING (gritzko, chat 2026-07-19): GET uses the SAME stamping rules PATCH uses for merged files (the DIS-057 band) — the follow-up <a href="/todo/GET/GET-049.html">GET-049</a>'s constraint explicitly anticipated (&quot;route merge outputs to the DIS-057-style band&quot;). Today a bare get that carries an uncommitted edit leaves the file wearing its OLD <code>put</code> row's restamp; that ts stays in the wtlog stamp-set, so the <a href="/todo/STATUS/STATUS-011.html">STATUS-011</a> <code>has(mtime)</code> fast path validates the file clean against a base that moved — dirt that status and bare diff HIDE, and a post would silently not commit.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Incident 2026-07-19, work/STATUS-016: wtlog <code>put shared/wtlog.js</code> (row <code>26719BQw09</code>, BE-011 restamp → mtime 11:26:59.009), then a user bare <code>get ///be/#27d03a26</code> (row <code>26719BkGEg</code>) carried the edit per GET-048 §4.
+</p>
+<ul>
+<li>Post-get <code>jab status | cat</code> and bare <code>jab diff | cat</code> read the tree CLEAN; targeted <code>jab diff shared/wtlog.js</code> prints the full delta vs base — the discrepancy.</li>
+<li>Mechanism: the carry didn't rewrite the file (mtime still the put restamp); the put row fell below the new get floor (de-staged, out of classify scope) but its ts remains in the stamp-set, so the fast path answers &quot;clean&quot; — a stamp only means &quot;bytes unchanged since row X&quot;, never &quot;clean vs the CURRENT base&quot;.</li>
+<li>Control: files get DID write carry the get row ts (views/work/work.js mtime 11:47:16.939 == get ts) — GET-049's clean-overwrite leaf works.</li>
+<li>PATCH's band rules (shared/classify.js:179-192 patchStamps, DIS-057): row ts = band CEILING, merged files stamped ceil-2ms (<code>pat</code> clean apply), ceil-1ms (<code>mrg</code> weave), ceil (<code>cnf</code>); the outcome rides the stamp offset, zero content reads.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+After ANY get, no file can read clean while differing from the new base: carried/woven outputs are stamped into a DIS-057-style band under the get row's ceiling and classify buckets them by offset.
+</p>
+<ul>
+<li>Repro RED first: put an edit, bare-get a diverged/advanced target that carries it → today status+bare diff read clean; must read the carried file dirty (wt column <code>v</code> per <a href="/wiki/Status.html">Status</a>; conflict carries <code>!</code>).</li>
+<li>Stamp legs: carried-unchanged-by-get (the incident: restamp to the band even without a rewrite), woven output, conflict output; clean-overwrite keeps the GET-049 row-ts stamp.</li>
+<li>Reuse PATCH's stamping helper and generalize the classify band reader (patchStamps) to get rows — one band vocabulary, no parallel implementation.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>No log read-back: the band derives from be.now / the assigned row ts returned by ulog.append (GET-049/POST-029 discipline); row appended BEFORE stamps (ULOG refuses ts&lt;=tail).</li>
+<li>Stamping side is shared with the patch verb — extend, don't fork; status stays read-only (band reconstruction at read time, as patchStamps does).</li>
+<li>Whether the get should ALSO preserve the staging (the put row got out-scoped) is a separate question — this ticket only guarantees the dirt is visible; don't change put/post semantics.</li>
+<li><a href="/todo/GET/GET-048.html">GET-048</a> reset semantics and <a href="/todo/STATUS/STATUS-016.html">STATUS-016</a> patch-floor scope are in force; expect a weave with work/STATUS-016's staged wtlog.js.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Root cause is the merkle-PRUNED carried file: a <code>put</code>-staged file identical in old+new base is skipped by the reconcile, keeping its put restamp — still in the whole-log stamp-set (<code>has()</code> is not floor-scoped), so STATUS-011 reads it clean vs the advanced base.  Woven/conflict legs DID rewrite (visible), so the incident is specifically the un-rewritten leg.</li>
+<li>Get band = the SAME DIS-057 band, laid UNDER the get row's ceiling (=stampTs, the GET-049 clean-overwrite stamp, stays <code>ok</code> via <code>has()</code>): ceil-1ms <code>mrg</code> (wt <code>v</code>), ceil-2ms <code>con</code> (wt <code>!</code>).  The ceiling is NOT registered — clean overwrites keep it.  In practice stampTs &gt;&gt; the prior tail (separate procs), so the below-ceiling band never collides with a real row ts; the same 1-2ms collision edge GET-049 already noted (cosmetic).</li>
+<li>Stamping side (get.js): a <code>bandStamp(g,full,outcome)</code> twin of trySetMtime; the leaf weave leg stamps <code>mrg</code> (or the ceiling when the weave reproduced the target), the three conflict legs stamp <code>con</code>.  The pruned leg is caught by a terminal <code>carrySweep</code>: collect every pre-get <code>put</code> path (all de-scoped by the just-appended get row), and for each NOT visited by a leaf, restamp to the band iff still dirty vs the new base.  No log read-back — the band derives from g.stampTs (the ts ulog.append returned); row appended before stamps.</li>
+<li>Classify side: patchStamps EXTENDED (not forked) — after the patch rows it registers the recentmost get row's {ceil-1:mod, ceil-2:con}; scoped by boundaries().pd so a consuming post ends it.  Read-time only; status read-only.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> red repro: put → carrying bare get → status/bare-diff hide the dirt (test/get/carry-stamp)</li>
+<li><a href="./v.html">v</a> band stamping in get's carry/weave/conflict legs (bandStamp; carrySweep for the pruned leg)</li>
+<li><a href="./v.html">v</a> classify: generalize the band reader to get rows; quad reads <code>...v</code> / <code>...!</code></li>
+<li><a href="./v.html">v</a> green: incident shape shows the carried file; GET-049 stamp legs + suites stay</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The de-scoped <code>put</code> row itself is left below the get floor (out of scope per the ruling — put/post semantics untouched); only the DIRT is made visible.</li>
+<li>Pre-existing unrelated red: test/work/getctx (pty frame goldens) fails IDENTICALLY on the pristine baseline — verified, not touched.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+LANDED <code>64525364</code> (2026-07-19 12:42, &quot;GET-050: get must follow same rules for merged files as patch&quot;); work/GET-050 clean at tip. The DECISION-side hole (stamp false-clean at get's pending check on a base-moved file → clean-overwrite discard) is split out as <a href="/todo/GET/GET-052.html">GET-052</a>.
+</p>
+<p>
+Original staging note (historical):
+</p>
+<p>
+Changed (staged):
+</p>
+<ul>
+<li><code>shared/classify.js</code> — patchStamps also opens the recentmost get row's band {ceil-1:mod, ceil-2:con} (pd-scoped); the ceiling stays the GET-049 <code>ok</code> stamp.</li>
+<li><code>verbs/get/get.js</code> — <code>bandStamp</code> helper; leaf weave/conflict legs restamp to the band; <code>collectStaged</code>+<code>carrySweep</code> (finalizeGet) restamp de-scoped, still-dirty PRUNED carried files; <code>g.seen</code> skips leaf-handled paths.</li>
+<li><code>test/get/carry-stamp/run.sh</code> — NEW case (test submodule): put f.txt, advance a diverged mover g.txt, bare-get → f.txt (pruned) reads <code>...v</code> + bare diff lists it; clean g.txt stays unlit.  Glob-registered (no CMakeLists edit).</li>
+</ul>
+<p>
+Evidence: manual repro RED (post-get <code>status</code>/bare <code>diff</code> EMPTY for f.txt, only targeted <code>diff f.txt</code> showed it) → GREEN (<code>...v f.txt</code>, bare diff lists it). Suites green: test/get/* (35 pass / 6 env-skip, GET-049 stamp + weave/conflict incl.), test/status/* (12), test/patch/* (26, stampband incl.), test/work/view, statusfast.js, patchband.js.  Pre-existing unrelated red: test/work/getctx (pty frame goldens — identical FAIL on pristine baseline).
+</p>
+<p>
+Suggested commit message:
+</p>
+<div>
+<p>
+GET-050: get band-restamps carried files so stale put stamps can't false-clean
+</p>
+</div>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

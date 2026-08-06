@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LOG-004</title>
+<title>LOG-004: jab log exhausts file descriptors (EMFILE) on a many-pack store — probable fd/mmap leak on the pager path</title>
+<meta property="og:title" content="LOG-004: jab log exhausts file descriptors (EMFILE) on a many-pack store — probable fd/mmap leak on the pager path">
+<meta property="og:description" content="On a restored ~130-pack ~/.be store (project beagle, 1581-commit DAG), a TTY jab log dies with Error: No file descriptors available from mmap via load@openPager@cli before rendering; ulimit -n is 1024. A PIPED jab log in the same worktree completes, and jab status is fine, so the exhaustion needs the pager path and scales with store reads (jab list is also very slow on this store — the JS-056 rebuild-not-mmap index gap multiplies opens). Suspects: be/shared/store.js packAt mmaps each .keeper lazily and never unmaps, per-row store re-opens (submount probes) repeat that per pack, and the C++ io.mmap binding may hold the fd after mapping. Scope: be/ JS first (store.js, views/log), jabc C++ only if the binding provably holds fds. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/LOG/LOG-004.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -13,7 +17,7 @@
 </a>
 <h1>LOG-004: <code>jab log</code> exhausts file descriptors (EMFILE) on a many-pack store — probable fd/mmap leak on the pager path</h1>
 <p>
-On a restored ~130-pack <code>~/.be</code> store (project <code>beagle</code>, 1581-commit DAG), a TTY <code>jab log</code> dies with <code>Error: No file descriptors available</code> from <code>_mmap</code> via <code>load@_openPager@_cli</code> before rendering; <code>ulimit -n</code> is 1024. A PIPED <code>jab log</code> in the same worktree completes, and <code>jab status</code> is fine, so the exhaustion needs the pager path and scales with store reads (<code>jab list</code> is also very slow on this store — the <a href="../JS/JS-056.html">JS-056</a> rebuild-not-mmap index gap multiplies opens). Suspects: <code>be/shared/store.js</code> <code>packAt</code> mmaps each <code>.keeper</code> lazily and never unmaps, per-row store re-opens (submount probes) repeat that per pack, and the C++ <code>io.mmap</code> binding may hold the fd after mapping. Scope: be/ JS first (<code>store.js</code>, <code>views/log</code>), jabc C++ only if the binding provably holds fds. Method: <a href="../../meta/work.html">Issues</a>.
+On a restored <del>130-pack `</del>/.be<code> store (project </code>beagle<code>, 1581-commit DAG), a TTY </code>jab log<code> dies with </code>Error: No file descriptors available<code> from </code><em>mmap<code> via </code>load@</em>openPager@_cli<code> before rendering; </code>ulimit -n<code> is 1024. A PIPED </code>jab log<code> in the same worktree completes, and </code>jab status<code> is fine, so the exhaustion needs the pager path and scales with store reads (</code>jab list<code> is also very slow on this store — the [JS-056] rebuild-not-mmap index gap multiplies opens). Suspects: </code>be/shared/store.js<code> </code>packAt<code> mmaps each </code>.keeper<code> lazily and never unmaps, per-row store re-opens (submount probes) repeat that per pack, and the C++ </code>io.mmap<code> binding may hold the fd after mapping. Scope: be/ JS first (</code>store.js<code>, </code>views/log`), jabc C++ only if the binding provably holds fds. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -53,10 +57,18 @@ On a restored ~130-pack <code>~/.be</code> store (project <code>beagle</code>, 1
 <h2>Outcome</h2>
 <ul>
 <li>OPEN — filed 2026-07-06 from the live incident; worker dispatched per <a href="../../meta/work.html">Issues</a>.</li>
-<li>Audit 2026-07-07: still present — <code>shared/store.js packAt</code> (:169) caches<p>
-<code>git.pack.mmap</code> per pack with no close/unmap anywhere in store.js; no fixing commit in the be log (JS-100 <code>7974323b</code> covered an error-path leak only).
-</p>
-</li>
+<li>Audit 2026-07-07: still present — <code>shared/store.js packAt</code> (:169) caches <code>git.pack.mmap</code> per pack with no close/unmap anywhere in store.js; no fixing commit in the be log (JS-100 <code>7974323b</code> covered an error-path leak only).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

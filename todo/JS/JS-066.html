@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-066</title>
+<title>JS-066: .gitignore glob is catastrophically backtrackable (ReDoS)</title>
+<meta property="og:title" content="JS-066: .gitignore glob is catastrophically backtrackable (ReDoS)">
+<meta property="og:description" content="shared/util/ignore.js's glob() (the IGNOGlob port behind be status/ls wt-scan) implements / by recursing on EVERY suffix with no memoization, so a pattern like aaaaaz against a long non-matching path is exponential. .gitignore is untrusted — a checkout writes attacker-controlled content and load() walks UP to $HOME stacking every .gitignore — and match() runs once per worktree entry, so a hostile repo wedges the single-threaded runtime. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-066.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-066 <a href="./HIGH.html">HIGH</a>: <code>.gitignore</code> glob is catastrophically backtrackable (ReDoS)</h1>
+<h1>JS-066: <code>.gitignore</code> glob is catastrophically backtrackable (ReDoS)</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
 <p>
 <code>shared/util/ignore.js</code>'s <code>glob()</code> (the IGNOGlob port behind <code>be status</code>/<code>ls</code> wt-scan) implements <code>*</code>/<code>**</code> by recursing on EVERY suffix with no memoization, so a pattern like <code>*a*a*a*a*az</code> against a long non-matching path is exponential. <code>.gitignore</code> is untrusted — a checkout writes attacker-controlled content and <code>load()</code> walks UP to <code>$HOME</code> stacking every <code>.gitignore</code> — and <code>match()</code> runs once per worktree entry, so a hostile repo wedges the single-threaded runtime. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -19,83 +28,53 @@
 <h3>Context</h3>
 <ul>
 <li><code>shared/util/ignore.js:39</code> <code>glob(pat,str)</code> is the matcher.</li>
-<li><code>:51-53</code> <code>**</code> branch: <code>for (t=si..len) glob(subPat, str.slice(t))</code> — recurse<p>
-on every suffix, NO memo on <code>(pi,si)</code>, NO iteration cap.
-</p>
-</li>
-<li><code>:56-62</code> <code>*</code> branch: same per-suffix recursion (stops past a <code>/</code>); two <code>*</code><p>
-segments in one pattern multiply → exponential on a non-match.
-</p>
-</li>
-<li><code>:52</code> <code>:59</code> each step allocates fresh <code>pat.slice</code>/<code>str.slice</code> substrings,<p>
-amplifying the constant factor on top of the exponential blowup.
-</p>
-</li>
-<li><code>:104</code> <code>:109</code> <code>:113</code> <code>tryMatch</code> calls <code>glob</code> per pattern; <code>:113</code> retries at<p>
-every dir level for unanchored-with-slash, multiplying the call count.
-</p>
-</li>
-<li>Untrusted input: <code>load()</code> <code>:176</code> reads <code>.gitignore</code> per dir; <code>:168-184</code><p>
-walks anchor→<code>$HOME</code>/<code>/</code> stacking up to 64 files; <code>match()</code> <code>:190-204</code> runs <code>setDecideDeep</code>→<code>glob</code> per scanned wt entry → one hostile pattern + one long path hangs <code>be status</code>/<code>ls</code> (cited <a href="../../wiki/GET.html">GET</a>).
-</p>
-</li>
+<li><code>:51-53</code> <code>**</code> branch: <code>for (t=si..len) glob(subPat, str.slice(t))</code> — recurse on every suffix, NO memo on <code>(pi,si)</code>, NO iteration cap.</li>
+<li><code>:56-62</code> <code>*</code> branch: same per-suffix recursion (stops past a <code>/</code>); two <code>*</code> segments in one pattern multiply → exponential on a non-match.</li>
+<li><code>:52</code> <code>:59</code> each step allocates fresh <code>pat.slice</code>/<code>str.slice</code> substrings, amplifying the constant factor on top of the exponential blowup.</li>
+<li><code>:104</code> <code>:109</code> <code>:113</code> <code>tryMatch</code> calls <code>glob</code> per pattern; <code>:113</code> retries at every dir level for unanchored-with-slash, multiplying the call count.</li>
+<li>Untrusted input: <code>load()</code> <code>:176</code> reads <code>.gitignore</code> per dir; <code>:168-184</code> walks anchor→<code>$HOME</code>/<code>/</code> stacking up to 64 files; <code>match()</code> <code>:190-204</code> runs <code>setDecideDeep</code>→<code>glob</code> per scanned wt entry → one hostile pattern + one long path hangs <code>be status</code>/<code>ls</code> (cited <a href="../../wiki/GET.html">GET</a>).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>glob()</code> runs in time linear (or near-linear) in <code>pat.length+str.length</code> for<p>
-ALL patterns, including adversarial <code>*a*a*…*az</code> vs a long non-match.
-</p>
-</li>
-<li>A repro test that today hangs (or exceeds a wall-clock budget) and after the<p>
-fix returns no-match promptly, with identical match/no-match verdicts to native IGNOGlob on the existing parity corpus.
-</p>
-</li>
+<li><code>glob()</code> runs in time linear (or near-linear) in <code>pat.length+str.length</code> for ALL patterns, including adversarial <code>*a*a*…*az</code> vs a long non-match.</li>
+<li>A repro test that today hangs (or exceeds a wall-clock budget) and after the fix returns no-match promptly, with identical match/no-match verdicts to native IGNOGlob on the existing parity corpus.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Pure JS over <code>io.stat</code>/<code>io.mmap</code>/<code>io.getenv</code>; no C, no dog. Byte-equivalent<p>
-verdicts to dog/git/IGNO.c (<code>IGNOGlob</code>/<code>TryMatch</code>) on the parity suite.
-</p>
-</li>
-<li>Keep <code>*</code>=non-<code>/</code>, <code>**</code>=across-<code>/</code>, <code>?</code>=one-char semantics exactly; do not<p>
-regress the <code>dir/</code>-prefix or negation rules. Scope: <code>glob()</code> (+ tiny helpers).
-</p>
-</li>
+<li>Pure JS over <code>io.stat</code>/<code>io.mmap</code>/<code>io.getenv</code>; no C, no dog. Byte-equivalent verdicts to dog/git/IGNO.c (<code>IGNOGlob</code>/<code>TryMatch</code>) on the parity suite.</li>
+<li>Keep <code>*</code>=non-<code>/</code>, <code>**</code>=across-<code>/</code>, <code>?</code>=one-char semantics exactly; do not regress the <code>dir/</code>-prefix or negation rules. Scope: <code>glob()</code> (+ tiny helpers).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>SUPERSEDED (review feedback): a hand-rolled matcher (two-pointer / DP) is<p>
-STILL &quot;manual parsing&quot; — abc.mkd forbids it; the JS analogue of the ragel rule is to TRANSLATE the glob to a RegExp and let the engine match. Landed: compile <code>pat</code>→ONE cached <code>RegExp</code> (<code>*</code>→<code>[^/]*</code>, <code>**</code>→<code>.*</code> swallowing one <code>/</code>, <code>?</code>→<code>[^/]</code>, else escaped literal; no <code>[...]</code> classes — the C glob has none).
-</p>
-</li>
-<li>A <code>str.length ** star-runs</code> work budget skips a degenerate multi-<code>*</code> glob →<p>
-no-match (fail-safe), since JS RegExp BACKTRACKS (it is not a ragel DFA).
-</p>
-</li>
+<li>SUPERSEDED (review feedback): a hand-rolled matcher (two-pointer / DP) is STILL &quot;manual parsing&quot; — abc.mkd forbids it; the JS analogue of the ragel rule is to TRANSLATE the glob to a RegExp and let the engine match. Landed: compile <code>pat</code>→ONE cached <code>RegExp</code> (<code>*</code>→<code>[^/]*</code>, <code>**</code>→<code>.*</code> swallowing one <code>/</code>, <code>?</code>→<code>[^/]</code>, else escaped literal; no <code>[...]</code> classes — the C glob has none).</li>
+<li>A <code>str.length ** star-runs</code> work budget skips a degenerate multi-<code>*</code> glob → no-match (fail-safe), since JS RegExp BACKTRACKS (it is not a ragel DFA).</li>
 <li>(original plan, replaced) a linear two-pointer matcher.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> REGRESSED/never landed: re-do glob()→cached-RegExp + work budget in the CURRENT<p>
- <code>shared/util/ignore.js</code> (<code>:39-70</code> is the recursive per-suffix matcher again).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> REGRESSED/never landed: re-do glob()→cached-RegExp + work budget in the CURRENT <code>shared/util/ignore.js</code> (<code>:39-70</code> is the recursive per-suffix matcher again).</li>
 <li class="open"><input type="checkbox" disabled> Re-add the repro <code>test/ignore.js</code> (<code>*a*a*…*az</code> bomb &lt;2s + native-parity corpus).</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>2026-07-07 audit: the 2026-06-25 working-tree fix is NOT in the be/ shard —<p>
-<code>glob()</code> (ignore.js:39) recurses on every suffix for <code>*</code>/<code>**</code> (<code>:52</code>,<code>:59</code>), no memo, no budget, per-step <code>pat.slice</code>/<code>str.slice</code>; no <code>test/ignore.js</code> exists. Presumably lost in the beagle-ext catch-up/JSQUE-016 reorg (<code>027beac9</code>+); still exploitable.
-</p>
-</li>
+<li>2026-07-07 audit: the 2026-06-25 working-tree fix is NOT in the be/ shard — <code>glob()</code> (ignore.js:39) recurses on every suffix for <code>*</code>/<code>**</code> (<code>:52</code>,<code>:59</code>), no memo, no budget, per-step <code>pat.slice</code>/<code>str.slice</code>; no <code>test/ignore.js</code> exists. Presumably lost in the beagle-ext catch-up/JSQUE-016 reorg (<code>027beac9</code>+); still exploitable.</li>
+<li>2026-07-10 revision: still OPEN — glob() shared/util/ignore.js:39-73 still recurses per-suffix (:52 *<strong>, :59 </strong>), no RegExp-translate, no memo/budget; no test/ignore.js; no landed fix in be log</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(pending — the earlier &quot;implemented in the working tree&quot; claim did not survive into<p>
-the be/ tree; see the 2026-07-07 audit note above. Design stands: RegExp translate, NOT a hand-rolled DP matcher — abc.mkd forbids manual parsing.)
-</p>
-</li>
+<li>(pending — the earlier &quot;implemented in the working tree&quot; claim did not survive into the be/ tree; see the 2026-07-07 audit note above. Design stands: RegExp translate, NOT a hand-rolled DP matcher — abc.mkd forbids manual parsing.)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

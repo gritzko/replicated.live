@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PACK-002</title>
+<title>PACK-002: JS pack writer emits OFSDELTA (offset-only) — jab post feeds raw today</title>
+<meta property="og:title" content="PACK-002: JS pack writer emits OFSDELTA (offset-only) — jab post feeds raw today">
+<meta property="og:description" content="The be/ JS pack writer feeds every object RAW: fold-commit.js::writePack calls pk.feed(type, body, -1, null) (base -1 = no delta), and ingest lands packs verbatim. The native keeper is OFS-ALWAYS — it deltifies against an earlier object in the SAME pack (PackLog). So JS-authored packs are bigger than native's and diverge from the on-disk format. Implement OFSDELTA emit in the JS writer. Offset-only either way: NEVER a REFDELTA — a base outside the current pack stays RAW (reclaimed at GIT-006 recompaction). Follow-up to PACK-001. Method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PACK/PACK-002.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -18,53 +22,26 @@ The be/ JS pack writer feeds every object RAW: <code>fold-commit.js::writePack</
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>be/verbs/post/fold-commit.js::writePack</code> and <code>shared/ingest.js</code> write raw<p>
-records; a JS commit stores a full blob even when a near-identical prior version sits earlier in the same pack.
-</p>
-</li>
-<li>The binding <code>_pack_feed(buf, off, type, content, base, baseOff, …)</code> already<p>
-accepts a base+offset (js/pack.hpp); <code>git.delta.encode</code> landed (<a href="../JS/JS-036.html">JS-036</a>) but its reconcile/wiring was left incomplete (<a href="../GET/GET-031.html">GET-031</a>).
-</p>
-</li>
-<li>OFS-ALWAYS invariant (keeper/KEEP.c:1579): only OFS_DELTA against an earlier<p>
-same-pack base; a cross-pack base → store RAW. NO REF_DELTA in a native log. (<a href="../JS/JS-037.html">JS-037</a> is the REF_DELTA-emit path — distinct; this ticket is OFS-only.)
-</p>
-</li>
+<li><code>be/verbs/post/fold-commit.js::writePack</code> and <code>shared/ingest.js</code> write raw records; a JS commit stores a full blob even when a near-identical prior version sits earlier in the same pack.</li>
+<li>The binding <code>_pack_feed(buf, off, type, content, base, baseOff, …)</code> already accepts a base+offset (js/pack.hpp); <code>git.delta.encode</code> landed (<a href="../JS/JS-036.html">JS-036</a>) but its reconcile/wiring was left incomplete (<a href="../GET/GET-031.html">GET-031</a>).</li>
+<li>OFS-ALWAYS invariant (keeper/KEEP.c:1579): only OFS_DELTA against an earlier same-pack base; a cross-pack base → store RAW. NO REF_DELTA in a native log. (<a href="../JS/JS-037.html">JS-037</a> is the REF_DELTA-emit path — distinct; this ticket is OFS-only.)</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>writePack</code> (and the commit-path <code>ingest</code>) emits OFS_DELTA against a chosen<p>
-earlier same-pack object (by offset); readers (<code>PACKResolveOfs</code>, <code>PIDXScan</code>) already handle it — no reader change.
-</p>
-</li>
-<li>Base selection: an earlier object in THIS pack (e.g. the prior version of the<p>
-same path); no in-pack base → RAW. Never REF_DELTA, never a cross-pack base.
-</p>
-</li>
-<li>Size-parity (ideally byte-parity) with a native OFS pack on a fixture;<p>
-index + resolve round-trip byte-identical objects.
-</p>
-</li>
+<li><code>writePack</code> (and the commit-path <code>ingest</code>) emits OFS_DELTA against a chosen earlier same-pack object (by offset); readers (<code>PACKResolveOfs</code>, <code>PIDXScan</code>) already handle it — no reader change.</li>
+<li>Base selection: an earlier object in THIS pack (e.g. the prior version of the same path); no in-pack base → RAW. Never REF_DELTA, never a cross-pack base.</li>
+<li>Size-parity (ideally byte-parity) with a native OFS pack on a fixture; index + resolve round-trip byte-identical objects.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li><code>be/</code> JS writer + the <code>git.delta</code> binding only. Offset-only — NO REF_DELTA<p>
-(that stays <a href="../JS/JS-037.html">JS-037</a>). OFS chain depth ≤ <code>KEEP_WRITE_CHAIN_MAX</code> (50).
-</p>
-</li>
+<li><code>be/</code> JS writer + the <code>git.delta</code> binding only. Offset-only — NO REF_DELTA (that stays <a href="../JS/JS-037.html">JS-037</a>). OFS chain depth ≤ <code>KEEP_WRITE_CHAIN_MAX</code> (50).</li>
 <li>Repro-first (CLAUDE.md §17); <code>be/</code> post/get parity suites stay green.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Reuse <code>git.delta.encode</code> (<a href="../JS/JS-036.html">JS-036</a>) + <code>_pack_feed(base, baseOff)</code>; pick the<p>
-base among objects ALREADY fed to this pack (offset known at feed time).
-</p>
-</li>
-<li>Start simple: deltify a blob against the same-path prior object present<p>
-in-pack, else RAW. An OFS base may itself be a delta (chains, GIT-008) — cap the chain depth; a base outside the pack → RAW (never cross-file, never hash).
-</p>
-</li>
+<li>Reuse <code>git.delta.encode</code> (<a href="../JS/JS-036.html">JS-036</a>) + <code>_pack_feed(base, baseOff)</code>; pick the base among objects ALREADY fed to this pack (offset known at feed time).</li>
+<li>Start simple: deltify a blob against the same-path prior object present in-pack, else RAW. An OFS base may itself be a delta (chains, GIT-008) — cap the chain depth; a base outside the pack → RAW (never cross-file, never hash).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -76,14 +53,22 @@ in-pack, else RAW. An OFS base may itself be a delta (chains, GIT-008) — cap t
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Sequenced after the writer/append story settles (<a href="../JS/JS-099.html">JS-099</a> pack-write path);<p>
-may need to finish the <a href="../JS/JS-036.html">JS-036</a>/<a href="../GET/GET-031.html">GET-031</a> delta-encode wiring first.
-</p>
-</li>
+<li>Sequenced after the writer/append story settles (<a href="../JS/JS-099.html">JS-099</a> pack-write path); may need to finish the <a href="../JS/JS-036.html">JS-036</a>/<a href="../GET/GET-031.html">GET-031</a> delta-encode wiring first.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>(pending)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

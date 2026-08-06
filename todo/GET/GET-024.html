@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GET-024</title>
+<title>GET-024: be get ?#&lt;sha&gt; records a DETACHED cur-tip (?&lt;sha&gt;) instead of trunk-state — breaks be put ?#&lt;sha&gt; + commit (POSTDET). Regression from GET-023.</title>
+<meta property="og:title" content="GET-024: be get ?#&lt;sha&gt; records a DETACHED cur-tip (?&lt;sha&gt;) instead of trunk-state — breaks be put ?#&lt;sha&gt; + commit (POSTDET). Regression from GET-023.">
+<meta property="og:description" content="?#&lt;sha&gt; (empty query + #-fragment sha) means &quot;current/trunk branch, pinned to state &lt;sha&gt;&quot; — a NON-detached trunk-state checkout you can commit on top of. But the GET-023 checkout arm canonicalises it into the DETACHED form ?&lt;sha&gt; (query=sha, empty fragment) when it records the cur-tip, so a follow-up be post is refused POSTDET (&quot;detached wt — re-attach to a branch&quot;). Real regression from d6f35358, caught by be-put-06-triangle (SSH-gated, so it slipped the build-debug merge checks). Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-024.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,84 +16,61 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>GET-024: <code>be get ?#&lt;sha&gt;</code> records a DETACHED cur-tip (<code>?&lt;sha&gt;</code>) instead of trunk-state — breaks <code>be put ?#&lt;sha&gt;</code> + commit (POSTDET). Regression from GET-023.</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>?#&lt;sha&gt;</code> (empty query + <code>#</code>-fragment sha) means &quot;current/trunk branch, pinned to state &lt;sha&gt;&quot; — a NON-detached trunk-state checkout you can commit on top of. But the <a href="GET-023.html">GET-023</a> checkout arm canonicalises it into the DETACHED form <code>?&lt;sha&gt;</code> (query=sha, empty fragment) when it records the cur-tip, so a follow-up <code>be post</code> is refused POSTDET (&quot;detached wt — re-attach to a branch&quot;). Real regression from <code>d6f35358</code>, caught by <code>be-put-06-triangle</code> (SSH-gated, so it slipped the build-debug merge checks). Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Symptom: <code>test/put/06-triangle</code> round R4 (<code>be put &quot;?#$TIP&quot;</code> → <code>be get --force &quot;?#$TIP&quot;</code><p>
-→ <code>be post</code>) dies at the post with <code>sniff: post: refusing on detached wt … Error: POSTDET</code>. PASSES on parent <code>b71eba2a</code>, FAILS 3/3 on <code>d6f35358</code>/<code>ef8901fa</code> (clean trunk, <code>-DWITH_SSH=ON</code>). Not flaky, not a stale-wt artifact (main wt cur == trunk tip).
-</p>
-</li>
-<li>Root cause: <a href="GET-023.html">GET-023</a> (<code>d6f35358</code>) added the <code>?#&lt;sha&gt;</code> arm at <code>sniff/GET.c</code> (the<p>
-<code>has_q &amp;&amp; $empty(query) &amp;&amp; !$empty(fragment)</code> branch + its <code>~:2175</code> source compose) that builds the GETCheckout SOURCE in the DETACHED form <code>?&lt;frag&gt;</code> (<code>u8csMv(fsrc_u.query, frag)</code>, empty fragment) → the cur-tip wtlog row lands as <code>?&lt;sha40&gt;</code>. <code>post_is_detached_wt</code> (<code>sniff/POST.c:945</code>, DIS-009) flags empty-fragment + 40-hex-query as detached → POST refuses. The input was <code>?#&lt;sha&gt;</code> (TRUNK-STATE, fragment-sha) — it must NOT collapse to the detached query-sha form.
-</p>
-</li>
-<li>Spec: PUT (<code>PUT.html</code> §PUT) — <code>be put ?#&lt;sha&gt;</code> is a legitimate trunk reset that allows a<p>
-follow-up commit. The detached <code>?&lt;sha&gt;</code> form (DIS-009) staying detached is CORRECT; only the <code>?#&lt;sha&gt;</code> mis-canonicalisation is wrong.
-</p>
-</li>
-<li>PROCESS GAP: the GET-023 merge built only <code>build-debug</code> (no <code>WITH_SSH</code>), so the<p>
-SSH-gated <code>be-put-06-triangle</code> never ran → the regression landed green-looking.
-</p>
-</li>
+<li>Symptom: <code>test/put/06-triangle</code> round R4 (<code>be put &quot;?#$TIP&quot;</code> → <code>be get --force &quot;?#$TIP&quot;</code> → <code>be post</code>) dies at the post with <code>sniff: post: refusing on detached wt … Error: POSTDET</code>. PASSES on parent <code>b71eba2a</code>, FAILS 3/3 on <code>d6f35358</code>/<code>ef8901fa</code> (clean trunk, <code>-DWITH_SSH=ON</code>). Not flaky, not a stale-wt artifact (main wt cur == trunk tip).</li>
+<li>Root cause: <a href="GET-023.html">GET-023</a> (<code>d6f35358</code>) added the <code>?#&lt;sha&gt;</code> arm at <code>sniff/GET.c</code> (the <code>has_q &amp;&amp; $empty(query) &amp;&amp; !$empty(fragment)</code> branch + its <code>~:2175</code> source compose) that builds the GETCheckout SOURCE in the DETACHED form <code>?&lt;frag&gt;</code> (<code>u8csMv(fsrc_u.query, frag)</code>, empty fragment) → the cur-tip wtlog row lands as <code>?&lt;sha40&gt;</code>. <code>post_is_detached_wt</code> (<code>sniff/POST.c:945</code>, DIS-009) flags empty-fragment + 40-hex-query as detached → POST refuses. The input was <code>?#&lt;sha&gt;</code> (TRUNK-STATE, fragment-sha) — it must NOT collapse to the detached query-sha form.</li>
+<li>Spec: PUT (<code>PUT.html</code> §PUT) — <code>be put ?#&lt;sha&gt;</code> is a legitimate trunk reset that allows a follow-up commit. The detached <code>?&lt;sha&gt;</code> form (DIS-009) staying detached is CORRECT; only the <code>?#&lt;sha&gt;</code> mis-canonicalisation is wrong.</li>
+<li>PROCESS GAP: the GET-023 merge built only <code>build-debug</code> (no <code>WITH_SSH</code>), so the SSH-gated <code>be-put-06-triangle</code> never ran → the regression landed green-looking.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>be get ?#&lt;sha&gt;</code> checks out <code>&lt;sha&gt;</code> and records the cur-tip as TRUNK-STATE (<code>?#&lt;sha&gt;</code>:<p>
-empty query + <code>#</code>-fragment), NON-detached — a follow-up <code>be post</code> is allowed.
-</p>
-</li>
-<li>Preserve GET-023's classify-or-reject (invalid fragment → error; <code>SNIFFfragref</code> green)<p>
-AND the genuine detached <code>?&lt;sha&gt;</code> form staying detached.
-</p>
-</li>
+<li><code>be get ?#&lt;sha&gt;</code> checks out <code>&lt;sha&gt;</code> and records the cur-tip as TRUNK-STATE (<code>?#&lt;sha&gt;</code>: empty query + <code>#</code>-fragment), NON-detached — a follow-up <code>be post</code> is allowed.</li>
+<li>Preserve GET-023's classify-or-reject (invalid fragment → error; <code>SNIFFfragref</code> green) AND the genuine detached <code>?&lt;sha&gt;</code> form staying detached.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Fix in the GET-023 <code>sniff/GET.c</code> arm: record the source as the trunk-state form<p>
-(empty query + fragment=frag), NOT the detached <code>?&lt;frag&gt;</code> — reuse <code>u</code>'s parsed components rather than re-composing a query-sha. No re-roll of URI handling.
-</p>
-</li>
-<li>VALIDATE with <code>-DWITH_SSH=ON</code> (build-ssh) — <code>be-put-06-triangle</code> is the repro; it MUST<p>
-pass. Full <code>ctest</code> green in BOTH build-debug and build-ssh.
-</p>
-</li>
+<li>Fix in the GET-023 <code>sniff/GET.c</code> arm: record the source as the trunk-state form (empty query + fragment=frag), NOT the detached <code>?&lt;frag&gt;</code> — reuse <code>u</code>'s parsed components rather than re-composing a query-sha. No re-roll of URI handling.</li>
+<li>VALIDATE with <code>-DWITH_SSH=ON</code> (build-ssh) — <code>be-put-06-triangle</code> is the repro; it MUST pass. Full <code>ctest</code> green in BOTH build-debug and build-ssh.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open) The arm passes <code>?&lt;frag&gt;</code> as the GETCheckout source; change it to the<p>
-<code>?#&lt;frag&gt;</code> (trunk-state) shape so the recorded cur-tip keeps an empty query + the sha in the fragment — exactly what <code>post_is_detached_wt</code> treats as NON-detached.
-</p>
-</li>
+<li>(open) The arm passes <code>?&lt;frag&gt;</code> as the GETCheckout source; change it to the <code>?#&lt;frag&gt;</code> (trunk-state) shape so the recorded cur-tip keeps an empty query + the sha in the fragment — exactly what <code>post_is_detached_wt</code> treats as NON-detached.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first (WITH_SSH): <code>be-put-06-triangle</code> RED on trunk; minimal repro<p>
-  <code>be put ?#&lt;sha&gt;</code> → <code>be get --force ?#&lt;sha&gt;</code> → <code>be post</code> → POSTDET.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first (WITH_SSH): <code>be-put-06-triangle</code> RED on trunk; minimal repro <code>be put ?#&lt;sha&gt;</code> → <code>be get --force ?#&lt;sha&gt;</code> → <code>be post</code> → POSTDET.</li>
 <li class="open"><input type="checkbox" disabled> Fix the GET-023 arm to record trunk-state, not detached; keep <code>?&lt;sha&gt;</code> detached.</li>
-<li class="open"><input type="checkbox" disabled> <code>be-put-06-triangle</code> + <code>SNIFFfragref</code> + the detached-refuse tests (<code>get-33</code>) all green;<p>
-  full ctest in build-debug AND build-ssh.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> <code>be-put-06-triangle</code> + <code>SNIFFfragref</code> + the detached-refuse tests (<code>get-33</code>) all green; full ctest in build-debug AND build-ssh.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Regression of <a href="GET-023.html">GET-023</a> (<code>d6f35358</code>). The fix is GET-side (canonical form), not a<p>
-change to POST's detached refusal (that is correct).
-</p>
-</li>
+<li>Regression of <a href="GET-023.html">GET-023</a> (<code>d6f35358</code>). The fix is GET-side (canonical form), not a change to POST's detached refusal (that is correct).</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li><strong>LANDED <code>134b9e30</code></strong> (2026-06-16): the GET-023 arm composed the GETCheckout source as<p>
-the detached query-sha <code>?&lt;frag&gt;</code> (<code>u8csMv(fsrc_u.query, frag)</code>, empty fragment) → len-41 query → recorded DETACHED. Fix: carry <code>u</code>'s own present-but-empty query (<code>u8csMv(fsrc_u.query, u-&gt;query)</code>) so <code>URIutf8Feed</code> emits the bare <code>?</code> trunk sigil and GETCheckout records trunk-state <code>?#&lt;sha&gt;</code> while still checking out <code>&lt;frag&gt;</code>. Same composer + <code>call()</code> check, no hand-roll. Process-gap closed: new NON-SSH-gated case in <code>test/get/33-detached-refuse-commit/run.sh</code> (runs in build-debug, verified RED on revert). Green BOTH configs: build-ssh 388/388 (incl. <code>be-put-06-triangle</code>), build-debug 309/309; <code>SNIFFfragref</code> + genuine-detached <code>?&lt;sha&gt;</code> POSTDET preserved.
-</p>
-</li>
+<li><strong>LANDED <code>134b9e30</code></strong> (2026-06-16): the GET-023 arm composed the GETCheckout source as the detached query-sha <code>?&lt;frag&gt;</code> (<code>u8csMv(fsrc_u.query, frag)</code>, empty fragment) → len-41 query → recorded DETACHED. Fix: carry <code>u</code>'s own present-but-empty query (<code>u8csMv(fsrc_u.query, u-&gt;query)</code>) so <code>URIutf8Feed</code> emits the bare <code>?</code> trunk sigil and GETCheckout records trunk-state <code>?#&lt;sha&gt;</code> while still checking out <code>&lt;frag&gt;</code>. Same composer + <code>call()</code> check, no hand-roll. Process-gap closed: new NON-SSH-gated case in <code>test/get/33-detached-refuse-commit/run.sh</code> (runs in build-debug, verified RED on revert). Green BOTH configs: build-ssh 388/388 (incl. <code>be-put-06-triangle</code>), build-debug 309/309; <code>SNIFFfragref</code> + genuine-detached <code>?&lt;sha&gt;</code> POSTDET preserved.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

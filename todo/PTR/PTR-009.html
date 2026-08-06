@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PTR-009</title>
+<title>PTR-009: abc/URI static Buf4096 needs an API change (carved from PTR-001)</title>
+<meta property="og:title" content="PTR-009: abc/URI static Buf4096 needs an API change (carved from PTR-001)">
+<meta property="og:description" content="PTR-001 split out the two abc/URI.c static u8 Buf4096 because deleting them is a real DESIGN FORK, not a mechanical refactor: URIMergePath/URIRelativePath return slices that VIEW into the static buffer and the caller (URIAbsolute/URIRelative, public alias n) does NOT copy them out — abs-&gt;path keeps pointing into the buffer after return. acarve can't replace them: BASS rewinds at the call() boundary, so a carve inside the callee dangles the returned slice. GATED — abc is core, surface the diff.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PTR/PTR-009.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>PTR-009: abc/URI static Buf<a href="">4096</a> needs an API change (carved from PTR-001)</h1>
+<h1>PTR-009: abc/URI static Buf<a href="./4096.html">4096</a> needs an API change (carved from PTR-001)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 PTR-001 split out the two <code>abc/URI.c</code> static <code>u8 Buf[4096]</code> because deleting them is a real DESIGN FORK, not a mechanical refactor: <code>URIMergePath</code>/<code>URIRelativePath</code> return slices that VIEW into the static buffer and the caller (<code>URIAbsolute</code>/<code>URIRelative</code>, public alias <code>n</code>) does NOT copy them out — <code>abs-&gt;path</code> keeps pointing into the buffer after return. <code>a_carve</code> can't replace them: BASS rewinds at the <code>call()</code> boundary, so a carve inside the callee dangles the returned slice. GATED — abc is core, surface the diff.
 </p>
@@ -55,14 +64,19 @@ PTR-001 split out the two <code>abc/URI.c</code> static <code>u8 Buf[4096]</code
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>Ruled Candidate A, <code>u8s out</code> variant. Landed <code>b0455595</code> (abc sub <code>5f84502a</code>):<p>
-<code>URIAbsolute</code>/<code>URIRelative</code> take a caller-owned <code>u8s out</code> (callers pass <code>u8bIdle(buf)</code> over <code>a_pad</code>); the result VIEWS the written prefix via a gauge (<code>u8gOf</code>/<code>u8gFeed</code>/<code>u8csMv(result, u8gLeftC(g))</code>) so <code>out</code> must outlive it.
-</p>
-</li>
-<li>Both static <code>Buf[4096]</code> deleted; <code>remove_dot_segments</code> → <code>PATHu8sDrain</code><p>
-segment-walk; <code>merged</code> concat stays internal BASS <code>a_carve</code>. 397/397, ASAN-clean.
-</p>
-</li>
+<li>Ruled Candidate A, <code>u8s out</code> variant. Landed <code>b0455595</code> (abc sub <code>5f84502a</code>): <code>URIAbsolute</code>/<code>URIRelative</code> take a caller-owned <code>u8s out</code> (callers pass <code>u8bIdle(buf)</code> over <code>a_pad</code>); the result VIEWS the written prefix via a gauge (<code>u8gOf</code>/<code>u8gFeed</code>/<code>u8csMv(result, u8gLeftC(g))</code>) so <code>out</code> must outlive it.</li>
+<li>Both static <code>Buf[4096]</code> deleted; <code>remove_dot_segments</code> → <code>PATHu8sDrain</code> segment-walk; <code>merged</code> concat stays internal BASS <code>a_carve</code>. 397/397, ASAN-clean.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

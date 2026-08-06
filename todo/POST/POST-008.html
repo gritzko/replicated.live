@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>POST-008</title>
+<title>POST-008: be post to a be:// (keeper) remote is unwired — rejected &quot;needs a remote URI (ssh://…)&quot;; no be:// push test</title>
+<meta property="og:title" content="POST-008: be post to a be:// (keeper) remote is unwired — rejected &quot;needs a remote URI (ssh://…)&quot;; no be:// push test">
+<meta property="og:description" content="There is no working be post push to a beagle store — local OR remote. be post be://localhost/beagle → keeper: post needs a remote URI (ssh://host/path?branch) / KEEPFAIL; be post file:///beagle → the same KEEPFAIL &quot;needs a remote URI&quot; (a file:// URL carries no host, so it fails the host-required gate); be post ssh://localhost/beagle falls through to the git wire → fatal: 'beagle' does not appear to be a git repository / WIRECLFL. So POST rejects be: and file: outright and the only remote it accepts is a git one — even though be: is the beagle-remote scheme that GET/HEAD/PATCH already fetch over (after GET-003/GET-005). The help text itself (&quot;(ssh://host/path?branch)&quot;) shows the push path only ever contemplated ssh:. And no test exercises a be:// push, which is how it stayed broken. Surfaced trying to land DIS-030+031 from a clone. See POST, GET, URI, CLAUDE.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/POST/POST-008.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,8 +16,13 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>POST-008: <code>be post</code> to a <code>be://</code> (keeper) remote is unwired — rejected &quot;needs a remote URI (ssh://…)&quot;; no be:// push test</h1>
+<div>
 <p>
-There is no working <code>be post</code> push to a beagle store — local OR remote. <code>be post be://localhost/beagle</code> → <code>keeper: post needs a remote URI (ssh://host/path[?branch])</code> / <code>KEEPFAIL</code>; <code>be post file:///beagle</code> → the <strong>same</strong> <code>KEEPFAIL</code> &quot;needs a remote URI&quot; (a <code>file://</code> URL carries no host, so it fails the host-required gate); <code>be post ssh://localhost/beagle</code> falls through to the git wire → <code>fatal: 'beagle' does not appear to be a git repository</code> / <code>WIRECLFL</code>. So POST rejects <code>be:</code> and <code>file:</code> outright and the only remote it accepts is a <strong>git</strong> one — even though <code>be:</code> is the beagle-remote scheme that GET/HEAD/PATCH already fetch over (after <a href="">GET-003</a>/<a href="">GET-005</a>). The help text itself (&quot;(ssh://host/path<a href="">?branch</a>)&quot;) shows the push path only ever contemplated <code>ssh:</code>. And no test exercises a <code>be://</code> push, which is how it stayed broken. Surfaced trying to land DIS-030+031 from a clone. See <a href="../../wiki/POST.html">POST</a>, <a href="../../wiki/GET.html">GET</a>, <a href="../../wiki/URI.html">URI</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
+Now: DONE
+</p>
+</div>
+<p>
+There is no working <code>be post</code> push to a beagle store — local OR remote. <code>be post be://localhost/beagle</code> → <code>keeper: post needs a remote URI (ssh://host/path[?branch])</code> / <code>KEEPFAIL</code>; <code>be post file:///beagle</code> → the <strong>same</strong> <code>KEEPFAIL</code> &quot;needs a remote URI&quot; (a <code>file://</code> URL carries no host, so it fails the host-required gate); <code>be post ssh://localhost/beagle</code> falls through to the git wire → <code>fatal: 'beagle' does not appear to be a git repository</code> / <code>WIRECLFL</code>. So POST rejects <code>be:</code> and <code>file:</code> outright and the only remote it accepts is a <strong>git</strong> one — even though <code>be:</code> is the beagle-remote scheme that GET/HEAD/PATCH already fetch over (after <a href="./GET-003.html">GET-003</a>/<a href="./GET-005.html">GET-005</a>). The help text itself (&quot;(ssh://host/path<a href="./?branch.html">?branch</a>)&quot;) shows the push path only ever contemplated <code>ssh:</code>. And no test exercises a <code>be://</code> push, which is how it stayed broken. Surfaced trying to land DIS-030+031 from a clone. See <a href="../../wiki/POST.html">POST</a>, <a href="../../wiki/GET.html">GET</a>, <a href="../../wiki/URI.html">URI</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
 </p>
 <h2>Issues</h2>
 <p>
@@ -29,7 +38,7 @@ The post-push path recognizes only git transports; the keeper/<code>be:</code> s
 </ul>
 <h2>Blockers</h2>
 <p>
-Relates to <a href="">GET-003</a>/GET-004 be:-path resolution; the keeper push (<code>WIREPush</code>) must accept the <code>be:</code> scheme symmetrically with fetch.
+Relates to <a href="./GET-003.html">GET-003</a>/GET-004 be:-path resolution; the keeper push (<code>WIREPush</code>) must accept the <code>be:</code> scheme symmetrically with fetch.
 </p>
 <h2>Planned</h2>
 <p>
@@ -43,7 +52,18 @@ Wire <code>be post</code> push over <code>be:</code>/<code>keeper:</code> and co
 </ul>
 <h2>Resolution (fixed, awaiting gate)</h2>
 <p>
-The reproducible bug was narrower than first written: host-bearing <code>be://localhost/&lt;path&gt;</code> already routes to the keeper push and works (<code>test/post/22</code>). The defect is the <strong>host-required gate</strong> — <code>keeper_post</code>'s <code>if (!g || u8csEmpty(g-&gt;host))</code> rejected any host-LESS routable target: <code>file:///path</code>, and a <code>be://</code> whose host the dog-layer rewrite stripped (the clone case in the original repro). Fix: <code>keeper/KEEP.exe.c:778-801</code> now accepts when host / authority / path / <code>?/&lt;proj&gt;</code> selector / a <code>DOGIsTransport</code> scheme is present (mirrors <code>keeper_get</code>); help text fixed in <code>beagle/BE.cli.c:77-80</code>. New <code>test/post/32-push-file-local-store</code> (local-exec <code>file://</code>, no ssh) proves a <code>be post file://&lt;abs&gt;</code> push FF-advances the peer trunk + wt; repro-first verified (reverting the gate → exact <code>KEEPFAIL</code>). Full debug ctest 321/321. Two sub-bugs split out: <a href="">POST-009</a> (recv wt-advance <code>BEPRJDUP</code>/exit-153 on the <code>?/proj</code> form) and <a href="">POST-010</a> (no-op <code>file://</code> re-push stray <code>FILEFAIL</code>). Not committed.
+The reproducible bug was narrower than first written: host-bearing <code>be://localhost/&lt;path&gt;</code> already routes to the keeper push and works (<code>test/post/22</code>). The defect is the <strong>host-required gate</strong> — <code>keeper_post</code>'s <code>if (!g || u8csEmpty(g-&gt;host))</code> rejected any host-LESS routable target: <code>file:///path</code>, and a <code>be://</code> whose host the dog-layer rewrite stripped (the clone case in the original repro). Fix: <code>keeper/KEEP.exe.c:778-801</code> now accepts when host / authority / path / <code>?/&lt;proj&gt;</code> selector / a <code>DOGIsTransport</code> scheme is present (mirrors <code>keeper_get</code>); help text fixed in <code>beagle/BE.cli.c:77-80</code>. New <code>test/post/32-push-file-local-store</code> (local-exec <code>file://</code>, no ssh) proves a <code>be post file://&lt;abs&gt;</code> push FF-advances the peer trunk + wt; repro-first verified (reverting the gate → exact <code>KEEPFAIL</code>). Full debug ctest 321/321. Two sub-bugs split out: <a href="./POST-009.html">POST-009</a> (recv wt-advance <code>BEPRJDUP</code>/exit-153 on the <code>?/proj</code> form) and <a href="./POST-010.html">POST-010</a> (no-op <code>file://</code> re-push stray <code>FILEFAIL</code>). Not committed.
 </p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

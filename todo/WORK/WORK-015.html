@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORK-015: a patch #&lt;sha&gt; of the upstream tip posts as a picked cherry — the wt stays -1 forever</title>
+<meta property="og:title" content="WORK-015: a patch #&lt;sha&gt; of the upstream tip posts as a picked cherry — the wt stays -1 forever">
+<meta property="og:description" content="Reported by gritzko 2026-07-20, live: //JS-120 was +1; he patched in the upstream commit, posted it as &quot;merge with the upstream changes&quot;, and expected +2. The row still reads +2. The work view is FAITHFUL — dag and graf both say ahead 2 / behind 1. The posted commit d2ab2b2c carries picked 9bbb7003, NOT a second parent, so the upstream tip never enters its ancestry and the wt can never stop being behind. Root cause is the patch ORIGIN codec, not the view.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/WORK/WORK-015.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WORK-015: a <code>patch #&lt;sha&gt;</code> of the upstream tip posts as a <code>picked</code> cherry — the wt stays <a href="./-1.html">-1</a> forever</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+Reported by gritzko 2026-07-20, live: //JS-120 was <code>[+1][-1]</code>; he patched in the upstream commit, posted it as &quot;merge with the upstream changes&quot;, and expected <code>[+2]</code>. The row still reads <code>[+2][-1]</code>. The work view is FAITHFUL — dag and graf both say ahead 2 / behind 1. The posted commit d2ab2b2c carries <code>picked 9bbb7003</code>, NOT a second <code>parent</code>, so the upstream tip never enters its ancestry and the wt can never stop being behind. Root cause is the patch ORIGIN codec, not the view.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Rendered row (gritzko's paste): <code>//JS-120 [?] [±] [post] [+2][-1] 13:12 #d2ab2b2c merge with the upstream change</code>.</li>
+<li>Verified d2ab2b2c headers: <code>tree 8fa0436b</code>, <code>parent 85d55dd3</code> (ONE parent), <code>picked 9bbb7003</code>, no second <code>parent</code> line.</li>
+<li>//JS-120 tracks <code>//WORK/#b4ec4c47</code>; //WORK tip is 9bbb7003 (<code>MARK-011: rendered pages carry no OG meta…</code>).</li>
+<li>dag.aheadBehind(cur,tip) = ahead <a href="./d2ab2b2c, 85d55dd3.html">d2ab2b2c, 85d55dd3</a>, behind <a href="./9bbb7003.html">9bbb7003</a>; graf.aheadBehind agrees exactly — NOT a <a href="/todo/WORK/WORK-011.html">WORK-011</a> graf-cache defect and NOT a <a href="/todo/WORK/WORK-014.html">WORK-014</a> stale-repaint defect.</li>
+<li>The wtlog row that produced it: <code>26720DAj7J patch #9bbb70032068218d6c71615a2138f89ca8270fca</code> — the <code>#&lt;sha&gt;</code> fragment form.</li>
+<li>Seam: shared/wtlog.js:324 <code>patchOrigins()</code> reads <code>isFullSha(u.fragment)</code> → kind <code>picked</code>; verbs/post/post.js:798-806 routes <code>picked</code> into pickedShas, never into theirsParents (:944); fold-commit.js:119 states the invariant &quot;Never <code>parent</code>, so history stays linear&quot;.</li>
+<li>DIS-057 (post.js:788-792) ALREADY makes an in-scope patch's theirs commit a real merge parent — but only for the <code>?&lt;sha&gt;</code> origin form.</li>
+<li>Prior ground: <a href="/todo/PATCH/PATCH-015.html">PATCH-015</a> owns the origin→header routing; the <code>#hash = cherry</code> semantics are gritzko's own 2026-07 patch ruling.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A wt that has absorbed its upstream tip and posted must stop reading behind — <code>[+2]</code>, no <code>[-1]</code>.</li>
+<li>Needs a gritzko RULING first (see Blockers): the <code>#hash = cherry</code> semantics are his, so the cure must not be invented by the worker.</li>
+<li>Red-first repro: fixture wt ahead 1 / behind 1 → patch the upstream tip → post → assert the row's behind side clears (today: pinned red at <code>[-1]</code>).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Do NOT overturn the <code>#hash = cherry</code> / <code>?ref = whole missing line</code> ruling on the worker's own authority.</li>
+<li>All URI/hash resolution stays in be/core/resolve_hash.js — no reimplementation, no regex on the fragment.</li>
+<li>Verify through the real path (a posted commit's actual headers + a <code>work</code> render), not a unit probe on patchOrigins alone.</li>
+<li>No VC ops: no commit, no post, no push in //JS-120 or anywhere else.</li>
+<li>Work in the EXISTING work/JS-120 worktree; do not clone, do not touch the main tree.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Cure (a) implemented, PENDING gritzko's ruling: cherry semantics survive for every off-track sha; only a whole, ancestor-complete absorb of the tracked ref's OWN tip promotes from <code>picked</code> to a merge <code>parent</code>.</li>
+<li><code>patch! #tip</code> still records <code>foster</code> (bang unchanged).</li>
+<li>A behind/equal sha stays the existing dedup no-op.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> repro built: test/patch/tracked-tip/run.sh — fixture ahead 1 / behind 1, <code>patch #T1</code> + <code>post</code>; asserts two parents and ahead 2 / behind 0.  Verified RED (exit 1, commit carries <code>picked</code>, one parent — the live symptom) → GREEN (exit 0).</li>
+<li class="done"><input type="checkbox" checked disabled> cure implemented in verbs/patch/patch.js (one file).</li>
+<li class="open"><input type="checkbox" disabled> gritzko's ruling on (a) vs (b) — nothing committed yet.</li>
+<li class="open"><input type="checkbox" disabled> d2ab2b2c is NOT retroactively fixed: //JS-120 keeps reading <a href="./+2.html">+2</a><a href="./-1.html">-1</a> until that commit is redone with the parent.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>RULING NEEDED from gritzko — three candidate cures, they differ in what they overturn:</li>
+</ul>
+<p>
+   -  (a) <code>patch</code> of a commit that IS the tracked ref's tip (or
+</p>
+<div>
+<p>
+  an ancestor-complete catch-up) routes to <code>parent</code>, not <code>picked</code> — cherry semantics survive for off-track shas.
+</p>
+</div>
+<p>
+   -  (b) the user should have typed <code>patch ?9bbb7003</code>; then the
+</p>
+<div>
+<p>
+  cure is a plain-words warning/refusal when a <code>#&lt;sha&gt;</code> cherry names the very tip the wt is behind.
+</p>
+</div>
+<p>
+   -  (c) <code>#hash</code> always becomes a merge parent — overturns the
+</p>
+<div>
+<p>
+  2026-07 cherry ruling; listed for completeness only.
+</p>
+</div>
+<h2>Outcome</h2>
+<ul>
+<li>Nothing committed — awaiting the ruling.  Work sits in work/JS-120: verbs/patch/patch.js + test/patch/tracked-tip/.</li>
+<li>Suggested message: <code>WORK-015: a patch of the tracked tip records a parent, not a picked</code></li>
+<li>Suite 309/310; the one failure <code>work/getctx</code> is PRE-EXISTING (verified: fails identically on the untouched main tree).</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

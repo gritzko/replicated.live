@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GET-008</title>
+<title>GET-008: be get! (≡ be get --force) resets the world — its get row voids prior staged records (append-only, NO truncation)</title>
+<meta property="og:title" content="GET-008: be get! (≡ be get --force) resets the world — its get row voids prior staged records (append-only, NO truncation)">
+<meta property="og:description" content="be get! is just be get --force (the bang injects --force, nothing more) and is the clean-slate reset. It does NOT need to truncate .be/wtlog: the wtlog is append-only, and a get row IS a boundary — it is &quot;a hard reset of the world&quot; that resets both the pd boundary (SNIFFAtLastPostTs, sniff/AT.c:631-634) and the patch boundary (atpatchboundarystart, sniff/AT.c:544-547, DIS-010). So once a fresh get row is appended, every prior staged put/patch record falls below the boundary and is void — POST/PATCH already ignore everything before the most recent get/commit-all-post. Clearing a poisoned wtlog (origin: POST-011 Part B — accumulated staged patch rows → be post POSTNOMSG) is therefore just running be get!, which appends that boundary. The only real question is whether a no-op be get! (target already == cur) still appends the get row; if it short-circuits without one, the reset doesn't happen. See GET, POST, POST-011, CLAUDE.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-008.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,8 +16,13 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>GET-008: <code>be get!</code> (≡ <code>be get --force</code>) resets the world — its <code>get</code> row voids prior staged records (append-only, NO truncation)</h1>
+<div>
 <p>
-<code>be get!</code> is just <code>be get --force</code> (the bang injects <code>--force</code>, nothing more) and is the clean-slate reset. It does NOT need to truncate <code>.be/wtlog</code>: the wtlog is <strong>append-only</strong>, and a <code>get</code> row IS a boundary — it is &quot;a hard reset of the world&quot; that resets both the pd boundary (<code>SNIFFAtLastPostTs</code>, <code>sniff/AT.c:631-634</code>) and the patch boundary (<code>at_patch_boundary_start</code>, <code>sniff/AT.c:544-547</code>, DIS-010). So once a fresh <code>get</code> row is appended, every prior staged <code>put</code>/<code>patch</code> record falls <strong>below</strong> the boundary and is void — POST/PATCH already ignore everything before the most recent <code>get</code>/commit-all-<code>post</code>. Clearing a poisoned wtlog (origin: <a href="">POST-011</a> Part B — accumulated staged <code>patch</code> rows → <code>be post</code> <code>POSTNOMSG</code>) is therefore just running <code>be get!</code>, which appends that boundary. The only real question is whether a <strong>no-op</strong> <code>be get!</code> (target already == cur) still appends the <code>get</code> row; if it short-circuits without one, the reset doesn't happen. See <a href="../../wiki/GET.html">GET</a>, <a href="../../wiki/POST.html">POST</a>, <a href="">POST-011</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
+Now: DONE
+</p>
+</div>
+<p>
+<code>be get!</code> is just <code>be get --force</code> (the bang injects <code>--force</code>, nothing more) and is the clean-slate reset. It does NOT need to truncate <code>.be/wtlog</code>: the wtlog is <strong>append-only</strong>, and a <code>get</code> row IS a boundary — it is &quot;a hard reset of the world&quot; that resets both the pd boundary (<code>SNIFFAtLastPostTs</code>, <code>sniff/AT.c:631-634</code>) and the patch boundary (<code>at_patch_boundary_start</code>, <code>sniff/AT.c:544-547</code>, DIS-010). So once a fresh <code>get</code> row is appended, every prior staged <code>put</code>/<code>patch</code> record falls <strong>below</strong> the boundary and is void — POST/PATCH already ignore everything before the most recent <code>get</code>/commit-all-<code>post</code>. Clearing a poisoned wtlog (origin: <a href="./POST-011.html">POST-011</a> Part B — accumulated staged <code>patch</code> rows → <code>be post</code> <code>POSTNOMSG</code>) is therefore just running <code>be get!</code>, which appends that boundary. The only real question is whether a <strong>no-op</strong> <code>be get!</code> (target already == cur) still appends the <code>get</code> row; if it short-circuits without one, the reset doesn't happen. See <a href="../../wiki/GET.html">GET</a>, <a href="../../wiki/POST.html">POST</a>, <a href="./POST-011.html">POST-011</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
 </p>
 <h2>Issues</h2>
 <p>
@@ -36,8 +45,19 @@ Verify the reset workflow; make <code>be get!</code> append its <code>get</code>
 <ul>
 <li>Repro first (<a href="../../CLAUDE.md">CLAUDE</a> §17): stage <code>put</code>/<code>patch</code> rows in <code>.be/wtlog</code>, run <code>be get!</code> (force re-checkout to cur), assert (a) a fresh <code>get</code> row is appended, (b) <code>be post</code> is a clean no-op (not <code>POSTNOMSG</code>/<code>PUTNONE</code>) because the staged rows are now below the boundary, (c) <code>be log:</code> still lists (no idx damage — and there is none, since nothing was deleted). If a no-op <code>be get!</code> already appends the boundary, this passes with NO code change → close as verified.</li>
 <li>If a no-op force get short-circuits without appending: make the forced get record its <code>get</code> boundary row (the minimal append-only fix); do NOT delete or truncate any rows.</li>
-<li>Document <code>be get!</code> as the poisoned-wtlog recovery in <a href="../../wiki/PATCH.html">PATCH</a>/<a href="../../wiki/POST.html">POST</a> (replaces the hand-edit <code>.be/wtlog</code> workaround <a href="">POST-011</a> cited).</li>
+<li>Document <code>be get!</code> as the poisoned-wtlog recovery in <a href="../../wiki/PATCH.html">PATCH</a>/<a href="../../wiki/POST.html">POST</a> (replaces the hand-edit <code>.be/wtlog</code> workaround <a href="./POST-011.html">POST-011</a> cited).</li>
 <li>Regression test under <code>test/get</code>.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

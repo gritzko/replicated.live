@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-052: get's pending check can stamp-false-clean a BASE-MOVED file — clean-overwrite leg destroys wt bytes</title>
+<meta property="og:title" content="GET-052: get's pending check can stamp-false-clean a BASE-MOVED file — clean-overwrite leg destroys wt bytes">
+<meta property="og:description" content="Split 2026-07-19 out of /todo/GET/GET-050 (landed 64525364) and the /todo/STATUS/STATUS-008 loop.js loss. GET-050 band-restamps carried files AFTER the get so dirt stays visible — but the DECISION input is untouched: get's pending detection consumes classify, whose /todo/STATUS/STATUS-011 has(mtime) fast path answers &quot;bytes unchanged since row X&quot;, never &quot;clean vs the CURRENT base&quot;. - The suspected hole (tip 9928a0be, unverified): file put-staged (restamp in the stamp set), bytes unchanged since the put (stamp VALID), upstream moves the file's base entry; bare get → fast path says clean → the clean-overwrite leaf checks out the new base blob over the wt bytes. Discard happens BEFORE GET-050's carrySweep could see dirt (&quot;iff still dirty vs the new base&quot; is false once overwritten) — silent, unrecoverable unless the staged blob rode the put row. - The //STATUS-008-f21 loop.js casualty itself ran that tree's OWN f21-era (pre-GET-048) get code via the jsrc climb — it motivates but does not prove the tip hole; hence repro-first on the tip.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-052.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-052: get's pending check can stamp-false-clean a BASE-MOVED file — clean-overwrite leg destroys wt bytes</h1>
+<div>
+<p>
+Now: DONT
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Split 2026-07-19 out of <a href="/todo/GET/GET-050.html">GET-050</a> (landed <code>64525364</code>) and the <a href="/todo/STATUS/STATUS-008.html">STATUS-008</a> loop.js loss. GET-050 band-restamps carried files AFTER the get so dirt stays visible — but the DECISION input is untouched: get's pending detection consumes classify, whose <a href="/todo/STATUS/STATUS-011.html">STATUS-011</a> <code>has(mtime)</code> fast path answers &quot;bytes unchanged since row X&quot;, never &quot;clean vs the CURRENT base&quot;.
+</p>
+<ul>
+<li>The suspected hole (tip <code>9928a0be</code>, unverified): file put-staged (restamp in the stamp set), bytes unchanged since the put (stamp VALID), upstream moves the file's base entry; bare get → fast path says clean → the clean-overwrite leaf checks out the new base blob over the wt bytes. Discard happens BEFORE GET-050's carrySweep could see dirt (&quot;iff still dirty vs the new base&quot; is false once overwritten) — silent, unrecoverable unless the staged blob rode the put row.</li>
+<li>The <code>//STATUS-008-f21</code> loop.js casualty itself ran that tree's OWN f21-era (pre-GET-048) get code via the jsrc climb — it motivates but does not prove the tip hole; hence repro-first on the tip.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+RED-first on the pristine tip: the shape above must show the discard (or prove the tip safe — a NO-REPRO with evidence closes this <a href="./DONT.html">DONT</a>).
+</p>
+<ul>
+<li>Fix: for files whose base entry CHANGED old→new, the pending check must not trust the stamp fast path alone — hash (or size-compare, <a href="/todo/GET/GET-051.html">GET-051</a>) exactly that candidate set; dirty → weave leg, never checkout-over.</li>
+<li>The candidate set (base-moved files) is small — the added hashing cost stays negligible; the stamp fast path remains for base-unchanged files.</li>
+<li>Control case stays green: unstaged fresh-mtime dirt on a base-moved file must already weave (GET-048) — verify as the baseline.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>GET-048 reset semantics, GET-049 row-ts stamps, GET-050 band rules in force — extend, don't fork; no log read-back (be.now/append-returned ts only).</li>
+<li>No put/post semantics changes; only the get decision + overwrite guard.</li>
+<li>Repro in a fixture clone, NOT in <code>//STATUS-008-f21</code> (evidence tree).</li>
+<li><a href="/todo/GET/GET-051.html">GET-051</a>'s size guard is the independent backstop at the write site — reference, don't duplicate; if size-compare suffices here, say so there.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> control repro: unstaged dirty + base-moved + fresh mtime → tip weaves (GET-048 sanity)</li>
+<li class="done"><input type="checkbox" checked disabled> red repro: valid put stamp + base-moved + bare get → discard on tip? NO — weaves identically</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>if red: pending check hashes/size-checks the base-moved candidate set; weave; green</del></li>
+<li class="done"><input type="checkbox" checked disabled> if no-repro: evidence + <a href="./DONT.html">DONT</a></li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<p>
+NO-REPRO on tip 9928a0be (opus worker <code>//GET-052</code>, 2026-07-19) — the hypothesis is structurally impossible in current get:
+</p>
+<ul>
+<li>get.js consults classify ONLY for the untracked sweep (classify.wtScan, get.js:1117); the clean-vs-dirty DECISION is content-based: checkout.leafUnchanged (checkout.js:122-134) full-reads + bytesEq vs the NEW blob (get.js:1024), and <code>dirty = onDisk != baseBytes(oldSha)</code> off full reads (get.js:1032-1038) — the STATUS-011 stamp set never gates it. Merkle prune (get.js:926) keys on tree-sha equality, so a base-moved file always reaches the content check.</li>
+<li>Fixtures: control (unstaged dirt) <code>...v</code> weave-preserved; staged valid-stamp conflicting <code>...!</code> with markers, non-conflicting <code>...v</code> — nothing discarded. Suites test/get/{carry-stamp,divergent-dirty-weave,dirty,divergent-committed-add,restore-deleted} PASS.</li>
+<li>The <code>//STATUS-008-f21</code> loop.js loss was that tree's OWN pre-GET-048 get code — not tip evidence. The generic write-seam backstop stays <a href="/todo/GET/GET-051.html">GET-051</a> (any misclassification, incl. old-code trees and post).</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

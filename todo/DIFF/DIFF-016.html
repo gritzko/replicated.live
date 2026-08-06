@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIFF-016: EXPECTED-based diff — green/red local, pale blue/orange patched-in, yellow conflicts</title>
+<meta property="og:title" content="DIFF-016: EXPECTED-based diff — green/red local, pale blue/orange patched-in, yellow conflicts">
+<meta property="og:description" content="Per /todo/DIS/DIS-080: with fence markers retired, the diff view is where conflicts are seen and resolved. EXPECTED = the straightforward weave reading of base + all in-scope patch-ins (theirs layers, no WT layer). Green/red = wt compared to EXPECTED (local outstanding edits). Patched-in changes (EXPECTED vs base) render pale blue/orange — the other kind of in/rm, not salad/salmon. Tokens where both sides touch (conflicts) render yellow. All provenance comes from the weave — per-token origin ids — no separate diff3 pass.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIFF/DIFF-016.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIFF-016: EXPECTED-based diff — green/red local, pale blue/orange patched-in, yellow conflicts</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<p>
+Per <a href="/todo/DIS/DIS-080.html">DIS-080</a>: with fence markers retired, the diff view is where conflicts are seen and resolved. EXPECTED = the straightforward weave reading of base + all in-scope patch-ins (theirs layers, no WT layer). Green/red = wt compared to EXPECTED (local outstanding edits). Patched-in changes (EXPECTED vs base) render pale blue/orange — the other kind of in/rm, not salad/salmon. Tokens where both sides touch (conflicts) render yellow. All provenance comes from the weave — per-token origin ids — no separate diff3 pass.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Today's diff shows one green/red axis vs base; a patched-in change is indistinguishable from a local edit, and a conflict was only visible as fences in the bytes.</li>
+<li>The weave already carries per-token source ids (commit hi64, WT layer 00000000005774ed); ours/theirs/both classification per token falls out of the fold.</li>
+<li>Multi-patch runs stack: EXPECTED folds ALL patch rows in scope, several runs compose in one weave.</li>
+</ul>
+<h3>Goals</h3>
+<ol>
+<li>Diff render classifies each changed token: theirs-only → pale blue (in) / pale orange (rm); wt-vs-EXPECTED → green/red; overlap (conflict) → yellow. Conflict paths cross-checked against <a href="/todo/ULOG/ULOG-004.html">ULOG-004</a> accessor.</li>
+<li>Row metric: patched-in tokens weigh as edits — in/rm in the max(in,rm) row weight, total = max + eq (<a href="./[inline-vs-split-metric-max.html">[inline-vs-split-metric-max</a>] extends, C HUNK.c + JS bro.js in lockstep).</li>
+<li>Theme: pale blue/orange + yellow SGRs in view/theme.js, plain-text fallbacks for goldens; quad/status colors stay red for <code>con</code> rows.</li>
+</ol>
+<h3>Constraints</h3>
+<ul>
+<li>Weave-based only — no diff3 reimplementation, no marker parsing.</li>
+<li>Verify through the real UI path (pager pty), not TLV probes (<a href="./[verify-through-real-ui-path.html">[verify-through-real-ui-path</a>]).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>EXPECTED reading = <code>shared/expected.js</code> <code>expectedOf()</code> — patch.js mergeApply MINUS <code>weave.foldWt</code>: weave.build per side, weave.merge, <code>mergedLive</code>.</li>
+<li>Provenance rides the EXPECTED bytes as a THIRD weave layer folded BETWEEN base and wt (<code>ID_EXP</code>), so ONE emitDiff spells side AND origin — no 2nd pass.</li>
+<li>emitDiff/emitFull emit the weave walk verbatim (verified: tokens 1:1, never split, windows contiguous) — a hunk record aligns to it by token text.</li>
+<li>Encoding = tok32 bit 26 (<code>custom</code>) means PATCHED IN.  C HUNK.c IGNORES that bit (probed), so <code>--plain</code> stays byte-identical; side 3 was rejected (C plain reads it as EQ and collapses the +/- pair).</li>
+<li>CONFLICT needs no third bit: it is a RUN of consecutive changed tokens carrying BOTH bit-26 values — the same membership test mergedLive uses. EQ tokens break runs, so two edits on neighbouring lines never false-yellow.</li>
+<li>PLAIN-TEXT FALLBACK = NONE, deliberately.  <code>test/diff/18-patch-base</code> asserts <code>^\+THREE$</code> on <code>--plain</code> after a patch and I may not edit it; provenance is a colour distinction, asserted on <code>--color</code> SGR digits (no ESC literal, so dash-safe).  <code>--plain</code> output is unchanged for every provenance.</li>
+<li>Yellow is derived from the WEAVE (DIS-080: regions come from the weave, not rows).  <code>wtlog.conflicts()</code> is read in diff.js's expectedCtx and cross-checked at TEST level (<code>status</code> con tally == the yellow path) — path-granular only.</li>
+<li>Colours (view/theme.js <code>DIFF_WASH</code>, 256-cube bg): local 194/157 + 224/217 (unchanged), patched-in 153/117 (blue) + 223/215 (orange), conflict 229/227 (yellow — 229 not 230, which is the banner band).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> shared EXPECTED reading (weave minus WT layer) — same object post's fold commits</li>
+<li class="done"><input type="checkbox" checked disabled> token provenance → color class in the diff emit; theme entries</li>
+<li class="done"><input type="checkbox" checked disabled> metric: JS side done (bro.js classifyLines pIn/pRm + max(in,rm)+eq)</li>
+<li class="blocked"><input type="checkbox" disabled> HUNK.c twin — jab/ is READ-ONLY here; follow-up spelled out below</li>
+<li class="done"><input type="checkbox" checked disabled> tests: local-only, patch-only, mixed, conflict, two patch runs stacked</li>
+</ul>
+<h3>HUNK.c follow-up (the lockstep C twin, NOT done here)</h3>
+<ul>
+<li>File <code>beagle/dog/hunk/HUNK.c</code>, fn <code>bro_classify_lines</code> (the twin of view/bro.js <code>classifyLines</code>) + <code>bro_classify</code>/<code>lineKind</code>.</li>
+<li>Rule: a token with tok32 bit 26 (custom) set is an EDIT — its bytes go to <code>in_b</code>/<code>rm_b</code>, NEVER <code>eq_b</code>; row weight stays <code>max(in_b,rm_b)</code>, total <code>max + eq_b</code> (<a href="./[inline-vs-split-metric-max.html">[inline-vs-split-metric-max</a>]).  Break out <code>p_in</code>/<code>p_rm</code> to mirror the JS tally.</li>
+<li><code>bro_cell_ansi</code> needs the same wash families (THEME slots for pale blue/orange + yellow) and the run-overlap → yellow rule, or the C pager will keep painting patched-in tokens salad/salmon.</li>
+<li>Same file also carries <a href="/todo/DIFF/DIFF-019.html">DIFF-019</a> <a href="./HIGH.html">HIGH</a>: <code>HUNKu8sFeedLineBased</code> fixed 64KB/4KB side buffers throw <code>hunk.render: out full</code> on big files and SILENTLY truncate regions past 4KB (bare <code>u8bFeed</code>, refusal dropped) — the one libdog pass should fix both while touching HUNK.c.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Depends on <a href="/todo/PATCH/PATCH-025.html">PATCH-025</a> (markerless <code>mergedLive</code>), which is NOT merged — its 3 files were imported into this worktree by orchestrator order. DIFF-016 cannot land before PATCH-025.</li>
+<li>RESOLVED 2026-07-30: the five PATCH-025 regolds (<code>get/conf-state</code>, <code>get/confdrop</code>, <code>get/dirty</code>, <code>post/conf-state</code>, <code>status/conflict</code>) ported byte-identical from <code>//PATCH-025/test</code> (gritzko-approved versions), all green + staged here. Sole remaining failure: <code>post/patch-absorb</code> (<a href="/todo/POST/POST-035.html">POST-035</a>'s row-based gate) — 320/321.</li>
+<li>2026-07-30 base moved to <code>///be/#5c0d5c21</code>: the wt's own markerless weave conflicted <code>get.js</code>/<code>weave.js</code> and token-glue left get.js unparseable (267 fails); resolved by hand — weave3 (now in <code>shared/weave.js</code>) renders via <code>mergedLive</code> returning <code>{bytes, spans}</code>, both callers adapted (<code>get.js:1275</code> binding restored, <code>shared/checkout.js</code> spans-not-markers — checkout.js is NOW PART of this tree's staged set). Suite back to 315/321.</li>
+<li>NO diff golden anywhere needed a regold — the plain path is byte-identical.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Not committed.  Suggested commit message: <code>DIFF-016: EXPECTED-based diff colours</code></li>
+<li>Staged in <code>//DIFF-016</code> (<code>jab put</code>): new <code>shared/expected.js</code>; edited <code>views/diff/diff.js</code>, <code>view/bro.js</code>, <code>view/theme.js</code>; imported (PATCH-025) <code>shared/weave.js</code>, <code>verbs/patch/patch.js</code>, <code>verbs/get/get.js</code>.</li>
+<li>Staged in <code>//DIFF-016/test</code>: new <code>test/diff/{19-patch-provenance, 20-patch-conflict,21-patch-stacked}</code>; imported PATCH-025 conflict goldens.</li>
+<li>Full suite 316/321 (the 5 imported PATCH-025 failures, no new ones); diff 20/20, patch 28/28, status 14/14.</li>
+<li>Pager verified through a pty-driven <code>Pager.render()</code> probe (tty.openpty, raw mode): all five washes reach the real frame bytes.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

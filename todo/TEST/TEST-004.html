@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TEST-004: JS treadmill for git.pack — clone the kernel from a URI arg, then tag-hop the worktree, git as the oracle</title>
+<meta property="og:title" content="TEST-004: JS treadmill for git.pack — clone the kernel from a URI arg, then tag-hop the worktree, git as the oracle">
+<meta property="og:description" content="JAB-020 collapses the clone path to one git.pack(fd, buf, shard, opts) call, and its own TODO demands &quot;a real jab get of a large repo, not a unit probe&quot;. This ticket builds that probe: a JS treadmill under be/test/mill/, run by hand (never in ctest), that clones a repo named BY A URI ARGUMENT and then walks its worktree tag by tag, diffing against a parallel git clone at every step. The linux kernel IS the target — ~6.3 GB pack, 11.7M objects, the case where a per-object JS boundary dies and a one-call binding must not. Ports the shell beagle/beagle/test/mill.sh family to JS, run as jab be/test/mill/&lt;script&gt;.js &lt;uri&gt; … (jab takes a script path — be/main.js is invoked the same way). Method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/TEST/TEST-004.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>TEST-004: JS treadmill for <code>git.pack</code> — clone the kernel from a URI arg, then tag-hop the worktree, git as the oracle</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+<a href="../JAB/JAB-020.html">JAB-020</a> collapses the clone path to one <code>git.pack(fd, buf, shard, opts)</code> call, and its own TODO demands &quot;a real <code>jab get</code> of a large repo, not a unit probe&quot;. This ticket builds that probe: a JS treadmill under <code>be/test/mill/</code>, run by hand (never in <code>ctest</code>), that clones a repo named BY A URI ARGUMENT and then walks its worktree tag by tag, diffing against a parallel <code>git</code> clone at every step. The linux kernel IS the target — ~6.3 GB pack, 11.7M objects, the case where a per-object JS boundary dies and a one-call binding must not. Ports the shell <code>beagle/beagle/test/mill*.sh</code> family to JS, run as <code>jab be/test/mill/&lt;script&gt;.js &lt;uri&gt; …</code> (jab takes a script path — <a href="../../be/main.js">be/main.js</a> is invoked the same way). Method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>beagle/beagle/test/mill-tags.sh</code> is the shape to port: clone at a tag, <code>git checkout</code> the same tag in a reference tree, <code>rsync -rlcni --delete</code> the two, count failures; <code>mill-last10.sh</code> adds timings, <code>mill-toy.sh</code> a synthesized 10-tag repo.</li>
+<li>The shell family hardcodes <code>REPO=$HOME/src/git</code> and the keeper's HOME-relative <code>//host/path</code> form — TEST-004 takes a URI arg instead, so the same script runs against a local mirror or a github URL.</li>
+<li><a href="../JAB/JAB-020.html">JAB-020</a> §Goals: &quot;no pack bytes are ever materialised in the JS heap&quot;; the kernel is what makes that observable (RSS, wall clock), a toy repo is not.</li>
+<li>Verified in <code>work/KEEP-006</code>: the libdog loop repacked the 6.33 GB linux pack from a PIPE, 11,690,992 shas matching git — that run was manual and unrepeatable; this ticket makes it a script.</li>
+<li><code>be/test/</code> today is data-driven <code>&lt;verb&gt;/&lt;case&gt;/run.sh</code> globbed into CTest by <code>be/test/CMakeLists.txt</code> — the treadmill must NOT land in that glob (it would join <code>ctest -j16</code> and hang the suite for an hour).</li>
+<li>POLICY from <a href="TEST-003.html">TEST-003</a> does not bind here: the oracle is <code>git</code>, not native <code>be</code> — a git worktree comparison is the intended ground truth, not a stale-native view parity.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+A manually-invoked JS treadmill that proves <code>git.pack</code> ingests a kernel-sized pack correctly and that the resulting worktree is byte-identical to git's at every tag.
+</p>
+<ul>
+<li><code>jab be/test/mill/clone.js &lt;uri&gt; [opts]</code> — clone the repo at <code>&lt;uri&gt;</code> into a scratch worktree; report objects, bytes, wall time, peak RSS.</li>
+<li><code>jab be/test/mill/tags.js &lt;uri&gt; [opts]</code> — clone at the first tag, then <code>get</code> each subsequent tag, comparing the worktree to a git reference clone after each hop.</li>
+<li><code>&lt;uri&gt;</code> is a POSITIONAL ARG, no default and no <code>$HOME/src/git</code> fallback: <code>be://localhost/…</code>, <code>file:/…</code> and <code>https://github.com/torvalds/linux</code> all valid, resolved through <a href="../../wiki/URI.html">resolve_hash</a> like any other URI.</li>
+<li>The tag oracle is a real <code>git checkout</code> in a parallel clone plus a full-content diff — identical trees or the hop FAILS, per <a href="../JAB/JAB-020.html">JAB-020</a>'s end-to-end rule.</li>
+<li>Tag set is selectable (<code>--tags v6.1,v6.2</code> / <code>--last N</code> / all), because the kernel has ~900 tags and nobody runs them all.</li>
+<li>Lives in its OWN dir <code>be/test/mill/</code>, excluded from the <code>be/test/*/*/run.sh</code> CTest glob and from <code>ninja test</code>; a <code>be/test/mill/README.mkd</code> states how to run it.</li>
+<li>Runs against BOTH the pre- and post-<a href="../JAB/JAB-020.html">JAB-020</a> binding, so it can show the boundary-crossing win rather than assert it.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Node-free: <code>be/</code> has zero <code>async</code>/<code>await</code>/<code>Promise</code> (<a href="../JAB/JAB-020.html">JAB-020</a> §Design decisions) — the treadmill is plain synchronous JS on the jab runtime, driving <code>git</code>/<code>rsync</code> as subprocesses.</li>
+<li>Disk and time are the real limits: a kernel clone plus a git reference clone is tens of GB and tens of minutes; the script must state its footprint up front and clean up on exit unless kept.</li>
+<li>Scratch under <code>$HOME/tmp</code> (ext4), never under the source tree — <code>be</code> walks up for a <code>.be</code> anchor and a scratch wt inside the project glues onto the project's own store (<code>be/test/CMakeLists.txt</code>).</li>
+<li>Never touch the main tree; the treadmill only ever writes inside its own scratch root.</li>
+<li>Timeouts are per-hop and generous but present — a hung indexer must fail, not wedge the run forever.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Settled with gritzko 2026-07-27 when the ticket was ordered.
+</p>
+<ul>
+<li>*<strong>Topic is TEST</strong>*, not JAB: the treadmill outlives <a href="../JAB/JAB-020.html">JAB-020</a> and belongs with the harness family (TEST-001..003).</li>
+<li>*<strong>The kernel is the point</strong>* — no &quot;tier down to a toy repo for CI&quot; escape hatch; a toy-repo smoke test is what <code>mill-toy.sh</code>/<code>be/test/get/*</code> already are.</li>
+<li>*<strong>URI is an argument</strong>*, so local-mirror vs github is the caller's choice and the same script covers both transports (<code>be://</code>/<code>file:</code> vs curl/https).</li>
+<li>*<strong>Tag hop asserts tree identity against git</strong>* — the same oracle <code>mill-tags.sh</code> uses, not a cheaper tree-hash shortcut.</li>
+<li>*<strong>JS, run via <code>jab &lt;script.js&gt;</code></strong>* — jab resolves a script path arg (<code>jab be/main.js &lt;verb&gt;</code> is the existing precedent), so no new runner is needed.</li>
+<li>*<strong>Manual only, own directory</strong>* <code>be/test/mill/</code> — outside the CTest glob, invoked by a person or a CI job that opted in.</li>
+<li>*<strong>A THIRD script, <code>pack.js</code>, added 2026-07-27</strong>* once <code>git.pack(fd, buf, shard, opts)</code> landed in jab (build <code>22bec7d6</code>): it calls the binding DIRECTLY, so <a href="../JAB/JAB-020.html">JAB-020</a>'s one-call surface is exercised before <code>jab get</code> is converted to route through it.</li>
+<li>*<strong><code>clone.js</code>/<code>tags.js</code> stay CLI-driven</strong>* and therefore measure whatever the clone path does today (the per-object JS loop) — that is the baseline, not a defect.</li>
+<li>*<strong>The scratch worktree is a BARE EMPTY DIR</strong>*, not repo-setup.sh's empty-<code>.be/</code> shield: pre-seeding <code>.be/</code> makes the first <code>jab get</code> throw (see Blockers). Isolation rides the <code>.be</code> firewall FILE above the scratch instead.</li>
+<li>*<strong><code>--serve</code> (<code>test/mill/serve.py</code>)</strong>* wraps a local git repo in <code>git upload-pack</code> over smart-HTTP — the box has no sshd by default, a bare git path is not a remote, and <code>be:</code>/<code>file:</code> want a beagle store, so without it a local git mirror is unclonable.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> <code>be/test/mill/</code> dir + <code>README.mkd</code> (how to run, disk/time footprint, which transports reach the kernel).</li>
+<li><a href="./v.html">v</a> Shared <code>be/test/mill/lib.js</code>: <code>$HOME/tmp</code> scratch + firewall, subprocess runner over pol, per-step <code>timeout</code>, wall + VmHWM sampling, output cap, cleanup-unless-kept.</li>
+<li><a href="./v.html">v</a> Arg parsing for <code>&lt;uri&gt;</code> positional + <code>--tags/--last/--keep/--cap/--mode/--serve</code> — scheme read through the URI lexer (<code>shared/uri.js</code> → <code>new URI</code>), never a regex.</li>
+<li><a href="./v.html">v</a> <code>clone.js</code>: one <code>jab get &lt;uri&gt;</code>, wall/peak-RSS/store bytes/file count; <code>git ls-remote</code> tip check, or <code>--ref-clone</code> for the full rsync oracle plus a git-vs-jab wall/RSS table.</li>
+<li><a href="./v.html">v</a> <code>tags.js</code>: git reference clone (<code>--no-checkout</code>), then per tag <code>jab get &lt;uri&gt;?tags/&lt;TAG&gt;</code> + <code>git checkout</code> + rsync compare; tally, non-zero exit on any failure. Verified 4/4 on a tagged toy repo, each hop landing its OWN sha.</li>
+<li><a href="./v.html">v</a> <code>pack.js</code>: <code>git.pack</code> direct — objects vs <code>git count-objects</code>, <code>raw+ofs+ref == objects</code>, <code>inBytes == pack - 20</code>, logs under the cap, REF present whenever it rotated, and FILE vs PIPE byte-identical.</li>
+<li><a href="./ .html"> </a> <code>pack.js --thin</code>: feed a THIN pack (REF_DELTA bases by construction) and pin today's plain-words refusal, so the case flips to a pass when ingest learns REF_DELTA input (see Blockers).</li>
+<li><a href="./ .html"> </a> Verify the CTest glob does NOT pick <code>be/test/mill/</code> up (no <code>*/*/run.sh</code> match) and <code>ninja test</code> stays the same length.</li>
+<li><a href="./ .html"> </a> Run the pair against a LOCAL kernel mirror first, then against github — the https/curl leg is a different code path (<a href="../JAB/JAB-020.html">JAB-020</a> <code>curlRun</code> fd handover).</li>
+<li><a href="./ .html"> </a> Record a pre-<a href="../JAB/JAB-020.html">JAB-020</a> baseline (wall, peak RSS, whether it completes at all) so the post-change run has something to beat.</li>
+<li><a href="./ .html"> </a> Cross-link from <a href="../JAB/JAB-020.html">JAB-020</a> §TODOs &quot;Verify end-to-end through a real <code>jab get</code> of a large repo&quot; to this ticket.</li>
+<li><a href="./ .html"> </a> Decide whether the shell <code>mill*.sh</code> family gets retired or kept as the native-<code>be</code> counterpart — report, do not delete here.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<p>
+Three product findings the treadmill surfaced on its first outing, each now its own ticket; none is a treadmill defect.
+</p>
+<ul>
+<li><a href="../PACK/PACK-004.html">PACK-004</a> <code>REPACK.c:308</code> refuses a REF_DELTA that ARRIVES in the source pack, so <code>pack.js</code> currently only covers all-OFS input (which is what git's own repack emits). <code>pack.js --thin</code> stays a TODO here until that lands.</li>
+<li><a href="../BE/BE-061.html">BE-061</a> a pre-seeded empty <code>.be/</code> makes the FIRST <code>jab get</code> throw <code>ToBigInt</code> in <code>hashlet60FromBytes</code>; the treadmill uses bare scratch dirs to dodge it, which is a workaround to revert once fixed.</li>
+<li><a href="../BE/BE-062.html">BE-062</a> <code>curlRun</code> drops argv<a href="./0.html">0</a>, so curl never gets <code>-sSf</code> — its progress meter pollutes every http run and HTTP errors do not fail the fetch.</li>
+<li>Peak RSS is <code>time -v</code>'s rusage, NOT /proc polling: <code>pol.run</code> blocks until the watched fd is ready, so a quiet child yields no sample points and the process is gone by EOF.</li>
+<li><code>jab get</code> cannot reach the kernel over any transport on this box: https buffers the whole body in the JS heap (<a href="../KEEP/KEEP-006.html">KEEP-006</a> §Blockers), a bare git path is not a remote, and <code>be:</code>/<code>file:</code> want a beagle store. <code>pack.js</code> bypasses the wire; <code>clone.js</code>/<code>tags.js</code> need a beagle-store mirror or <code>--serve</code> (small repos).</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+Built and run 2026-07-27 in <code>//TEST-004</code> (off <code>///be/</code>, base <code>45ad875a</code>); UNCOMMITTED per the no-post order. Suggested commit: <code>TEST-004: manual JS treadmills for git.pack and jab get</code>.
+</p>
+<ul>
+<li><code>be/test/mill/</code>: <code>lib.js</code>, <code>pack.js</code>, <code>clone.js</code>, <code>tags.js</code>, <code>serve.py</code>, <code>README.mkd</code>. Not in the CTest glob (<code>*/*/run.sh</code>), so <code>ninja test</code> is unchanged.</li>
+<li><code>pack.js</code> over git.git at a 128 MB cap: *<strong>417,182/417,182 objects, 3 logs, 57,609 REF</strong>* — the <a href="../KEEP/KEEP-006.html">KEEP-006</a> prototype's number to the record (57,609 predicted, 57,609 emitted), FILE and PIPE runs byte-identical, 1m13s / 672 MiB peak each.</li>
+<li>Toy repo at a 300-byte cap: rotation to 6 logs converts both crossing OFS deltas to REF; 10/10 checks, FILE ≡ PIPE.</li>
+<li><code>tags.js</code> over a 4-tag repo through <code>--serve</code>: 4/4 hops, each landing its OWN sha, every worktree rsync-identical to <code>git checkout</code>.</li>
+<li>git.git clone over <code>ssh://localhost</code>, git vs beagle on an idle box, two runs: *<strong>git 20-21s / 111 MiB peak, jab 1m35-37s / 780 MiB peak — 4.6-4.7x wall, 7x RSS</strong>*, both landing 4,842 files and a 297 MiB store. That is the pre-<a href="../JAB/JAB-020.html">JAB-020</a> per-object JS path; the number to beat.</li>
+<li>The same run is the tree oracle, and with <code>git clone --recurse-submodules</code> plus UNANCHORED <code>.git</code>/<code>.be</code> excludes it comes down to exactly THREE differences: <code>compat/vcbuild/*.bat</code>. git.git's <code>.gitattributes</code> carries <code>*.bat text eol=crlf</code>, so git checks out CRLF while beagle writes the raw LF blob — beagle's checkout is not <code>.gitattributes</code>-aware. Everything else in git.git, submodule included, is byte-identical.</li>
+<li>Kernel (<code>$HOME/src/linux</code>, 6.33 GB pack, 11,690,992 objects — matching <a href="../KEEP/KEEP-006.html">KEEP-006</a> exactly): reached 6.75M objects and 2 logs before being stopped to free the box for the clone benchmark. Not yet a completed pass.</li>
+<li>Three product findings, each filed: <a href="../PACK/PACK-004.html">PACK-004</a>, <a href="../BE/BE-061.html">BE-061</a>, <a href="../BE/BE-062.html">BE-062</a>.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

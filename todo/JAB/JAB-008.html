@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JAB-008</title>
+<title>JAB-008: binding calls C ops raw, skipping call() — BASS scratch never rewinds, the 1GB arena drains, everything dies as &quot;out full?&quot;</title>
+<meta property="og:title" content="JAB-008: binding calls C ops raw, skipping call() — BASS scratch never rewinds, the 1GB arena drains, everything dies as &quot;out full?&quot;">
+<meta property="og:description" content="PRO.h's contract (dog/abc/PRO.h:20-40,73-83): a callee's acarve scratch dies when the CALLER's call()/try() rewinds ABCBASS; sane() alone rewinds nothing. The jab binding breaks the contract at the C++/C boundary: every JABCFN (weave.hpp WEAVENext/WEAVEMerge/WEAVEAlive…, pack.hpp, hunk.hpp) invokes the C op RAW — no call() equivalent — and ABCBASS is mapped ONCE in main.cpp:281 and never rewound for the process lifetime. So every binding invocation leaks its whole carve set into the arena. Probe 2026-07-16 (in work/PATCH-012): fold the SAME 1MB blob from scratch in one process → DIED at iteration 240, weave.fold: failed (out full?) — ~4.3MB/fold (WEAVEFromBlob's acarve(u32, toks, len+16) ≈4MB + anchors), 1GB/4.3MB ≈ 240. The C op's internal SNOROOM surfaces under the SAME &quot;out full?&quot; message as a dest overflow, so the leak masquerades as PATCH-012's cap bug. Hypothesis credit: gritzko.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-008.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JAB-008 <a href="./HIGH.html">HIGH</a>: binding calls C ops raw, skipping <code>call()</code> — BASS scratch never rewinds, the 1GB arena drains, everything dies as &quot;out full?&quot;</h1>
+<h1>JAB-008: binding calls C ops raw, skipping <code>call()</code> — BASS scratch never rewinds, the 1GB arena drains, everything dies as &quot;out full?&quot;</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
 <p>
 PRO.h's contract (<code>dog/abc/PRO.h:20-40,73-83</code>): a callee's <code>a_carve</code> scratch dies when the CALLER's <code>call()</code>/<code>try()</code> rewinds ABC_BASS; <code>sane()</code> alone rewinds nothing. The jab binding breaks the contract at the C++/C boundary: every <code>JABC_FN</code> (weave.hpp <code>WEAVENext</code>/<code>WEAVEMerge</code>/<code>WEAVEAlive</code>…, pack.hpp, hunk.hpp) invokes the C op RAW — no <code>call()</code> equivalent — and <code>ABC_BASS</code> is mapped ONCE in <code>main.cpp:281</code> and never rewound for the process lifetime. So every binding invocation leaks its whole carve set into the arena. Probe 2026-07-16 (in <code>work/PATCH-012</code>): fold the SAME 1MB blob from scratch in one process → DIED at iteration 240, <code>weave.fold: failed (out full?)</code> — ~4.3MB/fold (<code>WEAVEFromBlob</code>'s <code>a_carve(u32, toks, len+16)</code> ≈4MB + anchors), 1GB/4.3MB ≈ 240. The C op's internal SNOROOM surfaces under the SAME &quot;out full?&quot; message as a dest overflow, so the leak masquerades as <a href="../PATCH/PATCH-012.html">PATCH-012</a>'s cap bug. Hypothesis credit: gritzko.
 </p>
@@ -74,9 +83,13 @@ The guard is the binding's job; the C ops and the JS layer stay untouched.
 </ul>
 <div class="footer">
 ❧
-<a href="/feed.rss">RSS feed</a> ❧
-<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
-<a href="https://github.com/gritzko/jab">JAB</a>
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
 ❧
 </div>
 </body>

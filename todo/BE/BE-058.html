@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-058: views swallow failures or spell bare codes — bro launch, spot ?ref, type/size/tree</title>
+<meta property="og:title" content="BE-058: views swallow failures or spell bare codes — bro launch, spot ?ref, type/size/tree">
+<meta property="og:description" content="Three view-side spots hide failure from the user, found in the 2026-07-24 house-cleaning sweep. The pager launch discards bad-arg errors into an empty viewport, spot's historic search treats an unresolvable ?ref as zero matches, and type/size/tree throw bare C-style codes with no plain-words line — all contradicting the errors-in-plain-words ruling (DIS-079 tracks the same disease for wt-less read verbs; this ticket is the in-view arm).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BE/BE-058.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-058: views swallow failures or spell bare codes — bro launch, spot ?ref, type/size/tree</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
+<p>
+Three view-side spots hide failure from the user, found in the 2026-07-24 house-cleaning sweep. The pager launch discards bad-arg errors into an empty viewport, spot's historic search treats an unresolvable <code>?ref</code> as zero matches, and type/size/tree throw bare C-style codes with no plain-words line — all contradicting the errors-in-plain-words ruling (<a href="../DIS/DIS-079.html">DIS-079</a> tracks the same disease for wt-less read verbs; this ticket is the in-view arm).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>be/views/bro/bro.js:166 broRun pager branch: <code>catch (e) { /* a bad spell just contributes nothing */ }</code> — a typo'd path at <code>jab bro &lt;arg&gt;</code> yields a silent empty viewport, while the same spell typed at the <code>:</code> bar reports <code>err: ...</code> via _runSpell.</li>
+<li>be/views/spot/search.js:197 walkRef: <code>try { sha = r.resolveHex(...) } catch (e) {}</code> then <code>if (!sha) return;</code> — bad <code>?ref</code>/<code>?branch</code> emits nothing, exit 0, indistinguishable from no matches; every other bad input there logs a hint and throws (SPOTNOBODY/SPOTNOEXT/SPOTBADPAT).</li>
+<li>be/views/type/type.js:95,100 throw &quot;TYPENONE&quot;; size.js:144,149 &quot;SIZENONE&quot;; tree.js:130,141-147,194 &quot;TREENONE&quot;/&quot;TREEFAIL&quot; — bare codes, no io.log line. Siblings todo.js:404 and work.js:795 do it right: one plain line, then throw.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Every bad CLI arg produces one plain-words line naming the arg; empty viewport / empty output no longer doubles as an error channel.</li>
+<li>spot's bad-<code>?ref</code> path joins its siblings: hint + throw.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro per site first (<a href="../../meta/work.html">/meta/work</a> §3); pager site needs the pty-click path, not a unit probe.</li>
+<li>In-pager launch errors go to this.message, not stderr noise.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> 1. bro.js:166 — route driveSpell failure into this.message.</li>
+<li class="open"><input type="checkbox" disabled> 2. search.js:197 — hint + throw on unresolvable ?ref; hoist the inline lazy require of core/resolve.js to the top.</li>
+<li class="open"><input type="checkbox" disabled> 3. type/size/tree — plain line before each throw, todo.js-style.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Open. Filed 2026-07-24 from the be/ house-cleaning review sweep.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

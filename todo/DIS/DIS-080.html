@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-080: markerless conflicts — RGA weave bytes, EXPECTED tree, resolved==posted</title>
+<meta property="og:title" content="DIS-080: markerless conflicts — RGA weave bytes, EXPECTED tree, resolved==posted">
+<meta property="og:description" content="RULING (gritzko, 2026-07-29): conflict fence markers (&lt;&lt;&lt;&lt;/||||/&gt;&gt;&gt;&gt;) are retired — fenced bytes cannot be cleanly diffed or merged again, which breaks multi-patch stacking. On conflict the wt file gets the weave's LIVE BYTES per RGA rules (both sides' insertions in deterministic weave order, no fences). Conflict state lives in wtlog rows + render, never in file bytes. Umbrella; implementation split: /todo/PATCH/PATCH-025, /todo/ULOG/ULOG-004, /todo/DIFF/DIFF-016, /todo/STATUS/STATUS-017, /todo/POST/POST-035.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-080.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-080: markerless conflicts — RGA weave bytes, EXPECTED tree, resolved==posted</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+RULING (gritzko, 2026-07-29): conflict fence markers (<code>&lt;&lt;&lt;&lt;</code>/<code>||||</code>/<code>&gt;&gt;&gt;&gt;</code>) are retired — fenced bytes cannot be cleanly diffed or merged again, which breaks multi-patch stacking. On conflict the wt file gets the weave's LIVE BYTES per RGA rules (both sides' insertions in deterministic weave order, no fences). Conflict state lives in wtlog rows + render, never in file bytes. Umbrella; implementation split: <a href="/todo/PATCH/PATCH-025.html">PATCH-025</a>, <a href="/todo/ULOG/ULOG-004.html">ULOG-004</a>, <a href="/todo/DIFF/DIFF-016.html">DIFF-016</a>, <a href="/todo/STATUS/STATUS-017.html">STATUS-017</a>, <a href="/todo/POST/POST-035.html">POST-035</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Today <code>weave.merge</code> output carries fences; <code>shared/conflict.js</code> hasConflictMarker scans them; <code>con</code> liveness = durable <code>con</code> row AND markers-on-disk (classify.js:423-427); resolution is detected by markers vanishing. All of that assumes fenced bytes.</li>
+<li>Fenced files poison every later weave/diff: a second <code>patch</code> run folds the fences as content; multi-patch is the driving case.</li>
+<li>Supersedes the marker-liveness half of <a href="/todo/STATUS/STATUS-005.html">STATUS-005</a> (its durable <code>con</code> rows stay).</li>
+</ul>
+<h3>Goals — the rulings</h3>
+<ol>
+<li>Wt bytes on conflict = RGA live reading of the merged weave. No fences, file always tokenizes, always re-weavable.</li>
+<li>EXPECTED tree = the straightforward weave reading of base + all in-scope patch-ins (theirs layers, no WT layer). Everything is weave-based; no separate diff3.</li>
+<li>Durable per-file <code>con &lt;path&gt;</code> wtlog rows stay (append-only). Cheap accessor: conflict paths = <code>con</code> rows scanned back to the last get/post barrier.</li>
+<li>Resolution (AMENDED, gritzko 2026-07-29): a registered conflict is resolved by (1) an explicit <code>put</code>/<code>delete</code> row LATER than its con row (row order decides), or (2) a forced <code>post!</code> — believed all-resolved, its row is the barrier; else (3) still pending, post refuses. No content-based detection. Amendment lands in POST-035's wt (<code>conflicts()</code> shadows con rows by later put/delete).</li>
+<li>Diff colors by weave token provenance: local edits (wt vs EXPECTED) green/red; patched-in tokens pale blue/orange — they are edits, the other kind of in/rm; overlap/conflict yellow. Patched-in tokens weigh as edits in the max(in,rm) row metric.</li>
+<li>Dirty stays wt != base. EXPECTED only splits dirt into kinds: wt==expected → patched-in dirt (posts as the merge commit); wt!=expected on a patched path → local edit on top; <code>ok</code> remains wt==base only.</li>
+<li><code>be patch</code> keeps returning non-zero on any conflict (PATCHCONFLICT) — unattended <code>patch &amp;&amp; post</code> chains must stop.</li>
+</ol>
+<h3>Constraints</h3>
+<ul>
+<li>Region/provenance info comes from the weave (per-token origin ids), not from stored rows — rows stay path-granular.</li>
+<li>Retirements once landed: hasConflictMarker scan in post pre-flight (goes row-based), the <code>cnf</code> mtime stamp slot, marker-based tests.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> PATCH-025 RGA live bytes out of the merge, no fences</li>
+<li class="open"><input type="checkbox" disabled> ULOG-004 conflicts accessor (paths since last get/post)</li>
+<li class="open"><input type="checkbox" disabled> DIFF-016 EXPECTED-based coloring + metric</li>
+<li class="open"><input type="checkbox" disabled> STATUS-017 classify kinds vs EXPECTED, row-based con liveness</li>
+<li class="open"><input type="checkbox" disabled> POST-035 row-based conflict gate, post resolves</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

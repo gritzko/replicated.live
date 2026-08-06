@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JGET-014</title>
+<title>JGET-014: same-line weave — jab escalates to cnf/GETCONF (rc=1) where native emits mrg (rc=0), and ours/theirs are SWAPPED</title>
+<meta property="og:title" content="JGET-014: same-line weave — jab escalates to cnf/GETCONF (rc=1) where native emits mrg (rc=0), and ours/theirs are SWAPPED">
+<meta property="og:description" content="A behind-worktree FF / cross-branch weave over a file with DISJOINT edits merges correctly under jab (verified PARITY). But a directly-COLLIDING single-line edit diverges twice from native: jab emits a fatal cnf + GETCONF (rc=1) where native emits a non-fatal mrg (rc=0) with the union markers, AND the conflict hunk has ours/theirs reversed (&lt;&lt;&lt;&lt;theirs||||mine&gt;&gt;&gt;&gt; vs native &lt;&lt;&lt;&lt;mine||||theirs&gt;&gt;&gt;&gt;). Part of JGET-001; method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JGET/JGET-014.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JGET-014 <a href="./LOW.html">LOW</a>: same-line weave — jab escalates to <code>cnf</code>/GETCONF (rc=1) where native emits <code>mrg</code> (rc=0), and ours/theirs are SWAPPED</h1>
+<h1>JGET-014: same-line weave — jab escalates to <code>cnf</code>/GETCONF (rc=1) where native emits <code>mrg</code> (rc=0), and ours/theirs are SWAPPED</h1>
+<div>
+<p>
+Now: OPEN Sev: LOW
+</p>
+</div>
 <p>
 A behind-worktree FF / cross-branch weave over a file with DISJOINT edits merges correctly under jab (verified PARITY). But a directly-COLLIDING single-line edit diverges twice from native: jab emits a fatal <code>cnf</code> + GETCONF (rc=1) where native emits a non-fatal <code>mrg</code> (rc=0) with the union markers, AND the conflict hunk has ours/theirs reversed (<code>&lt;&lt;&lt;&lt;theirs||||mine&gt;&gt;&gt;&gt;</code> vs native <code>&lt;&lt;&lt;&lt;mine||||theirs&gt;&gt;&gt;&gt;</code>). Part of <a href="JGET-001.html">JGET-001</a>; method <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -19,21 +28,12 @@ A behind-worktree FF / cross-branch weave over a file with DISJOINT edits merges
 <h3>Context</h3>
 <ul>
 <li>Native <code>beagle/test/get/66-staged-overlap-merge</code> (arm B requires <code>mrg</code>, rc=0).</li>
-<li>Repro: staged/unstamped overlap with a same-line collision; jab → <code>cnf</code>+GETCONF<p>
-rc=1, sides swapped; native → <code>mrg</code> rc=0. Disjoint-region edits: PARITY (verified). Evidence <code>/tmp/claude-1000/jabprobe</code> (case 66 pair).
-</p>
-</li>
-<li>Root: the 3-way weave (<code>get.js:748</code> / shared weave3) — conflict classification<p>
-(fatal vs non-fatal <code>mrg</code>) and the ours/theirs argument order.
-</p>
-</li>
+<li>Repro: staged/unstamped overlap with a same-line collision; jab → <code>cnf</code>+GETCONF rc=1, sides swapped; native → <code>mrg</code> rc=0. Disjoint-region edits: PARITY (verified). Evidence <code>/tmp/claude-1000/jabprobe</code> (case 66 pair).</li>
+<li>Root: the 3-way weave (<code>get.js:748</code> / shared weave3) — conflict classification (fatal vs non-fatal <code>mrg</code>) and the ours/theirs argument order.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>A same-line overlap weaves to <code>mrg</code> (rc=0) with the union, ours/theirs in native<p>
-order; only an unmergeable case escalates — matching native case-66 arm B.
-</p>
-</li>
+<li>A same-line overlap weaves to <code>mrg</code> (rc=0) with the union, ours/theirs in native order; only an unmergeable case escalates — matching native case-66 arm B.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
@@ -42,10 +42,7 @@ order; only an unmergeable case escalates — matching native case-66 arm B.
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Audit weave3's conflict path: confirm the mine/theirs argument order vs native,<p>
-and the <code>mrg</code> (emit union, rc=0) vs <code>cnf</code> (GETCONF, rc=1) decision boundary.
-</p>
-</li>
+<li>Audit weave3's conflict path: confirm the mine/theirs argument order vs native, and the <code>mrg</code> (emit union, rc=0) vs <code>cnf</code> (GETCONF, rc=1) decision boundary.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -55,15 +52,23 @@ and the <code>mrg</code> (emit union, rc=0) vs <code>cnf</code> (GETCONF, rc=1) 
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Overlaps <a href="../DIS/README.html">DIS-057</a> (be/ dirtiness/merge classifier vs Dirty.mkd) — coordinate the<p>
-<code>mrg</code>/<code>cnf</code> taxonomy there.
-</p>
-</li>
+<li>Overlaps <a href="../DIS/README.html">DIS-057</a> (be/ dirtiness/merge classifier vs Dirty.mkd) — coordinate the <code>mrg</code>/<code>cnf</code> taxonomy there.</li>
 <li>AUDIT 2026-07-07: half the ticket (escalation) is likely moot post-TEST-003; left open for the order half + the ruling.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>(open) Filed 2026-06-29.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

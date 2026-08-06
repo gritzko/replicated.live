@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-025</title>
+<title>JS-025: be &lt;name&gt; extension dispatch → bin/&lt;name&gt;.js</title>
+<meta property="og:title" content="JS-025: be &lt;name&gt; extension dispatch → bin/&lt;name&gt;.js">
+<meta property="og:description" content="Make be run repo-local extension scripts: an unknown leading bareword resolves to bin/&lt;name&gt;.js, forked through the jabc runtime with the tail as args. Last dispatch fallback (never shadows a verb/projector/file). The concept is Extensions; require() between scripts already works. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-025.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,98 +15,66 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-025 <a href="">MED</a>: <code>be &lt;name&gt;</code> extension dispatch → <code>bin/&lt;name&gt;.js</code></h1>
+<h1>JS-025: <code>be &lt;name&gt;</code> extension dispatch → <code>bin/&lt;name&gt;.js</code></h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 Make <code>be</code> run repo-local extension scripts: an unknown leading bareword resolves to <code>bin/&lt;name&gt;.js</code>, forked through the <code>jabc</code> runtime with the tail as <code>args</code>. Last dispatch fallback (never shadows a verb/projector/file). The concept is <a href="../../wiki/Extensions.html">Extensions</a>; <code>require()</code> between scripts already works. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><a href="../../wiki/Extensions.html">Extensions</a> is the escape hatch beside the closed <a href="../../wiki/Verbs.html">Verbs</a> basis; this<p>
-ticket wires the dispatch. <code>require.cpp</code> already ships a working sync CommonJS <code>require()</code>, so &quot;scripts that require each other&quot; needs no new code.
-</p>
-</li>
-<li>Today an unknown bareword (no scheme/host/query, not a file) falls into<p>
-<code>be_diagnose_unknown</code> (<code>beagle/BE.cli.c:4326</code>) → typo suggestion → <code>BENOCMD</code>.
-</p>
-</li>
-<li>Session decision: FORK <code>jabc</code> (like every other sub-dog via <code>BERun</code>), do NOT<p>
-link JSC into <code>be</code> — preserves JABC's anti-bloat ethos. <code>WITH_JS</code> is now ON by default (CMakeLists.txt), so <code>jabc</code> builds and is on hand to fork.
-</p>
-</li>
+<li><a href="../../wiki/Extensions.html">Extensions</a> is the escape hatch beside the closed <a href="../../wiki/Verbs.html">Verbs</a> basis; this ticket wires the dispatch. <code>require.cpp</code> already ships a working sync CommonJS <code>require()</code>, so &quot;scripts that require each other&quot; needs no new code.</li>
+<li>Today an unknown bareword (no scheme/host/query, not a file) falls into <code>be_diagnose_unknown</code> (<code>beagle/BE.cli.c:4326</code>) → typo suggestion → <code>BENOCMD</code>.</li>
+<li>Session decision: FORK <code>jabc</code> (like every other sub-dog via <code>BERun</code>), do NOT link JSC into <code>be</code> — preserves JABC's anti-bloat ethos. <code>WITH_JS</code> is now ON by default (CMakeLists.txt), so <code>jabc</code> builds and is on hand to fork.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>be &lt;name&gt; [args]</code> runs <code>bin/&lt;name&gt;.js</code> via <code>BERun(&quot;jabc&quot;, [&quot;bin/&lt;name&gt;.js&quot;, ...args])</code><p>
-when <code>name</code> is not a verb/projector and <code>bin/&lt;name&gt;.js</code> exists.
-</p>
-</li>
-<li>Insert the probe in <code>becli_inner</code> BEFORE <code>be_diagnose_unknown</code> fires: file →<p>
-extension → typo. The script's exit code is <code>be</code>'s exit code.
-</p>
-</li>
-<li>Missing <code>jabc</code> (built without JSC) → a clear &quot;extension unavailable&quot; line,<p>
-not a crash; <code>bin/</code> absent → fall through to the existing typo diagnostic.
-</p>
-</li>
+<li><code>be &lt;name&gt; [args]</code> runs <code>bin/&lt;name&gt;.js</code> via <code>BERun(&quot;jabc&quot;, [&quot;bin/&lt;name&gt;.js&quot;, ...args])</code> when <code>name</code> is not a verb/projector and <code>bin/&lt;name&gt;.js</code> exists.</li>
+<li>Insert the probe in <code>becli_inner</code> BEFORE <code>be_diagnose_unknown</code> fires: file → extension → typo. The script's exit code is <code>be</code>'s exit code.</li>
+<li>Missing <code>jabc</code> (built without JSC) → a clear &quot;extension unavailable&quot; line, not a crash; <code>bin/</code> absent → fall through to the existing typo diagnostic.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>No JSC in the <code>be</code> binary; reuse <code>BERun</code>. <code>bin/</code> is repo-root-relative<p>
-(resolve off the worktree root, not raw cwd) — a plain dir now, submodule later.
-</p>
-</li>
-<li>Extensions must NEVER shadow a built-in: probe only after the verb/projector<p>
-and on-disk-file branches have missed.
-</p>
-</li>
-<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE.md</a> §17): a ctest/shell test that <code>be &lt;name&gt;</code> runs a<p>
-<code>bin/&lt;name&gt;.js</code>, forwards <code>args</code>, propagates exit code, and that a real verb is unaffected. Add to the BE test surface.
-</p>
-</li>
+<li>No JSC in the <code>be</code> binary; reuse <code>BERun</code>. <code>bin/</code> is repo-root-relative (resolve off the worktree root, not raw cwd) — a plain dir now, submodule later.</li>
+<li>Extensions must NEVER shadow a built-in: probe only after the verb/projector and on-disk-file branches have missed.</li>
+<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE.md</a> §17): a ctest/shell test that <code>be &lt;name&gt;</code> runs a <code>bin/&lt;name&gt;.js</code>, forwards <code>args</code>, propagates exit code, and that a real verb is unaffected. Add to the BE test surface.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open) Resolve <code>bin/</code> against the worktree root via HOME (already opened at<p>
-the top of <code>becli_inner</code>), so <code>be ext</code> works from a subdir, not just repo root.
-</p>
-</li>
-<li>(open) Argv shape forwarded to <code>jabc</code>: <code>[&quot;bin/&lt;name&gt;.js&quot;, ...tail]</code> — <code>jabc</code><p>
-already exposes the tail as <code>args</code> / <code>process.argv</code> (JS-015), so the contract is free. Confirm flags before <code>&lt;name&gt;</code> vs after route correctly through CLIParse.
-</p>
-</li>
+<li>(open) Resolve <code>bin/</code> against the worktree root via HOME (already opened at the top of <code>becli_inner</code>), so <code>be ext</code> works from a subdir, not just repo root.</li>
+<li>(open) Argv shape forwarded to <code>jabc</code>: <code>[&quot;bin/&lt;name&gt;.js&quot;, ...tail]</code> — <code>jabc</code> already exposes the tail as <code>args</code> / <code>process.argv</code> (JS-015), so the contract is free. Confirm flags before <code>&lt;name&gt;</code> vs after route correctly through CLIParse.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
 <li class="open"><input type="checkbox" disabled> <code>be get --nosub</code> onto current trunk; debug build per <a href="../../beagle/CLAUDE.md">CLAUDE.md</a>.</li>
-<li class="open"><input type="checkbox" disabled> Repro-first: a test that <code>be hello a b</code> runs <code>bin/hello.js</code> seeing<p>
-  <code>args == [&quot;a&quot;,&quot;b&quot;]</code>, exits with the script's code, and that <code>be get</code> etc.   still dispatch natively. Red before the hook, green after.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Add the <code>bin/&lt;name&gt;.js</code> probe + <code>jabc</code> fork in <code>becli_inner</code> before<p>
-  <code>be_diagnose_unknown</code>; handle missing <code>jabc</code> / missing <code>bin/</code>.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: a test that <code>be hello a b</code> runs <code>bin/hello.js</code> seeing <code>args == [&quot;a&quot;,&quot;b&quot;]</code>, exits with the script's code, and that <code>be get</code> etc. still dispatch natively. Red before the hook, green after.</li>
+<li class="open"><input type="checkbox" disabled> Add the <code>bin/&lt;name&gt;.js</code> probe + <code>jabc</code> fork in <code>becli_inner</code> before <code>be_diagnose_unknown</code>; handle missing <code>jabc</code> / missing <code>bin/</code>.</li>
 <li class="open"><input type="checkbox" disabled> Update <a href="../../wiki/Extensions.html">Extensions</a>, <code>beagle/js/INDEX.md</code> (dispatch note), and the BE board.</li>
 </ul>
 <h3>Blockers</h3>
 <ul>
-<li>None. The repo/store SDK (open a <code>.be</code>, read by sha, classify the wt) is a<p>
-SEPARATE larger effort — extensions ship usable over <code>io.spawn</code>-of-<code>be</code> until it lands. Out of scope here.
-</p>
-</li>
+<li>None. The repo/store SDK (open a <code>.be</code>, read by sha, classify the wt) is a SEPARATE larger effort — extensions ship usable over <code>io.spawn</code>-of-<code>be</code> until it lands. Out of scope here.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li><strong>LANDED <code>371ad14b</code></strong> (2026-06-21): <code>be &lt;name&gt;</code> runs <code>&lt;HOME.wt&gt;/bin/&lt;name&gt;.js</code><p>
-via <code>be_run_extension</code> (<code>beagle/BE.cli.c</code>) — forks <code>jabc</code> through <code>BERun</code> (sibling-resolved by <code>HOMEResolveSibling</code>, no JSC linked into <code>be</code>), the verbatim tail forwarded as <code>args</code>, the script's exit becoming <code>be</code>'s. LAST dispatch fallback (verbs → projectors → file → <code>bin/&lt;name&gt;.js</code> → typo), so a built-in is never shadowed; original-bareword + tail snapshotted before the cwd-canonization pass so subdir invocation stays wt-rooted. <code>WITH_JS</code> ON by default + <code>jabc</code> built into <code>${DOG_BIN_DIR}</code> beside <code>be</code>. Missing <code>jabc</code> (no <code>WITH_JS</code>) degrades to &quot;extension unavailable&quot;. ctest <code>be-all-02-extension-dispatch</code>; suite 345/346 (the one fail, <code>be-post-relpath</code>, is pre-existing + unrelated).
-</p>
-</li>
-<li>Follow-ups filed: <a href="">JS-026</a> (richer extension exit codes — jabc has no<p>
-<code>process.exit</code>) and <a href="">GET-029</a> (<code>be get ?/proj</code> baseline breaks when the last wtlog row is a bare <code>post</code>, hit during worktree setup).
-</p>
-</li>
+<li><strong>LANDED <code>371ad14b</code></strong> (2026-06-21): <code>be &lt;name&gt;</code> runs <code>&lt;HOME.wt&gt;/bin/&lt;name&gt;.js</code> via <code>be_run_extension</code> (<code>beagle/BE.cli.c</code>) — forks <code>jabc</code> through <code>BERun</code> (sibling-resolved by <code>HOMEResolveSibling</code>, no JSC linked into <code>be</code>), the verbatim tail forwarded as <code>args</code>, the script's exit becoming <code>be</code>'s. LAST dispatch fallback (verbs → projectors → file → <code>bin/&lt;name&gt;.js</code> → typo), so a built-in is never shadowed; original-bareword + tail snapshotted before the cwd-canonization pass so subdir invocation stays wt-rooted. <code>WITH_JS</code> ON by default + <code>jabc</code> built into <code>${DOG_BIN_DIR}</code> beside <code>be</code>. Missing <code>jabc</code> (no <code>WITH_JS</code>) degrades to &quot;extension unavailable&quot;. ctest <code>be-all-02-extension-dispatch</code>; suite 345/346 (the one fail, <code>be-post-relpath</code>, is pre-existing + unrelated).</li>
+<li>Follow-ups filed: <a href="./JS-026.html">JS-026</a> (richer extension exit codes — jabc has no <code>process.exit</code>) and <a href="./GET-029.html">GET-029</a> (<code>be get ?/proj</code> baseline breaks when the last wtlog row is a bare <code>post</code>, hit during worktree setup).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

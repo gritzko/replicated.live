@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TODO-001 DONE: todo board IO — trust readdir, reuse known paths</title>
+<meta property="og:title" content="TODO-001 DONE: todo board IO — trust readdir, reuse known paths">
+<meta property="og:description" content="The board render does ~4.4k syscalls for one screen of one-liners: every key is re-probed through pageFile's 6-candidate stat ladder though listTopic just got the exact name from io.readdir, and work.js re-discovers the board + re-probes the same pages once per wt row. NARROWED (gritzko 2026-08-03): this ticket is path reuse ONLY — derive the page file from the name already in hand, memoize per run; read-size work (bounded head / single read) is out of scope.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/TODO/TODO-001.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>TODO-001 <a href="./DONE.html">DONE</a>: todo board IO — trust readdir, reuse known paths</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<p>
+The board render does ~4.4k syscalls for one screen of one-liners: every key is re-probed through <code>pageFile</code>'s 6-candidate stat ladder though <code>listTopic</code> just got the exact name from <code>io.readdir</code>, and work.js re-discovers the board + re-probes the same pages once per wt row. NARROWED (gritzko 2026-08-03): this ticket is path reuse ONLY — derive the page file from the name already in hand, memoize per run; read-size work (bounded head / single read) is out of scope.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Profiled <code>jab todo</code> 2026-07-24 (786 tickets on disk, warm cache): 4403 syscalls — 888 opens, 854 stat + 757 lstat, 1535 reads.
+</p>
+<ul>
+<li><code>views/todo/todo.js</code> listTopic: readdir yields <code>KEY.mkd</code> / <code>KEY/</code>, then <code>pageFile(dir, key)</code> re-probes up to 6 paths (3 exts thin + 3 fat) — ~800 avoidable stats per board.</li>
+<li><code>readBytes</code> reads min(st.size, 1 MiB) — the WHOLE file — but <code>pageTitle</code> uses bytes up to the first <code>\n</code> only.</li>
+<li><code>views/work/work.js</code> is a second payer: ticketTitle/ticketLink per wt row call <code>todo.boardDir()</code> (a stat) + pageFile probes + a full pageTitle read, 93 rows, zero memoization.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+No path is probed twice: a name readdir returned, or a file already found this run, is never re-discovered.
+</p>
+<ul>
+<li>listTopic derives the page file straight from the readdir entry (<code>KEY.&lt;ext&gt;</code> file, or <code>KEY/</code> dir → README probe only then); <code>pageFile</code> stays for direct <code>todo KEY</code> addressing.</li>
+<li>work.js memoizes boardDir + per-key title/link per render run (or todo.js exposes a memoizing lookup for consumers).</li>
+<li>strace acceptance: the <del>800 pageFile re-probe stats are gone from <code>jab todo</code>; <code>jab work</code>'s todo-side stats drop </del>3x.</li>
+<li>OUT OF SCOPE (narrowed): pageTitle read size — the full-read-serves-<a href="TODO-002.html">/todo/TODO/TODO-002</a> plan moves with that ticket.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Rendering stays byte-identical (existing todo/work tests are the harness); <code>todo KEY</code> direct addressing keeps working for closed tickets and fat layouts.</li>
+<li>No caching across runs in this ticket — the wt-level title index is a separate discussion (deliberately out of scope here).</li>
+<li>The 1 MiB CAP stays for emitPage (full page render still reads the file).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: syscall-count harness (strace or io-op counter) pinning the current cost, then the reduced cost.</li>
+<li><a href="./ .html"> </a> listTopic: filename from readdir, no pageFile re-probe.</li>
+<li><a href="./ .html"> </a> work.js per-run memo for boardDir/ticketTitle/ticketLink.</li>
+<li><a href="./x.html">x</a> bounded-head pageTitle — narrowed out 2026-08-03, read-size work follows <a href="TODO-002.html">/todo/TODO/TODO-002</a>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>A cross-run title cache (path → size/mtime/header line) would cut the remaining 757 opens to ~changed-only; parked pending discussion — do NOT build it under this ticket.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>landed <code>///be/#acc80350</code>: todo.js listTopic readdir-derived pages, work.js per-run memos, <code>test/todo/pathreuse</code> repro; board stats 876→13.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

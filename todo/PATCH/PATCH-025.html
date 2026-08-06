@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PATCH-025: conflict output is RGA live bytes, not fence markers</title>
+<meta property="og:title" content="PATCH-025: conflict output is RGA live bytes, not fence markers">
+<meta property="og:description" content="Per the /todo/DIS/DIS-080 ruling: on a weave conflict, patch (and get's weave leaf) writes the RGA live reading of the merged weave — both sides' insertions in weave order, no &lt;&lt;&lt;&lt;/||||/&gt;&gt;&gt;&gt; fences. The file stays tokenizable, diffable and re-weavable across multiple patch runs. Conflict signalling moves entirely to the durable con &lt;path&gt; row (already appended, patch.js:467-471) and the non-zero PATCHCONFLICT exit (stays, patch.js:482).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PATCH/PATCH-025.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PATCH-025: conflict output is RGA live bytes, not fence markers</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<p>
+Per the <a href="/todo/DIS/DIS-080.html">DIS-080</a> ruling: on a weave conflict, <code>patch</code> (and <code>get</code>'s weave leaf) writes the RGA live reading of the merged weave — both sides' insertions in weave order, no <code>&lt;&lt;&lt;&lt;</code>/<code>||||</code>/<code>&gt;&gt;&gt;&gt;</code> fences. The file stays tokenizable, diffable and re-weavable across multiple patch runs. Conflict signalling moves entirely to the durable <code>con &lt;path&gt;</code> row (already appended, patch.js:467-471) and the non-zero <code>PATCHCONFLICT</code> exit (stays, patch.js:482).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Today <code>wm.merged(...)</code> renders fences (patch.js:199-205, get.js weave leaf ~1061-1096); <code>conflict.hasConflictMarker</code> detects them post-hoc (patch.js:213).</li>
+<li>Fenced bytes break the multi-patch case: the next weave folds fences as content; that is the bug driving DIS-080.</li>
+<li>The weave already knows per-token origin; a conflict is an overlap the renderer can report without emitting fences.</li>
+</ul>
+<h3>Goals</h3>
+<ol>
+<li>Weave render gains a markerless mode: live RGA bytes out, conflict spans reported to the caller (paths → <code>con</code> rows; regions recomputed at render time, not stored).</li>
+<li><code>patch</code> and <code>get</code> both use it; <code>con</code> row append and mtime band unchanged; <code>PATCHCONFLICT</code> non-zero exit on any conflict unchanged; <code>get</code> keeps its non-fatal warn.</li>
+<li>Conflict detection no longer reads bytes — <code>hasConflictMarker</code> drops out of the merge path (post's gate goes row-based in <a href="/todo/POST/POST-035.html">POST-035</a>).</li>
+</ol>
+<h3>Constraints</h3>
+<ul>
+<li>RGA order must be deterministic across replicas (weave id = hi64 of sha; wt layer id fixed) — same inputs, same bytes.</li>
+<li>Marker-based tests (<code>test/patch/conflict</code>, <code>same-anchor-conflict</code>, <code>dirty-overlap</code>, <code>test/status/conflict</code>) need markerless goldens; <code>PATCH_EXPECT=conflict</code> keeps requiring non-zero exit.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>RGA ORDERING RULE: the merged reading is <code>WEAVEAlive</code> semantics over the union weave — every token whose RM bit is clear, in weave order, which is dog's symmetric RGA order (commit-id tie-break). Both sides' insertions at one anchor read out back to back, ours/theirs by hash order, never by caller side.</li>
+<li><code>weave.mergedLive(wm, groupIds) -&gt; { bytes, spans }</code> mirrors the C <code>WEAVEEmitMerged</code> run walk with the fences replaced by weave order: a run of non-shared tokens CONFLICTS iff two membership masks are disjoint; the byte-equality collapse (re-absorbed cherry/foster content) is kept, so NON-conflicting output is byte-identical to the old fenced render — only conflicted runs change.</li>
+<li>Membership is computed from <code>wm.commits[inserter]</code> against the per-side hashlet sets (index 0 = spine = shared), the JS twin of <code>WEAVEScope</code>+<code>weave_emit_membership</code> — deterministic across replicas, no clock/side input.</li>
+<li>Conflict signal = <code>spans.length &gt; 0</code>; <code>con</code> rows, the mtime band (pat/mrg/cnf) and the PATCHCONFLICT non-zero exit are untouched.</li>
+<li>get's POST-032 &quot;unresolved conflict, do not re-weave&quot; skip is GONE — markerless bytes are re-weavable, which is the point; get's carrySweep con band is now row-based (<code>conRecorded</code>), no marker scan.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> weave: markerless merged render + conflict span report</li>
+<li class="done"><input type="checkbox" checked disabled> patch.js/get.js: consume it; keep con rows, band, exits</li>
+<li class="done"><input type="checkbox" checked disabled> retire hasConflictMarker from the merge/emit path</li>
+<li class="done"><input type="checkbox" checked disabled> regold the conflict tests, add a two-patch-runs stack test</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><code>test/post/patch-absorb</code> FAILS (the ONLY red in <code>ctest</code>, 315/316): post's marker pre-scan (post.js:888) no longer sees a conflict, so a conflicted absorb commits instead of refusing. That gate is <a href="/todo/POST/POST-035.html">POST-035</a> (out of scope here) — patch-absorb goes green when the row-based gate lands.</li>
+<li>classify.js <code>wtHasMarker</code> (STATUS-005 con liveness) is now DEAD for our output; <code>con</code> still shows because the patch/get mtime band spells <code>cnf</code>/<code>con</code>. Row-based liveness is <a href="/todo/STATUS/STATUS-017.html">STATUS-017</a>.</li>
+<li>RESOLVED (gritzko approved 2026-07-29): the four extra marker-grep cases were regolded — see Outcome.</li>
+<li>2026-07-30, base moved to <code>///be/#5c0d5c21</code> (GET-056b matrix landed): trunk weave3 STORED its token-level <code>&lt;&lt;&lt;&lt;</code>/<code>||||</code>/<code>&gt;&gt;&gt;&gt;</code> render into <code>verbs/get/get.js</code> + <code>shared/weave.js</code> (con rows) — the exact DIS-080 violation this ticket removes; markers glue MID-LINE so get.js is not valid JS, and the wt's own jab now throws <code>SyntaxError: Unexpected token '&lt;&lt;'</code> loading the get verb (get is bricked IN this wt until the file is resolved by hand or from outside).</li>
+<li>Resolution must re-apply ours (mergedLive rewire) onto the moved weave3 in <code>shared/weave.js</code> — GET-056b relocated the function, so the get.js side of ours mostly dissolves into a small <code>wm.merged</code> → <code>mergedLive</code> swap at <a href="./be/shared/weave.js:183.html">weave.js:183</a>.</li>
+<li>Suspected FALSE conflict: the <code>shared/weave.js</code> exports region — both sides INSERTED different lines at the same anchor (trunk's weave3 export vs ours' mergedLive export); disjoint same-anchor adds should coexist, not conflict. get.js's regions are real (ours edits weave3 in place, theirs deletes it wholesale).</li>
+<li>Follow-ups filed: <a href="/todo/BRO/BRO-042.html">BRO-042</a> (bro can't open the unparseable file — TXTT ext-&quot;&quot; fallback), <a href="/todo/DIFF/DIFF-019.html">DIFF-019</a> (scoped diff of the 82KB file dies <code>hunk.render: out full</code>).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Not committed. Suggested commit message: <code>PATCH-025: markerless RGA conflict bytes</code></li>
+<li>Code staged in <code>//PATCH-025</code>: shared/weave.js (<code>mergedLive</code>), verbs/patch/patch.js, verbs/get/get.js.</li>
+<li>Goldens regolded (listed): test/patch/{conflict,dirty-overlap,same-anchor-conflict}, test/status/conflict; NEW test/patch/stacked-conflict (two stacked absorbs at one anchor — fences used to nest as <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;Y||||X&gt;&gt;&gt;&gt;|||||Z&gt;&gt;&gt;&gt;&gt;</code>, now folds to <code>YXZ</code>).</li>
+<li>Approved extra regolds: test/get/conf-state (fence assert → negative fence + both sides; the &quot;1 fence, no nesting&quot; count → re-get leaves the bytes byte-identical), test/get/confdrop, test/get/dirty (A2), test/post/conf-state — each <code>grep '&lt;&lt;&lt;&lt;' || fail</code> became <code>if grep '&lt;&lt;&lt;&lt;' then fail</code> + both-sides greps. Plus a stale-comment fix in test/get/detached-recover.</li>
+<li>All four verified RED against a temporarily re-fenced <code>weave3</code>, GREEN with <code>mergedLive</code>.</li>
+<li>RECOVERY 2026-07-29 23:05 after the <a href="/todo/GET/GET-057.html">GET-057</a> clobber (base advanced to <code>543269d6</code>): the five lost regolds (get/conf-state, get/confdrop, get/dirty, post/conf-state, status/conflict) were re-applied identically, re-verified red→green, and all 17 files (3 code + 14 test) re-staged. <code>ctest -j16</code> = 315/316 on the new base; <code>be-js-unit-wtlog_con</code> (trunk-provided) passes.</li>
+<li>GET-057 data point: <code>weave3</code>'s <code>theirs==base ⇒ keep ours</code> arm is byte-identical before and after PATCH-025, and the removed POST-032 skip only ever fired for con-row paths (none in this wt) — so the content clobber is not this ticket's edit.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

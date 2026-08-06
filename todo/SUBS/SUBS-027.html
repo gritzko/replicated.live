@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SUBS-027</title>
+<title>SUBS-027: submodule state model — four records (parent pin, sub synth-branch, parent wtlog, sub wtlog) and one dirtiness classifier</title>
+<meta property="og:title" content="SUBS-027: submodule state model — four records (parent pin, sub synth-branch, parent wtlog, sub wtlog) and one dirtiness classifier">
+<meta property="og:description" content="Submodule consistency today is recomputed ad-hoc per verb by re-parsing the parent tree + .gitmodules; this ticket pins it to FOUR cheap reflog/wtlog records and one shared classifier, so be status/head/get/post all judge &quot;dirty&quot; the same way. The model also fixes SUBS-026 (the ahead-of-pin case reads clean) by giving status a record to compare against. See Submodules, Store.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/SUBS/SUBS-027.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>SUBS-027: submodule state model — four records (parent pin, sub synth-branch, parent wtlog, sub wtlog) and one dirtiness classifier</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 Submodule consistency today is recomputed ad-hoc per verb by re-parsing the parent tree + <code>.gitmodules</code>; this ticket pins it to FOUR cheap reflog/wtlog records and one shared classifier, so <code>be status</code>/<code>head</code>/<code>get</code>/<code>post</code> all judge &quot;dirty&quot; the same way. The model also fixes <a href="SUBS-026.html">SUBS-026</a> (the ahead-of-pin case reads clean) by giving status a record to compare against. See <a href="../../wiki/Submodules.html">Submodules</a>, <a href="../../wiki/Store.html">Store</a>.
 </p>
@@ -22,7 +31,7 @@ Four records describe a mounted sub's state; each lives in a known file, no tree
 </p>
 <ul>
 <li><strong>R1 parent pin</strong> — in the parent shard <code>refs</code> (<code>.be/&lt;parent&gt;/refs</code>): <code>&lt;sub/path&gt;?&lt;parent/branch&gt;#&lt;full_hash&gt;</code>. A denormalized mirror of <code>.gitmodules</code> path + the <code>160000</code> gitlink, so verbs avoid re-parsing the tree/.gitmodules.</li>
-<li><strong>R2 sub synth-branch</strong> — in the sub shard <code>refs</code> (<code>.be/&lt;sub&gt;/refs</code>): <code>?.&lt;parent&gt;/&lt;branch&gt;#&lt;full_hash&gt;</code>. The keep-alive dot-branch tip on the sub's side (the parent-driven <a href="">POST</a> anchor; <code>?/&lt;sub&gt;/.&lt;parent&gt;</code> seen from the parent).</li>
+<li><strong>R2 sub synth-branch</strong> — in the sub shard <code>refs</code> (<code>.be/&lt;sub&gt;/refs</code>): <code>?.&lt;parent&gt;/&lt;branch&gt;#&lt;full_hash&gt;</code>. The keep-alive dot-branch tip on the sub's side (the parent-driven <a href="./POST.html">POST</a> anchor; <code>?/&lt;sub&gt;/.&lt;parent&gt;</code> seen from the parent).</li>
 <li><strong>R3 parent wtlog</strong> — <code>.be/wtlog</code>: the last get/post row, <code>?&lt;parent/branch&gt;#&lt;base&gt;</code> — the parent wt's branch + base hash.</li>
 <li><strong>R4 sub wtlog</strong> — the mount anchor <code>&lt;wt&gt;/&lt;path&gt;/.be</code>: the last get/post row, <code>?&lt;branch&gt;#&lt;base&gt;</code> — the sub wt's branch + the actually-checked-out sub commit.</li>
 <li>Live example (<code>beagle</code> in <code>beagle-journal</code>): R1=<code>5a95cd15</code>, R4.base=<code>3b41fa69</code> (advanced), R2 ABSENT (no <code>?.beagle-journal</code> dot-branch), R3.branch=<code>trunk</code>, and R4 was recorded as an unbound <code>?#hash</code> want — so status read clean (<a href="SUBS-026.html">SUBS-026</a>).</li>
@@ -63,7 +72,7 @@ Coherent ⟺ all agree: <code>R1.hash == R2.hash == R4.base</code>, the sub file
 <ul>
 <li><strong>synth-lag / synth-missing</strong> — R2.hash ≠ R1.hash, or R2 absent → pinned commit unanchored in the sub shard (GC-orphan; your beagle case).</li>
 <li><strong>coord-mismatch</strong> — R2.&lt;parent/branch&gt; ≠ R3.branch → sub anchored under the wrong parent branch.</li>
-<li><strong>unbound</strong> — R4 is a <code>?#hash</code> want with no title → decoupled, status shows a blank pin (get-records-blank-want, <a href="">SUBS-028</a>).</li>
+<li><strong>unbound</strong> — R4 is a <code>?#hash</code> want with no title → decoupled, status shows a blank pin (get-records-blank-want, <a href="./SUBS-028.html">SUBS-028</a>).</li>
 </ul>
 <p>
 Recursive verb semantics — the recursion is RETURN-CODE driven; the parent inspects each sub and decides:
@@ -95,5 +104,16 @@ So a healthy post drives R4→R2→R1 bottom-up; a healthy get drives R1→R4 to
 <li>Four-record / three-axis model documented in <a href="../../wiki/Submodules.html">Submodules</a> (&quot;Submodule state: four records&quot; + &quot;Three orthogonal axes&quot;).</li>
 <li>Deferred to <a href="SUBS-027b.html">SUBS-027b</a>: write R1/R2 records, the Edited + coord-mismatch axes, the get/post recursion contract, the <code>be head</code> pin axis, and the get/post test gaps.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

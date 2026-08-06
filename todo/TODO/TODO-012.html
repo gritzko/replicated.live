@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TODO-012: the rev tree bumps on junk events — an editor swap file rebuilds the whole board</title>
+<meta property="og:title" content="TODO-012: the rev tree bumps on junk events — an editor swap file rebuilds the whole board">
+<meta property="og:description" content="The /todo/BRO/BRO-043 ruling stands as written — bucket plus ancestors, revs only under a live watcher, arming lazy on the query. What is over-eager is what counts as an event. shared/cache.js parses each fsw record and then THROWS THE NAME AWAY (cache.js:126-127, &quot;for revs the dir is all we need&quot;): every write in an armed dir bumps that dir and all its ancestors, whether the name is a ticket, a .o, a .swp or a rename artifact. The ignore rules are applied to the arming WALK's directories (cache.js:161-163) and to nothing else, so the very names the project's own .gitignore files under # editor junk are the ones that drop the caches. Measured on a real board in a resident process (probes in the TODO-012 worktree, test/todo/junkev/): opening a ticket in vim and quitting WITHOUT saving costs TWO full board-rowset rebuilds; a gitignored .o under a worktree costs that worktree a full classifyMerge and repaints byte-identical rows.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/TODO/TODO-012.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>TODO-012: the rev tree bumps on junk events — an editor swap file rebuilds the whole board</h1>
+<div>
+<p>
+Now: OPEN Sev: MED Ask: gritzko Rep: ///be/
+</p>
+</div>
+<p>
+The <a href="/todo/BRO/BRO-043.html">BRO-043</a> ruling stands as written — bucket plus ancestors, revs only under a live watcher, arming lazy on the query.  What is over-eager is what counts as an event.  <code>shared/cache.js</code> parses each fsw record and then THROWS THE NAME AWAY (<code>cache.js:126-127</code>, &quot;for revs the dir is all we need&quot;): every write in an armed dir bumps that dir and all its ancestors, whether the name is a ticket, a <code>*.o</code>, a <code>.swp</code> or a rename artifact.  The ignore rules are applied to the arming WALK's directories (<code>cache.js:161-163</code>) and to nothing else, so the very names the project's own <code>.gitignore</code> files under <code># editor junk</code> are the ones that drop the caches.  Measured on a real board in a resident process (probes in the TODO-012 worktree, <code>test/todo/junkev/</code>): opening a ticket in vim and quitting WITHOUT saving costs TWO full board-rowset rebuilds; a gitignored <code>*.o</code> under a worktree costs that worktree a full <code>classifyMerge</code> and repaints byte-identical rows.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+THE CHAIN, end to end (files and lines from <code>///be</code> at <code>#9acaa555</code>):
+</p>
+<ol>
+<li><code>views/bro/pager.js:1460</code> — the resident pager calls <code>CACHE.start(io.cwd())</code>: ONE <code>fsw.init()</code> fd for the whole tree (<code>shared/cache.js:67-77</code>).  A one-shot CLI never reaches it, so revs exist in the pager only (ruling 3).</li>
+<li>A view asks <code>CACHE.rev(dir)</code> (<code>shared/cache.js:186</code>).  The board asks for the board dir (<code>views/todo/todo.js:1135</code>), each topic dir (<code>todo.js:534</code>), each wt dir (<code>todo.js:697</code>) and each mounted sub (<code>todo.js:645</code>); <code>views/status/status.js:281</code> asks for the repo's wt.</li>
+<li><code>rev</code> drains first (<code>cache.js:188</code> → <code>poll()</code>, <code>cache.js:113-132</code>): <code>fsw.drain</code> into a 64 KB Buf, <code>fsw.records</code> parses <code>{wd, name}</code>, the wd maps back to its dir (<code>cache.js:128</code>).  *<strong>The record's <code>name</code> is discarded</strong>* — this is where the over-eagerness enters.</li>
+<li><code>bump(dir)</code> (<code>cache.js:90-99</code>) increments the ONE shared counter and stamps that dir plus EVERY ancestor spot up to <code>/</code>.</li>
+<li><code>arm(path)</code> (<code>cache.js:154-172</code>) re-arms: a spot that moved since its last walk re-runs <code>classify.wtWalk</code> over the WHOLE subtree and <code>fsw.dir</code>s every non-ignored dir (<code>.be/</code> re-admitted, <code>cache.js:163</code>).  The ignore matcher is loaded there (<code>cache.js:158</code>) and used for DIRS only — <code>cache.js:161</code> skips every name that does not end in <code>/</code>.</li>
+<li>The consumer compares the rev against its own memo and recomputes on any mismatch: board rowset (<code>todo.js:1131-1141</code>), topic heads (<code>todo.js:533-538</code>), wt file counts (<code>todo.js:696-699</code>), sub folds (<code>todo.js:643-651</code>), status rows (<code>status.js:281</code>).</li>
+<li>OVERFLOW, a drain throw, or the pager's <code>R</code>/<code>r</code> (<code>pager.js:606</code>) → <code>bumpRoot()</code> (<code>cache.js:102-107</code>) stamps EVERY spot.</li>
+</ol>
+<p>
+CONFIRMED — measured, not read.  The harness is <code>test/todo/junkev/</code> in the TODO-012 worktree (unstaged probes, adapted from <code>test/todo/rowcache/</code>): one resident process running the REAL verbs through <code>core/loop.js</code>, counters = the <code>JAB_STATS</code> object reads, every <code>io.open</code>/<code>io.readdir</code> under the ticket tree (<code>touch</code>), which worktrees paid <code>classifyMerge</code> (<code>folds</code>), <code>cache.stats().drops</code>, and the rendered hunk bytes.  The quiet-board floor is <code>work=0 touch=0 folds=0</code>, 1-2 ms.
+</p>
+<ol>
+<li>*<strong>A gitignored file re-classifies its worktree.</strong>*  <code>.gitignore</code> says <code>*.o</code>; <code>echo x &gt; work/TIC-001/src/main.o</code> → 3 rev bumps, <code>folds=[TIC-001]</code>, 3 object reads, board bytes SAME.  Verified through the REAL UI as well (<code>test/todo/junkev/ptyprobe.py</code>, a live <code>jab todo</code> pager driven by keystrokes): obj delta 3 against a quiet floor of 0, painted rows identical.</li>
+<li>*<strong>An editor swap file rebuilds the board rowset — twice, for a file that never changed.</strong>*  vim writes <code>.KEY.mkd.swp</code> when it OPENS a ticket, before any edit.  Create <code>todo/TIC/.TIC-001.mkd.swp</code> → 3 bumps, <code>touch=13</code> (a hit does 0): <code>listTopics</code> + <code>listTopic(TIC)</code> + the metaidx sweep all re-run, rows IDENTICAL.  Delete it on <code>:q</code> → 1 bump, <code>touch=13</code> again.  <code>*.swp</code> sits in the journal's own <code>.gitignore</code> under the comment <code># editor junk</code>.</li>
+<li>*<strong>Any non-ticket file in a topic dir does the same.</strong>*  <code>todo/TIC/notes.txt</code> → 3 bumps, <code>touch=13</code>, rows identical.  The board only ever reads <code>KEY.&lt;ext&gt;</code> / <code>KEY/README.&lt;ext&gt;</code> (<code>todo.js:495-510</code>); every other name in a topic dir is invisible to it and still drops it.</li>
+<li>*<strong>An ignored DIR leaks its creation.</strong>*  <code>mkdir work/TIC-001/build</code> (<code>build/</code> ignored) → 1 bump + a re-classify, rows identical.  Writes INSIDE <code>build/</code> are correctly silent — an ignored dir is never armed — so only the <code>mkdir</code> gets through.</li>
+<li>*<strong>No coalescing.</strong>*  400 <code>*.o</code> creates = 1200 bumps; deleting them = 400 more.  A render landing anywhere in the middle pays the wt's full classify.</li>
+<li>*<strong>One build poisons more than one render.</strong>*  20 000 creates in <code>work/TIC-002/burst/</code> → OVERFLOW → <code>bumpRoot()</code> → all 10 spots dropped: all three worktrees re-classified AND the ticket tree re-read (<code>touch=17</code>), 305 ms against a 1-2 ms hit.  The tail keeps arriving: the NEXT render still re-read the ticket tree 17 times, because <code>poll()</code>'s 1024-round guard (<code>cache.js:115</code>) returns with events still queued.  Two consecutive renders paid for one build in a 3-worktree fixture.</li>
+<li>*<strong>The ancestor rule crosses a boundary the parent deliberately ignores.</strong>*  One process rendering BOTH the board (which arms every <code>work/*</code> worktree as a spot) and the project root's <code>status</code> (whose <code>.gitignore</code> carries <code>/work/</code> — the journal's own BE-031 rule, so the root reads nothing under it): a write at <code>work/TIC-001/deep/nope.txt</code> bumps the wt dir and every ancestor including the project root, and the root's status re-classifies (<code>work=18 folds=1</code>) to paint IDENTICAL bytes.  Same for the ignored <code>*.o</code>.  Without the board's arming there is no event at all (the root's own walk skips <code>/work/</code>), so it is the two views SHARING one rev tree that makes the root pay.</li>
+<li>*<strong>One atomic save = 5 bumps, and 2 rebuilds if a render lands mid-dance.</strong>*  Write <code>BUG-001.mkd.tmp</code> (3 events) then rename over <code>BUG-001.mkd</code> (2 events).  Coalesced into one miss if no render intervenes; a live pager repaints on any keystroke, and a render between the write and the rename costs TWO full rowset rebuilds (<code>touch=12</code> each) for ONE logical edit.</li>
+</ol>
+<p>
+MEASURED NEGATIVES — suspicions ruled out, so nobody re-chases them:
+</p>
+<ul>
+<li>*<strong>No self-inflicted loop.</strong>*  A quiet board render opens ZERO files for write.  <code>jab status</code> / <code>jab diff</code>, run repeatedly, leave <code>&lt;wt&gt;/.be</code> and <code>&lt;wt&gt;/..be.idx</code> byte- and mtime-identical.  The store lives at <code>~/.be/&lt;project&gt;/</code>, OUTSIDE the watched tree, so metaidx and keeper writes fire no events at all.</li>
+<li>*<strong>The fsw mask carries no ACCESS/OPEN.</strong>*  Probed directly on a bare <code>fsw</code> watcher: <code>io.read</code> of a watched file, <code>io.lstat</code> and <code>io.readdir</code> each produce 0 events (creates give 2, a write 2, a rename 2, <code>mkdir</code> 1, <code>io.setMtime</code> 0).  A view cannot invalidate itself by reading.</li>
+<li>*<strong>The per-block witnesses hold.</strong>*  A junk event under one worktree drops that worktree's blocks only — <code>touch=0</code>, other rows byte-identical — and one ticket edit in <code>todo/BUG</code> re-lists BUG only, never TIC (traced: <code>wtWalk←arm←rev←openTickets</code> and <code>listTopic←openTickets</code> on BUG alone).  The <a href="/todo/TODO/TODO-006.html">TODO-006</a> r3 split is doing its job; the leak is upstream of it.</li>
+</ul>
+<p>
+WHAT IT COSTS ON THE REAL TREE (<code>/home/gritzko/src/journal</code>, 901 tickets, 58 topic dirs):
+</p>
+<ul>
+<li>The arming re-walk of <code>todo/</code> — paid on EVERY miss of that spot, i.e. once per junk event — is 109 ms warm, 3.2 s cold, 976 names.</li>
+<li>The metaidx sweep's stat shape over 901 ticket files is 512 ms.</li>
+<li>Against a quiet-board hit of 1-2 ms.  One swap file appearing is therefore ~100x-500x the cost of the render it invalidated, and it buys nothing.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+An event that cannot change what a view read must not drop what that view cached.  Nothing about the <a href="/todo/BRO/BRO-043.html">BRO-043</a> ruling changes: bucket plus ancestors, live-watcher-only, lazy arming, <code>R</code> drops all.
+</p>
+<ul>
+<li><code>poll()</code> reads the record's <code>name</code> and asks the ignore rules whether that path could matter before bumping.  The matcher is already loaded per armed spot in <code>arm()</code> (<code>cache.js:158</code>); today it is thrown away after the walk.</li>
+<li>The filter is a PURE OPTIMIZATION: on kqueue <code>name</code> is <code>&quot;&quot;</code> (rescan), and that must bump exactly as it does today.  With the filter disabled every view behaves byte for byte as it does now — the BRO-043 constraint, unchanged.</li>
+<li><code>.be</code> stays re-admitted (its wtlog rows are a status input) but <code>..be.idx</code> and <code>*.keeper.idx</code> are not: they are gitignored sidecars no view reads.</li>
+<li>One drain round bumps a dir at most ONCE.  Only the final rev is ever compared, so this is free semantically and makes the drops counter honest (400 files = 400 bumps today, 1200 recorded).</li>
+<li>A burst poisons ONE render, not N: after an OVERFLOW the queue is drained to empty before the query is answered, instead of leaving the tail behind the 1024-round guard.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Pure performance, again: with the name filter off, every view renders identically.  The rowcache and status/cache tests are the byte-parity nets.</li>
+<li><code>fsw.unwatch</code> cannot remove a kernel watch (ABC-013), so the fix can never be &quot;stop watching the junk dir&quot; — it has to be a decision taken at drain time.</li>
+<li><code>name</code> is a BARE basename; the ignore matcher wants a path relative to the ignore root.  Reconstruct it from the wd's dir, which <code>S.dirOf</code> already holds (<code>cache.js:128</code>) — do NOT re-derive roots by hand.</li>
+<li>Reuse <code>shared/util/ignore.js</code> <code>load</code>/<code>match</code> (the same instance <code>arm</code> builds) — no second matcher, no hand-rolled name rules (<a href="./reuse-libdog.html">reuse-libdog</a>).</li>
+<li>The rev tree stores no view values and learns no view semantics beyond &quot;is this path ignored&quot; without gritzko's word: see the Blockers on the ticket-name question.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<p>
+ -<a href="./ .html"> </a> keep the per-spot ignore matcher <code>arm()</code> builds (<code>cache.js:158</code>) instead of dropping it, keyed by the armed root -<a href="./ .html"> </a> <code>poll()</code>: rebuild <code>dir + &quot;/&quot; + name</code> from <code>S.dirOf[r.wd]</code>, ask the nearest armed root's matcher, skip the bump when it matches; <code>name === &quot;&quot;</code> always bumps -<a href="./ .html"> </a> exclude <code>..be.idx</code> / <code>*.keeper.idx</code> from the <code>.be</code> re-admission while keeping <code>.be</code> itself live -<a href="./ .html"> </a> coalesce one drain round to at most one bump per dir -<a href="./ .html"> </a> drain to empty after an OVERFLOW so one build costs one render, not two-plus -<a href="./ .html"> </a> tests: a gitignored file under a wt must not re-classify it; a <code>.swp</code> create AND delete in a topic dir must not rebuild the board rowset; a 20 k burst must poison exactly one render; with the filter off, byte parity everywhere -<a href="./ .html"> </a> measure again on the real board: junk events per hour of a normal session, and the hit rate before/after
+</p>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>A scratch file in a topic dir that is NOT gitignored (<code>todo/TIC/notes.txt</code>) is invisible to the BOARD but is a real untracked file for <code>status</code> — so the right filter differs per SPOT: ignore rules for a worktree spot, &quot;is this a ticket file&quot; for a board spot.  Teaching the rev tree a per-spot name predicate is a design step beyond the ignore filter and needs gritzko's call; the ignore filter alone already covers <code>.swp</code>, <code>*.o</code>, <code>*.log</code>, <code>*.lock</code>, <code>*~</code> and every <code>build*/</code> artifact.</li>
+<li>kqueue reports no name, so macOS keeps today's behaviour exactly — the win is Linux-only, and the tests must not assume the filter fires.</li>
+<li>The <code>1024</code>-round guard and the 64 KB drain Buf (<code>cache.js:74</code>, <code>cache.js:115</code>) are the mechanism behind the multi-render poisoning; raising either without a bound is how the burst path grows unbounded latency instead.</li>
+<li>The probes live in the TODO-012 worktree at <code>test/todo/junkev/</code> (<code>fixture.sh</code> + <code>probe.js</code>, <code>probe2.js</code>, <code>probe3.js</code>, <code>probe4.js</code>, <code>probe5.js</code>, <code>ptyprobe.py</code>), UNSTAGED and never posted — they are evidence, not a fix, and <code>PROBE=&lt;file&gt; sh fixture.sh</code> reruns any of them.</li>
+<li>A <code>jab todo --tlv</code> on the real journal tree took 12 m wall for 7 s of user time while other jab processes were running — store-lock contention, not board cost; do not read that number as a board profile.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

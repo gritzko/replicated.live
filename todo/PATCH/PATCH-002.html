@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PATCH-002</title>
+<title>PATCH-002: be patch does not weave an incoming change into a worktree-dirty file (silently skips it as noop)</title>
+<meta property="og:title" content="PATCH-002: be patch does not weave an incoming change into a worktree-dirty file (silently skips it as noop)">
+<meta property="og:description" content="be patch MUST weave incoming-branch changes into a dirty worktree (fine-grained, no false conflicts — that is the whole point of the verb). It does not: when a file is BOTH locally-modified AND changed on the incoming branch, be patch leaves the local version untouched and the incoming change is silently dropped (counted in noop, not merged). A following be post then reverts the incoming side — silent data loss. This blocks landing any ticket that touches a file another ticket already landed. See Verbs, Sniff.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PATCH/PATCH-002.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>PATCH-002: be patch does not weave an incoming change into a worktree-dirty file (silently skips it as noop)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>be patch</code> MUST weave incoming-branch changes into a <strong>dirty</strong> worktree (fine-grained, no false conflicts — that is the whole point of the verb). It does not: when a file is BOTH locally-modified AND changed on the incoming branch, <code>be patch</code> leaves the local version untouched and the incoming change is silently dropped (counted in <code>noop</code>, not <code>merged</code>). A following <code>be post</code> then reverts the incoming side — silent data loss. This blocks landing any ticket that touches a file another ticket already landed. See <a href="../wiki/Verbs.html">Verbs</a>, <a href="../wiki/Sniff.html">Sniff</a>.
 </p>
@@ -21,10 +30,7 @@ Reproduced live while landing MEM-024 onto <code>main</code> (which already had 
 </p>
 <ul>
 <li>Setup: worktree <code>~/todo/MEM-024</code> detached at base <code>838e592b</code>, with <strong>dirty</strong> rework edits to <code>keeper/WIRECLI.c</code> (function <code>wpush_walk_*</code>) and <code>keeper/test/WIRE_CLIENT.c</code> (new test <code>WIRECLIENTtest_deep_chain_walk</code>). <code>main</code> = <code>78fa65f5</code> had <strong>already landed MEM-025</strong>, which modified the SAME two files in <strong>disjoint</strong> regions (<code>wcli_match_advert</code> <code>first_name</code> snapshot; new test <code>WIRECLIENTtest_huge_advert_firstref</code>).</li>
-<li>Ran <code>be patch '?main'</code> in the dirty worktree. Output:<p>
-<code>sniff: patch: noop=143 take-theirs=5 merged=0 added=0 deleted=0 content-conflict=0 mod-del-kept=0 failed=0</code> It applied main's changes to 5 <strong>clean</strong> files (<code>take-theirs=5</code>: e.g. <code>sniff/SUBS.c</code>, <code>test/log/01-…/run.sh</code>) but did <strong>nothing</strong> for the two files that were dirty-AND-changed-upstream: <code>merged=0</code>, <code>content-conflict=0</code>. Afterwards those files are <strong>MEM-024-only</strong> — MEM-025's <code>first_name_buf</code>/<code>WIRECLIENTtest_huge_advert_firstref</code> are absent (verified by <code>rg</code>).
-</p>
-</li>
+<li>Ran <code>be patch '?main'</code> in the dirty worktree. Output: <code>sniff: patch: noop=143 take-theirs=5 merged=0 added=0 deleted=0 content-conflict=0 mod-del-kept=0 failed=0</code> It applied main's changes to 5 <strong>clean</strong> files (<code>take-theirs=5</code>: e.g. <code>sniff/SUBS.c</code>, <code>test/log/01-…/run.sh</code>) but did <strong>nothing</strong> for the two files that were dirty-AND-changed-upstream: <code>merged=0</code>, <code>content-conflict=0</code>. Afterwards those files are <strong>MEM-024-only</strong> — MEM-025's <code>first_name_buf</code>/<code>WIRECLIENTtest_huge_advert_firstref</code> are absent (verified by <code>rg</code>).</li>
 <li>So the two dirty+upstream-changed files fell into the <strong><code>noop=143</code></strong> bucket: <code>be patch</code> evidently classifies a worktree-dirty path as <strong>noop / skip</strong> instead of routing it to the 3-way weave. Disjoint regions should weave clean (<code>merged++</code>); a genuinely overlapping region should report <code>content-conflict</code> — never silent-skip.</li>
 <li>Corroboration: <code>be post --nosub</code> on the same worktree (cascade onto <code>main</code>) DID detect a conflict (<code>GRAFCNFL</code>, &quot;cascade aborted (merge conflict in descendant)&quot;) — so the conflict machinery sees the overlap; only the <code>be patch</code>-into-dirty path silently skips it.</li>
 </ul>
@@ -47,5 +53,16 @@ The parallel fix-and-land loop (<a href="../../rule/Issues.html">Issues</a>) dep
 <ul>
 <li>Landed <code>2583217c</code> (beagle, 2026-06-12): &quot;weave wt-dirty file incoming branch changed&quot; — a wt-dirty path whose incoming side changed enters the 3-way weave (merged on disjoint, content-conflict on overlap), no silent noop-skip.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

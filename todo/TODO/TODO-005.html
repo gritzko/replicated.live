@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TODO-005 DONE: :todo rows grow wt links, sev bullets, fade, counts, families</title>
+<meta property="og:title" content="TODO-005 DONE: :todo rows grow wt links, sev bullets, fade, counts, families">
+<meta property="og:description" content="The :todo row is bare KEY title done while a :work row carries nav, buttons and stats. Ruling (gritzko 2026-08-03): one ticket = one worktree — multi-tree work becomes a ticket FAMILY with explicit On1:/On2: deps — so a board row can check for its wt (listWork + the suffix-tolerant ticketKey, the exact reverse of work's ?) and surface links and stats. This ticket grows the row; the arg grammar and meta filters stay /todo/TODO/TODO-004's.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/TODO/TODO-005.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>TODO-005 <a href="./DONE.html">DONE</a>: <code>:todo</code> rows grow wt links, sev bullets, fade, counts, families</h1>
+<div>
+<p>
+Now: DONE Sev: MED On1: TODO-001 On2: BRO-044 See: TODO-002 See: TODO-004
+</p>
+</div>
+<p>
+The <code>:todo</code> row is bare <code>KEY title [done]</code> while a <code>:work</code> row carries nav, buttons and stats. Ruling (gritzko 2026-08-03): one ticket = one worktree — multi-tree work becomes a ticket FAMILY with explicit <code>On1:</code>/<code>On2:</code> deps — so a board row can check for its wt (<code>listWork</code> + the suffix-tolerant <code>ticketKey</code>, the exact reverse of work's <code>[?]</code>) and surface links and stats. This ticket grows the row; the arg grammar and meta filters stay <a href="TODO-004.html">/todo/TODO/TODO-004</a>'s.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>views/work/work.js</code> already maps wt name → ticket (<code>ticketKey</code>, WORK-010) and owns the stats machinery: graf ahbeh (WORK-011), <code>fadeHex</code> age fade (WORK-005), fixed button slots (R2).</li>
+<li><code>views/todo/todo.js</code> reads one line per ticket (header) and renders <code>KEY &lt;elastic title&gt; [done]</code>; sort still rides the dying header <code>[MARK]</code> — <code>Now:</code>/<code>Sev:</code> pairs are the truth now (<a href="TODO-004.html">/todo/TODO/TODO-004</a> context).</li>
+<li><a href="../BRO/BRO-044.html">/todo/BRO/BRO-044</a> <code>mtime.idx</code> caches per-blob commit times — the fade must read THAT, not fs mtime (a fresh clone restamps every file, TODO-004 measured all 837 tickets tie).</li>
+<li><a href="TODO-001.html">/todo/TODO/TODO-001</a> owns the board IO budget: one read per ticket, per-run memos; every addition here rides that one read.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Board and <code>todo TOPIC</code> rows grow, in order: sev bullet, key, wt link, counts, fade; family children nest under their parent. Composes with the <a href="TODO-002.html">/todo/TODO/TODO-002</a> badge and the BE-040 <code>[done]</code> button, forks neither.
+</p>
+<ul>
+<li>Sev bullet FIRST in the row: one colored <code>●</code> off <code>Sev:</code> (CRIT red, HIGH orange, MED plain, LOW dim); open/closed state in the same glyph (closed tickets, when a TODO-004 filter shows them, render hollow <code>○</code>).</li>
+<li>Wt link: a matching <code>work/&lt;KEY&gt;*</code> wt puts a visible <code>[»]</code> slot after the key, minting <code>status //KEY</code> — the symmetric twin of work's <code>[?]</code>; no wt → the slot ┄-fills (fixed columns, the work R2 discipline).</li>
+<li>Ahbeh + dirty counts off the wt: <code>[+N][-N]</code> via work's registry/graf cache, plus changed/new/deleted file counts (<code>~N +N -N</code>) off the wt status; zero sides show nothing, two-digit clamp — the work <code>ahbehSpans</code> conventions.</li>
+<li>Age fade: the row's fade rides the ticket's last-touch time from <a href="../BRO/BRO-044.html">/todo/BRO/BRO-044</a> <code>mtime.idx</code>; pager-only leading <code>#rrggbb</code> O token, <code>fadeHex</code> reused as-is.</li>
+<li>Family nesting: a ticket whose <code>Sub:</code> names a listed OPEN parent indents under it, dotted rails (<code>├┄┄</code>, work's tracker-run look); a parent-less or closed-parent <code>Sub:</code> renders flat.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>Sev:</code>/<code>Now:</code>/<code>Sub:</code> come off the ONE TODO-001 read (a <code>pageMeta</code> head-scan of <code>Key: value</code> lines) or the TODO-003 index — never a second open per ticket.</li>
+<li>Counts cost keepers: open per shard ONCE (work's <code>registry()</code>), and only for tickets that HAVE a wt; the no-wt board must stay index-fast.</li>
+<li>Dirty counts come from the status machinery, no parallel differ (<a href="../../meta/abc.html">reuse-libdog</a>); if a wt is unreadable the slot ┄-fills, no error row.</li>
+<li>Plain mode stays chrome-free: bullets, links, buttons and fade are pager-only; the sev ORDER still applies to both.</li>
+<li>Existing todo goldens keep passing modulo the added spans; the repro test pins the row layout, the wt-match rule and the nesting rule.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Suffix-tolerant match both ways: <code>work/PIN-1b</code> links from ticket <code>PIN-1</code>; two wts matching one ticket → the name-sorted first gets the slot, the rest are <code>:work</code>'s business.</li>
+<li>Sev sort key moves from the header mark to <code>Sev:</code> (the migration ran); the header-grep stays only as the closed-state fallback until TODO-004 lands its <code>Now:</code> filter.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> <code>pageMeta()</code> head-scan (Sev/Now/Sub/Due) on the TODO-001 read path</li>
+<li class="open"><input type="checkbox" disabled> sev bullet + open/closed glyph, <code>Sev:</code>-driven sort</li>
+<li class="open"><input type="checkbox" disabled> wt discovery memo (<code>listWork</code> × <code>ticketKey</code>) + the <code>[»]</code> slot</li>
+<li class="open"><input type="checkbox" disabled> ahbeh + dirty counts behind the wt check, work registry reuse</li>
+<li class="open"><input type="checkbox" disabled> fade off <code>mtime.idx</code> (blocked on <a href="../BRO/BRO-044.html">/todo/BRO/BRO-044</a>)</li>
+<li class="open"><input type="checkbox" disabled> <code>Sub:</code> family nesting, dotted rails</li>
+<li class="open"><input type="checkbox" disabled> repro test: layout columns, wt match, nesting, plain parity</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="../BRO/BRO-044.html">/todo/BRO/BRO-044</a> LANDED <code>///be/#3adde9ed</code> (2026-08-03) — the fade item is unblocked; it needs the wt rebased past that commit (base was acc80350 + the bee1634d merge).</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

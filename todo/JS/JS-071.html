@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-071</title>
+<title>JS-071: views/diff/diff.js — handler is dead, ctx.views never set</title>
+<meta property="og:title" content="JS-071: views/diff/diff.js — handler is dead, ctx.views never set">
+<meta property="og:description" content="The diff: VIEW handler (JAB-014) is wired to read its pinned from/to/scope spec off ctx.viewsrow.uri, but NOTHING in the resident loop ever sets ctx.views, and the cited resolve.js classifyView seed does not exist. Every diff: URI therefore returns at the guard and emits zero bytes — the whole view is dead as wired. See DIFF. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-071.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-071 <a href="">CRIT</a>: <code>views/diff/diff.js</code> — handler is dead, <code>ctx.views</code> never set</h1>
+<h1>JS-071: <code>views/diff/diff.js</code> — handler is dead, <code>ctx.views</code> never set</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The <code>diff:</code> VIEW handler (JAB-014) is wired to read its pinned from/to/scope spec off <code>ctx.views[row.uri]</code>, but NOTHING in the resident loop ever sets <code>ctx.views</code>, and the cited <code>resolve.js classifyView</code> seed does not exist.  Every <code>diff:</code> URI therefore returns at the guard and emits zero bytes — the whole view is dead as wired.  See <a href="../DIFF/DIFF-001.html">DIFF</a>.  Method: <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -20,22 +29,10 @@ The <code>diff:</code> VIEW handler (JAB-014) is wired to read its pinned from/t
 <ul>
 <li><code>views/diff/diff.js:271</code>: <code>const spec = (ctx &amp;&amp; ctx.views &amp;&amp; ctx.views[row.uri]) || null;</code></li>
 <li><code>views/diff/diff.js:272</code>: <code>if (!spec) return;</code> — fires for EVERY row.</li>
-<li><code>ctx.views</code> is never assigned: <code>core/loop.js:56-87</code> builds ctx with<p>
-no <code>views</code> key (repo/T0/out/queue/flags/refs/resolved/seedRows/ triple/seededRowCount/args/mode/sink — and nothing else).
-</p>
-</li>
-<li>diff.js:9-10 header cites a <code>resolve.js classifyView</code> seed that<p>
-pins the spec; grep finds <code>classifyView</code> ONLY in those comments — <code>core/resolve.js</code> defines <code>classifyArg</code> (:97), never <code>classifyView</code>.
-</p>
-</li>
-<li>Net: diffFile/diffTreeRefs/diffWtTree/recurseSubPins (:278-302)<p>
-are all unreachable; <code>spec</code> is always null.
-</p>
-</li>
-<li>This is why the diff parity cases are xfail in<p>
-<code>test/CMakeLists.txt:24-28</code> (<code>_BE_WILL_FAIL</code>): be-js-diff-01-3revs, -02-divergent-children, -03-stock-context, -08-sub-pin-bump-gitlink, -11-file-scope-full.
-</p>
-</li>
+<li><code>ctx.views</code> is never assigned: <code>core/loop.js:56-87</code> builds ctx with no <code>views</code> key (repo/T0/out/queue/flags/refs/resolved/seedRows/ triple/seededRowCount/args/mode/sink — and nothing else).</li>
+<li>diff.js:9-10 header cites a <code>resolve.js classifyView</code> seed that pins the spec; grep finds <code>classifyView</code> ONLY in those comments — <code>core/resolve.js</code> defines <code>classifyArg</code> (:97), never <code>classifyView</code>.</li>
+<li>Net: diffFile/diffTreeRefs/diffWtTree/recurseSubPins (:278-302) are all unreachable; <code>spec</code> is always null.</li>
+<li>This is why the diff parity cases are xfail in <code>test/CMakeLists.txt:24-28</code> (<code>_BE_WILL_FAIL</code>): be-js-diff-01-3revs, -02-divergent-children, -03-stock-context, -08-sub-pin-bump-gitlink, -11-file-scope-full.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
@@ -46,71 +43,46 @@ are all unreachable; <code>spec</code> is always null.
 <h3>Constraints</h3>
 <ul>
 <li>libabc+libdog ONLY (store.js/wtlog/recurse.js); NO dog spawn, NO /proc.</li>
-<li>Keep the handler's existing spec shape (mode range|wt, fromSha/toSha/<p>
-baselineSha, navver, path) so :278-302 stay byte-identical.
-</p>
-</li>
+<li>Keep the handler's existing spec shape (mode range|wt, fromSha/toSha/ baselineSha, navver, path) so :278-302 stay byte-identical.</li>
 <li>Choose ONE seam, do not add both.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Option A (seed): add <code>classifyView</code> to <code>core/resolve.js</code> and pin<p>
-<code>ctx.views[row.uri]</code> in <code>loop.js</code> ctx build — matches the header's documented contract; ZERO ref resolution stays in the handler.
-</p>
-</li>
-<li>Option B (re-parse): drop <code>ctx.views</code> and re-parse the <code>diff:</code> URI<p>
-off <code>ctx.args[0]</code> in-handler, the way <code>views/log/log.js:39 parseArg</code>, <code>views/commit/commit.js:25</code> and <code>views/tree/tree.js:133</code> already do (the loop's one-shot scheme:uri form rides <code>ctx.args[0]</code>, not row.uri).
-</p>
-</li>
-<li>Prefer B: log/commit/tree set the precedent; no resolve.js surface<p>
-change; the ref→tree resolution then lives where the other views' does.
-</p>
-</li>
+<li>Option A (seed): add <code>classifyView</code> to <code>core/resolve.js</code> and pin <code>ctx.views[row.uri]</code> in <code>loop.js</code> ctx build — matches the header's documented contract; ZERO ref resolution stays in the handler.</li>
+<li>Option B (re-parse): drop <code>ctx.views</code> and re-parse the <code>diff:</code> URI off <code>ctx.args[0]</code> in-handler, the way <code>views/log/log.js:39 parseArg</code>, <code>views/commit/commit.js:25</code> and <code>views/tree/tree.js:133</code> already do (the loop's one-shot scheme:uri form rides <code>ctx.args[0]</code>, not row.uri).</li>
+<li>Prefer B: log/commit/tree set the precedent; no resolve.js surface change; the ref→tree resolution then lives where the other views' does.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="wontfix"><input type="checkbox" disabled> <del>Repro-first: be-js-diff-11-file-scope-full asserts NON-EMPTY output;</del><p>
- confirmed RED today (jab empty vs native hunks), GREEN after.
-</p>
-</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Repro-first: be-js-diff-11-file-scope-full asserts NON-EMPTY output; confirmed RED today (jab empty vs native hunks), GREEN after.</del></li>
 <li class="wontfix"><input type="checkbox" disabled> <del>Implement the seam (B); parseDiffArg populates <code>spec</code> so :278-302 run.</del></li>
 <li class="wontfix"><input type="checkbox" disabled> <del>Resolve ?ref / commit→tree the way log.js/commit.js/tree.js parse args.</del></li>
 <li class="wontfix"><input type="checkbox" disabled> <del>Dropped all 5 be-js-diff-* entries from <code>_BE_WILL_FAIL</code> (each green).</del></li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul class="todo">
-<li class="blocked"><input type="checkbox" disabled> <code>resolve.js classifyView</code> does not exist — the header documents an<p>
- unbuilt seam; pick a real one (B) rather than chase the phantom.
-</p>
-</li>
+<li class="blocked"><input type="checkbox" disabled> <code>resolve.js classifyView</code> does not exist — the header documents an unbuilt seam; pick a real one (B) rather than chase the phantom.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED: be <code>7b0cd620</code> (diff.js) + be/test <code>4a0fa9fc</code> (CMakeLists WILL_FAIL drops + diff/11 range). All 5 be-js-diff cases off xfail.<p>
-Root cause CONFIRMED: <code>spec</code> always null (ctx.views never set) → every <code>diff:</code> URI emitted zero bytes; <code>be 'diff:big.txt?v1..v2' --plain</code> had real hunks, <code>jab</code> had none (verified before fix).
-</p>
-</li>
-<li>FIX = Option B (re-parse), <code>be/views/diff/diff.js</code> ONLY: `parseDiffArg(k,<p>
-repo, ctx.args<a href="">0</a>)<code> builds the spec in-handler (same shape mode/from/to/ baseline/navver/path) like log/commit/tree; </code>resolveCommit<code> is branch-FIRST then full-sha/hashlet (store.js resolveRef/getObject/resolveHexAny); baseline via wtlog.baselineTip(). COEXIST: pinned </code>ctx.views<a href="">row.uri</a><code> STILL wins (commit.js COMMIT-006) — </code>pinned ?? reparse`.
-</p>
-</li>
-<li>URI FORMS (C GRAF.exe.c:352-358, all byte-parity vs native --plain/--color):<p>
-<code>?from..to</code> TWO-DOT range (the user's commit-hunk click target — file + tree), legacy <code>?from#to</code>, <code>?branch</code> branch-vs-base (file+tree), no-path <code>?&lt;hashlet&gt;</code> commit-show (rev vs parent¹, root falls through), <code>diff:</code> / <code>diff:&lt;file&gt;</code> wt-vs-base. The user's <code>diff:&lt;path&gt;?&lt;a&gt;..&lt;b&gt;</code> now emits hunks.
-</p>
-</li>
-<li>COLOR SEAM: the BRO-006 per-hunk <code>U</code> body click-target leaked a phantom<p>
-trailing line in the HUNK color line-walk (C has no body U-target; navigates via hunk.uri). <code>diffOut</code> now appends the U-target ONLY in --tlv (the bro pager's hunksFromTlv per-line nav); plain/color feed the bare record → byte-parity with graf, click still follows hunk.uri. <code>withUTarget</code> + be-js-diff-links UNCHANGED (test calls the fn directly).
-</p>
-</li>
-<li>GREENED + DROPPED from <code>_BE_WILL_FAIL</code> (all 5): be-js-diff-01-3revs,<p>
--02-divergent-children, -03-stock-context, -08-sub-pin-bump-gitlink, -11-file-scope-full. NONE left xfail. 11 extended with the hash <code>..</code> range (the user's form). commit-diff/commit-links + diff-links (BRO-006) GREEN.
-</p>
-</li>
-<li>Suite: 76/77; the lone red is be-js-bro-universal — a WILL_FAIL that PASSES<p>
-(pre-existing stale xfail, cat/grep/ls only, NOT diff; noted in COMMIT-006). Left as-is (out of JS-071's be/views/diff scope).
-</p>
-</li>
+<li>LANDED: be <code>7b0cd620</code> (diff.js) + be/test <code>4a0fa9fc</code> (CMakeLists WILL_FAIL drops + diff/11 range). All 5 be-js-diff cases off xfail. Root cause CONFIRMED: <code>spec</code> always null (ctx.views never set) → every <code>diff:</code> URI emitted zero bytes; <code>be 'diff:big.txt?v1..v2' --plain</code> had real hunks, <code>jab</code> had none (verified before fix).</li>
+<li>FIX = Option B (re-parse), <code>be/views/diff/diff.js</code> ONLY: <code>parseDiffArg(k, repo, ctx.args[0])</code> builds the spec in-handler (same shape mode/from/to/ baseline/navver/path) like log/commit/tree; <code>resolveCommit</code> is branch-FIRST then full-sha/hashlet (store.js resolveRef/getObject/resolveHexAny); baseline via wtlog.baselineTip(). COEXIST: pinned <code>ctx.views[row.uri]</code> STILL wins (commit.js COMMIT-006) — <code>pinned ?? reparse</code>.</li>
+<li>URI FORMS (C GRAF.exe.c:352-358, all byte-parity vs native --plain/--color): <code>?from..to</code> TWO-DOT range (the user's commit-hunk click target — file + tree), legacy <code>?from#to</code>, <code>?branch</code> branch-vs-base (file+tree), no-path <code>?&lt;hashlet&gt;</code> commit-show (rev vs parent¹, root falls through), <code>diff:</code> / <code>diff:&lt;file&gt;</code> wt-vs-base. The user's <code>diff:&lt;path&gt;?&lt;a&gt;..&lt;b&gt;</code> now emits hunks.</li>
+<li>COLOR SEAM: the BRO-006 per-hunk <code>U</code> body click-target leaked a phantom trailing line in the HUNK color line-walk (C has no body U-target; navigates via hunk.uri). <code>diffOut</code> now appends the U-target ONLY in --tlv (the bro pager's hunksFromTlv per-line nav); plain/color feed the bare record → byte-parity with graf, click still follows hunk.uri. <code>withUTarget</code> + be-js-diff-links UNCHANGED (test calls the fn directly).</li>
+<li>GREENED + DROPPED from <code>_BE_WILL_FAIL</code> (all 5): be-js-diff-01-3revs, -02-divergent-children, -03-stock-context, -08-sub-pin-bump-gitlink, -11-file-scope-full. NONE left xfail. 11 extended with the hash <code>..</code> range (the user's form). commit-diff/commit-links + diff-links (BRO-006) GREEN.</li>
+<li>Suite: 76/77; the lone red is be-js-bro-universal — a WILL_FAIL that PASSES (pre-existing stale xfail, cat/grep/ls only, NOT diff; noted in COMMIT-006). Left as-is (out of JS-071's be/views/diff scope).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

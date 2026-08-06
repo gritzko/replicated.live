@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-057: bare get CLOBBERS dirty staged files untouched by the incoming commit</title>
+<meta property="og:title" content="GET-057: bare get CLOBBERS dirty staged files untouched by the incoming commit">
+<meta property="og:description" content="Incident 2026-07-29 21:31, gritzko in //PATCH-025 (the wt runs its OWN modified get.js — PATCH-025 rewired the weave leaf, so trunk may be innocent): be get absorbed trunk's ULOG-004 commit (da3cf823 → 543269d6, touches only shared/wtlog.js + test/wtlogcon.js + CMakeLists) and OVERWROTE five dirty+staged test files with trunk bytes although theirs==base for every one of them — keep-ours was the only legal outcome. Staged demotion ...V → ...v also observed (put rows precede the new get tip row; rows NOT deleted). Regold content lost from the tree (put rows carry no blob sha; staging is row-only).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-057.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-057: bare get CLOBBERS dirty staged files untouched by the incoming commit</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<p>
+Incident 2026-07-29 21:31, gritzko in <code>//PATCH-025</code> (the wt runs its OWN modified get.js — PATCH-025 rewired the weave leaf, so trunk may be innocent): <code>be get</code> absorbed trunk's ULOG-004 commit (da3cf823 → 543269d6, touches only shared/wtlog.js + test/wtlog_con.js + CMakeLists) and OVERWROTE five dirty+staged test files with trunk bytes although theirs==base for every one of them — keep-ours was the only legal outcome. Staged demotion <code>...V</code> → <code>...v</code> also observed (put rows precede the new get tip row; rows NOT deleted). Regold content lost from the tree (put rows carry no blob sha; staging is row-only).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Clobbered (byte-identical to trunk after the get): test/get/conf-state/run.sh, test/get/confdrop/run.sh, test/get/dirty/run.sh, test/post/conf-state/run.sh, test/status/conflict/run.sh.</li>
+<li>Survived (kept local bytes, restamped 21:31): test/patch/{conflict,dirty-overlap,same-anchor-conflict}/{run.sh,golden.out}, test/patch/stacked-conflict/* (untracked-new), test/get/detached-recover/run.sh, test/wtlog_con.js. All were equally staged+dirty — the discriminator is UNKNOWN, that is the first thing to find.</li>
+<li>Ulog tail of <code>//PATCH-025/test</code> after the incident: <code>get /test</code> seed, 14 put rows (20:17 and 21:20 batches), then the new <code>get /test</code> row — no rows lost.</li>
+<li>The wt's jab loaded the wt's OWN jsrc: verbs/get/get.js there carries PATCH-025's changes (weave3 → mergedLive {bytes,spans}, POST-032 unresolved-conflict re-weave skip REMOVED, carrySweep con band row-based). Evidence tree frozen: do NOT edit <code>//PATCH-025</code> until the repro is extracted.</li>
+</ul>
+<h3>Goals</h3>
+<ol>
+<li>Reproduce in a scratch clone: stage+edit files upstream-untouched by the incoming commit, bare get, diff. Run once with the wt's get.js and once with trunk's — pin WHICH code clobbers, and what separates the clobbered five from the survivors.</li>
+<li>Fix so theirs==base ⇒ keep ours, always — staged or not; add the repro as a permanent get test.</li>
+<li>RULED (gritzko 2026-07-29): an FF get keeps the staged list — recorded in <a href="/todo/GET/GET-053.html">GET-053</a> with the FF-only redesign; this ticket owns only the clobber.</li>
+</ol>
+<h3>Constraints</h3>
+<ul>
+<li>If the bug is PATCH-025's, the fix belongs in that ticket's scope before it can land; if trunk's, this is a standalone <a href="./HIGH.html">HIGH</a>.</li>
+<li>Recovery of the five regolds is mechanical (itemised in <a href="/todo/PATCH/PATCH-025.html">PATCH-025</a> Outcome + worker report) — redo only AFTER the repro is captured from the frozen tree.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>DISCRIMINATOR = THE EXEC BIT. The clobbered five are exactly the mode 100755 files; every survivor is 100644. Verified by <code>stat</code> on the base tree.</li>
+<li>Not the ulog batches, not the stamp bands, not carrySweep, not weave3: the 20:17/21:20 put batches straddle both sets (get/detached-recover, 21:20, survived).</li>
+<li>ROOT CAUSE: <code>shared/checkout.js</code> <code>apply()</code> GET-040 dirty guard was gated on <code>leaf.kind === &quot;f&quot;</code>, so a dirty EXEC (&quot;x&quot;) leaf fell through to clean-overwrite.</li>
+<li>Only <code>submount.mount</code> calls <code>checkout.apply</code> (submount.js:365,421), so the clobber is SUBMODULE-ONLY — a flat wt weaves through get.js's own leaf, which is correct.</li>
+<li>That is why the incident hit <code>//PATCH-025/test</code> (a sub) and spared the three staged parent .js files: 644, and carried by carrySweep (band <code>mrg</code>, ceil-1ms).</li>
+<li><a href="/todo/GET/GET-056.html">GET-056</a> fixed this SAME <code>kind === &quot;f&quot;</code> gate in get.js's weave leaf (test/get/dirty-exec-binary) but missed the checkout.js twin — this is that miss.</li>
+<li>TRUNK IS GUILTY. PATCH-025 is INNOCENT: the replay clobbers the identical five under da3cf823's own code and under the evidence code — byte-identical outcome.</li>
+<li>weave3's <code>theirs==base ⇒ keep ours</code> arm is present and correct in BOTH; it is never reached for a sub file, which is the whole bug.</li>
+<li>mtime forensics confirm the branch: survivors 21:31:56.248 (mrg band = ceil-1ms, restamped only), clobbered .249 (ceiling = the clean-overwrite stamp).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> discriminator: why those five, not the patch/* files — the exec bit</li>
+<li class="done"><input type="checkbox" checked disabled> two-code repro (wt get.js vs trunk get.js) — both clobber, trunk guilty</li>
+<li class="done"><input type="checkbox" checked disabled> keep-ours fix + permanent test (test/get/sub-dirty-exec)</li>
+<li class="done"><input type="checkbox" checked disabled> redo the 5 regolds in //PATCH-025 after evidence capture → done, see <a href="/todo/PATCH/PATCH-025.html">PATCH-025</a> Outcome</li>
+<li class="done"><input type="checkbox" checked disabled> gritzko's ruling on staging surviving a base advance → <a href="/todo/GET/GET-053.html">GET-053</a> (keep the staged list)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>CLOSED via <a href="/todo/GET/GET-056b.html">GET-056b</a> landing <code>///be/#5c0d5c21</code> + <code>//be/test#4e59c1ac</code> (2026-07-30): the same gate fixed to the full merge matrix, equivalent test <code>test/sub/dirty-exec-keep</code> landed.</li>
+<li><code>//GET-057</code>'s staged one-liner + <code>test/get/sub-dirty-exec/run.sh</code> SUPERSEDED, never landed; the worktree holds nothing unique (evidence copies in <code>//GET-057/evidence/</code>) — reapable.</li>
+<li>THE FIX (trunk-only, standalone <a href="./HIGH.html">HIGH</a>; no PATCH-025 lineage needed — PATCH-025 never touched checkout.js): checkout.js:203 <code>leaf.kind === &quot;f&quot;</code> → <code>(leaf.kind === &quot;f&quot; || leaf.kind === &quot;x&quot;)</code>. Symlinks keep clean-resetting (a dirty symlink is a re-point, out of scope).</li>
+<li>TEST <code>be-js-get-sub-dirty-exec</code>: parent+sub, sub gains an exec <code>run.sh</code> + a 644 <code>note.txt</code>, both dirtied AND <code>put</code>-staged in the mounted sub, sub advances on an UNRELATED file, update get. Asserts ours kept for both, the exec bit kept, and that theirs still fast-forwards. RED on the old gate (&quot;dirty+staged EXEC run.sh was CLOBBERED&quot;), GREEN after.</li>
+<li>INCIDENT REPLAY (the real evidence, not a toy): clone <code>///be/#da3cf823</code>, stage+dirty the same 14 test files, bare <code>jab get</code>. Trunk code → the exact five clobbered, nine kept. Evidence (PATCH-025) code → identical. Fixed code → lost=0, and theirs' <code>test/wtlog_con.js</code> still lands.</li>
+<li><code>ctest -j16</code> = 318/318 PASS (get+patch+status+post = 132/132). Pre-existing suite was 317; the new case is the 318th.</li>
+<li>Evidence copies of the frozen wt's three JS files kept in <code>//GET-057/evidence/</code>; repro scripts in <code>//GET-057/scratch/</code> (untracked, not staged).</li>
+<li>NOT DONE (out of scope, by instruction): <a href="/todo/GET/GET-053.html">GET-053</a>'s FF gate. The <code>...V</code> → <code>...v</code> staged demotion reproduces in a FLAT wt too and is <a href="/todo/GET/GET-053.html">GET-053</a>'s ruling, not a clobber.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

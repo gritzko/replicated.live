@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GET-018</title>
+<title>GET-018: make be get's worktree update atomic — stage-to-temp + atomic swap (or journal+rollback) so a mid-write failure leaves ref/wtlog/tree all unchanged</title>
+<meta property="og:title" content="GET-018: make be get's worktree update atomic — stage-to-temp + atomic swap (or journal+rollback) so a mid-write failure leaves ref/wtlog/tree all unchanged">
+<meta property="og:description" content="Split from GET-016 Part 1. be get's COMMIT POINT (sniff/GET.c:1338-1429) advances the local branch ref + wtlog BEFORE the non-crash-safe worktree write (WALKTreeLazy + drains + sub loop), deliberately — the comment documents replay-via-be get --force ?&lt;cur&gt; as the recovery, and test/get/09-refuse-no-commit + test/get/10-partial-recovery pin that model (get/10 asserts the wtlog GROWS after a failing write and that --force replay is the fix). So the literal &quot;advance the ref only after the write succeeds&quot; reorder is rejected: it breaks that documented crash-safety model and both tests. True all-or-nothing atomicity needs a redesign — stage the wt mutation to a scratch area then atomically swap + advance the ref, or journal each mutation and roll back on failure. GET-016 Part 2 (the --force full-reset that makes the replay recovery actually work) landed separately. See GET, GET-016, CLAUDE.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-018.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -26,6 +30,17 @@ Split from <a href="./GET-016.html">GET-016</a> Part 1. <code>be get</code>'s CO
 <li><strong>Stage-to-temp + atomic swap</strong> (preferred): materialise the new tree into a scratch dir, fsync, then a single swap/commit + ref advance; a partial failure discards the scratch and the live tree is untouched.</li>
 <li><strong>Journal + rollback</strong>: record an undo entry per wt mutation; on failure replay it backwards. More invasive; handles in-place edits without a full second copy.</li>
 </ul>
+<h2>Design ruling (2026-07-11, gritzko-approved): PLAN/APPLY split + begin/seal rows (JS first)</h2>
+<p>
+The JS impl (<code>be/verbs/get/get.js</code>) is the live surface and had two incidents on 2026-07-11 proving the amplifier is actively lossy, not theoretical: <a href="GET-043/README.html">GET-043</a> (conflict-abort dropped queued leaves in 3 worktrees) and the <code>journal/be</code> self-update crash (tip appended, zero files written, then a same-tip re-get CEMENTED the stale files as phantom &quot;local edits&quot; via weave3's theirs==base keep-ours). Ruling:
+</p>
+<ul>
+<li><strong>Plan/apply split</strong>: get becomes two passes. PLAN is read-only — pruned reconcile walk, classify every leaf (new/upd/del/mrg/con), compute the weaves for dirty files, run GETOVRL and the tip-has-no-tree check, prefetch sub packs. Any refusal fires BEFORE the first mutation (post's POST-017 pattern). APPLY then writes files (per-file write-temp+rename hygiene) and finishes the wtlog.</li>
+<li><strong>Begin/seal rows</strong>: keep the early tip append as the INTENT row (preserves the wtlog-grows replay model 09/10 pin), append a terminal SEAL row after apply; <code>curTip()</code> and every last-<code>#sha</code> reader honor only SEALED tips. An unsealed tail = interrupted apply; the next get plans against the last SEALED baseline, and a partial apply self-heals through weave3's ours==theirs early-out (files-ahead skew is convergent, tip-ahead was lossy).</li>
+<li><strong>Backward compat</strong>: wtlogs without seal rows read as before (every tip row sealed) — old trees must not regress.</li>
+<li>Skew-direction note for the record: files-ahead-of-baseline self-heals; tip-ahead-of-files self-hides and loses data. All ordering choices must respect this asymmetry.</li>
+<li>Stale-detection (leaf recognizes on-disk == blob@prior-tip as stale, not edited) is a composable follow-up — own ticket if not folded here.</li>
+</ul>
 <h2>Constraints</h2>
 <p>
 Must not regress the crash-safety property <code>test/get/09</code>/<code>10</code> protect — either preserve replay-recovery as a fallback, or migrate those tests to the new no-drift model as a deliberate, reviewed step.
@@ -39,9 +54,23 @@ Must not regress the crash-safety property <code>test/get/09</code>/<code>10</co
 <h2>WIP</h2>
 <h3>TODOs</h3>
 <ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> JS: plan/apply split + hoists — work/GET-018 (get.js, checkout.js temp+rename), uncommitted; verified RED/GREEN.</li>
+<li class="done"><input type="checkbox" checked disabled> JS: <code>seal</code> verb row + seal-gated wtlog.tip()/oldTipOf/currentSubPin; legacy logs read unchanged; conflicted-but-materialised gets DO seal.</li>
+<li class="done"><input type="checkbox" checked disabled> JS repro: test/get/atomic (3 properties) — RED on pre-change tree (refuse appended; cement kept stale bytes), GREEN on the fix; 12 suites + tip-reader verb suites green.</li>
 <li class="open"><input type="checkbox" disabled> Design pass: choose stage-to-temp+swap vs journal+rollback; write the ruling here. Audit 2026-07-07: no GET-018 commit landed; commit-point-before-write model unchanged; the JS side now has its own atomicity notes (<code>shared/submount.js</code> GET-037 sub-anchor drop) — align the two.</li>
 <li class="open"><input type="checkbox" disabled> Repro: inject a mid-<code>WALKTreeLazy</code> failure; assert ref + wtlog + tree unchanged.</li>
 <li class="open"><input type="checkbox" disabled> Implement; reconcile <code>test/get/09</code>/<code>10</code> to the chosen model (do not silently break the replay-recovery property).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

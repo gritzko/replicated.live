@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DIS-057</title>
+<title>DIS-057: be/ JS — unify status+post on ONE ULOG-merge dirtiness classifier (base ⊕ put ⊕ wt ⊕ theirs ulogs → a classification ulog), per Dirty.mkd</title>
+<meta property="og:title" content="DIS-057: be/ JS — unify status+post on ONE ULOG-merge dirtiness classifier (base ⊕ put ⊕ wt ⊕ theirs ulogs → a classification ulog), per Dirty.mkd">
+<meta property="og:description" content="Today status and post classify dirtiness through TWO separate ladders over shared primitives: status/ls:/spot use shared/classify.js (classify/classifyDir, the JS twin of sniff/SNIFF.exe.c::statusstep), while post uses verbs/post/fold-decide.js (decide, the JS twin of sniff/POST.c::postclassifystep). Both re-run their own base ⊕ wt ⊕ put ⊕ del merge and emit different vocabularies (display buckets vs keep/unlink/add), so they can drift — and fold-decide THROWS on an in-scope patch row (POST-005 / JS-051 &quot;theirs&quot; 5th input), so the pat/mrg/cnf states Dirty requires aren't even commit-able. The rework: ONE classifier built as an N-way merge of four ulogs — the base tree, the put list (wtlog), the work-tree scan, and any patched-in (theirs) trees — whose OUTPUT is itself a ulog (per-path bucket + resolved sha/mode). status renders that output ulog; post consumes it (bucket → keep/unlink/add). Folds in the Dirty deltas: the rmv/mov move pair, pat/mrg/cnf (theirs ulogs + a patch-written stamp offset), and conf→cnf. ULOG is already the substrate (JS-031 classify; shared/ulog.js each/drain/write). Scope be/ only. See Dirty, STATUS-002, POST-005; method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-057.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>DIS-057: be/ JS — unify status+post on ONE ULOG-merge dirtiness classifier (base ⊕ put ⊕ wt ⊕ theirs ulogs → a classification ulog), per Dirty.mkd</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 Today <code>status</code> and <code>post</code> classify dirtiness through TWO separate ladders over shared primitives: <code>status</code>/<code>ls:</code>/<code>spot</code> use <code>shared/classify.js</code> (<code>classify</code>/<code>classifyDir</code>, the JS twin of <code>sniff/SNIFF.exe.c::status_step</code>), while <code>post</code> uses <code>verbs/post/fold-decide.js</code> (<code>decide</code>, the JS twin of <code>sniff/POST.c::post_classify_step</code>). Both re-run their own <code>base ⊕ wt ⊕ put ⊕ del</code> merge and emit different vocabularies (display buckets vs <code>keep</code>/<code>unlink</code>/<code>add</code>), so they can drift — and <code>fold-decide</code> THROWS on an in-scope <code>patch</code> row (POST-005 / <a href="../JS/JS-051.html">JS-051</a> &quot;theirs&quot; 5th input), so the <code>pat</code>/<code>mrg</code>/<code>cnf</code> states <a href="../../wiki/Dirty.html">Dirty</a> requires aren't even commit-able. The rework: ONE classifier built as an N-way merge of four ulogs — the *<strong>base tree</strong><strong>, the </strong><strong>put list</strong>* (wtlog), the *<strong>work-tree</strong>* scan, and any *<strong>patched-in (theirs) trees</strong>* — whose OUTPUT is itself a ulog (per-path bucket + resolved sha/mode). <code>status</code> renders that output ulog; <code>post</code> consumes it (bucket → <code>keep</code>/<code>unlink</code>/<code>add</code>). Folds in the <a href="../../wiki/Dirty.html">Dirty</a> deltas: the <code>rmv</code>/<code>mov</code> move pair, <code>pat</code>/<code>mrg</code>/<code>cnf</code> (theirs ulogs + a patch-written stamp offset), and <code>conf</code>→<code>cnf</code>. ULOG is already the substrate (<a href="../JS/JS-031.html">JS-031</a> classify; <code>shared/ulog.js</code> each/drain/write). Scope <code>be/</code> only. See <a href="../../wiki/Dirty.html">Dirty</a>, <a href="../STATUS/STATUS-002.html">STATUS-002</a>, <a href="../POST/POST-005.html">POST-005</a>; method <a href="../../skill/Issues.html">Issues</a>.
 </p>
@@ -27,10 +36,7 @@ Today <code>status</code> and <code>post</code> classify dirtiness through TWO s
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>ONE classifier = an N-way merge of four INPUT ulogs → one OUTPUT (classification) ulog:<p>
-1. base tree ulog — the baseline commit snapshot, path → {sha, mode}; 2. put list ulog — the wtlog put/delete/move staged intents (already a ulog); 3. work-tree ulog — the wt scan, path → {mtime, kind}; 4. patched-in tree ulog(s) — each in-scope patch's theirs tree, path → {sha, mode}, if any.
-</p>
-</li>
+<li>ONE classifier = an N-way merge of four INPUT ulogs → one OUTPUT (classification) ulog: 1. base tree ulog — the baseline commit snapshot, path → {sha, mode}; 2. put list ulog — the wtlog put/delete/move staged intents (already a ulog); 3. work-tree ulog — the wt scan, path → {mtime, kind}; 4. patched-in tree ulog(s) — each in-scope patch's theirs tree, path → {sha, mode}, if any.</li>
 <li>OUTPUT ulog row = {path, bucket, sha?, mode?, ts}: <code>bucket</code> is the <a href="../../wiki/Dirty.html">Dirty</a> status (rendered by <code>status</code>), <code>sha</code>/<code>mode</code> is the resolved content (consumed by <code>post</code>). Single source of truth.</li>
 <li><code>status</code> becomes a RENDERER over the output ulog (bucket→row/colour, <code>ok</code> count-only, <code>eq</code> for <code>ls:</code>); <code>post</code> becomes a CONSUMER (bucket→<code>keep</code>/<code>unlink</code>/<code>add</code>). No second merge; the POST-005 patch-row throw is subsumed.</li>
 <li><a href="../../wiki/Dirty.html">Dirty</a> parity: the <code>rmv</code>/<code>mov</code> pair, <code>pat</code>/<code>mrg</code>/<code>cnf</code>, and the <code>conf</code>→<code>cnf</code> rename.</li>
@@ -80,5 +86,16 @@ Today <code>status</code> and <code>post</code> classify dirtiness through TWO s
 <li>Tests in-tree: test/post/{move,patch-pat,patch-absorb,agree}; DIS-059's <code>wtlog.attachedBranch</code> unification rode this changeset.</li>
 <li>Deferred as planned: submodule 5th-ulog axes (<a href="../SUBS/SUBS-027b.html">SUBS-027b</a>/<a href="../../wiki/Submodules.html">Submodules</a>; tracked under <a href="./DIS-058.html">DIS-058</a> D14).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

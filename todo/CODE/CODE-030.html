@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-030 DONE: be/ has 5 dependency cycles — break them into one acyclic tree</title>
+<meta property="og:title" content="CODE-030 DONE: be/ has 5 dependency cycles — break them into one acyclic tree">
+<meta property="og:description" content="Tarjan over all 481 require edges of be/ (102 modules; top-level AND in-body, since an in-body require defers the LOAD, not the DEPENDENCY) finds 5 strongly-connected components, every one of them a PAIR, and no self-loops. Each is ONE misplaced symbol: a primitive split across two files, or a library embedded in a view. core/registry.js's runtime req(f) verb dispatch is the one legitimate upward edge and is excluded — folding it in collapses ~50 modules into a single SCC and says nothing. Four of the five cures are leaf extractions of low risk; the fifth touches the pager's spell path and is the only dangerous one.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-030.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>CODE-030 <a href="./DONE.html">DONE</a>: be/ has 5 dependency cycles — break them into one acyclic tree</h1>
+<div>
+<p>
+Now: DONE Sev: MED Rep: ///be/ See: CODE-028
+</p>
+</div>
+<p>
+Tarjan over all 481 require edges of <code>be/</code> (102 modules; top-level AND in-body, since an in-body require defers the LOAD, not the DEPENDENCY) finds 5 strongly-connected components, every one of them a PAIR, and no self-loops. Each is ONE misplaced symbol: a primitive split across two files, or a library embedded in a view. <code>core/registry.js</code>'s runtime <code>req(f)</code> verb dispatch is the one legitimate upward edge and is excluded — folding it in collapses ~50 modules into a single SCC and says nothing. Four of the five cures are leaf extractions of low risk; the fifth touches the pager's spell path and is the only dangerous one.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Analysed 2026-08-04 on <code>///be/#014aa381</code>, re-verified independently at the same tip; every closing edge below was read at the cited line.
+</p>
+<ul>
+<li><code>core/discover.js</code> ↔ <code>core/resolve_hash.js</code> — <code>discover.js:151,179,182-185</code> <a href="./in-body.html">in-body</a>, <code>resolve_hash.js:28</code> <a href="./top.html">top</a>.</li>
+<li><code>shared/cache.js</code> ↔ <code>shared/classify.js</code> — <code>cache.js:159</code> <a href="./in-body.html">in-body</a>, <code>classify.js:81</code> <a href="./in-body, `libDir()`.html">in-body, `libDir()`</a>.</li>
+<li><code>core/loop.js</code> ↔ <code>views/bro/bro.js</code> — <code>loop.js:590</code> <a href="./in-body, `_here`.html">in-body, `_here`</a>, <code>bro.js:108,176</code> <a href="./in-body, bareword.html">in-body, bareword</a>.</li>
+<li><code>views/todo/todo.js</code> ↔ <code>views/work/work.js</code> — <code>todo.js:572</code> <a href="./in-body.html">in-body</a>, <code>work.js:43</code> <a href="./top.html">top</a>.</li>
+<li><code>verbs/get/get.js</code> ↔ <code>verbs/patch/fetchleg.js</code> — <code>get.js:513</code> <a href="./in-body.html">in-body</a>, <code>fetchleg.js:12</code> <a href="./top.html">top</a>.</li>
+<li><code>Object.assign(module.exports, …)</code> makes a cycle load-order-SAFE; it does not remove it. All five count as cycles.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Zero SCCs of size &gt;1 in the require graph, with <code>registry</code>'s dynamic dispatch the only upward edge.
+</p>
+<ul>
+<li>Each cure is a SYMBOL MOVE plus a re-export, so call sites do not change and the diff stays readable.</li>
+<li>A test asserts the graph is acyclic, so the property is enforced rather than remembered.</li>
+<li>Behaviour, output bytes and module identity unchanged throughout — this is structure, not function.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Pure refactor; the pager and the <code>.be</code> climb are the two places to tread carefully.
+</p>
+<ul>
+<li>The <code>.be</code> climb stays in <code>core/resolve_hash.js</code> — <a href="./resolve-hash-mandatory.html">resolve-hash-mandatory</a> is a standing rule; take the cure DIRECTION that preserves it (see Design decisions).</li>
+<li>Do not reintroduce in-body <code>require()</code> to hide an edge — a hidden cycle is still a cycle (CODE-028's ruling).</li>
+<li><code>views/bro/pager.js</code> is a render-layer module misfiled under <code>views/</code>; moving it is right but 35 test files name the path. OUT OF SCOPE, recorded only.</li>
+<li>No test edited to pass. The <code>loop</code>/<code>bro</code> cure needs a pty-click repro, not a unit probe (<a href="./verify-through-real-ui-path.html">verify-through-real-ui-path</a>).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>1. <code>cache</code> ↔ <code>classify</code>: <code>wtWalk</code> belongs to neither — its own header says &quot;two callers, wtScan and cache.js&quot;. Move it into <code>cache.js</code> (where the rev keying its memo lives), <code>takeWalk</code> becomes internal, <code>classify.wtWalk</code> stays a one-line re-export. 2 files.</li>
+<li>2. <code>get</code> ↔ <code>fetchleg</code>: <code>parseRemote</code> + <code>resolveLocalSource</code> are URI classification, not verb behaviour — extract to a leaf <code>verbs/get/remote.js</code>, <code>get.js</code> re-exports. 3 files.</li>
+<li>3. <code>discover</code> ↔ <code>resolve_hash</code>: the <code>.be</code> CLIMB and the ANCHOR READER are two halves of one primitive. Fold <code>discover.resolve</code>/<code>beRoot</code>/<code>resolveAnchor</code> INTO <code>resolve_hash.js</code> and leave <code>discover.js</code> a forwarding facade — this direction keeps the climb where the standing rule says it lives. 3 files.</li>
+<li>3b. REJECTED unless gritzko rules otherwise: the mirror, extracting both halves into a new <code>core/anchor.js</code>. Same 3 files and same acyclic result, but it relocates the climb.</li>
+<li>4. <code>todo</code> ↔ <code>work</code>: two disjoint libraries each embedded in the other's view. Extract the ticket-page family to <code>shared/ticketpage.js</code>; <code>work.js</code> then needs no <code>todo</code> at all and <code>views/ticket/ticket.js</code> becomes a direct consumer. 4 files.</li>
+<li>5. <code>loop</code> ↔ <code>bro</code>: <code>driveSpell</code> is a dispatch function living in a view. Move <code>driveSpell</code>/<code>spellCall</code>/<code>_openPager</code> into <code>loop.js</code>; <code>bro.js</code> calls <code>loop.openPager()</code>. The snag is <code>driveSpell</code>'s bare-path branch calling bro's <code>buildHunks</code> — pass it in, or extract it. 2-3 files, HIGH risk: ~14 pty/driver tests wire this path.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: an acyclicity test — build the graph (top-level + in-body, resolving <code>_here</code>/<code>libDir()</code>/<code>__dirname</code>/bareword forms), assert no SCC &gt;1, excluding registry's dynamic dispatch.</li>
+<li><a href="./ .html"> </a> cure 1 (cache/classify), cure 2 (get/fetchleg), cure 4 (todo/work) — independent, any order.</li>
+<li><a href="./ .html"> </a> cure 3 (discover/resolve_hash), fold-into-resolve_hash direction.</li>
+<li><a href="./ .html"> </a> cure 5 (loop/bro) LAST, with a pty-click repro; defer and report if it turns hairy.</li>
+<li><a href="./ .html"> </a> <code>ctest -j16</code> green; view output byte-identical.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>COLLIDES with CODE-028: its 27 staged unmerged edits touch every file this ticket restructures. Landing THIS first would shrink CODE-028 to a plain hoist with no cycles to cure, and would delete CODE-029's 17-site trap outright — sequencing is gritzko's call.</li>
+<li>4 non-cycle LAYERING violations are out of scope, each one leaf symbol: <code>util/ignore.js:172</code> wants <code>gitmodules.parseText</code>; <code>checkout.js:56</code> + <code>get.js:57</code> want <code>diff.isBinary</code> (moving it also drops <code>diff.js</code>, fan-out 11, out of get's load chain); <code>wire.js:22</code> wants <code>render.shQuote</code>.</li>
+<li><code>core/</code> and <code>shared/</code> are not layers but two arbitrary bags — a <code>util → core → shared → views</code> rule yields 24 upward edges. A real layering is a separate ticket.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

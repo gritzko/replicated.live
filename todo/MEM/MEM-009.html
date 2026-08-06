@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-009</title>
+<title>MEM-009: TCP/UDP socket fd leaked on bind failure (abc/TCP.c, abc/UDP.c)</title>
+<meta property="og:title" content="MEM-009: TCP/UDP socket fd leaked on bind failure (abc/TCP.c, abc/UDP.c)">
+<meta property="og:description" content="In both TCPListen and UDPBind the resolve loop opens a socket, then on a failing bind() the error branch traces, frees the addrinfo, and returns the failure code without close(sfd); the loop's normal close(sfd) is unreachable past the early return, so every bind failure (port in use, permission denied) leaks a descriptor. The goal is to close the socket on the failure path.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-009.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>MEM-009: TCP/UDP socket fd leaked on bind failure (abc/TCP.c, abc/UDP.c)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 In both <code>TCPListen</code> and <code>UDPBind</code> the resolve loop opens a socket, then on a failing <code>bind()</code> the error branch traces, frees the addrinfo, and returns the failure code without <code>close(sfd)</code>; the loop's normal <code>close(sfd)</code> is unreachable past the early return, so every bind failure (port in use, permission denied) leaks a descriptor. The goal is to close the socket on the failure path.
 </p>
@@ -35,5 +44,16 @@ Close before failing.
 <li>Repro first: bind to an in-use port and assert the fd count does not grow across calls.</li>
 <li><code>close(sfd)</code> before the early return in each bind-failure branch (or <code>close(sfd); continue;</code> and fail only after the loop).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

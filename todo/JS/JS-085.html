@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-085</title>
+<title>JS-085: views/log/log.js::resolveHashlet re-impls store.resolveHexAny via test-only k.packs()</title>
+<meta property="og:title" content="JS-085: views/log/log.js::resolveHashlet re-impls store.resolveHexAny via test-only k.packs()">
+<meta property="og:description" content="be log:#&lt;hashlet&gt; resolves a short hex to a full COMMIT sha. The log view's resolveHashlet (log.js:104) bypasses the public reader API: it reaches into the test-only k.packs(), re-mmaps every pack (already cached by the store), and re-runs a full O(all-objects) decompress-and- prefix-match scan that near-verbatim duplicates store.resolveHexAny + indexPackByWalk. commit.js already does the same job in ~6 lines. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-085.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,74 +15,43 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-085 <a href="./HIGH.html">HIGH</a>: <code>views/log/log.js::resolveHashlet</code> re-impls store.resolveHexAny via test-only <code>k._packs()</code></h1>
+<h1>JS-085: <code>views/log/log.js::resolveHashlet</code> re-impls store.resolveHexAny via test-only <code>k._packs()</code></h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
 <p>
 <code>be log:#&lt;hashlet&gt;</code> resolves a short hex to a full COMMIT sha.  The log view's <code>resolveHashlet</code> (log.js:104) bypasses the public reader API: it reaches into the test-only <code>k._packs()</code>, re-mmaps every pack (already cached by the store), and re-runs a full O(all-objects) decompress-and- prefix-match scan that near-verbatim duplicates store.resolveHexAny + indexPackByWalk.  commit.js already does the same job in ~6 lines. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>log.js:109 <code>packs = k._packs()</code> — <code>_packs</code> is store.js:551<p>
-marked &quot;expose for tests / verification&quot;, NOT a reader verb.
-</p>
-</li>
-<li>log.js:111-130 re-mmaps each pack (<code>git.pack.mmap</code>), walks<p>
-every offset, inflates each object (<code>pk.resolve</code>), reframes the sha, prefix-matches, and re-detects ambiguity.
-</p>
-</li>
-<li>This is the exact work store.js::resolveHexAny (:302) +<p>
-indexPackByWalk (:95) already do over the cached wh128 lane.
-</p>
-</li>
-<li>commit.js:101-107 does the canonical thing: <code>k.resolveHexAny</code><p>
-then keep type===&quot;commit&quot;||&quot;tag&quot;; ~6 lines, no pack re-mmap.
-</p>
-</li>
+<li>log.js:109 <code>packs = k._packs()</code> — <code>_packs</code> is store.js:551 marked &quot;expose for tests / verification&quot;, NOT a reader verb.</li>
+<li>log.js:111-130 re-mmaps each pack (<code>git.pack.mmap</code>), walks every offset, inflates each object (<code>pk.resolve</code>), reframes the sha, prefix-matches, and re-detects ambiguity.</li>
+<li>This is the exact work store.js::resolveHexAny (:302) + indexPackByWalk (:95) already do over the cached wh128 lane.</li>
+<li>commit.js:101-107 does the canonical thing: <code>k.resolveHexAny</code> then keep type===&quot;commit&quot;||&quot;tag&quot;; ~6 lines, no pack re-mmap.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Replace resolveHashlet's body with the commit.js form:<p>
-<code>k.resolveHexAny(hexish)</code> then <code>k.getObject(sha).type</code> filter.
-</p>
-</li>
-<li><code>be log:#&lt;commit-hashlet&gt;</code> for a mid-history (non-tip) commit<p>
-still resolves; an ambiguous prefix still resolves to NOTHING.
-</p>
-</li>
-<li>Remove <code>_packs</code> from the production reader surface (or fence<p>
-it test-only) so views cannot re-enter the pack walk.
-</p>
-</li>
+<li>Replace resolveHashlet's body with the commit.js form: <code>k.resolveHexAny(hexish)</code> then <code>k.getObject(sha).type</code> filter.</li>
+<li><code>be log:#&lt;commit-hashlet&gt;</code> for a mid-history (non-tip) commit still resolves; an ambiguous prefix still resolves to NOTHING.</li>
+<li>Remove <code>_packs</code> from the production reader surface (or fence it test-only) so views cannot re-enter the pack walk.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Byte-equivalent log output: the existing log parity tests<p>
-(<code>test/js/log/*</code>) must stay green — same resolved sha, same ambiguity → empty behaviour as KEEPResolveHex.
-</p>
-</li>
-<li>Use only the reader's public verbs (resolveHexAny, getObject,<p>
-resolve.resolveHex tip fast-path); no <code>git.pack</code> in log.js.
-</p>
-</li>
+<li>Byte-equivalent log output: the existing log parity tests (<code>test/js/log/*</code>) must stay green — same resolved sha, same ambiguity → empty behaviour as KEEPResolveHex.</li>
+<li>Use only the reader's public verbs (resolveHexAny, getObject, resolve.resolveHex tip fast-path); no <code>git.pack</code> in log.js.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Mirror commit.js:101-107 exactly so the two hashlet resolvers<p>
-converge on the ONE store.resolveHexAny path (see <a href="./JS-090.html">JS-090</a>).
-</p>
-</li>
-<li>log keeps the tip fast-path <code>resolve.resolveHex(k,hexish)</code><p>
-first only if it changes no bytes; else fold into resolveHexAny.
-</p>
-</li>
+<li>Mirror commit.js:101-107 exactly so the two hashlet resolvers converge on the ONE store.resolveHexAny path (see <a href="./JS-090.html">JS-090</a>).</li>
+<li>log keeps the tip fast-path <code>resolve.resolveHex(k,hexish)</code> first only if it changes no bytes; else fold into resolveHexAny.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: a <code>test/js/log</code> case <code>log:#&lt;mid-history-hashlet&gt;</code><p>
- + an ambiguous-prefix case asserting empty, against current bytes.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: a <code>test/js/log</code> case <code>log:#&lt;mid-history-hashlet&gt;</code> + an ambiguous-prefix case asserting empty, against current bytes.</li>
 <li class="open"><input type="checkbox" disabled> Rewrite resolveHashlet over k.resolveHexAny + getObject type.</li>
 <li class="open"><input type="checkbox" disabled> Drop <code>_packs</code> from reader (store.js:555) or fence test-only.</li>
 </ul>
@@ -87,14 +60,23 @@ first only if it changes no bytes; else fold into resolveHexAny.
 <li class="blocked"><input type="checkbox" disabled> Pairs with <a href="./JS-090.html">JS-090</a> (three overlapping short-hex resolvers).</li>
 </ul>
 <ul>
-<li>2026-07-07 audit: STILL OPEN (line refs shifted) — <code>views/log/log.js:121 resolveHashlet</code><p>
-still calls <code>k._packs()</code> (<code>:126</code>); <code>shared/store.js:557</code> still exports <code>_packs</code>; the commit.js canonical form (<code>k.resolveHexAny</code>+<code>getObject</code>) is not adopted in log.js.
-</p>
-</li>
+<li>2026-07-07 audit: STILL OPEN (line refs shifted) — <code>views/log/log.js:121 resolveHashlet</code> still calls <code>k._packs()</code> (<code>:126</code>); <code>shared/store.js:557</code> still exports <code>_packs</code>; the commit.js canonical form (<code>k.resolveHexAny</code>+<code>getObject</code>) is not adopted in log.js.</li>
+<li>2026-07-10 revision: still OPEN — views/log/log.js:121 resolveHashlet still calls k.<em>packs() (log.js:126) + re-mmaps each pack (:130-147); shared/store.js:557 still exports </em>packs.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>(pending)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

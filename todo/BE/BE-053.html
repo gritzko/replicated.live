@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-053: todo list-all links resolve as ///BE-021/ tree URIs — must run todo BE-021 in the CURRENT context</title>
+<meta property="og:title" content="BE-053: todo list-all links resolve as ///BE-021/ tree URIs — must run todo BE-021 in the CURRENT context">
+<meta property="og:description" content="Reported by gritzko 2026-07-19. In the todo view's list-all board, a ticket link lands on e.g. ///BE-021/ — a (nonexistent) tree URI — instead of executing the spell todo BE-021 in the current context. The view emits hidden U word spells todo &lt;KEY&gt; by design (BE-038), and a spell is (context, verb, args) — the pager must hand it to the verb loop, never resolve it as a relative URI off ///. Somewhere on the emit or follow path the word spell degrades into URI resolution.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BE/BE-053.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-053: todo list-all links resolve as <code>///BE-021/</code> tree URIs — must run <code>todo BE-021</code> in the CURRENT context</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<p>
+Reported by gritzko 2026-07-19. In the todo view's list-all board, a ticket link lands on e.g. <code>///BE-021/</code> — a (nonexistent) tree URI — instead of executing the spell <code>todo BE-021</code> in the current context. The view emits hidden <code>U</code> word spells <code>todo &lt;KEY&gt;</code> by design (<a href="./BE-038.html">BE-038</a>), and a spell is (context, verb, args) — the pager must hand it to the verb loop, never resolve it as a relative URI off <code>///</code>. Somewhere on the emit or follow path the word spell degrades into URI resolution.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>views/todo/todo.js mints <code>todo &lt;KEY&gt;</code>/<code>todo &lt;TOPIC&gt;</code> U spells on every list row and body token (:222, :247, targetSpell :283, page splice :336-357) — no <code>///</code> is composed in the view; the corruption is downstream (hunk uri slot, pager <code>_uriAt</code>/follow resolver, or the spell-vs-URI classifier).</li>
+<li>Design truth: verbs take (context, arg) and resolve via resolve(context,base,rel); the pager is arg-blind (<a href="/todo/BRO/BRO-024.html">BRO-024</a> context model) — a <code>todo BE-021</code> spell runs in the CURRENT <code>//WT/dir/</code> context.</li>
+<li>ALL URI/hash resolution goes through core/resolve_hash.js; a word spell must never enter it as a path-relative and climb to <code>///</code>.</li>
+<li>be tip at filing: <code>82ef082f</code> (WORK-007 posted).</li>
+<li>Second live variant (gritzko 2026-07-19, a WORK-010 <code>[?]</code> click, empty-context O <code>//: todo STATUS-008</code>): the arg welds onto the CURRENT <code>//WT</code> context — red bar <code>//WORK-010/STATUS-008/: todo</code>, expected <code>//WORK-010/: todo STATUS-008</code>; evidence in <a href="/todo/BRO/BRO-038.html">BRO-038</a> <a href="./STALE.html">STALE</a>. The staged fix predates //WORK/#36040cfb — needs a weave onto the moved tip + a pin for this variant.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Repro first: a pty click on a list-all board row pins the wrong <code>///KEY/</code> navigation red, then flips green.</li>
+<li>A ticket-link click executes <code>todo &lt;KEY&gt;</code> with the pager's current context unchanged (<a href="/todo/BRO/BRO-024.html">BRO-024</a>: context mutates only by navigation); the address bar shows <code>(ctx): todo BE-021</code>, not <code>///BE-021/</code>.</li>
+<li>Whatever path degraded the spell (emit tag, follow resolver, spell classifier) is fixed at the ONE seam — no per-view patching.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Verify through the real UI path — a pty-click repro that flips, not TLV/unit probes alone.</li>
+<li>No reimplementation of URI resolution; the fix routes spells to the verb loop, URIs to resolve_hash — one classifier.</li>
+<li>Rulings in force: pager arg-blind; context only changes by navigation; errors in plain words.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Root cause: pager <code>_runSpell</code> (views/bro/pager.js) treated a word-spell's ARG as a nav address — <code>_fillAuth(&quot;BE-021&quot;)</code> → <code>///BE-021</code> → <code>_ctxFrom</code> → context <code>///BE-021/</code>; the page rendered right, the CONTEXT jumped wrong.</li>
+<li>Fix at the one seam: <code>_isNavAddr(uri)</code> — only a scheme, <code>//authority</code>, or absolute <code>/path</code> navigates; a bare relative arg leaves ctx unchanged and shows verbatim in the bar. <code>..</code>/<code>?ref</code> slot-edits untouched (<code>_applySpell</code> path).</li>
+<li>Noted for later: a relative-FILE click target (<code>cat wiki/Page.mkd</code>) now also keeps ctx at the meta root — consistent with <a href="./BE-038.html">BE-038</a>'s context-tree note; <code>_isNavAddr</code> is the seam if per-file descent is ever wanted.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> pty repro: fixture board + click driver (scratchpad todopty.py/setup.sh); red pinned <code>///BE-021/: todo</code> on the unfixed pager.</li>
+<li class="done"><input type="checkbox" checked disabled> seam located + minimal fix in _runSpell (views/bro/pager.js only, ~40 diff lines).</li>
+<li class="done"><input type="checkbox" checked disabled> green: bar shows <code>//: todo BE-021</code>, context unchanged; suite 302/303 == baseline (the one red is the known pre-existing work/getctx pty).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Staged (put only, NOT posted) in //BE-053 on base //WORK/#82ef082f: views/bro/pager.js.</li>
+<li>Orchestrator re-verified 2026-07-19 by running the pty flip BOTH ways: unfixed pager (//WORK) red <code>///BE-021/: todo</code>, fixed (//BE-053) green <code>//: todo BE-021</code>; work/view pty suite PASS on the fixed tree.</li>
+<li>Suggested commit: <code>BE-053: keep pager context on a word-spell arg click</code></li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

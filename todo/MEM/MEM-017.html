@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-017</title>
+<title>MEM-017: DOGRepoFromBe /.be/ scan reads one byte past the slice (dog/DOG.h)</title>
+<meta property="og:title" content="MEM-017: DOGRepoFromBe /.be/ scan reads one byte past the slice (dog/DOG.h)">
+<meta property="og:description" content="DOGRepoFromBe sets end = p1 - u8csLen(be) - 1 (= p1-4) but probes the 5-byte /.be/ pattern via q0..4, so on the final iteration q == p1-4 and q4 dereferences p1 — one byte past the end of p[0,p1). The over-read fires whenever the path ends in /.be (e.g. the documented legacy /abs/path/.be anchor); since these slices come from non-NUL-terminated URI/ULOG fields, it is a real 1-byte OOB read under ASan or at an mmap page edge. The goal is to fix the loop bound (and the two siblings).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-017.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>MEM-017: DOGRepoFromBe <code>/.be/</code> scan reads one byte past the slice (dog/DOG.h)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>DOGRepoFromBe</code> sets <code>end = p[1] - u8csLen(be) - 1</code> (= <code>p[1]-4</code>) but probes the 5-byte <code>/.be/</code> pattern via <code>q[0..4]</code>, so on the final iteration <code>q == p[1]-4</code> and <code>q[4]</code> dereferences <code>*p[1]</code> — one byte past the end of <code>[p[0],p[1])</code>. The over-read fires whenever the path ends in <code>/.be</code> (e.g. the documented legacy <code>/abs/path/.be</code> anchor); since these slices come from non-NUL-terminated URI/ULOG fields, it is a real 1-byte OOB read under ASan or at an mmap page edge. The goal is to fix the loop bound (and the two siblings).
 </p>
@@ -36,5 +45,16 @@ Correct the bound or use a slice-find helper.
 <li>Repro first: <code>DOGRepoFromBe</code> on a non-NUL-terminated slice ending in <code>/.be</code>; confirm 1-byte OOB under ASan.</li>
 <li>Set <code>end = p[1] - (u8csLen(be)+2)</code> (<code>p[1]-5</code>), or replace manual <code>q[i]</code> probing with <code>u8csFindS</code> for the literal <code>/.be/</code>; apply to both siblings.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

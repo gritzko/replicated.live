@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-022</title>
+<title>MEM-022: KEEPGetPacked resolves delta offsets without re-bounding (keeper/KEEP.c)</title>
+<meta property="og:title" content="MEM-022: KEEPGetPacked resolves delta offsets without re-bounding (keeper/KEEP.c)">
+<meta property="og:description" content="KEEPGetPacked chases the pack delta chain re-deriving cur each iteration but never re-checks cur &lt; packlen at the loop top (the entry bound runs once), and the OFSDELTA arm does cur = cur - obj.ofsdelta with no ofsdelta &lt;= cur guard, so a corrupt index/pack underflows cur to a wild base pointer (UB; sane() is compiled out in Release). Separately the cross-file REFDELTA arm recurses via KEEPGet→KEEPGetPacked with only a per-call local depth, so a deep cross-file chain stacks N frames → stack-overflow DoS. UNPK ingest guards block the remote underflow/cycle cases, leaving these as latent fragility plus a real deep-chain DoS. The goal is to bound and re-validate the resolver.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-022.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>MEM-022: KEEPGetPacked resolves delta offsets without re-bounding (keeper/KEEP.c)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>KEEPGetPacked</code> chases the pack delta chain re-deriving <code>cur</code> each iteration but never re-checks <code>cur &lt; packlen</code> at the loop top (the entry bound runs once), and the OFS_DELTA arm does <code>cur = cur - obj.ofs_delta</code> with no <code>ofs_delta &lt;= cur</code> guard, so a corrupt index/pack underflows <code>cur</code> to a wild base pointer (UB; <code>sane()</code> is compiled out in Release). Separately the cross-file REF_DELTA arm recurses via <code>KEEPGet</code>→<code>KEEPGetPacked</code> with only a per-call local <code>depth</code>, so a deep cross-file chain stacks N frames → stack-overflow DoS. UNPK ingest guards block the remote underflow/cycle cases, leaving these as latent fragility plus a real deep-chain DoS. The goal is to bound and re-validate the resolver.
 </p>
@@ -40,5 +49,16 @@ Re-validate per iteration; cap recursion.
 <li>Repro: ingest a long cross-file REF_DELTA chain (alternating 2 file_ids); assert <code>KEEPGetExact</code> fails bounded, not via stack overflow.</li>
 <li>Thread a recursion-depth cap through <code>KEEPGetPacked</code> (hidden depth param / k-field), fail when exceeded; or dedup revisited file_id/offset pairs.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

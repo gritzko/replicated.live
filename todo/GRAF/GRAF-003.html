@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GRAF-003 DONE: graf pair cache never persists — flush on consumer exit</title>
+<meta property="og:title" content="GRAF-003 DONE: graf pair cache never persists — flush on consumer exit">
+<meta property="og:description" content="The GRAF-001 ahead/behind pair cache computes and then DROPS its results every run: no caller ever invokes graf.flush(), and the auto-flush threshold (MEMFLUSH = 4096 pairs) is far above what one work render produces (~200 pairs). So every jab work re-walks the DAGs the cache was built to spare.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GRAF/GRAF-003.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GRAF-003 <a href="./DONE.html">DONE</a>: graf pair cache never persists — flush on consumer exit</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<p>
+The GRAF-001 ahead/behind pair cache computes and then DROPS its results every run: no caller ever invokes <code>graf.flush()</code>, and the auto-flush threshold (<code>MEM_FLUSH</code> = 4096 pairs) is far above what one <code>work</code> render produces (~200 pairs). So every <code>jab work</code> re-walks the DAGs the cache was built to spare.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Profiled <code>jab work</code> 2026-07-24 (warm cache, ~3.6k syscalls): the ahbeh walks open+mmap nearly EVERY pack, EVERY run — the pair cache is cold each time.
+</p>
+<ul>
+<li>341 <code>.keeper</code> opens per run: 80/87 packs of <code>~/.be/beagle-ext</code>, 64/67 of <code>~/.be/beagle-ext-tests</code> (154 unique packs total).</li>
+<li><code>shared/graf.js</code> seekPair always misses on disk: the shard's <code>*.graf.idx</code> runs are NATIVE (types 1..5, newest Jun 30) — zero 0xA/0xB pair rows ever landed.</li>
+<li><code>flush()</code> fires only at <code>memPairs &gt;= MEM_FLUSH</code> (4096); a 93-wt forest caches ~200 pairs, exits, loses them. <code>grep -rn 'flush' jsrc/views/work/</code> — no caller.</li>
+<li>GRAF-001 already specifies &quot;persist as a fresh small run via idxmaint&quot;; the machinery exists and is tested, it is just never reached.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Persist the memtable at end of run so run N+1 seeks what run N walked; the steady state is near-zero pack IO (tip metas only).
+</p>
+<ul>
+<li><code>work.js</code> registry keeps its per-shard graf handles; after <code>emitForest</code> (all hunks fed) call <code>flush()</code> on each opened graf.</li>
+<li>First run seeds the shard runs; a repeat <code>jab work</code> with unchanged tips must do 0 paint walks (verifiable via <code>graf.stats</code>).</li>
+<li>Any future consumer (status/relate) inherits the same rule: flush what you opened, once, at exit.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Flush stays best-effort under the native <code>.lock.graf</code> flock; a read-only store degrades silently (the idxmaint norm, already in graf.js).</li>
+<li>An empty memtable must not land an empty run (flush() already guards; keep it).</li>
+<li>No flush mid-render — one run land per (shard, run), at the end.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(proposed) registry() grows <code>flushAll()</code> iterating its <code>grafs</code> map; <code>emitForest</code> calls it in a <code>finally</code>-style tail so a throw mid-render still lands what was computed.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro test: two registry runs over one shard; run 2's <code>stats.walks</code> must be 0 and a fresh <code>*.graf.idx</code> run must exist after run 1.</li>
+<li><a href="./ .html"> </a> <code>registry().flushAll()</code> + the <code>emitForest</code> tail call.</li>
+<li><a href="./ .html"> </a> verify on the live journal forest: second <code>jab work</code> opens O(tips) packs, not O(history) (strace count).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>none known; the write path (landRun/compactAfterAdd under flock) is the tested GRAF-001 code.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

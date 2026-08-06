@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JGET-003</title>
+<title>JGET-003: jab get ? (switch to trunk) records the WRONG branch — a later be post rewrites that branch's history</title>
+<meta property="og:title" content="JGET-003: jab get ? (switch to trunk) records the WRONG branch — a later be post rewrites that branch's history">
+<meta property="og:description" content="jab get ? (the explicit &quot;switch to trunk&quot; form: present-but-empty query) writes a wtlog get row pinned to the CURRENT branch instead of trunk, because the empty query string collapses to curBranch. The worktree gets trunk's bytes but the anchor pins e.g. feat at a trunk commit; a following be post then advances feat to a commit rooted on the trunk tip — silently force-moving feat off its own history (committed-history corruption). Native distinguishes ? (switch to trunk) from a bare be get (FF the current branch). Part of JGET-001; method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JGET/JGET-003.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,47 +15,34 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JGET-003 <a href="./CRIT.html">CRIT</a>: <code>jab get ?</code> (switch to trunk) records the WRONG branch — a later <code>be post</code> rewrites that branch's history</h1>
+<h1>JGET-003: <code>jab get ?</code> (switch to trunk) records the WRONG branch — a later <code>be post</code> rewrites that branch's history</h1>
+<div>
+<p>
+Now: OPEN Sev: CRIT
+</p>
+</div>
 <p>
 <code>jab get ?</code> (the explicit &quot;switch to trunk&quot; form: present-but-empty query) writes a wtlog <code>get</code> row pinned to the CURRENT branch instead of trunk, because the empty query string collapses to <code>curBranch</code>. The worktree gets trunk's bytes but the anchor pins e.g. <code>feat</code> at a trunk commit; a following <code>be post</code> then advances <code>feat</code> to a commit rooted on the trunk tip — silently force-moving <code>feat</code> off its own history (committed-history corruption). Native distinguishes <code>?</code> (switch to trunk) from a bare <code>be get</code> (FF the current branch). Part of <a href="JGET-001.html">JGET-001</a>; method <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Found wiring <code>beagle/test/get/56-orphan-banner-not-dag</code>; the wiki <a href="../../wiki/GET.html">GET</a> model:<p>
-empty <code>?</code> = the trunk, no query = the current branch.
-</p>
-</li>
-<li>Repro: `echo trunk&gt;h.c; be put h.c; be post t; be put ?feat; be get ?feat;<p>
-echo feat&gt;h.c; be post f; jab get ?<code> → jab writes wtlog row </code>get ?feat#&lt;trunktip&gt;<code> (branch=feat); native writes </code>get ?#&lt;trunktip&gt;<code> (trunk). Proven consequence: the next </code>be post<code> advances </code>feat<code> to a trunk-rooted commit. Evidence </code>~/todo/JS096-probe1/{iso_j,iso_n,verify_switch}`.
-</p>
-</li>
-<li>Root: <code>inRepoSeed</code> D3' fallback (<code>get.js:423-429</code>):<p>
-<code>const branch = query; const wantBranch = branch || curBranch;</code> — a literal <code>?</code> yields <code>query===&quot;&quot;</code>, so <code>|| curBranch</code> swallows the explicit-trunk intent.
-</p>
-</li>
+<li>Found wiring <code>beagle/test/get/56-orphan-banner-not-dag</code>; the wiki <a href="../../wiki/GET.html">GET</a> model: empty <code>?</code> = the trunk, no query = the current branch.</li>
+<li>Repro: <code>echo trunk&gt;h.c; be put h.c; be post t; be put ?feat; be get ?feat; echo feat&gt;h.c; be post f; jab get ?</code> → jab writes wtlog row <code>get ?feat#&lt;trunktip&gt;</code> (branch=feat); native writes <code>get ?#&lt;trunktip&gt;</code> (trunk). Proven consequence: the next <code>be post</code> advances <code>feat</code> to a trunk-rooted commit. Evidence <code>~/todo/JS096-probe1/{iso_j,iso_n,verify_switch}</code>.</li>
+<li>Root: <code>inRepoSeed</code> D3' fallback (<code>get.js:423-429</code>): <code>const branch = query; const wantBranch = branch || curBranch;</code> — a literal <code>?</code> yields <code>query===&quot;&quot;</code>, so <code>|| curBranch</code> swallows the explicit-trunk intent.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>jab get ?</code> resolves to TRUNK and records a <code>get ?#&lt;tip&gt;</code> row (empty branch),<p>
-matching native; bare <code>be get</code> (no query at all) keeps FF-ing the current branch.
-</p>
-</li>
+<li><code>jab get ?</code> resolves to TRUNK and records a <code>get ?#&lt;tip&gt;</code> row (empty branch), matching native; bare <code>be get</code> (no query at all) keeps FF-ing the current branch.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Distinguish &quot;query absent&quot; from &quot;query present but empty&quot; at the parse layer<p>
-(don't fold them). Repro-first; add the parity test.
-</p>
-</li>
+<li>Distinguish &quot;query absent&quot; from &quot;query present but empty&quot; at the parse layer (don't fold them). Repro-first; add the parity test.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Carry a hasQuery flag (or sentinel) from <code>parseRemote</code>/<code>inRepoSeed</code> so <code>?</code><p>
-(present, empty → trunk) ≠ no-query (→ current branch). <code>wantBranch=&quot;&quot;</code> for <code>?</code>.
-</p>
-</li>
+<li>Carry a hasQuery flag (or sentinel) from <code>parseRemote</code>/<code>inRepoSeed</code> so <code>?</code> (present, empty → trunk) ≠ no-query (→ current branch). <code>wantBranch=&quot;&quot;</code> for <code>?</code>.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -61,14 +52,22 @@ matching native; bare <code>be get</code> (no query at all) keeps FF-ing the cur
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Silent: no error; the corruption only shows on the next post. High blast radius<p>
-because <code>?</code> is the canonical &quot;go to trunk&quot; idiom.
-</p>
-</li>
+<li>Silent: no error; the corruption only shows on the next post. High blast radius because <code>?</code> is the canonical &quot;go to trunk&quot; idiom.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>(open) Filed 2026-06-29.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

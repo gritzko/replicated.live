@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DIS-004</title>
+<title>DIS-004: delete dirty gate is mtime-only, no --force bypass</title>
+<meta property="og:title" content="DIS-004: delete dirty gate is mtime-only, no --force bypass">
+<meta property="og:description" content="be delete &lt;file&gt; should gate on mtime first, then a content-hash double-check when the mtime has drifted, and be delete --force &lt;file&gt; should delete a dirty file anyway. The impl is mtime-only with no hash fallback and no force bypass on the file/dir path, so a file with a drifted-but-identical mtime is wrongly refused and a deliberately dirty delete is impossible. The goal is to match the documented gate (see DELETE). User ruling 2026-05-31.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-004.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>DIS-004: delete dirty gate is mtime-only, no --force bypass</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>be delete &lt;file&gt;</code> should gate on mtime first, then a content-hash double-check when the mtime has drifted, and <code>be delete --force &lt;file&gt;</code> should delete a dirty file anyway. The impl is mtime-only with no hash fallback and no force bypass on the file/dir path, so a file with a drifted-but-identical mtime is wrongly refused and a deliberately dirty delete is impossible. The goal is to match the documented gate (see <a href="../wiki/DELETE.html">DELETE</a>). User ruling 2026-05-31.
 </p>
@@ -23,14 +32,8 @@
 <li><code>!SNIFFAtKnown(mtime)</code> → DELDIRTY with no content fallback; the file's own comment flags the hash fallback as TODO pending a baseline-tree path→sha lookup.</li>
 <li><code>--force</code> / <code>-r</code> only drive the recursive branch drop in <code>DELBranch</code>; there is no force bypass on the file or dir delete path.</li>
 <li><a href="../wiki/DELETE.html">DELETE</a> already documents the target three-step gate, so this is impl catching up to spec.</li>
-<li>Live repro 2026-06-23: an out-of-band <code>cp</code> (identical bytes, fresh mtime) onto<p>
-<code>bin/lib/store.js</code> → <code>be status</code>/<code>be diff bin</code> clean (<code>1396 ok</code>, empty) yet <code>be delete bin</code> → DELDIRTY &quot;bin has unstamped changes&quot;. The hash double-check would let this through (bytes == baseline blob).
-</p>
-</li>
-<li>The error's &quot;revert before deleting&quot; advice is misleading: <code>be get &lt;path&gt;</code> is a<p>
-no-staging overwrite that re-writes the file with a NEW mtime → still unstamped, delete still refuses; <code>be put &lt;path&gt;</code> stages a phantom (content==baseline). Only a FULL <code>be get</code> (rewrites the <code>..be.idx</code> stamp sidecar) re-stamps it clean.
-</p>
-</li>
+<li>Live repro 2026-06-23: an out-of-band <code>cp</code> (identical bytes, fresh mtime) onto <code>bin/lib/store.js</code> → <code>be status</code>/<code>be diff bin</code> clean (<code>1396 ok</code>, empty) yet <code>be delete bin</code> → DELDIRTY &quot;bin has unstamped changes&quot;. The hash double-check would let this through (bytes == baseline blob).</li>
+<li>The error's &quot;revert before deleting&quot; advice is misleading: <code>be get &lt;path&gt;</code> is a no-staging overwrite that re-writes the file with a NEW mtime → still unstamped, delete still refuses; <code>be put &lt;path&gt;</code> stages a phantom (content==baseline). Only a FULL <code>be get</code> (rewrites the <code>..be.idx</code> stamp sidecar) re-stamps it clean.</li>
 </ul>
 <h2>Blockers</h2>
 <p>
@@ -44,17 +47,22 @@ Add the hash double-check and thread a force flag.
 <li>DEL.c file + dir paths: on mtime ∉ stamp-set, hash the on-disk bytes and compare to the baseline blob sha — equal → proceed, drift → DELDIRTY.</li>
 <li>Thread a <code>force</code> flag into <code>DELStage</code> / <code>del_dir</code> so <code>be delete --force &lt;file&gt;</code> skips the dirty gate.</li>
 <li>Add table-driven cases: clean delete, mtime-drift-but-identical (proceed), genuine drift (refuse), <code>--force</code> over dirty (proceed).</li>
-<li>RESIDUAL → <a href="">DIS-052</a>: scoped <code>be get &lt;path&gt;</code> re-stamp + the misleading message<p>
-(out of this ticket's scope; the content double-check makes it moot for the identical-bytes case, but the &quot;revert&quot; advice is still wrong on its own).
-</p>
-</li>
+<li>RESIDUAL → <a href="./DIS-052.html">DIS-052</a>: scoped <code>be get &lt;path&gt;</code> re-stamp + the misleading message (out of this ticket's scope; the content double-check makes it moot for the identical-bytes case, but the &quot;revert&quot; advice is still wrong on its own).</li>
 </ul>
 <h2>Landed</h2>
 <ul>
-<li><code>9718a03a</code>: content double-check + <code>--force</code> bypass on both the file and dir<p>
-delete paths. <code>del_content_eq_baseline()</code> (<code>sniff/DEL.c</code>) resolves the path's baseline blob via <code>KEEPTreeDescend</code> over <code>SNIFFAtBaselineTreeSha</code> and delegates the bytes-vs-baseline compare to the existing <code>CLASSWtEqBase</code>; the gate is now <code>!force &amp;&amp; !SNIFFAtKnown(mtime) &amp;&amp; !content_eq_baseline</code>. <code>force</code> threaded <code>DELStage → del_stage_named → del_dir</code> (<code>--force</code> in <code>SNIFF.exe.c</code>). New <code>sniff/test/delforce.sh</code> (<code>SNIFFdelforce</code>, 6 cases); sniff/delete suite 16/16.
-</p>
-</li>
+<li><code>9718a03a</code>: content double-check + <code>--force</code> bypass on both the file and dir delete paths. <code>del_content_eq_baseline()</code> (<code>sniff/DEL.c</code>) resolves the path's baseline blob via <code>KEEPTreeDescend</code> over <code>SNIFFAtBaselineTreeSha</code> and delegates the bytes-vs-baseline compare to the existing <code>CLASSWtEqBase</code>; the gate is now <code>!force &amp;&amp; !SNIFFAtKnown(mtime) &amp;&amp; !content_eq_baseline</code>. <code>force</code> threaded <code>DELStage → del_stage_named → del_dir</code> (<code>--force</code> in <code>SNIFF.exe.c</code>). New <code>sniff/test/delforce.sh</code> (<code>SNIFFdelforce</code>, 6 cases); sniff/delete suite 16/16.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DIS-026</title>
+<title>DIS-026: no way to push a sub's commits to a git remote's named branch (//git-remote?&lt;branch&gt;)</title>
+<meta property="og:title" content="DIS-026: no way to push a sub's commits to a git remote's named branch (//git-remote?&lt;branch&gt;)">
+<meta property="og:description" content="DIS-019 made a direct be post ssh://…/&lt;sub&gt; a clean no-op so the synthetic dot-coordinate ?/&lt;sub&gt;/.&lt;parent&gt; never reaches a git wire as a funny refname — correct, but it left no path to push the sub's actual commits to the git remote's real branch. Per POST the slot model says //remote FF-pushes cur's tip and ?branch advances that (remote) label, so be post ssh://…/&lt;sub&gt;?main should push cur onto the remote's main. It doesn't: POST reads ?main as a required local label (NOBRANCH), the bare form no-ops on the synthetic cur (DIS-019), and even a read-only be head …?main hangs the wire (WIRECLFL). The keeper help already flags put //remote?ref → push to remote (stub) (keeper/KEEP.exe.c:46). Net: a sub's commits (the 10 abc MEM fixes on ?.beagle/) are stranded — they fast-forward git main cleanly and their objects are already in the peer, but be has no command to advance the remote branch. See POST, Submodules, DIS-019.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-026.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,8 +16,13 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>DIS-026: no way to push a sub's commits to a git remote's named branch (<code>//git-remote?&lt;branch&gt;</code>)</h1>
+<div>
 <p>
-DIS-019 made a direct <code>be post ssh://…/&lt;sub&gt;</code> a clean no-op so the synthetic dot-coordinate <code>?/&lt;sub&gt;/.&lt;parent&gt;</code> never reaches a git wire as a funny refname — correct, but it left <strong>no</strong> path to push the sub's actual commits to the git remote's real branch. Per <a href="../wiki/POST.html">POST</a> the slot model says <code>//remote</code> FF-pushes cur's tip and <code>?branch</code> advances that (remote) label, so <code>be post ssh://…/&lt;sub&gt;?main</code> <strong>should</strong> push cur onto the remote's <code>main</code>. It doesn't: POST reads <code>?main</code> as a required <strong>local</strong> label (<code>NOBRANCH</code>), the bare form no-ops on the synthetic cur (DIS-019), and even a read-only <code>be head …?main</code> hangs the wire (<code>WIRECLFL</code>). The keeper help already flags <code>put //remote?ref → push to remote (stub)</code> (<code>keeper/KEEP.exe.c:46</code>). Net: a sub's commits (the 10 abc MEM fixes on <code>?.beagle/</code>) are stranded — they fast-forward git <code>main</code> cleanly and their objects are already in the peer, but be has no command to advance the remote branch. See <a href="../wiki/POST.html">POST</a>, <a href="../wiki/Submodules.html">Submodules</a>, <a href="">DIS-019</a>.
+Now: DONE
+</p>
+</div>
+<p>
+DIS-019 made a direct <code>be post ssh://…/&lt;sub&gt;</code> a clean no-op so the synthetic dot-coordinate <code>?/&lt;sub&gt;/.&lt;parent&gt;</code> never reaches a git wire as a funny refname — correct, but it left <strong>no</strong> path to push the sub's actual commits to the git remote's real branch. Per <a href="../wiki/POST.html">POST</a> the slot model says <code>//remote</code> FF-pushes cur's tip and <code>?branch</code> advances that (remote) label, so <code>be post ssh://…/&lt;sub&gt;?main</code> <strong>should</strong> push cur onto the remote's <code>main</code>. It doesn't: POST reads <code>?main</code> as a required <strong>local</strong> label (<code>NOBRANCH</code>), the bare form no-ops on the synthetic cur (DIS-019), and even a read-only <code>be head …?main</code> hangs the wire (<code>WIRECLFL</code>). The keeper help already flags <code>put //remote?ref → push to remote (stub)</code> (<code>keeper/KEEP.exe.c:46</code>). Net: a sub's commits (the 10 abc MEM fixes on <code>?.beagle/</code>) are stranded — they fast-forward git <code>main</code> cleanly and their objects are already in the peer, but be has no command to advance the remote branch. See <a href="../wiki/POST.html">POST</a>, <a href="../wiki/Submodules.html">Submodules</a>, <a href="./DIS-019.html">DIS-019</a>.
 </p>
 <h2>Issues</h2>
 <p>
@@ -37,9 +46,20 @@ Implement <code>//git-remote?&lt;branch&gt;</code>: push cur's tip onto the peer
 <ul>
 <li>Repro first (<a href="../../CLAUDE.md">CLAUDE</a> §17): a hermetic git peer (bare, or clean <code>updateInstead</code>) whose <code>main</code> is an ancestor of a mounted sub's <code>?.beagle/</code> tip; <code>be post ssh://…/&lt;sub&gt;?main</code> must advance the peer's <code>main</code> to cur and exit 0; assert the peer ref moved. Mirror the three failing forms above as negative/positive cases.</li>
 <li>Distinguish the DIS-019 case from this one: a synthetic dot-coordinate is forbidden only as the wire <strong>refname</strong> (DIS-019); when an explicit <code>?&lt;branch&gt;</code> names the remote target it IS the refname, so the synthetic cur is a legal <strong>source</strong> — push it.</li>
-<li>Trace where POST turns <code>?&lt;branch&gt;</code> for a <code>//git-remote</code> into a local-label lookup (sniff post path raising <code>NOBRANCH</code> + <code>keeper/KEEP.exe.c</code> <code>cur_branch</code>/<code>local_branch</code> derivation ~226/375, the DIS-019 guard ~849-861, <code>wcli_be_to_wire</code>/<code>GITFeedRef</code> <code>keeper/WIRECLI.c:314</code>); make the remote <code>?&lt;branch&gt;</code> the wire refname and FF-check against the peer's advertised tip (<code>POSTNOFF</code> if not a descendant).</li>
+<li>Trace where POST turns <code>?&lt;branch&gt;</code> for a <code>//git-remote</code> into a local-label lookup (sniff post path raising <code>NOBRANCH</code> + <code>keeper/KEEP.exe.c</code> <code>cur_branch</code>/<code>local_branch</code> derivation <del>226/375, the DIS-019 guard </del>849-861, <code>wcli_be_to_wire</code>/<code>GITFeedRef</code> <code>keeper/WIRECLI.c:314</code>); make the remote <code>?&lt;branch&gt;</code> the wire refname and FF-check against the peer's advertised tip (<code>POSTNOFF</code> if not a descendant).</li>
 <li>Decide PUT vs POST surface: <code>be put //remote?ref</code> is the documented (stub) verb for a pure ref advance; <code>be post //remote?ref</code> composes commit+push. Implement the shared wire path once; a real design fork (which verb owns it) is a stop-and-ask.</li>
 <li>Regression test under <code>test/</code> (post or a new <code>push/</code> family); update the keeper help to drop &quot;(stub)&quot;.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

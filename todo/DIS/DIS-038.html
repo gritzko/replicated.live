@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DIS-038</title>
+<title>DIS-038: a fetched-but-not-DAG-indexed peer tip makes DAGAncestors bottom out at the tip, so be head reports a bogus huge ahead-count and be patch ?br! absorbs nothing</title>
+<meta property="og:title" content="DIS-038: a fetched-but-not-DAG-indexed peer tip makes DAGAncestors bottom out at the tip, so be head reports a bogus huge ahead-count and be patch ?br! absorbs nothing">
+<meta property="og:description" content="be head be://localhost?/beagle from a full be:// clone reports 1317 ahead, 1 behind when the true divergence is 1 ahead, 3 behind, and be patch --nosub be://localhost?/beagle! absorbs nothing (noop=11 … nothing absorbed). Root cause: the peer tip and its parent chain ARE fetched into keeper (commit objects intact, parent headers correct, NOT re-rooted), but their (COMMIT,COMMIT) parent edges are NOT ingested into graf's .graf.idx DAG during the be head/be patch fetch. DAGAncestors (Graf) walks ONLY the DAG index with no keeper-commit-body fallback, so DAGAncestors(peertip) returns just {peertip} — the shared base is missing from the target set, ahead = anccur \ anctarget = nearly all of cur, and getlca(cur,theirs) collapses to 0 (no common ancestor), making the whole-branch replay see nothing new. graf log already fixed this exact class for its own walk (DAG-miss → parse commit body); the ancestor/LCA walk never got that fallback. Diagnosed live on /home/gritzko/todo/DIS-035 (cur 54d2eb5b over base 479fcc96, peer trunk 8d313c50). See HEAD, PATCH, Graf, CLAUDE.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-038.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,11 +16,16 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>DIS-038: a fetched-but-not-DAG-indexed peer tip makes <code>DAGAncestors</code> bottom out at the tip, so <code>be head</code> reports a bogus huge ahead-count and <code>be patch ?br!</code> absorbs nothing</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>be head be://localhost?/beagle</code> from a full be:// clone reports <code>1317 ahead, 1 behind</code> when the true divergence is <code>1 ahead, 3 behind</code>, and <code>be patch --nosub be://localhost?/beagle!</code> absorbs nothing (<code>noop=11 … nothing absorbed</code>). Root cause: the peer tip and its parent chain ARE fetched into keeper (commit objects intact, parent headers correct, NOT re-rooted), but their <code>(COMMIT,COMMIT)</code> parent edges are NOT ingested into graf's <code>.graf.idx</code> DAG during the <code>be head</code>/<code>be patch</code> fetch. <code>DAGAncestors</code> (<a href="../../wiki/Graf.html">Graf</a>) walks ONLY the DAG index with no keeper-commit-body fallback, so <code>DAGAncestors(peer_tip)</code> returns just <code>{peer_tip}</code> — the shared base is missing from the target set, <code>ahead = anc_cur \ anc_target</code> = nearly all of cur, and <code>get_lca(cur,theirs)</code> collapses to 0 (no common ancestor), making the whole-branch replay see nothing new. <code>graf log</code> already fixed this exact class for its own walk (DAG-miss → parse commit body); the ancestor/LCA walk never got that fallback. Diagnosed live on <code>/home/gritzko/todo/DIS-035</code> (cur <code>54d2eb5b</code> over base <code>479fcc96</code>, peer trunk <code>8d313c50</code>). See <a href="../../wiki/HEAD.html">HEAD</a>, <a href="../../wiki/PATCH.html">PATCH</a>, <a href="../../wiki/Graf.html">Graf</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
 </p>
 <p>
-<strong>Blocks (confirmed 2026-06-11):</strong> this single defect is the root of <strong><a href="">GET-014</a></strong> (<code>be head</code>/<code>be patch</code> clobber local trunk <code>?</code>→divergent-C — confirmed to be pure tip-resolution: zero rows written during the verb, the fetched C object in the pool makes the next <code>.refs.idx</code> regen pick C as the tip) AND <strong><a href="">POST-015</a></strong>'s silent-drop half (absorbed commit collapses to the existing tip). Fixing <code>DAGAncestorsTunable</code> (<code>graf/DAG.c:219</code>) to port <code>graf log</code>'s DAG-miss keeper-commit-body fallback (<code>graf/LOG.c:329</code>) closes all three at once.
+<strong>Blocks (confirmed 2026-06-11):</strong> this single defect is the root of <strong><a href="./GET-014.html">GET-014</a></strong> (<code>be head</code>/<code>be patch</code> clobber local trunk <code>?</code>→divergent-C — confirmed to be pure tip-resolution: zero rows written during the verb, the fetched C object in the pool makes the next <code>.refs.idx</code> regen pick C as the tip) AND <strong><a href="./POST-015.html">POST-015</a></strong>'s silent-drop half (absorbed commit collapses to the existing tip). Fixing <code>DAGAncestorsTunable</code> (<code>graf/DAG.c:219</code>) to port <code>graf log</code>'s DAG-miss keeper-commit-body fallback (<code>graf/LOG.c:329</code>) closes all three at once.
 </p>
 <h2>Issues</h2>
 <p>
@@ -27,7 +36,7 @@ The DAG-index-only reachability walk silently under-reports when a fetched tip i
 <li><code>graf/LOG.c</code> first-parent walk (lines ~312-348) ALREADY handles this — DAG miss → parse <code>parent &lt;40hex&gt;</code> from the keeper commit body — which is why <code>graf log ?#&lt;peer_tip&gt;</code> walks the full true chain while <code>graf head</code> does not. The ancestor/LCA walk lacks the same fallback (the asymmetry IS the bug).</li>
 <li><code>graf head</code> ahead/behind (<code>graf_head_ahead_behind</code>, graf/LOG.c ~943): target resolves CORRECTLY to the peer tip (the single <code>-</code> row confirms it), but <code>behind=1</code> (only the tip) and <code>ahead=1317</code> (cur down to the root <code>c7184818 initial</code>) because <code>anc_target={peer_tip}</code> omits the shared base.</li>
 <li><code>get_lca</code> (graf/GET.c ~136): intersects the two ancestor sets; with <code>anc_target={peer_tip}</code> the intersection is empty → <code>*out=0</code> (its own comment names this &quot;DAG index empty&quot; case). The whole-branch <code>?br!</code> replay then weaves against an empty/zero base, so every file reads as noop → &quot;nothing absorbed&quot;.</li>
-<li>The fetch path does NOT index the peer tip: <code>be head/​patch &lt;scheme&gt;://host?…</code> spawns <code>graf get &lt;uri&gt;</code> → <code>GRAFIndexFromTips(u)</code> (graf/GRAF.exe.c ~296), which resolves the URI to ONE tip via <code>GRAFResolveTip</code> and walks only that. It never ingests the freshly-fetched remote-tracking tip's closure. The full <code>GRAFIndex()</code> (which walks <code>KEEPEachRemote</code>, graf/INDEX.c ~321-323) runs only on explicit <code>graf index</code> / <code>be reindex</code>.</li>
+<li>The fetch path does NOT index the peer tip: <code>be head/​patch &lt;scheme&gt;://host?…</code> spawns <code>graf get &lt;uri&gt;</code> → <code>GRAFIndexFromTips(u)</code> (graf/GRAF.exe.c <del>296), which resolves the URI to ONE tip via <code>GRAFResolveTip</code> and walks only that. It never ingests the freshly-fetched remote-tracking tip's closure. The full <code>GRAFIndex()</code> (which walks <code>KEEPEachRemote</code>, graf/INDEX.c </del>321-323) runs only on explicit <code>graf index</code> / <code>be reindex</code>.</li>
 </ul>
 <h2>Blockers</h2>
 <p>
@@ -36,10 +45,7 @@ Two independent layers, either fix alone removes the symptom; both are worth doi
 <ul>
 <li>Layer 1 (reachability robustness): <code>DAGAncestors</code>/<code>DAGAncestorsTunable</code>/<code>get_lca</code> have no keeper-body fallback on a DAG miss, unlike <code>graf log</code>.</li>
 <li>Layer 2 (index coverage): the <code>be head</code>/<code>be patch</code> fetch reindex (<code>GRAFIndexFromTips</code> via <code>graf get</code>) does not ingest the just-fetched remote-tracking peer tip — only a single resolved tip.</li>
-<li>Note DIS-037 (project addressed by store-DIR not TITLE) LANDED <code>014146f6</code><p>
-(12 Jun): <code>?/beagle</code> now resolves by title, so the head/lca path no longer leans on the implicit target for that reason — that compounding factor is gone. Layer 2 (remote-tip ingest) still stands on its own.
-</p>
-</li>
+<li>Note DIS-037 (project addressed by store-DIR not TITLE) LANDED <code>014146f6</code> (12 Jun): <code>?/beagle</code> now resolves by title, so the head/lca path no longer leans on the implicit target for that reason — that compounding factor is gone. Layer 2 (remote-tip ingest) still stands on its own.</li>
 </ul>
 <h2>Planned</h2>
 <p>
@@ -65,22 +71,21 @@ Real DAG (commit objects in keeper, parent headers — NOT re-rooted): <code>54d
 Second manifestation (GET-014 arm): a <code>be get --nosub</code> in a far-behind worktree regressed the SHARED <code>beagle</code> shard HEAD, orphaning 3 already-landed commits.
 </p>
 <ul>
-<li><code>/home/gritzko/todo/SUBS-030</code> posted <code>d7eaf5c4</code> (SUBS-030, clean FF over<p>
-<code>742c06ff</code>/<code>c3fbdda5</code>/<code>9e80e5f0</code>) at 08:14 and verified it as the tip.
-</p>
-</li>
-<li>Then <code>/home/gritzko/todo/DIS-048</code> (pinned at June-21 <code>0c67bea8</code>/<code>371ad14b</code>)<p>
-ran <code>be get --nosub</code>; <code>.be/beagle/refs</code> was rewritten at 08:19 and HEAD resolved back to <code>9e80e5f0</code> — the journal's gitlink pin — for ALL clones AND the <code>beagle/</code> submodule checkout (journal then shows <code>beagle</code> clean).
-</p>
-</li>
-<li>No data loss: <code>d7eaf5c4</code>/<code>742c06ff</code>/<code>c3fbdda5</code> still present in <code>beagle/refs</code>;<p>
-<code>be head</code> from a clone shows the classic bogus ahead-list (cur whole history).
-</p>
-</li>
-<li>Recovery is a linear FF of the <code>beagle</code> shard HEAD <code>9e80e5f0</code>→<code>d7eaf5c4</code><p>
-(advancing the journal gitlink pin past the regression is the durable fix).
-</p>
-</li>
+<li><code>/home/gritzko/todo/SUBS-030</code> posted <code>d7eaf5c4</code> (SUBS-030, clean FF over <code>742c06ff</code>/<code>c3fbdda5</code>/<code>9e80e5f0</code>) at 08:14 and verified it as the tip.</li>
+<li>Then <code>/home/gritzko/todo/DIS-048</code> (pinned at June-21 <code>0c67bea8</code>/<code>371ad14b</code>) ran <code>be get --nosub</code>; <code>.be/beagle/refs</code> was rewritten at 08:19 and HEAD resolved back to <code>9e80e5f0</code> — the journal's gitlink pin — for ALL clones AND the <code>beagle/</code> submodule checkout (journal then shows <code>beagle</code> clean).</li>
+<li>No data loss: <code>d7eaf5c4</code>/<code>742c06ff</code>/<code>c3fbdda5</code> still present in <code>beagle/refs</code>; <code>be head</code> from a clone shows the classic bogus ahead-list (cur whole history).</li>
+<li>Recovery is a linear FF of the <code>beagle</code> shard HEAD <code>9e80e5f0</code>→<code>d7eaf5c4</code> (advancing the journal gitlink pin past the regression is the durable fix).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

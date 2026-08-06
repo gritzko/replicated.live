@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JGET-010</title>
+<title>JGET-010: bareword path-vs-branch misroute — jab get can't switch by branch name, detach by bare sha, or do ?..</title>
+<meta property="og:title" content="JGET-010: bareword path-vs-branch misroute — jab get can't switch by branch name, detach by bare sha, or do ?..">
+<meta property="og:description" content="inRepoSeed runs the path-restore branch BEFORE the branch-switch / detach branches, so any bareword with no / and no leading ? is treated as a FILE path: a branch name (feat), a bare 40-hex sha (detach), and the parent form ?.. all misroute and error (no such path … / cannot resolve ?..), leaving the wt unswitched. Native classifies a bareword by TRACKED-in-baseline-tree status (DIS-017): a tree entry → restore, else → ?branch switch; and resolves .. to the parent branch. Non-destructive (no wt mutation) but jab get cannot switch by name, detach by sha, or navigate parents — and ?.. is used pervasively in the native suite. Part of JGET-001; method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JGET/JGET-010.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,32 +15,25 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JGET-010 <a href="./MED.html">MED</a>: bareword path-vs-branch misroute — <code>jab get</code> can't switch by branch name, detach by bare sha, or do <code>?..</code></h1>
+<h1>JGET-010: bareword path-vs-branch misroute — <code>jab get</code> can't switch by branch name, detach by bare sha, or do <code>?..</code></h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
 <p>
 <code>inRepoSeed</code> runs the path-restore branch BEFORE the branch-switch / detach branches, so any bareword with no <code>/</code> and no leading <code>?</code> is treated as a FILE path: a branch name (<code>feat</code>), a bare 40-hex sha (detach), and the parent form <code>?..</code> all misroute and error (<code>no such path …</code> / <code>cannot resolve ?..</code>), leaving the wt unswitched. Native classifies a bareword by TRACKED-in-baseline-tree status (<a href="../DIS/DIS-017.html">DIS-017</a>): a tree entry → restore, else → <code>?branch</code> switch; and resolves <code>..</code> to the parent branch. Non-destructive (no wt mutation) but <code>jab get</code> cannot switch by name, detach by sha, or navigate parents — and <code>?..</code> is used pervasively in the native suite. Part of <a href="JGET-001.html">JGET-001</a>; method <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Native `beagle/test/get/{34-restore-deleted-tracked (arm C1), 33-detached-refuse-commit<p>
-(bare sha arm), 04-branch-switch-status (?.. )}`.
-</p>
-</li>
-<li>Root: <code>inRepoSeed</code> (<code>get.js:390</code>) `let path=u.path; … if (path) return<p>
-restorePath(...)<code> runs before the detach/branch arms; restorePath throws at </code>get.js:470<code> (</code>no such path &lt;p&gt; in source<code>). </code>?..<code> reaches the switch arm but </code>k.resolveRef(&quot;..&quot;)<code> is empty → throw </code>get.js:435<code> (</code>cannot resolve ?..`).
-</p>
-</li>
-<li>Repro: after a <code>?./feat</code> fork — <code>jab get feat</code> / <code>jab get &lt;40hex&gt;</code> / <code>jab get '?..'</code><p>
-→ rc=1, no switch. Evidence under <code>/tmp/claude-1000/jabprobe</code> (c34/c33/c04).
-</p>
-</li>
+<li>Native <code>beagle/test/get/{34-restore-deleted-tracked (arm C1), 33-detached-refuse-commit (bare sha arm), 04-branch-switch-status (?.. )}</code>.</li>
+<li>Root: <code>inRepoSeed</code> (<code>get.js:390</code>) <code>let path=u.path; … if (path) return restorePath(...)</code> runs before the detach/branch arms; restorePath throws at <code>get.js:470</code> (<code>no such path &lt;p&gt; in source</code>). <code>?..</code> reaches the switch arm but <code>k.resolveRef(&quot;..&quot;)</code> is empty → throw <code>get.js:435</code> (<code>cannot resolve ?..</code>).</li>
+<li>Repro: after a <code>?./feat</code> fork — <code>jab get feat</code> / <code>jab get &lt;40hex&gt;</code> / <code>jab get '?..'</code> → rc=1, no switch. Evidence under <code>/tmp/claude-1000/jabprobe</code> (c34/c33/c04).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Bareword classification matches native (<a href="../DIS/DIS-017.html">DIS-017</a>): tracked tree entry → restore;<p>
-otherwise → branch switch. A bare 40-hex sha detaches (<code>?&lt;sha&gt;</code>). <code>?..</code> resolves to the parent branch.
-</p>
-</li>
+<li>Bareword classification matches native (<a href="../DIS/DIS-017.html">DIS-017</a>): tracked tree entry → restore; otherwise → branch switch. A bare 40-hex sha detaches (<code>?&lt;sha&gt;</code>). <code>?..</code> resolves to the parent branch.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
@@ -45,10 +42,7 @@ otherwise → branch switch. A bare 40-hex sha detaches (<code>?&lt;sha&gt;</cod
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Reorder/guard <code>inRepoSeed</code>: test tracked-in-baseline BEFORE treating a bareword as<p>
-a path; route a 40-hex bareword to detach; resolve <code>..</code>/<code>./</code> relative refs in the branch arm. Keep real path-restore for tracked entries.
-</p>
-</li>
+<li>Reorder/guard <code>inRepoSeed</code>: test tracked-in-baseline BEFORE treating a bareword as a path; route a 40-hex bareword to detach; resolve <code>..</code>/<code>./</code> relative refs in the branch arm. Keep real path-restore for tracked entries.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -64,5 +58,16 @@ a path; route a 40-hex bareword to detach; resolve <code>..</code>/<code>./</cod
 <ul>
 <li>(open) Filed 2026-06-29.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-015</title>
+<title>JS-015: script args dropped — no process.argv / args global</title>
+<meta property="og:title" content="JS-015: script args dropped — no process.argv / args global">
+<meta property="og:description" content="A JABC script cannot read its own command-line parameters: main() takes the first non-flag token as the script path and breaks, never exposing the trailing argv to JS. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-015.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,25 +15,21 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-015 <a href="">LOW</a>: script args dropped — no <code>process.argv</code> / <code>args</code> global</h1>
+<h1>JS-015: script args dropped — no <code>process.argv</code> / <code>args</code> global</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 A JABC script cannot read its own command-line parameters: <code>main()</code> takes the first non-flag token as the script path and <code>break</code>s, never exposing the trailing argv to JS. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>js/main.cpp:120-123</code> — once <code>argv[i]</code> is taken as <code>script_file</code>, the<p>
-arg loop <code>break</code>s; every token after it is ignored.
-</p>
-</li>
-<li>No <code>process.argv</code> / <code>scriptArgs</code> / <code>args</code> global is installed, so a<p>
-script has no way to see its parameters (verified: grep <code>argv</code> in <code>js/</code>).
-</p>
-</li>
-<li>Blocks any parameterized utility, e.g. <code>jabc tool.js status ~/repo</code><p>
-(the surfaced gap from the <code>be status</code> JABC-coverage review).
-</p>
-</li>
+<li><code>js/main.cpp:120-123</code> — once <code>argv[i]</code> is taken as <code>script_file</code>, the arg loop <code>break</code>s; every token after it is ignored.</li>
+<li>No <code>process.argv</code> / <code>scriptArgs</code> / <code>args</code> global is installed, so a script has no way to see its parameters (verified: grep <code>argv</code> in <code>js/</code>).</li>
+<li>Blocks any parameterized utility, e.g. <code>jabc tool.js status ~/repo</code> (the surfaced gap from the <code>be status</code> JABC-coverage review).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
@@ -43,17 +43,11 @@ script has no way to see its parameters (verified: grep <code>argv</code> in <co
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open) Collect the tail into a JS array set as a global — <code>args</code>, and<p>
-optionally a Node-ish <code>process.argv = [&quot;jabc&quot;, script, …tail]</code>.
-</p>
-</li>
+<li>(open) Collect the tail into a JS array set as a global — <code>args</code>, and optionally a Node-ish <code>process.argv = [&quot;jabc&quot;, script, …tail]</code>.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: <code>jabc tool.js a b</code> → <code>args</code> deep-equals <code>[&quot;a&quot;,&quot;b&quot;]</code><p>
-  (C++/e2e assert, red before).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: <code>jabc tool.js a b</code> → <code>args</code> deep-equals <code>[&quot;a&quot;,&quot;b&quot;]</code> (C++/e2e assert, red before).</li>
 <li class="open"><input type="checkbox" disabled> Build the array in <code>main()</code> after module install, before the run.</li>
 </ul>
 <h3>Blockers</h3>
@@ -62,14 +56,19 @@ optionally a Node-ish <code>process.argv = [&quot;jabc&quot;, script, …tail]</
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li><strong>LANDED <code>800c57a3</code></strong> (2026-06-21): <code>main()</code> records the argv tail; new<p>
-<code>JABCInstallArgv</code> sets global <code>args</code> + Node-ish <code>process.argv</code> (<code>[&quot;jabc&quot;, script, …tail]</code>) after module install. New <code>js/test/run-015.sh</code> ctest <code>JABCargv</code> red-before/green-after; <code>ctest -R JABC</code> 18/18, ASAN/LSan clean. Posted past a benign POSTCFLCT (doc string in INDEX.md → <a href="../POST/POST-006.html">POST-006</a>).
-</p>
-</li>
-<li>Pre-existing, not changed: <code>--eval CODE x</code> still treats <code>x</code> as a script<p>
-path (the no-trailing-script <code>--eval</code> case works, <code>args=[]</code>).
-</p>
-</li>
+<li><strong>LANDED <code>800c57a3</code></strong> (2026-06-21): <code>main()</code> records the argv tail; new <code>JABCInstallArgv</code> sets global <code>args</code> + Node-ish <code>process.argv</code> (<code>[&quot;jabc&quot;, script, …tail]</code>) after module install. New <code>js/test/run-015.sh</code> ctest <code>JABCargv</code> red-before/green-after; <code>ctest -R JABC</code> 18/18, ASAN/LSan clean. Posted past a benign POSTCFLCT (doc string in INDEX.md → <a href="../POST/POST-006.html">POST-006</a>).</li>
+<li>Pre-existing, not changed: <code>--eval CODE x</code> still treats <code>x</code> as a script path (the no-trailing-script <code>--eval</code> case works, <code>args=[]</code>).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

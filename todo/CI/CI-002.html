@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CI-002: HTTP GET → spell → hunks → HTML (web projector)</title>
+<meta property="og:title" content="CI-002: HTTP GET → spell → hunks → HTML (web projector)">
+<meta property="og:description" content="Serve Beagle views over HTTP by mapping the GET target into a context-verb-arg spell, executing it, and rendering the resulting HUNK stream as HTML with all links live. The pager's model verbatim on the web: URL bar = context, click = spell (/wiki/URI, BRO-024 context law). No new resolution logic anywhere — be/core/resolvehash.js and be/shared/spell.js stay the only resolvers.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CI/CI-002.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>CI-002: HTTP GET → spell → hunks → HTML (web projector)</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+Serve Beagle views over HTTP by mapping the GET target into a context-verb-arg spell, executing it, and rendering the resulting HUNK stream as HTML with all links live. The pager's model verbatim on the web: URL bar = context, click = spell (<a href="/wiki/URI.html">URI</a>, BRO-024 context law). No new resolution logic anywhere — <code>be/core/resolve_hash.js</code> and <code>be/shared/spell.js</code> stay the only resolvers.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The HUNK TLV already carries the full view model: rows, token tags, hidden <code>U</code>/<code>O</code>/<code>F</code> targets, banner URIs (<code>be/view/bro.js</code>, <code>be/views/bro/pager.js</code>). <code>bro --plain</code> (<code>be/views/bro/bro.js</code>) proves a spell can be executed headless and its hunks reproduced byte-exactly. <code>mark</code>/<code>rss</code> render the static site; live views (<code>status</code>, <code>log</code>, <code>diff</code>, <code>tree</code>, <code>cat</code>) have no web rendering at all.
+</p>
+<h3>Goals</h3>
+<ul>
+<li><code>GET /{verb}/{wtree}/{path}?{ref}</code> → <code>(ctx, verb, arg)</code> → <code>SPELL.compose</code> → run → hunks → HTML page.</li>
+<li>Verb absent → default by <code>otype</code> exactly like a pager row-click: tree→<code>ls</code>, blob→<code>cat</code>, commit→<code>commit</code>.</li>
+<li>Every <code>U</code> token renders as <code>&lt;a href&gt;</code>, every read-only <code>O</code> spell as a link, every <code>F</code> key as its ticket page.</li>
+<li>One theme: token tag → CSS class, class table generated from <code>be/view/theme.js</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The GET target is a URI: lex it with the native <code>URI</code>, compose with <code>URI.make</code> — no regex/string parsing (<a href="/meta/work.html">work</a> §Things NOT TO DO).</li>
+<li>ALL hash/path resolution via <code>resolve_hash</code>; context merge via <code>SPELL.compose</code> under the O-link rules (empty ctx leaves, absolute replaces, relative combines).</li>
+<li>GET dispatches projector views ONLY (the view registry); mutation verbs render as plain text, never links.</li>
+<li>Confinement is inherited: <code>discover.resolve</code> NAVESCAPE gates every path.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Fragment snag solves itself: <code>#pin</code> never reaches a server, but spec step 5.4 resolves <code>?hashlet</code> as a detached commit — the renderer rewrites <code>#sha</code> links as <code>?sha</code>; <code>resolve_hash</code> needs zero changes.</li>
+<li>One bijective URL↔(ctx,verb,arg) codec module, used by BOTH the request mapper and the link renderer — the resolve_hash single-source doctrine at the web edge.</li>
+<li>Serving starts CGI-style: frontend spawns <code>jab html '&lt;spell&gt;'</code> per request, matching the spawn-per-request wire model (stateless); a <code>pol</code> listener can come later without touching the renderer.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> <code>jab html &lt;spell&gt;</code>: execute spell headless (the <code>bro --plain</code> path), emit an HTML page from the hunk stream.</li>
+<li><a href="./ .html"> </a> URL↔spell codec module (bijective, URI.make-only composition).</li>
+<li><a href="./ .html"> </a> theme.js → CSS class table generator (one stylesheet).</li>
+<li><a href="./ .html"> </a> <code>U</code>/<code>O</code>/<code>F</code> token → href mapping; <code>#sha</code> → <code>?sha</code> rewrite; mutation-verb links inert.</li>
+<li><a href="./ .html"> </a> otype-default verb for verb-less URLs (via resolve_hash).</li>
+<li><a href="./ .html"> </a> CGI/spawn frontend; read-only view gate.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>No JS HTTP listener yet; CGI spawn sidesteps it for now.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+(pending)
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

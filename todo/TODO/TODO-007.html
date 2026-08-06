@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TODO-007 DONE: board count-button click stages nothing, jumps to top</title>
+<meta property="og:title" content="TODO-007 DONE: board count-button click stages nothing, jumps to top">
+<meta property="og:description" content="Field bug 2026-08-04, be todo in //TODO-006: clicking the lit ~5 (changed → bare put) and +6 (untracked → put +) count buttons in a row's FILE frame i ~5 +6 ✓ staged NOTHING and the view jumped to the TOP. Expected: the button drives //WT/: put (put +) in the row's own worktree and the view refreshes in place with the counts turning staged-grey.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/TODO/TODO-007.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>TODO-007 <a href="./DONE.html">DONE</a>: board count-button click stages nothing, jumps to top</h1>
+<div>
+<p>
+Now: DONE Sev: HIGH Ask: gritzko Rep: ///be/ See: TODO-006 See: TODO-005
+</p>
+</div>
+<p>
+Field bug 2026-08-04, <code>be todo</code> in //TODO-006: clicking the lit <code>~5</code> (changed → bare <code>put</code>) and <code>+6</code> (untracked → <code>put +</code>) count buttons in a row's FILE frame <code>[ i ~5    +6  ✓]</code> staged NOTHING and the view jumped to the TOP.  Expected: the button drives <code>//WT/: put</code> (<code>put +</code>) in the row's own worktree and the view refreshes in place with the counts turning staged-grey.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The symptom signature points past the spell text at the CLICK RESOLUTION: top-of-view with NO <code>err:</code> in the bar is the <code>_followRow</code> fallback (pager.js:1264) — <code>_uriAt</code> found no O token at the cell, so the pager followed the hunk banner <code>todo</code> and PUSHED a fresh board (top scroll).  A resolved mutation spell goes through <code>_actSpell</code>, which keeps the scroll and would surface any error as <code>err:</code> in the bar.
+</p>
+<ul>
+<li>The minting is correct and unchanged since TODO-005: countSlot → btnCell → <code>#&lt;pale&gt;&lt;tone&gt; //WT/: put</code> (todo.js:866/902), <code>_uriAt</code> sheds the colour prefix at the first space (pager.js:1328), parseOspell splits the three-part invite, <code>_isMutation(put)</code> gates to <code>_actSpell</code> (pager.js:1258).</li>
+<li>Prime suspect: <code>_screenToByte</code> column→byte drift across the row's HIDDEN token runs (several long O spans precede the count faces on a board row) and/or ambiguous-width glyphs (<code>●</code> <code>┄</code> <code>⇄</code>) — the computed byte offset lands on a neighbouring <code>S</code> token, whose next token is not an O, so <code>_uriAt</code> returns nothing.</li>
+<li>The TODO-006 pty legs clicked the ticket KEY (early in the row, one nav O) — the count buttons, deep in the row behind many hidden runs, were never click-tested.</li>
+<li>Distinct earlier symptom in the same session: the done <code>✓</code> click surfaced <code>err: cannot load verb 'done'</code> — that one was a mid-edit require chain (transient) and DID resolve the O; keep the two apart.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A pty repro FIRST: on the rowcache fixture board, click each lit button of the FILE frame (<code>~</code> <code>-</code> <code>+</code> and <code>✓</code>) and the COMMIT frame by SCREEN CELL; prove where the computed byte offset lands vs the O tokens.</li>
+<li>Fix so a click ANYWHERE on a button's 2-cell face fires its own O: <code>put</code> stages the changed rows, <code>put +</code> the untracked, the view refreshes IN PLACE (scroll kept), counts turn staged.</li>
+<li>Every board button click-tested in the pty leg from now on — key nav alone does not cover the frames.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Fix the RESOLVER (screen→byte / token walk), not the producer: the minted bytes are per TODO-005 rulings and other views share the O conventions — a producer workaround would fork the convention.</li>
+<li>Verify through the real UI path on the REAL board too (a fixture pass alone does not close this).</li>
+<li>No edits to tests outside the TODO-006 case files without permission.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> pty repro: click every frame button by cell, log hit token per cell</li>
+<li><a href="./ .html"> </a> root-cause the cell→byte→token walk (hidden runs, ambiguous widths)</li>
+<li><a href="./ .html"> </a> fix + red-verify; counts turn staged in place, scroll kept</li>
+<li><a href="./ .html"> </a> extend the board pty leg to click-cover all frame buttons</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>views/work/work.js:567 mints the WORK-005 fade <code>O</code> as a bare <code>#rrggbb</code> with NO trailing space — <code>_uriAt</code>'s strip needs <code>sp &gt; 0</code>, so a click there resolves to the literal <code>&quot;#222222&quot;</code> and drives garbage; same convention, different bug, ticket candidate.</li>
+<li><code>_followRow</code> happily re-pushes a view identical to the current one — that is what turned a dead click into &quot;jump to top&quot;; a same-view guard would make every stray click harmless, ticket candidate.</li>
+<li>A wholly-staged count is visually identical to a live button but for the wash — that is what invited the click; whether it needs a stronger disabled look is gritzko's call.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>ROOT CAUSE (prime suspect DISPROVEN): no <code>_screenToByte</code> drift — 712/712 painted button cells resolve their token at 100/120/200 cols.  The dead cells are the wholly-STAGED count slots: TODO-005's infoCell mints an <code>O</code> of <code>#rrggbb </code> with an EMPTY spell, <code>_uriAt</code> returns <code>&quot;&quot;</code>, falsy, so <code>_mouse</code> fell through to <code>_followRow</code>, which re-pushed the board — top of view, nothing staged, no err.  gritzko's <code>~5</code>/<code>+6</code> were already-staged counts (the lit <code>✓</code> on the same row agrees).</li>
+<li>FIX (resolver, 1 line in views/bro/pager.js): an <code>O</code> with an empty spell is an EXPLICIT non-target — the cell is inert, scroll kept, <code>(nothing to click here)</code> in the bar.  Producers untouched.</li>
+<li>Red-verified on fixture AND real board (fix removed → the exact field symptom returns); a speculative <code>bumpRoot</code>-per-click was tried, red-verify showed it not load-bearing, dropped.</li>
+<li>test/todo/rowcache/board.py now click-covers every frame button by screen cell — <code>~</code>→put, <code>+</code>→put +, <code>-</code>→staged delete, each verified against the target wt's own status LETTERS; ✓/post/get/patch asserted painted, deliberately not clicked; staged counts re-fire no verb.  81 legs, suite 350/350 (orchestrator-verified).</li>
+<li>The worker declined a mutating click on a real wt (no exact unstage inverse exists) — the staging path is proven in the fixture; a real-board mutation happens only on gritzko's explicit order.</li>
+<li>Staged in <code>//TODO-006/</code>: views/bro/pager.js + test/todo/rowcache/board.py (TODO-006's five files unchanged beside them).</li>
+<li>Suggested commit: <code>TODO-007: a spell-less button cell is inert, not a row click</code></li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

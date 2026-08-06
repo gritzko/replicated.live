@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>RON-001</title>
+<title>RON-001: RONToTime clamps out-of-range slots (never BADARG) + generator must not emit ms≥1000</title>
+<meta property="og:title" content="RON-001: RONToTime clamps out-of-range slots (never BADARG) + generator must not emit ms≥1000">
+<meta property="og:description" content="A ron60 whose calendar slots overflow (ms≥1000 from a same-second monotonic bump) is a legal 60-bit value/string but NOT a valid time; RONToTime (abc/RON.c:91) returns BADARG, and ron.date — the one caller that HARD-throws — crashes the whole jab status. Two fixes: (A) RONToTime clamps each slot to the nearest valid value so rendering / mtime restore never fail; (B) the ron60 stamp generator (ULOG monotonic max(now,last+1) bump) must not overflow the ms field when &gt;1000 rows land in one second. Repro string: 26702A0RFd (ms=1000). Method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/RON/RON-001.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,73 +16,45 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>RON-001: <code>RONToTime</code> clamps out-of-range slots (never BADARG) + generator must not emit ms≥1000</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 A ron60 whose calendar slots overflow (ms≥1000 from a same-second monotonic bump) is a legal 60-bit value/string but NOT a valid time; <code>RONToTime</code> (abc/RON.c:91) returns <code>BADARG</code>, and <code>ron._date</code> — the one caller that HARD-throws — crashes the whole <code>jab status</code>. Two fixes: (A) <code>RONToTime</code> clamps each slot to the nearest valid value so rendering / mtime restore never fail; (B) the ron60 stamp generator (ULOG monotonic <code>max(now,last+1)</code> bump) must not overflow the ms field when &gt;1000 rows land in one second. Repro string: <code>26702A0RFd</code> (ms=1000). Method <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Found debugging a <code>jab status</code> crash in a store-backed beagle clone:<p>
-<code>JS exception: Error: ron._date: bad ron60</code>.
-</p>
-</li>
-<li><code>jab get</code> wrote 1349 <code>put</code> wtlog rows in ONE second; the ULOG monotonic<p>
-stamp <code>max(RONNow(), last+1)</code> increments the PACKED ron60 integer, so the ms field (low two RON digits, <code>ms = d1*64 + d0</code>, 0–999; abc/RON.c:66) counts 0…999 then rolls to 1000,1001… — legal ron60 ints, illegal times.
-</p>
-</li>
-<li>Boundary verified: <code>26702A0RFc</code> = ms 999 → renders &quot;10:00&quot;; <code>26702A0RFd</code> =<p>
-ms 1000 (<code>0x3e8</code>) → <code>RONToTime</code> BADARG (abc/RON.c:110-111). Row 181 of the clone <code>.be</code>: <code>put dog/test/KEYW.c</code>.
-</p>
-</li>
-<li>Callers: <code>ron._date</code> (js/codec.cpp:164, HARD-THROWS, passes ms=NULL yet still<p>
-hits the ms check), <code>dog/HUNK.c:47</code>/<code>:1664</code> (fall back to now/&quot;?&quot;), <code>abc/FILE.c:421</code> io.setMtime (falls back to zero timespec). Only the JS date path is fatal.
-</p>
-</li>
+<li>Found debugging a <code>jab status</code> crash in a store-backed beagle clone: <code>JS exception: Error: ron._date: bad ron60</code>.</li>
+<li><code>jab get</code> wrote 1349 <code>put</code> wtlog rows in ONE second; the ULOG monotonic stamp <code>max(RONNow(), last+1)</code> increments the PACKED ron60 integer, so the ms field (low two RON digits, <code>ms = d1*64 + d0</code>, 0–999; abc/RON.c:66) counts 0…999 then rolls to 1000,1001… — legal ron60 ints, illegal times.</li>
+<li>Boundary verified: <code>26702A0RFc</code> = ms 999 → renders &quot;10:00&quot;; <code>26702A0RFd</code> = ms 1000 (<code>0x3e8</code>) → <code>RONToTime</code> BADARG (abc/RON.c:110-111). Row 181 of the clone <code>.be</code>: <code>put dog/test/KEYW.c</code>.</li>
+<li>Callers: <code>ron._date</code> (js/codec.cpp:164, HARD-THROWS, passes ms=NULL yet still hits the ms check), <code>dog/HUNK.c:47</code>/<code>:1664</code> (fall back to now/&quot;?&quot;), <code>abc/FILE.c:421</code> io.setMtime (falls back to zero timespec). Only the JS date path is fatal.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>(A) <code>RONToTime</code> clamps every out-of-range slot to nearest valid (ms→999,<p>
-sec/min→59, hour→23, mon→<a href="./1,12.html">1,12</a>, mday→<a href="./1,31.html">1,31</a>, year digits→9) and returns OK; never BADARG once <code>t != NULL</code>. The three callers then fail only on <code>ts==0</code>.
-</p>
-</li>
-<li>(B) the ron60 stamp generator (js/ulog.hpp <code>_ulog_now</code>, native ULOG /<p>
-keeper <code>keep_next_pup_key</code>) carries a same-second overflow into the next SECOND (or widens/serialises sub-ms) so it NEVER emits ms≥1000 — stamps stay round-trippable and monotonic.
-</p>
-</li>
+<li>(A) <code>RONToTime</code> clamps every out-of-range slot to nearest valid (ms→999, sec/min→59, hour→23, mon→<a href="./1,12.html">1,12</a>, mday→<a href="./1,31.html">1,31</a>, year digits→9) and returns OK; never BADARG once <code>t != NULL</code>. The three callers then fail only on <code>ts==0</code>.</li>
+<li>(B) the ron60 stamp generator (js/ulog.hpp <code>_ulog_now</code>, native ULOG / keeper <code>keep_next_pup_key</code>) carries a same-second overflow into the next SECOND (or widens/serialises sub-ms) so it NEVER emits ms≥1000 — stamps stay round-trippable and monotonic.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>(A) <code>abc/RON.c</code> only; repro-first (CLAUDE.md §17) as an abc unit test;<p>
-existing RON round-trip tests stay green; ASan clean. <code>RONOfTime</code> input validation stays STRICT (writers must produce valid times).
-</p>
-</li>
+<li>(A) <code>abc/RON.c</code> only; repro-first (CLAUDE.md §17) as an abc unit test; existing RON round-trip tests stay green; ASan clean. <code>RONOfTime</code> input validation stays STRICT (writers must produce valid times).</li>
 <li>(B) ULOG appender layer (spans js/ + dog/ULOG + keeper) — separate landing.</li>
-<li>The clamp is READ-side robustness; it does NOT repair the stored corruption<p>
-— (B) is the root cause.
-</p>
-</li>
+<li>The clamp is READ-side robustness; it does NOT repair the stored corruption — (B) is the root cause.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(A) replace each <code>return BADARG</code> in <code>RONToTime</code> with a clamp to the nearest<p>
-valid value (overflow→max, underflow→min); keep <code>RONOfTime</code> strict so this is a decode-tolerance change only, not a widening of what writers may emit.
-</p>
-</li>
+<li>(A) replace each <code>return BADARG</code> in <code>RONToTime</code> with a clamp to the nearest valid value (overflow→max, underflow→min); keep <code>RONOfTime</code> strict so this is a decode-tolerance change only, not a widening of what writers may emit.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> (A) repro: abc RON test — clamp cases in <code>dog/abc/test/RON.c</code> (ms 1000→999<p>
-  time unchanged, mon 14→12, hour 25→23, min/sec 60→59; all return OK).
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> (A) clamp patch in <code>RONToTime</code> (abc/RON.c:103 slot-by-slot clamp) — landed<p>
-  abc <code>ffc0624b</code> / beagle pin <code>a4094f7f</code> &quot;out-of-range timestamps do not throw&quot;.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> (B) generator: carry same-second ms overflow into the next second<p>
-  (<code>_ulog_now</code> / <code>keep_next_pup_key</code>); never emit ms≥1000; add a   &gt;1000-rows-in-one-second repro. <a href="./follow-up.html">follow-up</a>
-</p>
+<li class="done"><input type="checkbox" checked disabled> (A) repro: abc RON test — clamp cases in <code>dog/abc/test/RON.c</code> (ms 1000→999 time unchanged, mon 14→12, hour 25→23, min/sec 60→59; all return OK).</li>
+<li class="done"><input type="checkbox" checked disabled> (A) clamp patch in <code>RONToTime</code> (abc/RON.c:103 slot-by-slot clamp) — landed abc <code>ffc0624b</code> / beagle pin <code>a4094f7f</code> &quot;out-of-range timestamps do not throw&quot;.</li>
+<li class="open"><input type="checkbox" disabled> (B) generator: carry same-second ms overflow into the next second (<code>_ulog_now</code> / <code>keep_next_pup_key</code>); never emit ms≥1000; add a<blockquote>
+000-rows-in-one-second repro. <a href="./follow-up.html">follow-up</a>
+</blockquote>
 </li>
 <li class="open"><input type="checkbox" disabled> (B) optional: sweep/repair existing wtlogs already carrying ms≥1000 stamps.</li>
 </ul>
@@ -88,14 +64,19 @@ valid value (overflow→max, underflow→min); keep <code>RONOfTime</code> stric
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(A) LANDED: abc <code>ffc0624b</code> / beagle pin <code>a4094f7f</code> &quot;RON-001: out-of-range<p>
-timestamps do not throw&quot; — <code>RONToTime</code> clamps every slot (abc/RON.c:103), <code>RONOfTime</code> stays strict; clamp cases in <code>dog/abc/test/RON.c</code>.
-</p>
-</li>
-<li>(B) STILL OPEN (audit 2026-07-07): keeper <code>keep_next_pup_key</code><p>
-(keeper/KEEP.c:152) still bumps the PACKED ron60 (<code>max(now,last+1)</code>), and jab <code>_ulog_now</code> (ulog.hpp JABCulogNow) returns raw <code>RONNow()</code> — nothing prevents ms≥1000 when &gt;1000 stamps land in one second.
-</p>
-</li>
+<li>(A) LANDED: abc <code>ffc0624b</code> / beagle pin <code>a4094f7f</code> &quot;RON-001: out-of-range timestamps do not throw&quot; — <code>RONToTime</code> clamps every slot (abc/RON.c:103), <code>RONOfTime</code> stays strict; clamp cases in <code>dog/abc/test/RON.c</code>.</li>
+<li>(B) STILL OPEN (audit 2026-07-07): keeper <code>keep_next_pup_key</code> (keeper/KEEP.c:152) still bumps the PACKED ron60 (<code>max(now,last+1)</code>), and jab <code>_ulog_now</code> (ulog.hpp JABCulogNow) returns raw <code>RONNow()</code> — nothing prevents ms≥1000 when &gt;1000 stamps land in one second.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-033 LONG: migrate PUT's reflog editing into forceful post! — PUT/DELETE go wt-only</title>
+<meta property="og:title" content="POST-033 LONG: migrate PUT's reflog editing into forceful post! — PUT/DELETE go wt-only">
+<meta property="og:description" content="Proposal (gritzko, 2026-07-24): PUT/DELETE become wtlog-only editors (stage, unstage, move, base-set as in /todo/PUT/PUT-014); PUT's reflog-edit forms migrate into a forceful post!. RULING 2026-07-24 backs the split: ulog edits with no wt effect are PUT/DELETE.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/POST/POST-033.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>POST-033 <a href="./LONG.html">LONG</a>: migrate PUT's reflog editing into forceful <code>post!</code> — PUT/DELETE go wt-only</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Proposal (gritzko, 2026-07-24): PUT/DELETE become wtlog-only editors (stage, unstage, move, base-set as in <a href="/todo/PUT/PUT-014.html">PUT-014</a>); PUT's reflog-edit forms migrate into a forceful <code>post!</code>. RULING 2026-07-24 backs the split: ulog edits with no wt effect are PUT/DELETE.
+</p>
+<ul>
+<li>Falls off PUT/DELETE: non-FF ref reset (<code>put ?br#sha</code>, <code>?#sha</code>, <code>?&lt;40hex&gt;</code>), branch tombstone (<code>delete ?feat</code>, <code>-r</code>), remote force-push (<code>put ssh://origin</code>), remote ref delete, the DIS-011 log-only URL row.</li>
+<li>Survives: <code>put ?./fix</code> create is subsumed by <code>post ?./fix</code> (FF-from-nothing lands at the same sha).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Settle the verb scoping: either land the migration with answers to every concern below, or reject and keep a narrower explicit ref-editor verb.
+</p>
+<ul>
+<li>Decide the shape of forceful ref writes, ref removal, and force push.</li>
+<li>Update Verbs.mkd + PUT.mkd + POST.mkd + DELETE.mkd once ruled.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Slot law (Verbs.mkd): the same four slots combine the same way across every verb — a bang must not re-type a slot.</li>
+<li>GIT-016 RULING: post's non-FF refusal is honest, no force hint.</li>
+<li>Errors in plain words; no URI bangs (retired 2026-07).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Concerns to resolve before any code moves; each is a blocker on its own.
+</p>
+<ul>
+<li>Fragment collision: POST's <code>#</code> is the commit message (<code>post ?other#msg</code>); reset shapes need <code>#sha</code>. <code>post! ?br#abc1234</code> is ambiguous; hex-sniffing messages is a footgun; a bang re-typing <code>#</code> breaks the slot law.</li>
+<li>Direction breach: POST is wt→repo; ref-to-arbitrary-sha (tag an old commit, repair a ref) has no wt in it. Confining <code>post!</code> to cur.tip targets forces checkout round-trips just to write a label.</li>
+<li>Bang overload: <code>post!</code> already overrides the conflict-marker gate (post.js:881); one bang would arm BOTH &quot;commit conflict markers&quot; and &quot;non-FF clobber&quot; at once. Fragment bangs (<code>#msg!</code> squash, <code>#!</code>) stack on top: <code>post! '#msg!'</code>.</li>
+<li>Removal homeless: POST writes values, never removes; tombstones either stay in DELETE (breaking the wt-only symmetry that motivates the migration) or need a contrived empty-value <code>post!</code> shape.</li>
+<li>Safety gradient inverts: force moves from a deliberately-chosen verb (PUT, unconstrained by charter) to a habitual bang on the everyday commit verb; &quot;refused → add !&quot; turns honest FF refusals into silent history clobbers.</li>
+<li>Strays: the DIS-011 log-only URL row fits neither wt-only PUT nor <code>post!</code>; wire force-push + ingest remote-tracking bookkeeping migrate verbs (churn, harmless).</li>
+<li>Alternative on the table: keep ONE explicitly-forceful ref editor scoped to <code>?ref</code> shapes only (a narrower PUT successor), instead of merging force into POST.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> rule on each concern above (gritzko)</li>
+<li><a href="./ .html"> </a> then: spec pages, migration tickets per verb, repro tests</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Design-stage ticket: no code until the concerns are ruled on.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

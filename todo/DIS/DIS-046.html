@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DIS-046</title>
+<title>DIS-046: 3-way weave merge fails (&quot;graf err&quot;) on content with literal conflict markers</title>
+<meta property="og:title" content="DIS-046: 3-way weave merge fails (&quot;graf err&quot;) on content with literal conflict markers">
+<meta property="og:description" content="A be get 3-way merge of a file whose CONTENT contains the literal weave conflict markers &lt;&lt;&lt;&lt; |||| &gt;&gt;&gt;&gt; fails with &quot;graf err&quot;, leaving the wt copy unmerged — the merge-side analog of DIS-040 / POST-006 (POSTCFLCT false-fires on the same strings). Found updating the JS-027 worktree. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-046.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,36 +15,26 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>DIS-046 <a href="">MED</a>: 3-way weave merge fails (&quot;graf err&quot;) on content with literal conflict markers</h1>
+<h1>DIS-046: 3-way weave merge fails (&quot;graf err&quot;) on content with literal conflict markers</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 A <code>be get</code> 3-way merge of a file whose CONTENT contains the literal weave conflict markers <code>&lt;&lt;&lt;&lt; |||| &gt;&gt;&gt;&gt;</code> fails with &quot;graf err&quot;, leaving the wt copy unmerged — the merge-side analog of <a href="DIS-040.html">DIS-040</a> / <a href="../POST/POST-006.html">POST-006</a> (POSTCFLCT false-fires on the same strings). Found updating the <a href="../JS/JS-027.html">JS-027</a> worktree. Method: <a href="../../skill/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Repro (<code>be get</code> onto trunk <code>371ad14b</code>; both sides had edited <code>js/INDEX.md</code>):<p>
-<code>sniff: merge failed for js/INDEX.md (graf err) — leaving wt content untouched</code> + <code>merge failures: 1 file(s)</code>. The other 4 files weave-merged fine.
-</p>
-</li>
-<li><code>js/INDEX.md:42</code> documents <code>WEAVEEmitMerged</code> and literally contains<p>
-`<code>framing conflicts </code>&lt;&lt;&lt;&lt; |||| &gt;&gt;&gt;&gt;<code> </code>` — the exact sigils the merge writer uses.
-</p>
-</li>
-<li>Path: <code>GRAFMergeWtFile</code> (<code>graf/GET.c:419</code>) → <code>GRAFMergeWtFileTunable</code><p>
-(<code>graf/GET.c:301</code>) → <code>WEAVEMerge</code>/<code>WEAVEEmitMerged</code> (<code>dog/WEAVE.h:104</code>); error emitted at <code>sniff/GET.c:747</code>. Same string <code>js/INDEX.md</code> also false-fired POSTCFLCT earlier (needed <code>be post --force</code>).
-</p>
-</li>
-<li>Same root family as <a href="DIS-040.html">DIS-040</a> / <a href="../POST/POST-006.html">POST-006</a>: marker-like strings in tracked<p>
-content collide with beagle's own conflict-frame sigils.
-</p>
-</li>
+<li>Repro (<code>be get</code> onto trunk <code>371ad14b</code>; both sides had edited <code>js/INDEX.md</code>): <code>sniff: merge failed for js/INDEX.md (graf err) — leaving wt content untouched</code> + <code>merge failures: 1 file(s)</code>. The other 4 files weave-merged fine.</li>
+<li><code>js/INDEX.md:42</code> documents <code>WEAVEEmitMerged</code> and literally contains `<code>framing conflicts </code>&lt;&lt;&lt;&lt; |||| &gt;&gt;&gt;&gt;<code> </code>` — the exact sigils the merge writer uses.</li>
+<li>Path: <code>GRAFMergeWtFile</code> (<code>graf/GET.c:419</code>) → <code>GRAFMergeWtFileTunable</code> (<code>graf/GET.c:301</code>) → <code>WEAVEMerge</code>/<code>WEAVEEmitMerged</code> (<code>dog/WEAVE.h:104</code>); error emitted at <code>sniff/GET.c:747</code>. Same string <code>js/INDEX.md</code> also false-fired POSTCFLCT earlier (needed <code>be post --force</code>).</li>
+<li>Same root family as <a href="DIS-040.html">DIS-040</a> / <a href="../POST/POST-006.html">POST-006</a>: marker-like strings in tracked content collide with beagle's own conflict-frame sigils.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>A 3-way merge MUST NOT fail/corrupt when the merged content legitimately<p>
-contains <code>&lt;&lt;&lt;&lt;</code>/<code>||||</code>/<code>&gt;&gt;&gt;&gt;</code> lines — use content-derived / variable-length fences (git style), escaping, or a provenance check (coordinate with <a href="DIS-040.html">DIS-040</a>).
-</p>
-</li>
+<li>A 3-way merge MUST NOT fail/corrupt when the merged content legitimately contains <code>&lt;&lt;&lt;&lt;</code>/<code>||||</code>/<code>&gt;&gt;&gt;&gt;</code> lines — use content-derived / variable-length fences (git style), escaping, or a provenance check (coordinate with <a href="DIS-040.html">DIS-040</a>).</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
@@ -53,10 +47,7 @@ contains <code>&lt;&lt;&lt;&lt;</code>/<code>||||</code>/<code>&gt;&gt;&gt;&gt;<
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro test: 3-way merge a file containing <code>&lt;&lt;&lt;&lt;</code>/<code>||||</code>/<code>&gt;&gt;&gt;&gt;</code> lines → merges<p>
-  (or conflicts) cleanly, never &quot;graf err&quot;.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro test: 3-way merge a file containing <code>&lt;&lt;&lt;&lt;</code>/<code>||||</code>/<code>&gt;&gt;&gt;&gt;</code> lines → merges (or conflicts) cleanly, never &quot;graf err&quot;.</li>
 <li class="open"><input type="checkbox" disabled> Fix; re-run the graf/WEAVE merge suites.</li>
 </ul>
 <h3>Blockers</h3>
@@ -65,10 +56,18 @@ contains <code>&lt;&lt;&lt;&lt;</code>/<code>||||</code>/<code>&gt;&gt;&gt;&gt;<
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li><strong>LANDED <code>6d7ee04f</code></strong> (2026-06-21): content-sized VARIABLE-LENGTH conflict fences<p>
-in <code>WEAVEEmitMerged</code> (<code>graf/WEAVE.c</code> active + <code>dog/WEAVE.c</code> twin) — fence width = <code>max(4, longest+1)</code> over the merged output's fence-char run, so a real frame is always longer than any quoted <code>&lt;&lt;&lt;&lt;</code>/<code>||||</code>/<code>&gt;&gt;&gt;&gt;</code> content and can't collide. Repro: 2 <code>graf/test/MERGE3B01.c</code> cases. Posted with verified <code>--force</code> (the engine file legitimately contains the fence sigils — the POST-side <a href="DIS-040.html">DIS-040</a>/<a href="../POST/POST-006.html">POST-006</a> false-fire, separate). Reconciled with <a href="">DIS-047</a> (disjoint regions).
-</p>
-</li>
+<li><strong>LANDED <code>6d7ee04f</code></strong> (2026-06-21): content-sized VARIABLE-LENGTH conflict fences in <code>WEAVEEmitMerged</code> (<code>graf/WEAVE.c</code> active + <code>dog/WEAVE.c</code> twin) — fence width = <code>max(4, longest+1)</code> over the merged output's fence-char run, so a real frame is always longer than any quoted <code>&lt;&lt;&lt;&lt;</code>/<code>||||</code>/<code>&gt;&gt;&gt;&gt;</code> content and can't collide. Repro: 2 <code>graf/test/MERGE3B01.c</code> cases. Posted with verified <code>--force</code> (the engine file legitimately contains the fence sigils — the POST-side <a href="DIS-040.html">DIS-040</a>/<a href="../POST/POST-006.html">POST-006</a> false-fire, separate). Reconciled with <a href="./DIS-047.html">DIS-047</a> (disjoint regions).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

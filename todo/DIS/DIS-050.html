@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DIS-050</title>
+<title>DIS-050: be put ?&lt;40hex&gt; set-cur dispatch is inconsistent</title>
+<meta property="og:title" content="DIS-050: be put ?&lt;40hex&gt; set-cur dispatch is inconsistent">
+<meta property="og:description" content="be put ?&lt;40hex&gt; (set cur's branch OUTRIGHT to a bare full sha — the reflog escape hatch, PUT) dispatches two different ways depending on what the sha resolves to: when it resolves to cur's OWN branch tip, native falls through PUTStage→PUTNONE (exit 206, NO ref row written) instead of writing the ref. Surfaced porting JS-049; no corruption either way (the resulting refs were byte-identical), but the canonical dispatch is unpinned, so the JS port can't claim byte-parity for this form. Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-050.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,55 +15,39 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>DIS-050 <a href="">LOW</a>: <code>be put ?&lt;40hex&gt;</code> set-cur dispatch is inconsistent</h1>
+<h1>DIS-050: <code>be put ?&lt;40hex&gt;</code> set-cur dispatch is inconsistent</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>be put ?&lt;40hex&gt;</code> (set cur's branch OUTRIGHT to a bare full sha — the reflog escape hatch, <a href="../../wiki/PUT.html">PUT</a>) dispatches two different ways depending on what the sha resolves to: when it resolves to cur's OWN branch tip, native falls through <code>PUTStage</code>→<code>PUTNONE</code> (exit 206, NO ref row written) instead of writing the ref. Surfaced porting <a href="../JS/JS-049.html">JS-049</a>; no corruption either way (the resulting refs were byte-identical), but the canonical dispatch is unpinned, so the JS port can't claim byte-parity for this form. <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Found in <a href="../JS/JS-049.html">JS-049</a> probing: with the <code>&lt;40hex&gt;</code> resolving to cur's (trunk) tip,<p>
-native <code>be put ?&lt;sha&gt;</code> → <code>PUTStage</code>→<code>PUTNONE</code> (206, no write); the JS set-path → exit 0 (writes a <code>post ?#&lt;sha&gt;</code> row). Refs ended byte-identical regardless.
-</p>
-</li>
-<li>The three primary ref forms (<code>?br</code>, <code>?br#sha</code>, <code>?#sha</code>) ARE parity-verified;<p>
-only the bare-<code>?&lt;40hex&gt;</code> set-cur form is ambiguous (<code>sniff/SNIFF.exe.c:~1021</code> dispatch + <code>sniff/PUT.c::PUTSetBranch :1195</code>).
-</p>
-</li>
+<li>Found in <a href="../JS/JS-049.html">JS-049</a> probing: with the <code>&lt;40hex&gt;</code> resolving to cur's (trunk) tip, native <code>be put ?&lt;sha&gt;</code> → <code>PUTStage</code>→<code>PUTNONE</code> (206, no write); the JS set-path → exit 0 (writes a <code>post ?#&lt;sha&gt;</code> row). Refs ended byte-identical regardless.</li>
+<li>The three primary ref forms (<code>?br</code>, <code>?br#sha</code>, <code>?#sha</code>) ARE parity-verified; only the bare-<code>?&lt;40hex&gt;</code> set-cur form is ambiguous (<code>sniff/SNIFF.exe.c:~1021</code> dispatch + <code>sniff/PUT.c::PUTSetBranch :1195</code>).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Decide + document the canonical <code>?&lt;40hex&gt;</code> dispatch: when it SETS the ref<p>
-outright vs when it legitimately falls to <code>PUTNONE</code> (sha == cur tip = no-op?).
-</p>
-</li>
+<li>Decide + document the canonical <code>?&lt;40hex&gt;</code> dispatch: when it SETS the ref outright vs when it legitimately falls to <code>PUTNONE</code> (sha == cur tip = no-op?).</li>
 <li>Make native + the <a href="../JS/JS-049.html">JS-049</a> <code>bin/put.js</code> agree on it, then add a parity case.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Spec/impl decision first (<a href="../../wiki/Verbs.html">Verbs</a>/<a href="../../wiki/PUT.html">PUT</a> are the spec); a one-char-of-behavior<p>
-change, but it must not regress the verified <code>?br</code>/<code>?br#sha</code>/<code>?#sha</code> forms.
-</p>
-</li>
+<li>Spec/impl decision first (<a href="../../wiki/Verbs.html">Verbs</a>/<a href="../../wiki/PUT.html">PUT</a> are the spec); a one-char-of-behavior change, but it must not regress the verified <code>?br</code>/<code>?br#sha</code>/<code>?#sha</code> forms.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Repro corrected the premise: native does NOT hit <code>PUTNONE</code> — it resolves to<p>
-<code>PUTSetBranch</code> (exit 0) in both cases. The real divergence is the idempotency dedup in <code>REFSAppendVerb</code> (<code>keeper/REFS.c:146</code>): a set to the value the ref already holds writes NO row (keeps <code>.be/refs</code> bit-identical across repeats).
-</p>
-</li>
-<li>RULING (Option 2): align JS to native's dedup — <code>bin/put.js::refSet</code> no-ops<p>
-when <code>resolveRef(branch) == sha</code>. Preserves the shared bit-identity invariant (vs Option 1 &quot;always write&quot;, which would special-case PUT and break it).
-</p>
-</li>
+<li>Repro corrected the premise: native does NOT hit <code>PUTNONE</code> — it resolves to <code>PUTSetBranch</code> (exit 0) in both cases. The real divergence is the idempotency dedup in <code>REFSAppendVerb</code> (<code>keeper/REFS.c:146</code>): a set to the value the ref already holds writes NO row (keeps <code>.be/refs</code> bit-identical across repeats).</li>
+<li>RULING (Option 2): align JS to native's dedup — <code>bin/put.js::refSet</code> no-ops when <code>resolveRef(branch) == sha</code>. Preserves the shared bit-identity invariant (vs Option 1 &quot;always write&quot;, which would special-case PUT and break it).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Pin the canonical behavior; align native PUT dispatch + <code>bin/put.js</code>; add a<p>
-  <code>?&lt;40hex&gt;</code> parity case to <code>test/js/put/</code>.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Pin the canonical behavior; align native PUT dispatch + <code>bin/put.js</code>; add a <code>?&lt;40hex&gt;</code> parity case to <code>test/js/put/</code>.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -67,11 +55,19 @@ when <code>resolveRef(branch) == sha</code>. Preserves the shared bit-identity i
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>Landed <code>2ea762c2</code>: <code>bin/put.js::refSet</code> dedups (no-op when the ref already<p>
-resolves to <code>sha</code>), byte-parity with native; repro <code>test/js/put/ref-set-sha</code> (both sub-cases + an explicit refs-row count so CASE A can't pass vacuously). The put-harness isolation gap the repro needed was fixed in JS-050 (<code>reanchor</code>).
-</p>
-</li>
+<li>Landed <code>2ea762c2</code>: <code>bin/put.js::refSet</code> dedups (no-op when the ref already resolves to <code>sha</code>), byte-parity with native; repro <code>test/js/put/ref-set-sha</code> (both sub-cases + an explicit refs-row count so CASE A can't pass vacuously). The put-harness isolation gap the repro needed was fixed in JS-050 (<code>reanchor</code>).</li>
 <li>RESOLVED — delisted in the 2026-06-25 triage: landed <code>2ea762c2</code> (matches this ticket's own Outcome hash); <code>put.js</code> refSet dedup (<code>be/verbs/put/put.js</code>), repro <code>test/put/ref-set-sha</code>.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-036 DONE: post //X/sub compares the PARENT's base, refuses &quot;unrelated to cur&quot;</title>
+<meta property="og:title" content="POST-036 DONE: post //X/sub compares the PARENT's base, refuses &quot;unrelated to cur&quot;">
+<meta property="og:description" content="be post //DIS-082-jab/dog from a dog clone refuses with &quot;//DIS-082-jab/dog is unrelated to cur&quot; even though both trees are the same repo and the target is strictly behind. The DIS-062 arm (post.js advanceWorktree) feeds resolveHash's chash straight into the FF verdict, but for a bare //X/sub operand the trailing-slash convention resolves the PARENT frame: chash is the jab base, the dog tip is only ohash (the de-jure gitlink pin). A jab sha lands in the verdict against a dog curTip — &quot;unrelated&quot;. Get already handles this exact case (DIS-072); post never got the arm.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/POST/POST-036.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>POST-036 <a href="./DONE.html">DONE</a>: <code>post //X/sub</code> compares the PARENT's base, refuses &quot;unrelated to cur&quot;</h1>
+<div>
+<p>
+Now: DONE Sev: HIGH
+</p>
+</div>
+<p>
+<code>be post //DIS-082-jab/dog</code> from a dog clone refuses with &quot;<code>//DIS-082-jab/dog</code> is unrelated to cur&quot; even though both trees are the same repo and the target is strictly behind. The DIS-062 arm (<code>post.js</code> <code>advanceWorktree</code>) feeds <code>resolveHash</code>'s <code>chash</code> straight into the FF verdict, but for a bare <code>//X/sub</code> operand the trailing-slash convention resolves the PARENT frame: <code>chash</code> is the jab base, the dog tip is only <code>ohash</code> (the de-jure gitlink pin). A jab sha lands in the verdict against a dog curTip — &quot;unrelated&quot;. Get already handles this exact case (DIS-072); post never got the arm.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Hit on DIS-082 work, 2026-07-31, pushing a dog fix from the ticket clone into the jab clone's sub.
+</p>
+<ul>
+<li>Repro: <code>cd work/DIS-082</code> (dog clone, tip <code>e118a411</code>), <code>be post //DIS-082-jab/dog</code> -&gt; <code>JS exception: </code>//DIS-082-jab/dog<code> is unrelated to cur</code>.</li>
+<li>Chain: <code>resolve_hash.js</code> <code>frame()</code> (<code>:217-226</code>) re-anchors bare <code>sub</code> to the parent (de-jure), so step 5.5 reads the JAB wtlog; <code>rh.chash</code> = jab base, <code>rh.rpath</code>=&quot;dog&quot;, <code>rh.otype</code>=&quot;commit&quot;, <code>rh.ohash</code> = the pin.</li>
+<li><code>advanceWorktree</code> (<code>post.js:352-366</code>) ignores <code>rpath</code>/<code>otype</code> and calls <code>relate.verdict(reader, rh.chash, curTip)</code> — cross-repo shas, verdict &quot;unrelated&quot;.</li>
+<li><code>rh.chash</code> is ALSO the 3-way base (<code>oldTip</code>, <code>post.js:394</code>), so past the verdict the merge base would be the wrong repo's commit too.</li>
+<li>The prior art is in get: <code>handleWtSeed</code> (<code>get.js:392-404</code>, DIS-072) on <code>rpath &amp;&amp; otype==&quot;commit&quot;</code> re-resolves the entered form <code>//X/sub/</code> pinned at <code>ohash</code>, store/shard off the SUB's own anchor via <code>discover.wtdir</code>/<code>treeAt</code>.</li>
+<li>Workaround: the entered form <code>be post //DIS-082-jab/dog/</code> — <code>frame()</code> keeps the sub, step 5.5 reads ITS wtlog (de-jure vs de-facto slash convention).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+<code>post //X/sub</code> FF-advances the SUB worktree, same as the entered form.
+</p>
+<ul>
+<li>Bare <code>//X/sub</code> and <code>//X/sub/</code> both advance the sub's own base; the de-jure/de-facto distinction has no useful reading for an advance TARGET.</li>
+<li>The verdict and the merge base both use the sub's OWN base, and the merge runs against the sub's own store.</li>
+<li>A genuinely unrelated target still refuses, and the message names the tree actually compared.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+RULE ZERO holds: <code>resolve_hash</code> is the only resolver.
+</p>
+<ul>
+<li>Mirror get's DIS-072 arm, do not fork a second resolution path; re-resolve the entered form through <code>resolveHash</code>, never hand-read the sub's wtlog.</li>
+<li><code>discover.wtdir</code>/<code>discover.treeAt</code> locate the on-disk anchor only to WRITE, exactly as the arm does today.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>In <code>advanceWorktree</code>, on <code>rh.rpath &amp;&amp; rh.otype === &quot;commit&quot;</code>: re-resolve <code>URI.make(undefined, u.authority, u.path + &quot;/&quot;)</code> and proceed with THAT record — the one-line shape of get's DIS-072 arm.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> Repro test: <code>test/post/wt-target-sub/run.sh</code> — RED on pristine post.js (exact refusal reproduced), GREEN after.</li>
+<li><a href="./v.html">v</a> The DIS-072 re-resolve in <code>advanceWorktree</code>; verdict + <code>oldTip</code> off the sub frame. Target store was ALREADY right: <code>wtdir</code>/<code>treeAt</code> land on the sub's dir for the bare form — only <code>chash</code> was the parent's.</li>
+<li><a href="./v.html">v</a> Entered-form regression: <code>//X/sub/</code> covered in the same test; all 9 sibling <code>wt-target*</code> cases pass.</li>
+<li><a href="./v.html">v</a> Error text: unrelated refusal now reads `<code> </code>//X/sub<code> (base #&lt;8hex&gt;) is unrelated to cur</code>`.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Unlike get's DIS-072 arm, the re-resolve must NOT pin <code>#ohash</code>: post wants the sub's DE-FACTO base (step 5.5), the de-jure pin would freeze the target — &quot;mirror get&quot; was one line too literal.</li>
+</ul>
+<h3>Re-verification 2026-08-04, wt rebased onto <code>///be/#9acaa555</code></h3>
+<p>
+The wt was updated off <code>#e633d1be</code> onto the current trunk tip <code>#9acaa555</code>; two commits landed in between, one of them POST-037 (<code>?07d0aa7b</code>) in the SAME file. Re-checked:
+</p>
+<ul>
+<li><a href="./v.html">v</a> Weave clean. <code>verbs/post/post.js</code> in the wt == trunk <code>#9acaa555</code>'s post.js<div>
+<p>
+PLUS the two POST-036 hunks and nothing else (<code>diff -u</code> against the main tree confirms). Both POST-036 changes survived the rebase: the <code>let rh</code> + <code>rh.rpath &amp;&amp; rh.otype === &quot;commit&quot;</code> re-resolve of the entered form (NO <code>#ohash</code> pin) at <code>advanceWorktree</code>, and the <code>(base #&lt;8hex&gt;)</code> unrelated refusal. POST-037's confirmed-clean stamp loop (<code>for (const p of dres.confirmed || [])</code>, <code>post.js:984-999</code>) is present and untouched — it lives in the commit path, the POST-036 arm in <code>advanceWorktree</code>; no overlap, no lost or duplicated hunks.
+</p>
+</div>
+</li>
+<li><a href="./v.html">v</a> Repro still needed. <code>test/post/wt-target-sub/run.sh</code> with <code>BEDIR=</code> the<div>
+<p>
+pristine main tree <code>be</code> is RED with the exact original refusal `<code> JS exception: </code>//X/dog<code> is unrelated to cur </code>` and the sub's base unmoved — nothing upstream fixed it. GREEN in this wt.
+</p>
+</div>
+</li>
+<li><a href="./v.html">v</a> Suite green in-wt (cmake + <code>ctest -LE big</code>, 356 cases): 348 pass.<div>
+<p>
+All 52 <code>test/post/*</code> pass except the environmental <code>post-push-nonff-http</code> and <code>post-slots</code> timeouts (below). All 11 <code>wt-target*</code> cases pass (<code>wt-target</code>, <code>-ahead</code>, <code>-conflict</code>, <code>-detached</code>, <code>-dirty</code>, <code>-eq</code>, <code>-merge</code>, <code>-none</code>, <code>-nonff</code>, <code>-self</code>, <code>-sub</code>).
+</p>
+</div>
+</li>
+<li>The 8 reds are ALL pre-existing, not the fix: a fresh cmake build of the<div>
+<p>
+PRISTINE trunk (<code>/tmp/be-trunk-build</code>) reproduces the identical set — <code>bro-universal</code>, <code>lint-posix-sh</code>, <code>post-push-nonff-http</code>, <code>todo-click</code>, <code>todo-nav</code>, <code>work-view</code> (10 s default <code>TIMEOUT</code> vs ASAN-jab pty cases on this box), <code>todo-rowcache</code> (the known TODO-010), plus <code>status-patchpost</code> /<code>post-slots</code> which flip on rerun (8.1 s against a 10 s limit).
+</p>
+</div>
+</li>
+<li>Test-sub staging fell out during the base update: <code>test/.be</code> records<div>
+<p>
+<code>put post/wt-target-sub/run.sh</code>, then <code>get //POST-036/test#61fc519a</code>, which dropped it (the parent's post.js put WAS redone, the sub's was not). Re-staged from <code>test/</code> — status is now <code>...O</code>, both files staged. Also <code>chmod 755</code> on the new <code>run.sh</code> (it was 644; every sibling case's <code>run.sh</code> is 755 — ctest invokes them via <code>sh</code> so it did not affect the result, only tree consistency).
+</p>
+</div>
+</li>
+<li>Nothing else off in the wt: one sub (<code>test</code>, at <code>#61fc519a</code> = the trunk's<div>
+<p>
+own test pin), no unexpected dirt, wtlog reads clean.
+</p>
+</div>
+</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+Fix staged (not committed) in <code>//POST-036</code> (clone of <code>///be/#e633d1be</code>): <code>verbs/post/post.js</code> + new <code>test/post/wt-target-sub/run.sh</code>, both <code>jab put</code>. Orchestrator re-verified: repro red on the main-tree be, green in the clone; 51 <code>test/post/*</code> + 44 <code>test/get/*</code> pass (worker run), sibling <code>wt-target*</code> re-run clean. Suggested commit:
+</p>
+<ul>
+<li><code>POST-036: bare //X/sub posts to the SUB's own base, not the parent frame's</code></li>
+</ul>
+<p>
+2026-08-04 re-verification (see WIP): the wt now sits on <code>///be/#9acaa555</code> (current trunk tip, POST-037 included). The fix survived the rebase intact and weaves cleanly with POST-037; the repro is still RED on the pristine trunk, GREEN here; suite green bar 8 pre-existing reds that a fresh pristine-trunk build reproduces identically. <code>test/post/wt-target-sub/run.sh</code> had fallen out of staging during the base update and is re-staged. Both files staged, nothing committed. READY TO LAND with the commit message above.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

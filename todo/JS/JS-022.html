@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-022</title>
+<title>JS-022: generic mmap LSM index — abc.index (point / range / prefix)</title>
+<meta property="og:title" content="JS-022: generic mmap LSM index — abc.index (point / range / prefix)">
+<meta property="og:description" content="The lane containers (HASH/HEAP/HIT) expose the LSM primitives but not a reusable index. Add abc.index(lane, opts) — a stack of mmapped sorted runs + a memtable, with point/range/prefix query and ladder compaction. This is the substrate the pack-log index (JS-024 git.pack) builds on. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-022.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,75 +15,44 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-022 <a href="">MED</a>: generic mmap LSM index — <code>abc.index</code> (point / range / prefix)</h1>
+<h1>JS-022: generic mmap LSM index — <code>abc.index</code> (point / range / prefix)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The lane containers (<code>HASH</code>/<code>HEAP</code>/<code>HIT</code>) expose the LSM primitives but not a reusable index. Add <code>abc.index(lane, opts)</code> — a stack of mmapped sorted runs + a memtable, with point/range/prefix query and ladder compaction. This is the substrate the pack-log index (<a href="JS-024.html">JS-024</a> <code>git.pack</code>) builds on. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>js/cont.cpp</code> binds <code>HASH</code> (sets/maps), <code>HEAP</code> (sorted runs + <code>sort</code>), and<p>
-<code>HIT</code> <code>abc.merge</code>/<code>abc.intersect</code> — the LSM building blocks — but NO index control structure or query verbs over a stack of persisted runs.
-</p>
-</li>
-<li>Grounded in the real indexes (same LSM stack, differ only by lane): keeper<p>
-<code>wh128</code> puppy registry (<code>KEEPLookup</code> point/prefix, <code>KEEPCompact</code> 1/8 ladder) and spot <code>wh64</code> trigram (<code>CAPO</code> <code>SeekRange</code>). Design pass produced this scope.
-</p>
-</li>
+<li><code>js/cont.cpp</code> binds <code>HASH</code> (sets/maps), <code>HEAP</code> (sorted runs + <code>sort</code>), and <code>HIT</code> <code>abc.merge</code>/<code>abc.intersect</code> — the LSM building blocks — but NO index control structure or query verbs over a stack of persisted runs.</li>
+<li>Grounded in the real indexes (same LSM stack, differ only by lane): keeper <code>wh128</code> puppy registry (<code>KEEPLookup</code> point/prefix, <code>KEEPCompact</code> 1/8 ladder) and spot <code>wh64</code> trigram (<code>CAPO</code> <code>SeekRange</code>). Design pass produced this scope.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>abc.index(lane, opts)</code> → object owning runs + memtable, with <code>.put</code> /<p>
-<code>.flush</code> / <code>.compact</code> / <code>.get</code> (point) / <code>.range</code> / <code>.prefix</code> / <code>.seek</code>.
-</p>
-</li>
-<li>IN-MEMORY vs ON-DISK by <code>opts.dir</code>: *<strong>present</strong>* → persisted file runs<p>
-(<code>abc.book</code>, re-opened on open); *<strong>absent</strong>* → ephemeral <code>io.ram</code> runs (no files, gone at exit). Same leaves/memtable/compaction; only run backing + persistence differ (JS-side branch).
-</p>
-</li>
-<li>Push queries stream hits through an IN-FRAME callback (<code>.range</code>/<code>.prefix</code>,<p>
-rule #4). PULL via <code>.seek(needle)</code> → a cursor (<code>.next</code> / <code>.key</code> / <code>.val</code> / <code>.entry</code>) to read several entries at your own pace, stop anytime.
-</p>
-</li>
-<li>Prefix is HALF-OPEN <code>[p, p+2^lowBits)</code> (spot-style). Hits are a BigInt,<p>
-<code>[k,v]</code> pair, or blob per lane.
-</p>
-</li>
+<li><code>abc.index(lane, opts)</code> → object owning runs + memtable, with <code>.put</code> / <code>.flush</code> / <code>.compact</code> / <code>.get</code> (point) / <code>.range</code> / <code>.prefix</code> / <code>.seek</code>.</li>
+<li>IN-MEMORY vs ON-DISK by <code>opts.dir</code>: *<strong>present</strong>* → persisted file runs (<code>abc.book</code>, re-opened on open); *<strong>absent</strong>* → ephemeral <code>io.ram</code> runs (no files, gone at exit). Same leaves/memtable/compaction; only run backing + persistence differ (JS-side branch).</li>
+<li>Push queries stream hits through an IN-FRAME callback (<code>.range</code>/<code>.prefix</code>, rule #4). PULL via <code>.seek(needle)</code> → a cursor (<code>.next</code> / <code>.key</code> / <code>.val</code> / <code>.entry</code>) to read several entries at your own pace, stop anytime.</li>
+<li>Prefix is HALF-OPEN <code>[p, p+2^lowBits)</code> (spot-style). Hits are a BigInt, <code>[k,v]</code> pair, or blob per lane.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Write path PURE JS: <code>flush</code> = <code>memtable.sort()</code> → <code>abc.merge</code> into a fresh<p>
-run → push onto <code>.runs</code>. ON-DISK run = <code>abc.book</code> file (close msync+trim, rename, re-open RO); IN-MEMORY run = <code>io.ram</code> (kept as-is, no file). Runs are immutable (growth = new runs).
-</p>
-</li>
-<li><code>.seek(needle)</code> is a PURE-JS k-way merge cursor: per-run positions seeked via<p>
-<code>_findge_&lt;lane&gt;</code>, a tiny JS heap + newest-wins dedup, reading lane elements off the run typed-array views; JS owns ALL cursor state (rule #4 — no held native state, like the ULOG/HUNK cursors). <code>.range</code>/<code>.prefix</code> may be sugar over it or keep the native <code>_seekrange_</code> fast-drain — implementer's call.
-</p>
-</li>
-<li>3 new <code>hit.hpp</code>-sized leaves in a new <code>js/index.hpp</code> (registered in<p>
-<code>JABCContInstall</code>): <code>_findge_&lt;lane&gt;</code> (binary-search point, mirrors <code>KEEPLookup</code>), <code>_seekrange_&lt;lane&gt;</code> (binds <code>HIT&lt;lane&gt;SeekRange</code>), <code>_compact_&lt;lane&gt;</code> (binds <code>HIT&lt;lane&gt;Compact</code> — the 1/8 ladder, keeper/spot parity, full-element dedup + newest-run-wins). NO keyed/tombstone compaction.
-</p>
-</li>
-<li>u64 keys cross as BigInt; needles + <code>lo</code>/<code>hi</code> are BigInt; mind lane<p>
-alignment on re-mmap; validate <code>byteLength % (w*BPE) === 0</code> on open.
-</p>
-</li>
+<li>Write path PURE JS: <code>flush</code> = <code>memtable.sort()</code> → <code>abc.merge</code> into a fresh run → push onto <code>.runs</code>. ON-DISK run = <code>abc.book</code> file (close msync+trim, rename, re-open RO); IN-MEMORY run = <code>io.ram</code> (kept as-is, no file). Runs are immutable (growth = new runs).</li>
+<li><code>.seek(needle)</code> is a PURE-JS k-way merge cursor: per-run positions seeked via <code>_findge_&lt;lane&gt;</code>, a tiny JS heap + newest-wins dedup, reading lane elements off the run typed-array views; JS owns ALL cursor state (rule #4 — no held native state, like the ULOG/HUNK cursors). <code>.range</code>/<code>.prefix</code> may be sugar over it or keep the native <code>_seekrange_</code> fast-drain — implementer's call.</li>
+<li>3 new <code>hit.hpp</code>-sized leaves in a new <code>js/index.hpp</code> (registered in <code>JABCContInstall</code>): <code>_findge_&lt;lane&gt;</code> (binary-search point, mirrors <code>KEEPLookup</code>), <code>_seekrange_&lt;lane&gt;</code> (binds <code>HIT&lt;lane&gt;SeekRange</code>), <code>_compact_&lt;lane&gt;</code> (binds <code>HIT&lt;lane&gt;Compact</code> — the 1/8 ladder, keeper/spot parity, full-element dedup + newest-run-wins). NO keyed/tombstone compaction.</li>
+<li>u64 keys cross as BigInt; needles + <code>lo</code>/<code>hi</code> are BigInt; mind lane alignment on re-mmap; validate <code>byteLength % (w*BPE) === 0</code> on open.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open) <code>abc.index</code> lives in the <code>JABC_CONT_JS</code> bundle (like <code>Buf</code>/<code>pol</code>);<p>
-<code>js/index.hpp</code> holds the 3 leaves. v1 deletes = newest-run shadows older at query time (no tombstone drop) — DOCUMENT it.
-</p>
-</li>
+<li>(open) <code>abc.index</code> lives in the <code>JABC_CONT_JS</code> bundle (like <code>Buf</code>/<code>pol</code>); <code>js/index.hpp</code> holds the 3 leaves. v1 deletes = newest-run shadows older at query time (no tombstone drop) — DOCUMENT it.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
 <li class="open"><input type="checkbox" disabled> First <code>be get --nosub</code> onto current trunk (JS-021 landed); build.</li>
-<li class="open"><input type="checkbox" disabled> Repro-first: <code>js/test/index.js</code> (model on <code>hit.js</code>) — build <code>wh128</code> + <code>u64</code><p>
-  runs, <code>flush</code>, <code>compact</code> to the 1/8 ladder, assert POINT/RANGE/PREFIX vs a   brute-force JS oracle. Red before, green after.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: <code>js/test/index.js</code> (model on <code>hit.js</code>) — build <code>wh128</code> + <code>u64</code> runs, <code>flush</code>, <code>compact</code> to the 1/8 ladder, assert POINT/RANGE/PREFIX vs a brute-force JS oracle. Red before, green after.</li>
 <li class="open"><input type="checkbox" disabled> Add the 3 leaves + the <code>abc.index</code> object; doc INDEX.md / API.md.</li>
 </ul>
 <h3>Blockers</h3>
@@ -88,14 +61,19 @@ alignment on re-mmap; validate <code>byteLength % (w*BPE) === 0</code> on open.
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li><strong>LANDED <code>5d162989</code></strong> (2026-06-21): <code>abc.index(lane, opts)</code> — generic mmap LSM<p>
-over <code>u64</code>/<code>wh128</code>: <code>put</code>/<code>flush</code>/<code>compact</code> (<code>HIT&lt;lane&gt;Compact</code> 1/8 ladder)/ <code>get</code>/<code>range</code>/<code>prefix</code> (half-open)/<code>seek</code>. ON-DISK (<code>opts.dir</code> → <code>abc.book</code> files, re-opened) vs IN-MEMORY (no <code>dir</code> → <code>io.ram</code>, ephemeral). <code>.seek(needle)</code> = pure-JS pull cursor (per-source <code>_findge_</code> + JS min-heap + newest-wins dedup; rule #4, memtable snapshot on seek). 3 leaves in <code>js/index.hpp</code>; flush path pure JS; added <code>io.rename</code>/<code>io.mkdir</code>. <code>js/test/index.js</code> (<code>JABCindex</code>) vs a brute-force oracle red→green; <code>ctest -R JABC</code> 20/20, ASAN/LSan clean.
-</p>
-</li>
-<li>NOTE: <code>.range</code>/<code>.prefix</code> (native <code>_seekrange_</code> drain) do NOT dedup across<p>
-runs; <code>.seek</code> does. <code>kv64</code> + keyed/tombstone compaction deferred.
-</p>
-</li>
+<li><strong>LANDED <code>5d162989</code></strong> (2026-06-21): <code>abc.index(lane, opts)</code> — generic mmap LSM over <code>u64</code>/<code>wh128</code>: <code>put</code>/<code>flush</code>/<code>compact</code> (<code>HIT&lt;lane&gt;Compact</code> 1/8 ladder)/ <code>get</code>/<code>range</code>/<code>prefix</code> (half-open)/<code>seek</code>. ON-DISK (<code>opts.dir</code> → <code>abc.book</code> files, re-opened) vs IN-MEMORY (no <code>dir</code> → <code>io.ram</code>, ephemeral). <code>.seek(needle)</code> = pure-JS pull cursor (per-source <code>_findge_</code> + JS min-heap + newest-wins dedup; rule #4, memtable snapshot on seek). 3 leaves in <code>js/index.hpp</code>; flush path pure JS; added <code>io.rename</code>/<code>io.mkdir</code>. <code>js/test/index.js</code> (<code>JABCindex</code>) vs a brute-force oracle red→green; <code>ctest -R JABC</code> 20/20, ASAN/LSan clean.</li>
+<li>NOTE: <code>.range</code>/<code>.prefix</code> (native <code>_seekrange_</code> drain) do NOT dedup across runs; <code>.seek</code> does. <code>kv64</code> + keyed/tombstone compaction deferred.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

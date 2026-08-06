@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SPOT-001: shared/spot.js — the ONE file-location resolver (fragment anchors, symbols, needles)</title>
+<meta property="og:title" content="SPOT-001: shared/spot.js — the ONE file-location resolver (fragment anchors, symbols, needles)">
+<meta property="og:description" content="Superseded by SPOT-002: fragment grammar re-ruled 2026-07-18 (#L123 line, #needle substr, #/re/, #'tok pattern'; symbol forms dropped).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/SPOT/SPOT-001.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SPOT-001: shared/spot.js — the ONE file-location resolver (fragment anchors, symbols, needles)</h1>
+<div>
+<p>
+Now: STALE
+</p>
+</div>
+<p>
+Superseded by <a href="SPOT-002.html">SPOT-002</a>: fragment grammar re-ruled 2026-07-18 (#L123 line, #needle substr, #/re/, #'tok pattern'; symbol forms dropped).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Several consumers need &quot;find a location in a file&quot; and each is about to roll its own: <code>why:</code> fragment scoping (<a href="../WHY/WHY-002.html">/todo/WHY/WHY-002</a>), the planned spot-view rebuild (today's <code>views/spot/search.js</code> + <code>match.js</code>, JAB-021), and later <code>cat:</code>/<code>diff:</code> scoped hunks. The C side already fixed the vocabulary: <code>HUNKu8sMakeURI</code> emits <code>#L42</code> / <code>#sym</code> / <code>#sym:L42</code> / <code>#'quoted body':L42</code> (dog/HUNK.c:60), <code>HUNKu8sFragSplit</code> extracts, and symbols are the tokenizer's <code>N</code>-def tags (<code>CAPOFindFunc</code>, spot/CAPO.c:579).
+</p>
+<ul>
+<li>One resolver, many callers: the utility returns byte spans; paging/hunking/rendering stays with the caller.</li>
+<li>Adopt the C fragment conventions VERBATIM — do not invent a second grammar (<code>#function foo</code> is out; <code>#authorIdent</code> / <code>#authorIdent:L41</code> is the form).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+<code>shared/spot.js</code>: parse a locator string, resolve it over (source bytes, ext) to match spans.
+</p>
+<ul>
+<li><code>parse(frag)</code> → a typed locator; <code>find(loc, src, ext, toks?)</code> → ascending <code>[{lo, hi, line, col}]</code> byte spans (toks optional: caller may pass a pre-parsed token buffer, else tok.parse inside).</li>
+<li>Locator syntaxes, ONE grammar shared with hunk URIs:<ol>
+<li><code>L42</code>, <code>L42-60</code> — line / line range;</li>
+<li><code>42.7-43.2</code> — line.col span (the why-runs form, so a why-runs row is itself a valid locator);</li>
+<li><code>sym</code> — a symbol, matched at an <code>N</code>-def token;</li>
+<li><code>sym:L42</code> — symbol with a line hint (nearest def to the hint wins — tolerant to drift);</li>
+<li><code>'quoted body'</code> — structural SPOT needle (a-z bind one token, A-Z a block, two-space gap), percent-unescaped per hunk_frag_esc;</li>
+<li><code>/re/</code> — regex needle (the search view's regex matcher).</li>
+</ol>
+</li>
+<li>Reuse, not re-roll: lift <code>views/spot/match.js</code> matchers (grep/regex/structural) into or under shared/spot.js; the rebuilt spot view and search scaffold consume THIS module.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Hashlets win: a 6..40-hex fragment resolves via <a href="../../be/core/resolve_hash.js">resolve_hash</a> FIRST — spot.js never sees it; non-hex (or <code>:L</code>-suffixed) strings are locators. Policy note in resolve_hash.js, not a fork of it.</li>
+<li>NO manual parsing beyond the locator grammar itself; source matching rides tok.parse / TokStream / the existing matchers.</li>
+<li>KNOWN GAP (search.js parity caveat): the S→N DEF retag has NO JS binding — <code>tok.parse</code> is lexer-only. Symbol locators need either the new binding (MUST-ASK) or an explicit v1 heuristic; the choice is a design decision below, not an accident.</li>
+<li>Spans are byte-truth; line/col are derived in the same walk (no second scan).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>spot's substrate is the HUNK, not raw bytes: <code>find</code>/<code>window</code> take (text, toks) and skip hidden tags (<code>U</code>=20, <code>O</code>=14) in matching AND line/col math; spans return in hunk byte space. Raw-file callers tok.parse first — one code path, a why/diff hunk never re-tokenizes.</li>
+<li>Scoping = clipping, not per-view gating: <code>clip(text, toks, lo, hi)</code> (HUNKu32sClip twin, CAPOBuildHunk's own move) cuts a sub-hunk — views build their FULL hunk once, then <code>hunks()</code> windows+clips it. Clip boundaries snap to token edges; a hidden <code>O</code> sticks to its visible predecessor (never split a <code>[visible][O]</code> pair).</li>
+<li>Gutter line numbers come from the PRE-clip count — absolute file lines survive scoping.</li>
+<li>Any emitted hunk is valid input — the pager gets in-view search/jump (<code>/sym</code>) from the SAME <code>find</code>.</li>
+<li>v1 symbol heuristic (until the DEF binding lands): match the symbol bytes as a whole identifier token at column-0-anchored context (line starts a declaration-shaped run); <code>sym:L42</code> needs only nearest-line disambiguation, so the heuristic bar is low.</li>
+<li><code>find</code> returns ALL matches; callers pick (first / nearest-to-hint / all) — the resolver does not guess caller policy.</li>
+<li>The module is store-blind and URI-blind: hunk + locator in, spans/sub-hunks out; URI/fragment splitting stays with resolve_hash + the caller (HUNKu8sFragSplit twin lives here only as <code>parse</code>).</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> shared/spot.js: parse + find over (text, toks), line/line.col/symbol/needle/regex locators</li>
+<li><a href="./ .html"> </a> clip (HUNKu32sClip twin) + window/hunks — sub-hunk cutting, O-pair-safe</li>
+<li><a href="./ .html"> </a> lift match.js matchers to shared (search scaffold re-pointed, no behavior change)</li>
+<li><a href="./ .html"> </a> percent-unescape for quoted bodies (hunk_frag_esc twin)</li>
+<li><a href="./ .html"> </a> repro: table-driven golden — each syntax over a fixture file, incl. hex-fragment NON-capture</li>
+<li><a href="./ .html"> </a> decide the DEF binding: ask for tok DEF-pass export vs ship v1 heuristic (<a href="../WHY/WHY-002.html">/todo/WHY/WHY-002</a> blocks on symbol anchors only)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>S→N DEF retag has no JS binding (JAB-021 parity caveat) — symbol precision capped until resolved.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+(pending)
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

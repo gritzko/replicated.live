@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CI-004: v button — run the project's default build+test as a bg job</title>
+<meta property="og:title" content="CI-004: v button — run the project's default build+test as a bg job">
+<meta property="og:description" content="Local one-keystroke CI: the pager's v button detects the project's conventional build+test entry point (&quot;default stuff&quot;: ./ci.sh, ./scripts/ci.sh, cmake+ninja+ctest, ./configure &amp;&amp; make &amp;&amp; make test, and the per-language equivalents), runs it as a detached background job in the worktree, and puts the verdict into the per-repo cache. Separate from the qemu runner fleet (CI-001/CI-003) — this is the local leg; the fleet can later reuse the same detector script inside its VMs.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CI/CI-004.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>CI-004: <code>v</code> button — run the project's default build+test as a bg job</h1>
+<div>
+<p>
+Now: OPEN See: CI-001 See: TODO-006
+</p>
+</div>
+<p>
+Local one-keystroke CI: the pager's <code>v</code> button detects the project's conventional build+test entry point (&quot;default stuff&quot;: <code>./ci.sh</code>, <code>./scripts/ci.sh</code>, cmake+ninja+ctest, <code>./configure &amp;&amp; make &amp;&amp; make test</code>, and the per-language equivalents), runs it as a detached background job in the worktree, and puts the verdict into the per-repo cache. Separate from the qemu runner fleet (<a href="./CI-001.html">CI-001</a>/<a href="./CI-003.html">CI-003</a>) — this is the local leg; the fleet can later reuse the same detector script inside its VMs.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><a href="./CI-001.html">CI-001</a> covers remote per-commit runners; nothing runs the build/tests locally from the pager today — the user shells out by hand.</li>
+<li>Cache model updated by <a href="./STATUS-019.html">STATUS-019</a>: the shared cache is now a per-dir REV TREE storing no values — the CI verdict is a CONSUMER memo keyed by the rev(wtDir) it ran at, so the first edit after the run stales it automatically, same property as the old bucket drop.</li>
+<li>RULING gritzko 2026-08-04: <code>ci</code> MUST BE A VIEW — a views/-tree read-only verb like status/log/todo (<a href="./Views.html">Views</a> is the open category; only the mutation basis is closed).  The ∞ click mints the normal view spell, the pager pushes the ci view like any other: it starts or attaches to the run and renders the log tail (TODOs 7-9).  The <code>_pagerSpell</code> reserved-word interception built on 2026-08-04 is WRONG and must be removed — no pager-local dispatch, no special case.  The extension-script entry (<code>jab ci.js</code>) stays for the CLI and the <a href="./CI-001.html">CI-001</a> fleet.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>v</code> in the pager kicks off the detected default build+test for the current worktree as a background job; the pager stays interactive.</li>
+<li>Ruling gritzko 2026-08-04: the TODO BOARD grows a CI BUTTON per wt-having row — face <code>[ ∞]</code> (2-cell, frame conventions of TODO-005), tone <code>#5883a7</code> (a new view/theme.js BTN slot; the <code>ci</code> name is taken by the commit ✓ — pick a fresh name, e.g. <code>run</code>).</li>
+<li>Placement, gritzko's lean: the ∞ goes at the END of the FILE panel (where the ✓ sits today) and the post ✓ MOVES to the END of the COMMIT panel — staging surface ends in &quot;test it&quot;, history surface ends in &quot;commit it&quot;; frame widths shift 16/10 → 16/13.</li>
+<li>The button's click runs the CI-004 runner on the row's wt; while a job runs the face reads in-progress, and the landed verdict tints the button green/red off the consumer memo until rev(wtDir) moves.</li>
+<li>Ruling gritzko 2026-08-04: starting a run must SHOW the output, not just the badge — a CI LOG VIEW over the run's log file: render the LAST 4 KB, positioned at the END; <code>r</code> refreshes (re-reads the file, stays at the end while the job appends).  The log already lands in a file, so the view is a tail over it, no second capture path.</li>
+<li>On exit the result — green/red, exit code, log path — lands in the per-repo cache so status/pager surface it until the tree changes.</li>
+<li>Detection ladder, first hit in the worktree root wins:<ol>
+<li><code>./ci.sh</code></li>
+<li><code>./scripts/ci.sh</code></li>
+<li><code>CMakeLists.txt</code> → cmake + ninja + <code>ctest -j16</code></li>
+<li><code>./configure &amp;&amp; make &amp;&amp; make test</code></li>
+<li><code>Makefile</code> → <code>make &amp;&amp; make test</code></li>
+<li><code>Cargo.toml</code> → <code>cargo test</code>; <code>go.mod</code> → <code>go test ./...</code>; <code>package.json</code> → <code>npm test</code>; <code>pyproject.toml</code>/<code>setup.py</code> → pytest</li>
+</ol>
+</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>stdout+stderr captured to a log file; the cache row carries the log path, never the log body.</li>
+<li>No hand-rolled URI/path composition; resolution via the standard library (resolve_hash.js), paths via the worktree root only.</li>
+<li>The runner is arg-blind like any pager action: it acts on the current context worktree, no per-invocation configuration.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>One shared detector script (extension), so the <a href="./CI-001.html">CI-001</a> fleet runs the exact same &quot;default stuff&quot; inside its VMs later — no fleet-only logic.</li>
+<li>Result is cache-resident only: a stale verdict silently disappears with its bucket; no persisted CI history on this leg (that is the fleet's job).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> 1. Detector script in <code>be/</code>: probe the ladder, print the chosen command line; exit distinct on &quot;nothing detected&quot;.</li>
+<li class="open"><input type="checkbox" disabled> 2. Background execution: detached spawn in the worktree, log capture to a file, completion hook feeding the cache row.</li>
+<li class="open"><input type="checkbox" disabled> 3. Cache row shape: green/red, exit code, log path, keyed under the repo path bucket.</li>
+<li class="open"><input type="checkbox" disabled> 4. Pager <code>v</code> keybinding invoking the runner for the current context worktree; re-press while running reports &quot;in progress&quot;.</li>
+<li class="open"><input type="checkbox" disabled> 5. Surface the verdict: status/pager banner reads the cache row.</li>
+<li class="open"><input type="checkbox" disabled> 6. Board button (ruling 2026-08-04): <code>[ ∞]</code> #5883a7 at the FILE panel's end, the post ✓ moved to the COMMIT panel's end; wire the click to the runner, the face to the verdict memo.</li>
+<li class="open"><input type="checkbox" disabled> 7. The ci VIEW (ruling 2026-08-04, gritzko's words): it FORKS whatever command (the detection ladder; attach if one already runs), REDIRECTS output to a file, and the view TRACKS THE TAIL of that file, tail capped at 4 KB, positioned at the end; <code>r</code> re-reads and re-tails.</li>
+<li class="open"><input type="checkbox" disabled> 8. A GENERAL per-view mark &quot;refresh each ~1 s&quot; that bro honors for the topmost view — the ci view sets it while the job runs; OTHER views will use the same mark later, so it is a pager mechanism, not ci code.</li>
+<li class="open"><input type="checkbox" disabled> 9. Verdict FOOTER under the tail — <code>── PASS rc=0 ──</code> / <code>── FAIL rc=N ──</code> in the verdict tone, <code>⋯ running</code> mid-run; render-only, never written to the log file.  The hunk BANNER stays the command line as-is.</li>
+<li class="open"><input type="checkbox" disabled> 10. Remove the <code>_pagerSpell</code> reserved-word layer; the ∞ mints the plain view spell and the pager pushes the ci view normally.</li>
+<li class="open"><input type="checkbox" disabled> 11. Verdict on the BOARD (ruling gritzko 2026-08-04): the ∞ button's COLOUR carries the last run's verdict — greyish for unknown/never-ran, <code>#e1351e</code> fail, <code>#1fe033</code> ok.  The status is REMEMBERED per wt in a {wt: status} map the runner writes at settle (beside the logs, outside every watched tree, so no self-staling rev bump); the board reads the map cold — no watcher needed to show the last verdict.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known; independent of <a href="./GIT-022.html">GIT-022</a> and the qemu track.</li>
+<li>TODO #6 edits views/todo/todo.js frames — land AFTER the in-flight <a href="./TODO-006.html">TODO-006</a> r3 rework to avoid a two-writer collision on the file.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+r2, the ci VIEW (supersedes r1's reserved-word wiring):
+</p>
+<ul>
+<li><code>views/ci/ci.js</code> — a views/-tree read-only verb: bare <code>ci</code> (context tree), <code>ci //WT</code> (the board's form), <code>ci &lt;path&gt;</code>; all ride shared/ci.js's ONE runner.  The view forks-or-ATTACHES (<code>CI.ensure</code> — a fresh verdict replays, <code>r</code> re-runs), tails the log file (4 KB cap, positioned at the END), renders the <code>── PASS rc=0 ──</code>/<code>── FAIL rc=N ──</code> footer in the verdict tones, <code>⋯ running</code> mid-run; the banner stays the command line.</li>
+<li><code>shared/viewmark.js</code> — the GENERIC per-view ~1 s tick (tick/end/take): only the topmost marked view re-runs, scroll pins to the last page until a scroll key, unmarked views never wake.  loop.js also records the initial view's launch invocation (r/tick used to re-derive a spell from the banner — fatal for ci, whose banner is a command).</li>
+<li>TODO 11: settle writes the {wt: ok|fail} map to $TMP/be-ci/verdicts (temp+rename, outside every watched tree); the ∞ reads it COLD — greyish never-ran, #e1351e fail, #1fe033 ok (theme BTN_RUN; #5883a7 stays the in-flight tone) — and the verdict survives a fresh pager process.</li>
+<li>The <code>_pagerSpell</code> layer is DELETED (both call sites); the <code>v</code> key, status-bar badge, board layout, detection ladder, spawnFds capture and the rev-keyed memo survive.</li>
+<li>Suite 352/352 (orchestrator-verified); the pty case pins 17 legs (push-on-click, end-positioned tail, keyless growth, settle footer, tick stop, cold verdict colours, footer never on disk), three red-verifies.</li>
+<li>Smells parked: a killed job reads as <code>⋯ running</code> forever (log without .rc); $TMP/be-ci has no reaper; the key wait is the pre-existing 100 ms VTIME spin; Enter on the ci banner row derives nonsense (refresh fixed, that path not); BTN_FACE_ASCII/PANELW dead wiring.</li>
+<li>Suggested commit: <code>CI-004: ci as a view — log tail, 1s view tick, per-wt verdict map</code></li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

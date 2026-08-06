@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-064: the board reads .gitignore/.gitmodules twice — arm() and classifyMerge redo each other's work</title>
+<meta property="og:title" content="BE-064: the board reads .gitignore/.gitmodules twice — arm() and classifyMerge redo each other's work">
+<meta property="og:description" content="A tty be todo render loads the ignore matcher 355 times and parses .gitmodules 310 times for 149 classified repos. Measured attribution (2026-08-05, main tree, 137 wts / 863 tickets): cache.js's arm() does 204 ignore loads, classifyMerge redoes 151 of them for the SAME roots microseconds later; recurse.walk parses 159 .gitmodules, classifyMerge parses the same files 151 times over. This is a redundant CALL CHAIN, not a missing cache: TODO-006 already publishes the arming walk (S.walk) but not the matcher that produced it. Cure = hand the work down, don't re-read.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BE/BE-064.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-064: the board reads .gitignore/.gitmodules twice — arm() and classifyMerge redo each other's work</h1>
+<div>
+<p>
+Now: OPEN Sev: MED Rep: ///be/ Ask: gritzko See: TODO-006
+</p>
+</div>
+<p>
+A tty <code>be todo</code> render loads the ignore matcher 355 times and parses <code>.gitmodules</code> 310 times for 149 classified repos. Measured attribution (2026-08-05, main tree, 137 wts / 863 tickets): cache.js's <code>arm()</code> does 204 ignore loads, <code>classifyMerge</code> redoes 151 of them for the SAME roots microseconds later; <code>recurse.walk</code> parses 159 <code>.gitmodules</code>, classifyMerge parses the same files 151 times over. This is a redundant CALL CHAIN, not a missing cache: TODO-006 already publishes the arming walk (<code>S.walk</code>) but not the matcher that produced it. Cure = hand the work down, don't re-read.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Profiled through the pty (the real UI path), warm first paint 2.6-2.9 s, 5.6 s cold; <code>classifyMerge</code> is 149 calls (78 wts + 71 mounted subs) and <del>1.9 s of a </del>3.3 s render.
+</p>
+<ul>
+<li><code>cache.js:212</code> <code>arm(wt)</code> loads the matcher at <code>:216</code>, walks with it, then publishes ONLY the walk: <code>S.walk = {wt, rev, w}</code> (<code>:229</code>).</li>
+<li><code>classify.js:253</code> parses <code>&lt;wt&gt;/.gitmodules</code> and <code>:254</code> reloads the matcher for the same root the arming walk just used.</li>
+<li><code>recurse.js:77</code> <code>gitmodulesOrder(repo.wt)</code> parses that same file a second time; <code>todo.js:584</code> <code>foldCounts</code> then <code>:585</code> <code>foldSubs</code> run the two back to back, per repo.</li>
+<li><code>ignore.js:195</code> <code>load()</code> climbs to the project root: <code>todo/.gitignore</code> and <code>/.gitignore</code> are re-read 43x each (one per topic anchor).</li>
+<li><code>ignore.js:171</code> <code>declaredSubOf</code> has its own <code>.gitmodules</code> reader (STATUS-018), mapping <code>journal/.gitmodules</code> 149x; <code>parseText</code> runs 478 times per render (250 under the arm climb, 228 under classifyMerge).</li>
+<li>Syscall totals per render: <code>io.mmap</code> 1507 calls / 436 distinct paths (1071 repeat maps), <code>.gitmodules</code> mapped 312x, <code>io.lstat</code> 54644 / 40647 distinct, <code>io.stat</code> 42979 / 39981, <code>readAll</code> 14740.</li>
+<li>NOT in scope, separate leads: the 14740 per-file content reads in <code>classify.js:521</code> <code>wtEqBase</code>, and <code>readTreeRecursive</code> running 149 times over only 86 distinct tree shas (the clones share a trunk tip).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Each repo's <code>.gitmodules</code> is parsed once per render, each anchor's ignore matcher loaded once — the duplicate legs (151 + 151) die.</li>
+<li>Shared parent files (<code>/.gitignore</code>, <code>todo/.gitignore</code>, the project <code>.gitmodules</code>) are read once per render, not once per anchor.</li>
+<li>Emitted board bytes byte-identical before/after; no verb changes.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>No second cache mechanism: the rev tree (<code>cache.js</code>, STATUS-019) is the only change witness; a memo carries a rev or it does not exist.</li>
+<li>With no live watcher every lookup must MISS and recompute — a mutation verb never starts the watcher (<code>loop.js:499</code>), so its behaviour must stay byte-identical by construction.</li>
+<li><code>ignore.js</code> must not require <code>core/discover.js</code> (STATUS-018) and nothing may re-close the cycle CODE-030 cut (<code>classify.js:62</code>).</li>
+<li>Callers that pass no witness (<code>stage.js:87</code>, <code>get.js:1092</code>, tests) keep today's path unmemoised.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Two legs. Leg A deletes calls and needs no new state; Leg B memoises only the shared parent files. Leg A alone kills 302 of the 665 duplicate calls.
+</p>
+<ul>
+<li>Leg A1: widen the TODO-006 slot to carry what produced the walk — <code>S.walk = {wt, rev, w, ig}</code> (<code>cache.js:229</code>), plus a <code>takeArm(wt)</code> twin of <code>takeWalk</code> (<code>:235</code>) with the identical live/wt/rev guard.</li>
+<li>Leg A2: <code>classify.js:253-254</code> takes that slot when it is there and threads the walk into <code>wtScan</code> instead of re-taking it; a null slot falls back to today's load, so no-watcher runs are unchanged.</li>
+<li>Leg A3: <code>classifyMerge</code> keeps the parsed sub-path array and returns it; <code>recurse.walk</code> accepts <code>opts.subs</code> (<code>recurse.js:74-77</code>); todo.js threads it from <code>foldCounts</code> into <code>foldSubs</code> (<code>todo.js:584-585</code>).</li>
+<li>Leg B: memoise the PARSED FILE per its own dir, keyed by the rev of that dir, so 137 wts sharing <code>journal/.gitignore</code> share one entry — never keyed per anchor, or the sharing is lost.</li>
+<li>The witness query must arm ONE level only (a full <code>rev()</code> re-enters <code>arm</code> → <code>ignore.load</code> → recursion) and must drain the queue first, so a write from a pager mutation spell is seen before the memo answers.</li>
+<li><code>declaredSubOf</code> (<code>ignore.js:167</code>) drops its private reader and shares the per-dir <code>.gitmodules</code> entry; ignore.js stays free of discover.js.</li>
+<li>Storage side (module-level maps vs one fs-mirror value tree hanging off the rev tree) is still open — gritzko's tree proposal covers it and supersedes Leg B if it lands; Leg A is orthogonal either way.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./ .html"> </a> repro FIRST: a counting harness over <code>be/test/todo/rowcache</code> —
+</p>
+<div>
+<p>
+  assert <code>ignore.load</code> == distinct armed roots and <code>gitmodules.paths</code> == distinct roots (RED today at 355/310 for ~204/159)
+</p>
+</div>
+<p>
+ -<a href="./ .html"> </a> Leg A1 <code>cache.js</code>: carry <code>ig</code> in <code>S.walk</code>, add <code>takeArm(wt)</code> -<a href="./ .html"> </a> Leg A2 <code>classify.js:253-254</code>: take matcher + walk, fall back on null -<a href="./ .html"> </a> Leg A3 <code>classify.js</code> return <code>subPaths</code>; <code>recurse.js:74</code> <code>opts.subs</code>;
+</p>
+<div>
+<p>
+  <code>todo.js</code> <code>foldCounts</code> → <code>foldSubs</code> threading
+</p>
+</div>
+<p>
+ -<a href="./ .html"> </a> Leg B: per-dir parsed memo for <code>.gitignore</code> + <code>.gitmodules</code>, rev
+</p>
+<div>
+<p>
+  witness passed IN (no new require edge), climb memoised per level
+</p>
+</div>
+<p>
+ -<a href="./ .html"> </a> <code>ignore.js:167</code> <code>declaredSubOf</code> shares the per-dir entry -<a href="./ .html"> </a> byte-parity gate: memoised render == watcher-off render, tok+bytes -<a href="./ .html"> </a> invalidation leg: edit the project-root <code>.gitignore</code> between two
+</p>
+<div>
+<p>
+  renders under a live watcher, the second render must see it
+</p>
+</div>
+<p>
+ -<a href="./ .html"> </a> degrade leg: <code>cache.stop()</code>, repeat — the edit is still seen -<a href="./ .html"> </a> pty acceptance (real UI path): cold board → click a ticket →
+</p>
+<div>
+<p>
+  BACKSPACE; assert the mmap/read delta on the re-fire, not counters
+</p>
+</div>
+<p>
+ -<a href="./ .html"> </a> re-profile: mmap repeats 1071 → <del>0, <code>.gitmodules</code> maps 312 → </del>12
+</p>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><code>cache.js:83</code> <code>stop()</code> nulls the tree without bumping <code>S.rev</code>, so a watcher stopped and restarted can re-arm a dir at a rev an old memo already holds — a stale hit across the dead window. Correctness, not perf; wants its OWN ticket before Leg B lands (gritzko's call).</li>
+<li>Claim carried from the design pass, UNVERIFIED here: <code>classify.js:145</code> notes <code>io.mmap</code> never unmaps JS-side, which would make the 1071 repeat maps address-space burn as well as time (<a href="/todo/BE/BE-017.html">BE-017</a>, <a href="/todo/ABC/ABC-020.html">ABC-020</a> ground).</li>
+<li><code>arm()</code> also fires for the 46 topic dirs, publishing slots nobody takes — <code>takeArm</code> must keep <code>takeWalk</code>'s <code>s.wt !== wt</code> guard or a foreign take becomes possible.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+Suggested commit: <code>BE-064: hand the arm's matcher+subs down, stop re-reading</code>
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

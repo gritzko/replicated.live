@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-022: put.js hashlet resolver — dead-ternary bug + fold to resolveHexAny</title>
+<meta property="og:title" content="CODE-022: put.js hashlet resolver — dead-ternary bug + fold to resolveHexAny">
+<meta property="og:description" content="Deps: none to start. The BROADER hashlet-resolver dedup is owned by CODE-020 (resolveHashlet reconcile → shared/resolve.js); this is the put.js spin-off CODE-020 blockers explicitly told to file separately. A real bug, not just tidiness — carries its own repro. See resolve-hash.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-022.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>CODE-022: put.js hashlet resolver — dead-ternary bug + fold to resolveHexAny</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH Rep: ///be
+</p>
+</div>
+<p>
+Deps: none to start. The BROADER hashlet-resolver dedup is owned by <a href="CODE-020.html">CODE-020</a> (resolveHashlet reconcile → shared/resolve.js); this is the put.js spin-off <a href="CODE-020.html">CODE-020</a> blockers explicitly told to file separately. A real bug, not just tidiness — carries its own repro. See <a href="../../be/core/resolve_hash.js">resolve-hash</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>put.js:342 <code>resolveHex</code> is a stale copy of <a href="../../be/core/resolve.js">core/resolve.js</a><code>resolveHex</code>.</li>
+<li>put.js:343 <code>return k.getObject(hexish) ? hexish : hexish</code> — BOTH arms return <code>hexish</code>, so a NON-EXISTENT full sha is accepted as valid.</li>
+<li>The copy drops the <code>eachRemote</code> prefix fallback and never reaches <code>k.resolveHexAny</code>, so a mid-history commit hashlet silently misses.</li>
+<li>Put's <code>#sha</code>/<code>#hashlet</code> target resolution rides exactly this function.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Fix the dead ternary: an absent full sha resolves to nothing, not itself.</li>
+<li>Route put's hashlet→sha through <code>k.resolveHexAny</code> (any-object reach) or <a href="../../be/core/resolve_hash.js">resolve-hash</a>, retiring the local <code>resolveHex</code> copy.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Behavior-preserving EXCEPT the bug fix; repro-first (<a href="../../meta/abc.html">abc</a> policy).</li>
+<li>be/ JS only, drive via jab; the fold joins <a href="CODE-020.html">CODE-020</a>'s resolver group.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>The canonical reach is <code>k.resolveHexAny</code> (store hashlet60 index): full sha verbatim iff present, 6..40 prefix unique-or-nothing, all objects.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: <code>put ...#&lt;absent-full-sha&gt;</code> is wrongly accepted today</li>
+<li><a href="./ .html"> </a> repro: <code>put ...#&lt;mid-history-hashlet&gt;</code> silently misses today</li>
+<li><a href="./ .html"> </a> fix put.js:343 ternary — absent object → fail/undefined, not pass-through</li>
+<li><a href="./ .html"> </a> fold put.js:342 <code>resolveHex</code> → <code>k.resolveHexAny</code> (drop the local copy)</li>
+<li><a href="./ .html"> </a> confirm banner target (put.js:336) composes via <code>URI.make</code> (cluster C)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Reconciling onto one resolver is <a href="CODE-020.html">CODE-020</a>'s repro-gated group; land the put.js bug fix independently, then let the fold ride that group.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Not started. Suggested commit: <code>CODE-022: fix put hashlet dead ternary + resolveHexAny</code>.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

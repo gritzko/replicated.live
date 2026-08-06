@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIT-026: dog/git house-cleaning sweep — small correctness/style debts (2026-07-24 review)</title>
+<meta property="og:title" content="GIT-026: dog/git house-cleaning sweep — small correctness/style debts (2026-07-24 review)">
+<meta property="og:description" content="Residue of the 2026-07-24 jab/dog/git/ review: real but small defects that don't warrant one ticket each. Each TODO is self-contained; fix repro-first where a behavior changes, comment-only items need none. The four big findings went to GIT-011 (extended), GIT-023, GIT-024, GIT-025. Method: work.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GIT/GIT-026.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GIT-026: dog/git house-cleaning sweep — small correctness/style debts (2026-07-24 review)</h1>
+<div>
+<p>
+Now: OPEN Sev: LOW
+</p>
+</div>
+<p>
+Residue of the 2026-07-24 <code>jab/dog/git/</code> review: real but small defects that don't warrant one ticket each.  Each TODO is self-contained; fix repro-first where a behavior changes, comment-only items need none. The four big findings went to <a href="GIT-011.html">GIT-011</a> (extended), <a href="GIT-023.html">GIT-023</a>, <a href="GIT-024.html">GIT-024</a>, <a href="GIT-025.html">GIT-025</a>.  Method: <a href="../../meta/work.html">work</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Sweep over <code>dog/git/{GIT,PACK,DELT,ZINF,PKT,PIDX,CFG,IGNO,SUBS,SHA1}</code>.</li>
+<li>Untrusted-input items (decimal overflow, CFG grammar) rank first — commit bodies and <code>.gitmodules</code> blobs arrive off the wire.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Clear the TODO list below; no behavior change beyond the stated one per item; tests stay green.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>ABC style throughout (abc.mkd); ragel only for parsing; errors in plain words; INDEX.md updated if any header changes.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(per-item, in the fixing commits)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> <code>GIT.c:163</code> <code>git_drain_decimal</code>: no overflow guard — a long digit run in a commit ident is signed i64 overflow (UB); clamp digits.</li>
+<li class="open"><input type="checkbox" disabled> <code>SHA1.h:17</code> <code>sha1empty</code> reads <code>data[20]</code> via <code>u64c*</code>/<code>u32c*</code> — unaligned + strict-aliasing UB; byte-OR loop or memcmp vs zeros.</li>
+<li class="open"><input type="checkbox" disabled> <code>CFG.c.rl</code>: grammar requires a trailing <code>\n</code> — a config blob ending mid-line (git-legal) yields CFGBAD; SUBS then fails the WHOLE <code>.gitmodules</code> and drops the last submodule.  Accept EOF as EOL.</li>
+<li class="open"><input type="checkbox" disabled> <code>CFG.c.rl</code> <code>q_esc</code> admits only <code>\n \t \b \&quot; \\</code> — git accepts ANY backslash-escape in quoted strings; one <code>\,</code> fails the parse.</li>
+<li class="open"><input type="checkbox" disabled> <code>GIT.c:348</code> <code>GITFeedRef</code>: <code>u8bFeed</code> returns unchecked → silent ref truncation on a short buffer; <code>call()</code> them (abc.mkd feed rule).</li>
+<li class="open"><input type="checkbox" disabled> <code>DELT.c:29</code> <code>DELTApply</code> never checks declared <code>base_sz</code> against the actual <code>$size(base)</code> — a wrong base applies to plausible garbage instead of DELTBADFMT (git verifies this).</li>
+<li class="open"><input type="checkbox" disabled> <code>IGNO.c</code>: glob lacks char classes <code>[a-z]</code> and backslash escapes — such patterns silently never match; document or implement.</li>
+<li class="open"><input type="checkbox" disabled> <code>IGNO.c</code> <code>**</code> matching is exponential-backtracking worst case; <code>IGNO_MAX_PATTERNS</code>/<code>IGNO_MAX_CHAIN</code> overflow drops rules silently (log or error, no silent cap).</li>
+<li class="open"><input type="checkbox" disabled> <code>PKT.c:32</code> response-end (0002) is conflated with PKTFLUSH and PKT.h doesn't say; <code>PKT.c:36</code> <code>payload_len</code> is dead code.</li>
+<li class="open"><input type="checkbox" disabled> <code>SHA1.h:124</code> <code>sha1Drain</code> does <code>*from += 20</code> + memcpy — the banned slice→pointer mode switch; <code>u8csUsed</code> + typed copy.</li>
+<li class="open"><input type="checkbox" disabled> <code>SUBS.c:124</code> <code>SUBSu8bSynth</code>: hand-built slice literals with manual length constants (use <code>a_cstr</code>); no escaping of <code>&quot;</code>/<code>\</code> in path → <code>.gitmodules</code> injection from a hostile mount path.</li>
+<li class="open"><input type="checkbox" disabled> <code>PACK.c:128</code> <code>PACKu8sFeedObj</code> comment claims &quot;never leaves a truncated record&quot; — false on the error path (header+ofs already fed, no rollback); fix the contract text or add rollback.</li>
+<li class="open"><input type="checkbox" disabled> <code>PACK.c:51</code> / <code>DELT.c:8</code> varint decoders silently drop bits at shift ≥ ~58; add a range <code>test</code> so sizes can't alias.</li>
+<li class="open"><input type="checkbox" disabled> <code>PIDX.c:62</code> <code>pidx_emit_at</code> inflates each record at least twice (resolve + <code>PACKRecordEnd</code>) and re-resolves chains from scratch — quadratic-ish on deep-delta logs; measure, then decide.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

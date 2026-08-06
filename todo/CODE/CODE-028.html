@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-028 DONE: in-body require() in hot loops — hoist to regular top-level requires</title>
+<meta property="og:title" content="CODE-028 DONE: in-body require() in hot loops — hoist to regular top-level requires">
+<meta property="og:description" content="54 call sites across 24 be/ files call require() from inside a function body, so the spec is re-RESOLVED on every invocation: jab/require.cpp load() runs resolve() BEFORE it consults cacheabs, and resolution is normalize() plus an io.stat per candidate. The module body still evals once — what repeats is the path work. One be todo render pays this 80,342 times on core/resolvehash.js alone. RULING (gritzko 2026-08-04): the idiom is wrong; these become regular top-level requires. The loader-side memo is JAB-010's, in ///jab — a separate repo and a separate ticket; this one does not wait on it.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-028.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>CODE-028 <a href="./DONE.html">DONE</a>: in-body <code>require()</code> in hot loops — hoist to regular top-level requires</h1>
+<div>
+<p>
+Now: DONE Sev: MED Rep: ///be/ See: JAB-010
+</p>
+</div>
+<p>
+54 call sites across 24 be/ files call <code>require()</code> from inside a function body, so the spec is re-RESOLVED on every invocation: <code>jab/require.cpp</code> <code>load()</code> runs <code>resolve()</code> BEFORE it consults <code>cache[abs]</code>, and resolution is <code>normalize()</code> plus an <code>io.stat</code> per candidate. The module body still evals once — what repeats is the path work. One <code>be todo</code> render pays this 80,342 times on <code>core/resolve_hash.js</code> alone. RULING (gritzko 2026-08-04): the idiom is wrong; these become regular top-level requires. The loader-side memo is JAB-010's, in <code>///jab</code> — a separate repo and a separate ticket; this one does not wait on it.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Profiled <code>be todo</code> 2026-08-04 (strace + a jab microbench, warm cache).
+</p>
+<ul>
+<li><code>be --color todo</code> = 4.37s vs <code>be --plain todo</code> = 0.084s; the colour board scans 137 <code>work/</code> clones.</li>
+<li><code>stat(&quot;…/jsrc/core/resolve_hash.js&quot;)</code> 80,342 times, <code>open</code> once — one stat per re-resolve.</li>
+<li>Microbench: 80,342 repeat <code>require(abs)</code> = 231ms, of which <code>io.stat</code> is 190ms (~5% of the run).</li>
+<li>The hot chain is per classified PATH: <code>classify</code> → <code>discover.wtpath</code> → <code>discover.resolve</code> → <code>workRoot()</code> → <code>_rh()</code> → <code>require</code>.</li>
+<li><code>shared/project.js:17</code> justifies its lazy require with &quot;resolve_hash pulls in discover, and a top-level require risks a cycle&quot; — TRUE for <code>core/discover.js</code>, FALSE for project.js, which resolve_hash never requires.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Every <code>require()</code> in be/ sits at the top of its file; a call site names a module handle, never a <code>require()</code>.
+</p>
+<ul>
+<li>All 54 in-body sites hoisted, or deleted where the handle already exists at top level.</li>
+<li>52 of the 54 hoist with NO cycle: verified by building the top-level require graph and re-running cycle detection with every in-body edge added.</li>
+<li>The 2 that DO close a cycle get the cycle BROKEN, not a lazy require left behind (see Design decisions).</li>
+<li><code>be todo</code> <code>resolve_hash.js</code> stat count drops from 80,342 to 1; no behaviour change anywhere.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Pure refactor: no verb behaviour, no output bytes, no module identity changes.
+</p>
+<ul>
+<li><code>libDir()</code>-built and <code>__dirname</code>-built specs (<code>shared/classify.js</code>, <code>shared/subs.js</code>, <code>shared/patchscope.js</code>) become plain relative specs.</li>
+<li><code>core/loop.js</code>'s <code>_here + &quot;/…&quot;</code> sites are the ENTRY shim's own resolution — check each before hoisting, <code>_here</code> is argv-derived.</li>
+<li>Do NOT touch <code>///jab</code> — the loader memo is JAB-010's ground.</li>
+<li>Existing tests must pass untouched; no test edits without gritzko's word.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>The two real cycles: <code>core/discover.js</code> ↔ <code>core/resolve_hash.js</code>, and <code>verbs/patch/fetchleg.js</code> ↔ <code>verbs/get/get.js</code>.</li>
+<li><code>core/resolve_hash.js</code> assigns <code>module.exports = { … }</code> at the END, so a cycle partner that hoists captures a frozen <code>{}</code> — that is WHY the lazy requires exist.</li>
+<li>Cure: make the exports object exist EARLY and be filled by mutation (<code>const API = module.exports = {}; … API.treeAt = treeAt;</code>), the standard CommonJS cycle-safe shape; then both partners may hoist.</li>
+<li><code>resolve_hash.js</code> uses only <code>discover.beRoot</code>, <code>discover.resolveAnchor</code>, <code>discover.resolve</code> — a leaf split is the alternative cure if the mutation shape is refused.</li>
+<li><code>verbs/get/get.js</code> needs ONE symbol from fetchleg (<code>landTip</code>); fetchleg top-level requires get back — same two cures apply.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: a stat-counting harness pinning <code>resolve_hash.js</code> stats per <code>be todo</code> render, before and after.</li>
+<li><a href="./ .html"> </a> hoist the 52 cycle-free sites, file by file.</li>
+<li><a href="./ .html"> </a> break the <code>discover</code>/<code>resolve_hash</code> cycle, then hoist <code>discover.js:151</code> <code>_rh()</code> and its callers.</li>
+<li><a href="./ .html"> </a> break the <code>get</code>/<code>fetchleg</code> cycle, then hoist <code>get.js:513</code>.</li>
+<li><a href="./ .html"> </a> re-run the cycle detector; assert zero top-level cycles.</li>
+<li><a href="./ .html"> </a> <code>ctest -j16</code> green, <code>be todo</code> output byte-identical to before.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The stat cost is ~5% of <code>be todo</code>; the other 95% is the 255 MiB re-hash of 137 clones, which is NOT this ticket.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TODO-011 DONE: split the one-ticket page out of todo into its own view ticket</title>
+<meta property="og:title" content="TODO-011 DONE: split the one-ticket page out of todo into its own view ticket">
+<meta property="og:description" content="RULING (gritzko, 2026-08-04): todo is the TABULAR side only — the open-ticket board, a topic's list, the meta-pair filters. The one-ticket page becomes its OWN view named ticket. Today one view multiplexes both by arg shape (views/todo/todo.js:1-6: bare → board, ABC → topic list, ABC-123 → ticket page) and has grown to 1601 lines; the page arm and the table arm share an arg grammar they don't actually share (filters mean nothing on a page, a page key means nothing to a table).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/TODO/TODO-011.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>TODO-011 <a href="./DONE.html">DONE</a>: split the one-ticket page out of <code>todo</code> into its own view <code>ticket</code></h1>
+<div>
+<p>
+Now: DONE Sev: MED
+</p>
+</div>
+<p>
+RULING (gritzko, 2026-08-04): <code>todo</code> is the TABULAR side only — the open-ticket board, a topic's list, the meta-pair filters. The one-ticket page becomes its OWN view named <code>ticket</code>. Today one view multiplexes both by arg shape (<code>views/todo/todo.js:1-6</code>: bare → board, <code>ABC</code> → topic list, <code>ABC-123</code> → ticket page) and has grown to 1601 lines; the page arm and the table arm share an arg grammar they don't actually share (filters mean nothing on a page, a page key means nothing to a table).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>The routing is LEXICAL (the <code>uc ucnum* &quot;-&quot; dgt+</code> key rule, <code>todo.js:4-5</code>) and stays lexical — no path resolution in arg classing.</li>
+<li>The page arm renders a thin <code>todo/GET/GET-001.mkd</code> or a fat <code>todo/GET/GET-001/README.mkd</code> off <code>be.todoRoot()</code> (URI-016 climb, never an env var).</li>
+<li>Click spells are the coupling to cut carefully (BE-054: context-less <code>O</code> spells, the pager stays arg-blind): 1. board/list ticket-key rows carry <code>todo &lt;KEY&gt;</code> spells today — a KEY row must now spell <code>ticket &lt;KEY&gt;</code>. 2. TODO-008 in-page ticket-valued meta links (<code>See: BE-050</code>) navigate to the ticket page — now <code>ticket BE-050</code>. 3. filter/topic spells (<code>todo ABC Now:OPEN</code>, argLineWith replacement, BRO-025) are table business and STAY <code>todo</code> spells, untouched.</li>
+<li>Meta-pair machinery (TODO-003 metaidx, ONE find() per verb run; TODO-004 filters; the <code>Now:</code>/<code>Sev:</code> reading with the legacy header-mark fallback) is shared ground: the page shows a ticket's own pairs, the table filters on them. Share via requires, never duplicate.</li>
+<li>Siblings: <a href="/todo/TODO/TODO-004.html">TODO-004</a> (arg grammar), <a href="/todo/TODO/TODO-008.html">TODO-008</a> (ticket-valued links), <a href="/todo/TODO/TODO-005.html">TODO-005</a> (board row growth, open).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+<code>ticket ABC-123</code> renders the one-ticket page exactly as <code>todo ABC-123</code> does today (byte-parity is the RED/GREEN baseline); <code>todo</code> keeps board + topic list + filters only.
+</p>
+<ul>
+<li><code>todo ABC-123</code> no longer serves the page: it refuses in plain words pointing at <code>ticket ABC-123</code> (errors-in-plain-words rule; if a silent re-route is preferred that is gritzko's call — record the question in the Outcome, default to the refusal).</li>
+<li>Every ticket-key click anywhere in the two views lands in <code>ticket</code>; every filter/topic click stays in <code>todo</code>.</li>
+<li><code>ticket</code> rejects non-key args in plain words (<code>ticket ABC</code> names the topic list it is not: point at <code>todo ABC</code>; filters likewise point at <code>todo</code>).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Verbs resolve args, the pager stays arg-blind; spells stay context-less <code>O</code> spells (BE-054); arg classes stay LEXICAL.</li>
+<li>Shared helpers (metaidx read, mkd page rendering, key lexing) move to a required module or stay required from one home — NO second implementation of any of them.</li>
+<li><code>todo/done/</code> never lists — unchanged; the <code>ticket</code> view CAN render a closed ticket by key (a page is not a listing; same fail-open spirit as todo.js:45-48).</li>
+<li>Minimal moving: extract, don't rewrite; <code>views/ticket/</code> + edits in <code>views/todo/</code>; registry entry for the new view; no other verbs.</li>
+<li>Status/board output for the table arms stays byte-identical; the page under <code>ticket</code> stays byte-identical to today's page under <code>todo</code> (modulo the in-page spell verb name).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>*<strong>No registry entry exists to add.</strong>*  <code>core/registry.js</code> build() resolves a bareword by FILE (<code>views/&lt;verb&gt;/&lt;verb&gt;.js</code>, then <code>verbs/&lt;verb&gt;/</code>) — dropping <code>views/ticket/ticket.js</code> in registers the view.  Same for the test suite: <code>test/CMakeLists.txt</code> globs <code>&lt;verb&gt;/&lt;case&gt;/run.sh</code>, so <code>test/ticket/page/</code> registers itself as <code>be-js-ticket-page</code>.</li>
+<li>*<strong>ONE home for the shared ground, and it is <code>views/todo/todo.js</code>.</strong>*  The page arm MOVED to <code>ticket.js</code> (refdefs, targetSpell, emitPage, pageLinks, the two tok helpers — 135 lines, cut verbatim); everything both views need stays in <code>todo.js</code> and is required from there: the key/topic LEXER (<code>shape</code>, <code>ticketKey</code>, <code>keyTopic</code>), the board root (<code>boardDir</code>), the page-file ladder (<code>pageFile</code>), the byte read (<code>readBytes</code>), <code>EXTS</code>, the arg-line grammar (<code>parseArgs</code>, <code>argLineWith</code>, <code>spellWith</code>) and the two click classifiers (<code>navSpell</code>, <code>filterVal</code>).  Nothing is implemented twice; the edge is one-way (<code>ticket.js</code> → <code>todo.js</code>), so it needs no lazy require (unlike work.js ⇄ todo.js).</li>
+<li>*<strong><code>parseArgs</code> stays purely GRAMMATICAL and is shared.</strong>*  It classes a token lexically (<code>uc ucnum* &quot;-&quot; dgt+</code> unchanged) and never decides which view serves what.  Its old &quot;a ticket id takes no filters&quot; check MOVED out to the two verbs, so each refusal can point at the other view and neither message is duplicated.  <code>unscheme</code> grew a <code>scheme</code> parameter so the ONE DIS-060 parse serves <code>todo:GET-1</code> and <code>ticket:GET-1</code> alike.</li>
+<li>*<strong><code>todo ABC-123</code> REFUSES (the ticket's stated default), it does not re-route.</strong>*  The arg line IS the address bar (BRO-024/BRO-025), so a <code>todo</code> line answering with a page would lie about where the reader is.  One refusal covers the filtered form too.</li>
+<li>*<strong>Which spell is which:</strong>* a spell that lands on a PAGE is a <code>ticket</code> spell; a spell that lands on a LISTING is a <code>todo</code> spell.  That is the whole rule, and <code>navSpell()</code> is its single point of truth for ticket-valued links.  The in-page meta KEY/VALUE filter halves therefore stay <code>todo</code> spells minted through <code>spellWith</code> — a cross-view landing BY DESIGN, since a page carries no filters (a ticket-id arg line resolves to its TOPIC via argLineWith).</li>
+<li>*<strong><code>views/work/work.js</code> had to move too</strong>* (one literal): the <code>[?]</code> invite on a ticket-named worktree minted <code>//: todo &lt;KEY&gt;</code>, which the refusal would have turned into a dead button.  It is <code>//: ticket &lt;KEY&gt;</code> now; the TOPIC-named branch is a listing and stays <code>//: todo &lt;TOPIC&gt;</code>.</li>
+<li>*<strong><code>core/loop.js</code> gains <code>wrap.ticket = false</code>.</strong>*  An UNLISTED view type defaults to SOFT-wrap (pager.js <code>wrapFor</code>), so without the seed the split would have silently re-wrapped every ticket page.  <code>false</code> preserves exactly what the page had under <code>todo</code>.</li>
+<li>*<strong>The <code>ticket</code> miss is PLAIN WORDS, not the board's legacy <code>TODONONE</code>.</strong>*  <code>todo</code>'s own miss line is golden-pinned (BE-038) and is untouched; the new view starts clean under the errors-in-plain-words ruling.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> Baseline capture: today's <code>todo ABC-123</code> page bytes for a thin and a fat ticket → the <code>ticket</code> parity fixture.</li>
+<li><a href="./v.html">v</a> <code>views/ticket/ticket.js</code> extracted; registry entry (none needed — resolution is by file); <code>todo</code> page arm removed with the plain-words pointer.</li>
+<li><a href="./v.html">v</a> Spell sweep: key rows + TODO-008 value links → <code>ticket &lt;KEY&gt;</code>; filter/topic spells untouched; pager click round-trip verified.</li>
+<li><a href="./v.html">v</a> Tests: page parity (thin + fat), the <code>todo ABC-123</code> refusal, <code>ticket</code> non-key refusals, existing todo suite green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The suite run overlapped another worker's ctest on the same box; the first pass showed ~15 unrelated 10 s-TIMEOUT rows (post/patch/diff cases) that pass on a re-run.  <code>be-js-todo-rowcache</code> was ALREADY red on the base (TODO-010) and is not touched here.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+DONE — <code>views/ticket/ticket.js</code> is the one-ticket page view; <code>todo</code> is the board, the topic lists and the meta-pair filters, and nothing else.
+</p>
+<h3>Baseline parity (the RED/GREEN evidence)</h3>
+<p>
+The pre-split tree (be @ <code>94714be8</code>, untouched copy) and the post-split tree were run over the SAME fixture — a thin <code>todo/PAG/PAG-001.mkd</code> and a fat <code>todo/PAG/PAG-002/README.mkd</code>, each carrying meta pairs (plain, ticket-valued, an UNREGISTERED <code>Zzz:</code>, a colon-carrying <code>Rev:</code>), a bare key mention, a <code>[KEY]</code> reflink, a named refdef reflink and a <code>/wiki/Sample</code> shortcut:
+</p>
+<ul>
+<li><code>--plain</code>: <code>todo KEY</code> vs <code>ticket KEY</code> differ in ONE byte run, the banner (<code>todo PAG-001</code> → <code>ticket PAG-001</code>).  Both goldens are committed under <code>test/ticket/page/golden/</code>.</li>
+<li><code>--tlv</code>: the VISIBLE token stream (every non-<code>O</code> token, tag + bytes) is byte-identical, 111 tokens on each page.</li>
+<li><code>--tlv</code> spells: the ONLY delta is the verb name on the spells that land on a PAGE.</li>
+</ul>
+<pre><code>- SPELL &quot; PAG-002&quot; -&gt; &quot;todo PAG-002&quot;        (See: value)     + &quot;ticket PAG-002&quot;
+- SPELL &quot; PAG-003&quot; -&gt; &quot;todo PAG-003&quot;        (Zzz: value)     + &quot;ticket PAG-003&quot;
+- SPELL &quot;PAG-002&quot;  -&gt; &quot;todo PAG-002&quot;        (bare body key)  + &quot;ticket PAG-002&quot;
+- SPELL &quot;[/PAG-003/]&quot; -&gt; &quot;todo PAG-003&quot;     (reflink run)    + &quot;ticket PAG-003&quot;
+  SPELL &quot;Now:&quot;     -&gt; &quot;todo PAG Now:*&quot;      UNCHANGED (filter → the board)
+  SPELL &quot; OPEN&quot;    -&gt; &quot;todo PAG Now:OPEN&quot;   UNCHANGED
+  SPELL &quot;Sev:&quot;/&quot; MED&quot;/&quot;See:&quot;/&quot;Zzz:&quot;/&quot;Rev:&quot;  UNCHANGED
+  SPELL &quot;W&quot;/&quot;Sample&quot; -&gt; &quot;cat wiki/Sample.mkd&quot;  UNCHANGED
+</code></pre>
+<p>
+The board and topic listings show the mirror image: every KEY row went <code>todo &lt;KEY&gt;</code> → <code>ticket &lt;KEY&gt;</code>, while the topic header (<code>GET</code> → <code>todo GET</code>) and the <code>[ ✔]</code>/<code>[ ✗]</code> panel spells (<code>done KEY</code> / <code>dont KEY</code>) are untouched, and the visible tokens are byte-identical (41 board / 37 topic).
+</p>
+<h3>Refusal texts (all plain words, no bare code)</h3>
+<pre><code>$ todo PAG-001
+todo: 'PAG-001' names one ticket page, and this is the board — write 'ticket PAG-001'
+      for the page, or 'todo PAG' for the topic's list
+$ todo PAG-001 Now:OPEN
+todo: 'PAG-001' names one ticket page, and this is the board — write 'ticket PAG-001'
+      for the page, or 'todo PAG Now:OPEN' for the topic's list
+$ ticket
+ticket: which ticket? — write 'ticket ABC-123' for one ticket's page, or 'todo' for the open board
+$ ticket PAG
+ticket: 'PAG' names a topic, and a topic is a LIST — write 'todo PAG' for its open tickets,
+        or 'ticket PAG-123' for one ticket's page
+$ ticket Now:OPEN
+ticket: 'Now:OPEN' is a filter, and a filter narrows a LISTING, never a page — write
+        'todo Now:OPEN' for that list; 'ticket' takes one ticket code and nothing else
+$ ticket PAG-001 Now:OPEN
+ticket: 'Now:OPEN' is a filter, … — write 'todo PAG Now:OPEN' for that list; …
+$ ticket PAG-999
+ticket: there is no ticket PAG-999 under todo/PAG/ — 'todo PAG' lists that topic's open tickets
+</code></pre>
+<p>
+<code>todo</code>'s own topic miss keeps its golden-pinned <code>todo: NOPE: TODONONE</code> line; every exit is non-zero.
+</p>
+<h3>Spell sweep, through the REAL pager (pty clicks, <code>be-js-todo-nav</code>)</h3>
+<pre><code>ok  page-painted                        ok  board-painted
+ok  see-value-navigates                 ok  board-inline-value-navigates
+ok  see-value-is-not-a-filter           ok  board-inline-value-is-not-a-filter
+ok  unknown-key-value-navigates         ok  list-painted
+ok  key-half-still-filters              ok  list-key-row-opens-the-ticket-view
+ok  key-half-answers
+</code></pre>
+<p>
+Each landing is asserted on BOTH the BRO-024 address bar (<code>/: ticket NAV-002</code>) and the painted body, so a <code>todo</code> answer that merely mentions the code cannot pass.  New leg <code>list-key-row-opens-the-ticket-view</code>: a pty click on a topic-list KEY row lands on that ticket's page in the <code>ticket</code> view.  <code>be-js-todo-click</code> pins the other direction: an in-page meta pair click still opens <code>todo CLK Now:*</code> / <code>todo CLK Now:OPEN</code>.  <code>be-js-work-view</code> pins the work board's <code>[?]</code> → <code>//: ticket PIN-1</code> (its pty leg fires the button and lands on the page).
+</p>
+<h3>Suite</h3>
+<ul>
+<li>base <code>94714be8</code>, before: *<strong>352/353</strong>*, one red — <code>be-js-todo-rowcache</code> (pre-existing, TODO-010: the <code>and-the-row-grew-the-staged-tick</code> pty leg).</li>
+<li>after: *<strong>353/354</strong>*, same one red, same assertion.  The new case is <code>be-js-ticket-page</code>.</li>
+<li>(an intermediate run showed ~15 10 s-TIMEOUT rows; that was another worker's ctest on the same box, all green on the clean re-run.)</li>
+</ul>
+<h3>Files</h3>
+<pre><code>NEW  views/ticket/ticket.js          260   the page view (135 lines cut verbatim out of todo.js)
+NEW  test/ticket/page/run.sh         ~150  parity vs the pre-split goldens + both refusal families
+NEW  test/ticket/page/check.js       ~115  the page spell sweep
+NEW  test/ticket/page/golden/PAG-001.plain, PAG-002.plain
+     views/todo/todo.js              -246/+… page arm out, key spells → `ticket`, the refusal,
+                                             parseArgs/unscheme parameterised, shared exports
+     views/work/work.js              16    the `[?]` key branch mints `ticket &lt;KEY&gt;`
+     core/loop.js                    5     wrap.ticket = false (preserve the page's no-wrap)
+     test/todo/view/{run.sh,check.js}      page legs → `ticket`, board spells → `ticket &lt;KEY&gt;`,
+                                             the new `todo &lt;KEY&gt;` refusal leg
+     test/todo/meta/{run.sh,check.js}      page legs → `ticket`, refusal + miss legs
+     test/todo/nav/{run.sh,nav.py}         landings → `ticket`, + the list-key-row leg
+     test/todo/click/click.py              the page leg → `ticket CLK-001`
+     test/todo/rows/check.js               the row's nav spell
+     test/work/view/{run.sh,check.js,clickpty.py}   `[?]` → `//: ticket PIN-1`
+     test/done/buttons/check.js            the row's nav spell
+</code></pre>
+<h3>Open questions for gritzko</h3>
+<ol>
+<li>*<strong>Refusal vs silent re-route</strong>* — took the ticket's stated DEFAULT (refuse).  Say the word and <code>todo ABC-123</code> can forward to <code>ticket ABC-123</code> instead; the refusal is one <code>bad()</code> call in <code>todo()</code>.</li>
+<li>*<strong><code>ticket</code>'s wrap default</strong>* — set to <code>false</code> (no-wrap) purely to preserve what the page had while <code>todo</code> served it.  A ticket page is PROSE, so <code>true</code> (soft-wrap, the <code>cat</code>/<code>diff</code>/<code>status</code> default) may be what you actually want now that it has its own type.</li>
+<li>*<strong>The <code>ticket</code> miss line is plain words</strong>*, not the board's legacy <code>todo: KEY: TODONONE</code>.  The errors-in-plain-words ruling says so; the BE-038 golden keeps <code>todo</code>'s own line as it was.  Say if you want the new view to carry the old shape for symmetry.</li>
+<li>*<strong><code>views/work/work.js</code> was touched</strong>* (one literal) though the ticket scoped the change to <code>views/ticket/</code> + <code>views/todo/</code> — its <code>[?]</code> invite on a ticket-named worktree would otherwise have become a dead button.</li>
+</ol>
+<h3>Suggested commit message</h3>
+<pre><code>TODO-011: split the one-ticket page out of `todo` into the view `ticket`
+</code></pre>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

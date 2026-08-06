@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>KEEP-001</title>
+<title>KEEP-001: converge the three near-duplicate keeper tree-walkers</title>
+<meta property="og:title" content="KEEP-001: converge the three near-duplicate keeper tree-walkers">
+<meta property="og:description" content="Keeper carries three copies of the same &quot;recurse a git tree, hold a per-level scratch, collect subtree shas&quot; walker. They drifted apart, and the MEM-023/MEM-024 memory-safety work had to fix the same per-level-1 MiB-buffer bug in each copy separately — the clearest possible signal they should be one function. Per CLAUDE §13 (don't reimplement) and the reuse-not-local-dups rule, fold them into a single keeper-owned walker with a visitor callback. See Keeper.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/KEEP/KEEP-001.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>KEEP-001: converge the three near-duplicate keeper tree-walkers</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 Keeper carries <strong>three copies</strong> of the same &quot;recurse a git tree, hold a per-level scratch, collect subtree shas&quot; walker. They drifted apart, and the MEM-023/MEM-024 memory-safety work had to fix the <strong>same</strong> per-level-1 MiB-buffer bug in each copy separately — the clearest possible signal they should be one function. Per <a href="../../beagle/CLAUDE.md">CLAUDE</a> §13 (don't reimplement) and the reuse-not-local-dups rule, fold them into a single keeper-owned walker with a visitor callback. See <a href="../wiki/Keeper.html">Keeper</a>.
 </p>
@@ -22,7 +31,7 @@ The three walkers are byte-similar but each grew its own extra logic, so a fix i
 <ul>
 <li><code>keeper/WALK.c:walk_tree_dive</code> (<code>:40</code>) — the general <strong>visitor</strong> form (<code>visit</code>/<code>ctx</code>, <code>pathbuf</code>, <code>eager</code> lazy flag); drives <code>WALKTree</code>/<code>WALKTreeLazy</code>, the pack-build reachable-set. Fixed by <a href="../MEM/MEM-023.html">MEM-023</a> (right-size the carve via <code>KEEPGetSize</code>, <code>WALK_MAX_DEPTH</code> 4096 cap).</li>
 <li><code>keeper/KEEP.c:keep_walk_tree</code> (<code>:2716</code>) — a <strong>reachable-set collector</strong> (<code>out</code>/<code>n</code>/<code>cap</code>), no dedup. Reachable ONLY from the legacy ssh <code>KEEPPush</code> — it has <strong>no test caller at all</strong>. Fixed by <a href="../MEM/MEM-023.html">MEM-023</a> (rewritten iterative, BASS worklist).</li>
-<li><code>keeper/WIRECLI.c:wpush_walk_tree</code> (<code>:1109</code>) — <code>keep_walk_tree</code> plus a <code>have</code>/<code>add_to_have</code> <strong>dedup set</strong> (the merge-history short-circuit at <code>:1183</code>); the LIVE <code>be://</code> <code>WIREPush</code> path. Its own comment (<code>:1069</code>) admits &quot;Mirrors keep_walk_tree (KEEP.c) but lives <a href="">here</a>&quot;. Fixed by <a href="../MEM/MEM-024.html">MEM-024</a>.</li>
+<li><code>keeper/WIRECLI.c:wpush_walk_tree</code> (<code>:1109</code>) — <code>keep_walk_tree</code> plus a <code>have</code>/<code>add_to_have</code> <strong>dedup set</strong> (the merge-history short-circuit at <code>:1183</code>); the LIVE <code>be://</code> <code>WIREPush</code> path. Its own comment (<code>:1069</code>) admits &quot;Mirrors keep_walk_tree (KEEP.c) but lives <a href="./here.html">here</a>&quot;. Fixed by <a href="../MEM/MEM-024.html">MEM-024</a>.</li>
 <li>Net: a memory or correctness fix to tree-walking must be written three times; two of the copies are reachable-set collectors that differ only by an optional dedup set, and the third is a strict superset (a visitor) of both.</li>
 </ul>
 <h2>Blockers</h2>
@@ -42,10 +51,18 @@ One iterative, depth-capped, right-sized keeper walker; the three call sites pas
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>Landed <code>0eb0afab</code> on beagle.new (shape B, scope widened to 4 walkers per the<p>
-ruling): one <code>KEEPWalkTree(root, eager, visit, ctx)</code> (<code>WALK.h:66</code>, impl <code>WALK.c:156</code>) — bounded <code>try()</code>-per-subtree recursion (keeps DFS pre-order + per-sibling rewind exact), hard <code>WALK_MAX_DEPTH</code> cap, 64 KiB carve grown on <code>BNOROOM</code> (single inflate, no <code>KEEPGetSize</code> double-probe). <code>WALK</code>/<code>WIRECLI</code>/<code>CLOSE</code> re-expressed as visitors; have/close-set dedup → <code>WALKSKIP</code>. The fully-dead <code>keep_walk_tree</code>/<code>KEEPPush</code>/<code>keep_walk_commit</code> chain deleted (zero-caller proven). New <code>keeper/test/CLOSE.c</code>; 396/396, ASan/LSan clean. Delivers the unlanded <a href="../MEM/MEM-023.html">MEM-023</a>/<a href="../MEM/MEM-024.html">MEM-024</a> safety goal (depth cap + right-size) without that gate.
-</p>
-</li>
+<li>Landed <code>0eb0afab</code> on beagle.new (shape B, scope widened to 4 walkers per the ruling): one <code>KEEPWalkTree(root, eager, visit, ctx)</code> (<code>WALK.h:66</code>, impl <code>WALK.c:156</code>) — bounded <code>try()</code>-per-subtree recursion (keeps DFS pre-order + per-sibling rewind exact), hard <code>WALK_MAX_DEPTH</code> cap, 64 KiB carve grown on <code>BNOROOM</code> (single inflate, no <code>KEEPGetSize</code> double-probe). <code>WALK</code>/<code>WIRECLI</code>/<code>CLOSE</code> re-expressed as visitors; have/close-set dedup → <code>WALKSKIP</code>. The fully-dead <code>keep_walk_tree</code>/<code>KEEPPush</code>/<code>keep_walk_commit</code> chain deleted (zero-caller proven). New <code>keeper/test/CLOSE.c</code>; 396/396, ASan/LSan clean. Delivers the unlanded <a href="../MEM/MEM-023.html">MEM-023</a>/<a href="../MEM/MEM-024.html">MEM-024</a> safety goal (depth cap + right-size) without that gate.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

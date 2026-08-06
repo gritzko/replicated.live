@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-094</title>
+<title>JS-094: jab diff of a file under a submodule shows it wholly &quot;added&quot;</title>
+<meta property="og:title" content="JS-094: jab diff of a file under a submodule shows it wholly &quot;added&quot;">
+<meta property="og:description" content="jab diff &lt;sub&gt;/&lt;file&gt; (e.g. diff:be/view/bro.js from the journal root) rendered @@ -1,0 +1,N @@ — the WHOLE file as new — while be shows the real @@ -1,M +1,N @@. The baseline of a file UNDER a mounted submodule lives in the SUB's store; jab's parent-tree walk (blobAtTree) hits the gitlink, finds no blob, and diffFile treats the from-side as empty. be recurses the mount.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-094.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,56 +15,54 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-094 jab diff of a file under a submodule shows it wholly &quot;added&quot;</h1>
+<h1>JS-094: jab diff of a file under a submodule shows it wholly &quot;added&quot;</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>jab diff &lt;sub&gt;/&lt;file&gt;</code> (e.g. <code>diff:be/view/bro.js</code> from the journal root) rendered <code>@@ -1,0 +1,N @@</code> — the WHOLE file as new — while <code>be</code> shows the real <code>@@ -1,M +1,N @@</code>. The baseline of a file UNDER a mounted submodule lives in the SUB's store; jab's parent-tree walk (<code>blobAtTree</code>) hits the gitlink, finds no blob, and <code>diffFile</code> treats the from-side as empty. <code>be</code> recurses the mount.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Repro (from <code>~/journal</code>): <code>jab diff be/view/bro.js</code> → <code>@@ -1,0 +1,663 @@</code>;<p>
-<code>be diff:be/view/bro.js</code> → <code>@@ -1,291 +1,663 @@</code>. Same-store files (<code>todo/BRO/README.mkd</code>) were already byte-identical — only mount-nested paths broke. Surfaced while dogfooding the BRO-009 diff-colour work.
-</p>
-</li>
+<li>Repro (from <code>~/journal</code>): <code>jab diff be/view/bro.js</code> → <code>@@ -1,0 +1,663 @@</code>; <code>be diff:be/view/bro.js</code> → <code>@@ -1,291 +1,663 @@</code>. Same-store files (<code>todo/BRO/README.mkd</code>) were already byte-identical — only mount-nested paths broke. Surfaced while dogfooding the BRO-009 diff-colour work.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>jab diff:&lt;sub&gt;/&lt;file&gt;</code> byte-matches <code>be</code> (wt-vs-base AND range), the<p>
-emitted names prefixed under the mount.
-</p>
-</li>
+<li><code>jab diff:&lt;sub&gt;/&lt;file&gt;</code> byte-matches <code>be</code> (wt-vs-base AND range), the emitted names prefixed under the mount.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Pure JS; reuse <code>core/recurse.isMount</code> + <code>be.find</code> + the existing<p>
-<code>prefixingSink</code>; no new binding.
-</p>
-</li>
+<li>Pure JS; reuse <code>core/recurse.isMount</code> + <code>be.find</code> + the existing <code>prefixingSink</code>; no new binding.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li><code>mountSplit(repo, path)</code> finds the longest mounted prefix → {subPath, rest}.<p>
-The handler opens the sub repo/store, resolves the baseline THERE (wt: the sub's <code>wtlog.baselineTip</code>; range: the gitlink pin at each parent commit via <code>gitlinkAtTree</code>/<code>subTreeAtParent</code>), and diffs <code>rest</code> through a <code>prefixingSink(out, subPath)</code>.
-</p>
-</li>
+<li><code>mountSplit(repo, path)</code> finds the longest mounted prefix → {subPath, rest}. The handler opens the sub repo/store, resolves the baseline THERE (wt: the sub's <code>wtlog.baselineTip</code>; range: the gitlink pin at each parent commit via <code>gitlinkAtTree</code>/<code>subTreeAtParent</code>), and diffs <code>rest</code> through a <code>prefixingSink(out, subPath)</code>.</li>
 </ul>
 <h3>TODOs</h3>
 <ul>
-<li><a href="./v.html">v</a> views/diff/diff.js: mountSplit + gitlinkAtTree + subTreeAtParent +<p>
-handler delegation (wt + range).
-</p>
-</li>
+<li><a href="./v.html">v</a> views/diff/diff.js: mountSplit + gitlinkAtTree + subTreeAtParent + handler delegation (wt + range).</li>
 <li><a href="./v.html">v</a> test/diff/14-sub-file-baseline (git submodule fixture, dirtied sub file).</li>
-<li><a href="./v.html">v</a> Verified: <code>jab diff be/view/bro.js</code> == <code>be</code> byte-for-byte (plain+color);<p>
-<code>beagle/dog/HUNK.c</code> too; same-store unaffected; diff suite 9/9.
-</p>
-</li>
+<li><a href="./v.html">v</a> Verified: <code>jab diff be/view/bro.js</code> == <code>be</code> byte-for-byte (plain+color); <code>beagle/dog/HUNK.c</code> too; same-store unaffected; diff suite 9/9.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>LANDED <code>e5cf0fdd</code> (be, 26Jun; &quot;BRO-009,JS-093,JS-094: colored diffs in the js pager&quot;, beagle pin <code>b14b895d</code>).</li>
 <li>The whole-tree submodule-order gap sibling was BRO-009, landed the same commit.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

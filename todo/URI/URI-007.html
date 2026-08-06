@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>URI-007</title>
+<title>URI-007: be:-local not at parity with file:-local (blocks URI-006 St.3)</title>
+<meta property="og:title" content="URI-007: be:-local not at parity with file:-local (blocks URI-006 St.3)">
+<meta property="og:description" content="St.1 of URI-006 (096b425e) made a hostless be: run the keeper locally, but only reached parity for the SAME-NAME single-shard clone/fetch/push round-trip — the one shape its repro test/get/60 exercised. The URI-006 St.3 worker, migrating the ~20 file:// clone/push tests to be:, found 16/20 fail: be:&lt;store&gt;?/&lt;proj&gt; diverges from file://&lt;store&gt;?/&lt;proj&gt; in two production paths. file:-local is untouched and still works (so St.1 is incomplete, not a regression); this ticket extends be:-local to full file:-local parity so St.3 (and then St.2) can land. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/URI/URI-007.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,33 +15,26 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>URI-007 <a href="">HIGH</a>: <code>be:</code>-local not at parity with <code>file:</code>-local (blocks <a href="URI-006.html">URI-006</a> St.3)</h1>
+<h1>URI-007: <code>be:</code>-local not at parity with <code>file:</code>-local (blocks <a href="URI-006.html">URI-006</a> St.3)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 St.1 of <a href="URI-006.html">URI-006</a> (<code>096b425e</code>) made a hostless <code>be:</code> run the keeper locally, but only reached parity for the SAME-NAME single-shard clone/fetch/push round-trip — the one shape its repro <code>test/get/60</code> exercised. The <a href="URI-006.html">URI-006</a> St.3 worker, migrating the ~20 <code>file://</code> clone/push tests to <code>be:</code>, found 16/20 fail: <code>be:&lt;store&gt;?/&lt;proj&gt;</code> diverges from <code>file://&lt;store&gt;?/&lt;proj&gt;</code> in two production paths. <code>file:</code>-local is untouched and still works (so St.1 is incomplete, not a regression); this ticket extends <code>be:</code>-local to full <code>file:</code>-local parity so St.3 (and then St.2) can land. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>St.1 <code>be_be_local_route</code> rewrites <code>be:/abs?/proj</code>→<code>be:///abs?/proj</code>; <code>be_file_get_route</code><p>
-is a SEPARATE rewrite. Sniff resolves the <code>?/proj</code> selector per-arm — cross-name diverges.
-</p>
-</li>
-<li>Repro (St.3 worker, hermetic): git-seed a store (shards <code>par/ch/gc/src</code>, name ≠ dest<p>
-basename), then <code>be:$S?/par</code> exits 157/SNIFFFAIL/BEDOGEXIT while <code>file://$S?/par</code> → rc 0.
-</p>
-</li>
+<li>St.1 <code>be_be_local_route</code> rewrites <code>be:/abs?/proj</code>→<code>be:///abs?/proj</code>; <code>be_file_get_route</code> is a SEPARATE rewrite. Sniff resolves the <code>?/proj</code> selector per-arm — cross-name diverges.</li>
+<li>Repro (St.3 worker, hermetic): git-seed a store (shards <code>par/ch/gc/src</code>, name ≠ dest basename), then <code>be:$S?/par</code> exits 157/SNIFFFAIL/BEDOGEXIT while <code>file://$S?/par</code> → rc 0.</li>
 <li>Only same-name <code>?/$SHARD</code> (SHARD = wt dir basename) worked — all <code>test/get/60</code> ever tried.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>BE-LOCAL-A: <code>be:&lt;store&gt;?/&lt;proj&gt;</code> clones a cross-name / multi-shard / git-imported store<p>
-exactly as <code>file://&lt;store&gt;?/&lt;proj&gt;</code> does (project-selector resolution through the be: arm).
-</p>
-</li>
-<li>BE-LOCAL-B: <code>be:</code>-local enforces the FF / back-regress REFUSAL that <code>file:</code>-local does<p>
-(a behind/divergent-peer re-get must refuse, not silently back-regress/clobber).
-</p>
-</li>
+<li>BE-LOCAL-A: <code>be:&lt;store&gt;?/&lt;proj&gt;</code> clones a cross-name / multi-shard / git-imported store exactly as <code>file://&lt;store&gt;?/&lt;proj&gt;</code> does (project-selector resolution through the be: arm).</li>
+<li>BE-LOCAL-B: <code>be:</code>-local enforces the FF / back-regress REFUSAL that <code>file:</code>-local does (a behind/divergent-peer re-get must refuse, not silently back-regress/clobber).</li>
 <li>Transport HEAD/patch over <code>be:</code> reach parity too (head/20,22,24 family).</li>
 </ul>
 <h3>Constraints</h3>
@@ -48,10 +45,7 @@ exactly as <code>file://&lt;store&gt;?/&lt;proj&gt;</code> does (project-selecto
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Likely fix site: the sniff/<code>keeper_remote_uri</code> project-selector resolution the file:// arm<p>
-carries but the hostless-<code>be:</code> arm drops; and the FF-guard the <code>be:</code> get path skips.
-</p>
-</li>
+<li>Likely fix site: the sniff/<code>keeper_remote_uri</code> project-selector resolution the file:// arm carries but the hostless-<code>be:</code> arm drops; and the FF-guard the <code>be:</code> get path skips.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -66,10 +60,18 @@ carries but the hostless-<code>be:</code> arm drops; and the FF-guard the <code>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED <code>31050b3f</code>. ONE root cause: <code>keeper/REFS.c::REFSResolve</code> exempted only <code>file:</code><p>
-from early <code>REFSNONE</code>; broadened to host-less <code>be:</code> — fixes both A (selector) and B (FF guard, reached only after a REFS match). Plus <code>be_be_local_route</code> wired into the head/patch verbs (BE.cli.c). Repros <code>test/get/61</code> (cross-name), <code>test/get/62</code> (back-regress). Full suite green (pre-existing <code>be-post-relpath</code> aside).
-</p>
-</li>
+<li>LANDED <code>31050b3f</code>. ONE root cause: <code>keeper/REFS.c::REFSResolve</code> exempted only <code>file:</code> from early <code>REFSNONE</code>; broadened to host-less <code>be:</code> — fixes both A (selector) and B (FF guard, reached only after a REFS match). Plus <code>be_be_local_route</code> wired into the head/patch verbs (BE.cli.c). Repros <code>test/get/61</code> (cross-name), <code>test/get/62</code> (back-regress). Full suite green (pre-existing <code>be-post-relpath</code> aside).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

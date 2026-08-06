@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DIS-027</title>
+<title>DIS-027: a failed git push swallows the peer's error text (opaque WIRECLFL)</title>
+<meta property="og:title" content="DIS-027: a failed git push swallows the peer's error text (opaque WIRECLFL)">
+<meta property="og:description" content="When be post/be put pushes to a git remote and the peer's git-receive-pack refuses (dirty updateInstead checkout, denyCurrentBranch, a pre-receive hook, a funny ref), the human-readable reason lives in the peer's report-status ng &lt;ref&gt; &lt;reason&gt; line and/or its side-band-2 / receive-pack stderr — and be drops all of it, surfacing only fatal: the remote end hung up unexpectedly + Error: WIRECLFL + BEDOGEXIT. The cause of a push failure is therefore unknowable from be's output, which turned a one-line &quot;checkout is dirty&quot; into a multi-step trace. The FETCH path already does this right: it negotiates side-band-64k and forwards band-2 to stderr live (keeper/WIRECLI.c:618-624); the PUSH path does not. The goal: a refused push prints the peer's own reason before it fails. See POST, DIS-026.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-027.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,8 +16,13 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>DIS-027: a failed git push swallows the peer's error text (opaque WIRECLFL)</h1>
+<div>
 <p>
-When <code>be post</code>/<code>be put</code> pushes to a git remote and the peer's <code>git-receive-pack</code> refuses (dirty <code>updateInstead</code> checkout, <code>denyCurrentBranch</code>, a pre-receive hook, a funny ref), the human-readable reason lives in the peer's report-status <code>ng &lt;ref&gt; &lt;reason&gt;</code> line and/or its side-band-2 / receive-pack stderr — and be drops all of it, surfacing only <code>fatal: the remote end hung up unexpectedly</code> + <code>Error: WIRECLFL</code> + <code>BEDOGEXIT</code>. The cause of a push failure is therefore unknowable from be's output, which turned a one-line &quot;checkout is dirty&quot; into a multi-step trace. The FETCH path already does this right: it negotiates <code>side-band-64k</code> and forwards band-2 to stderr live (<code>keeper/WIRECLI.c:618-624</code>); the PUSH path does not. The goal: a refused push prints the peer's own reason before it fails. See <a href="../wiki/POST.html">POST</a>, <a href="">DIS-026</a>.
+Now: DONE
+</p>
+</div>
+<p>
+When <code>be post</code>/<code>be put</code> pushes to a git remote and the peer's <code>git-receive-pack</code> refuses (dirty <code>updateInstead</code> checkout, <code>denyCurrentBranch</code>, a pre-receive hook, a funny ref), the human-readable reason lives in the peer's report-status <code>ng &lt;ref&gt; &lt;reason&gt;</code> line and/or its side-band-2 / receive-pack stderr — and be drops all of it, surfacing only <code>fatal: the remote end hung up unexpectedly</code> + <code>Error: WIRECLFL</code> + <code>BEDOGEXIT</code>. The cause of a push failure is therefore unknowable from be's output, which turned a one-line &quot;checkout is dirty&quot; into a multi-step trace. The FETCH path already does this right: it negotiates <code>side-band-64k</code> and forwards band-2 to stderr live (<code>keeper/WIRECLI.c:618-624</code>); the PUSH path does not. The goal: a refused push prints the peer's own reason before it fails. See <a href="../wiki/POST.html">POST</a>, <a href="./DIS-026.html">DIS-026</a>.
 </p>
 <h2>Issues</h2>
 <p>
@@ -22,12 +31,12 @@ The push wire reads a status reply but never relays the peer's diagnostics.
 <ul>
 <li>The push request advertises only <code>report-status</code> (<code>keeper/WIRECLI.c:1388</code>), not <code>side-band-64k</code>, so receive-pack's <code>remote: …</code> text is never multiplexed back.</li>
 <li>The report-status reader (<code>~1415-1433</code>, <code>rfd_live</code>/&quot;peer closed report side&quot;) consumes <code>unpack</code>/<code>ng &lt;ref&gt; &lt;reason&gt;</code> but does not PRINT the <code>ng</code> reason; on an early hangup it just yields <code>WIRECLFL</code>.</li>
-<li>Observed: <code>be post ssh://localhost/src/dogs/abc?main</code> and <code>be head …?main</code> against a non-bare <code>updateInstead</code> peer with a dirty worktree → <code>the remote end hung up unexpectedly</code> / <code>WIRECLFL</code>, with NO indication the receiving checkout was dirty (the actual cause, see <a href="">DIS-026</a>).</li>
+<li>Observed: <code>be post ssh://localhost/src/dogs/abc?main</code> and <code>be head …?main</code> against a non-bare <code>updateInstead</code> peer with a dirty worktree → <code>the remote end hung up unexpectedly</code> / <code>WIRECLFL</code>, with NO indication the receiving checkout was dirty (the actual cause, see <a href="./DIS-026.html">DIS-026</a>).</li>
 <li>Contrast the fetch path (<code>:618-624</code>): <code>side-band-64k</code> + band-2 → stderr already works; the push path should mirror it.</li>
 </ul>
 <h2>Blockers</h2>
 <p>
-None. Independent of <a href="">DIS-026</a> (capability) — this is diagnosability — but both touch the push wire (<code>keeper/WIRECLI.c</code>); keep each change minimal and land serialized to ease the reconcile.
+None. Independent of <a href="./DIS-026.html">DIS-026</a> (capability) — this is diagnosability — but both touch the push wire (<code>keeper/WIRECLI.c</code>); keep each change minimal and land serialized to ease the reconcile.
 </p>
 <h2>Planned</h2>
 <p>
@@ -38,7 +47,18 @@ Surface the peer's push diagnostics: relay band-2 and print the report-status <c
 <li>Add <code>side-band-64k</code> to the push capability advert (<code>keeper/WIRECLI.c:1388</code>) and forward band-2 to stderr on the push path, reusing the fetch path's mechanism (<code>:618-624</code>, <code>KEEPIngestStream</code>'s band-2→stderr forwarder).</li>
 <li>Parse and print each report-status <code>ng &lt;ref&gt; &lt;reason&gt;</code> (and an <code>unpack &lt;err&gt;</code>) line to stderr before returning <code>WIRECLFL</code>; keep the exit code non-zero.</li>
 <li>On an early peer hangup, still emit whatever bytes arrived on band-2 / the report side so the user sees the partial reason.</li>
-<li>Regression test under <code>test/</code> (the same <code>push/</code> fixture as <a href="">DIS-026</a> if it lands first): refused push → output contains the peer's reason; successful push → unchanged.</li>
+<li>Regression test under <code>test/</code> (the same <code>push/</code> fixture as <a href="./DIS-026.html">DIS-026</a> if it lands first): refused push → output contains the peer's reason; successful push → unchanged.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

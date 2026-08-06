@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIFF-020: a get/post-merge conflict renders as plain local edits — no EXPECTED axis, no yellow</title>
+<meta property="og:title" content="DIFF-020: a get/post-merge conflict renders as plain local edits — no EXPECTED axis, no yellow">
+<meta property="og:description" content="/todo/DIFF/DIFF-016 landed the conflict render, but its whole axis is gated on PATCH rows: expectedCtx returns null when patchTheirs() is empty, and a merge-get writes no patch row. So a conflicted file diffs as ordinary green/red — the woven both-sides tokens are indistinguishable from a hand edit, which is exactly what /todo/DIS/DIS-080 made the diff view responsible for. The wtlog already carries the two pointers the EXPECTED reading needs; nothing new has to be written.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIFF/DIFF-020.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIFF-020: a get/post-merge conflict renders as plain local edits — no EXPECTED axis, no yellow</h1>
+<div>
+<p>
+Now: OPEN Sev: MED Ask: gritzko Env: any conflict produced by a merge-get (including the get leg of a post) Rev: ///be/#3d764808 See: DIFF-016
+</p>
+</div>
+<p>
+<a href="DIFF-016.html">/todo/DIFF/DIFF-016</a> landed the conflict render, but its whole axis is gated on PATCH rows: <code>expectedCtx</code> returns null when <code>patchTheirs()</code> is empty, and a merge-get writes no patch row. So a conflicted file diffs as ordinary green/red — the woven both-sides tokens are indistinguishable from a hand edit, which is exactly what <a href="../DIS/DIS-080.html">/todo/DIS/DIS-080</a> made the diff view responsible for. The wtlog already carries the two pointers the EXPECTED reading needs; nothing new has to be written.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>views/diff/diff.js:392-398</code> — <code>expectedCtx()</code> starts with <code>expected.theirsShas(log)</code> and returns <code>null</code> on an empty list; <code>shared/expected.js:22-25</code> — that list is <code>wtlog.patchTheirs()</code>, PATCH rows only.</li>
+<li><code>views/diff/diff.js:398</code> builds <code>cons: log.conflicts()</code> and NOTHING reads it — grep finds no consumer, though <a href="../ULOG/ULOG-004.html">/todo/ULOG/ULOG-004</a> goal 2 named the diff yellow spans as one.</li>
+<li>Measured, get-merge fixture (<code>f.txt</code> woven to <code>XY</code>): <code>diff --color</code> paints <code>48;5;217</code> + <code>48;5;157</code>, the LOCAL rm/in washes; no 153/117 blue-orange, no 229/227 yellow.</li>
+<li>The machinery itself is fine: <code>be/test/diff/20-patch-conflict</code> PASSes with <code>cq 227</code> — a patch-row conflict does wash yellow.</li>
+<li>The pointers are in the rows: after a conflicted get, <code>curTip</code> IS theirs (measured <code>56cfcde0</code>) and the barrier row before it names the pre-get base (<code>fc8ff3f3</code>) — the same backward scan <code>conflicts()</code> already runs stops on exactly that row.</li>
+<li>Ours BYTES are unrecoverable from the ulog (a <code>put</code> row is path-only, no blob sha), and the EXPECTED model never needs them — the ours axis is &quot;wt != EXPECTED&quot;.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+A live con path diffs in CONFLICT MODE, rendered identically to patch mode.
+</p>
+<ul>
+<li>ONE patch/conflict mode (ruling gritzko 2026-08-03): 4 provenance washes — ours in/rm green/red, theirs in/rm pale blue/orange — no per-origin render.</li>
+<li>A conflict renders structurally: in-touching-in interleaves green/blue at one anchor; in-touching-rm nests green interior to an orange run (<a href="../../wiki/Dirty.html">/wiki/Dirty</a> shapes).</li>
+<li>Yellow retires with the mode: DIFF-016's 229/227 pair goes, <code>be/test/diff/20-patch-conflict</code> (asserts <code>cq 227</code>) regolds, patch-mode output changes too.</li>
+<li>The theirs/base pointers come from the rows: <code>conflicts()</code> returns the barrier sha and the pre-barrier tip alongside each path (accessor change, NO new ulog rows).</li>
+<li><code>shared/expected.js</code> <code>expectedOf(k, path, base, shas, cache)</code> is reused as-is with <code>base</code> = the pre-get tip and <code>shas</code> = <a href="./the get's sha.html">the get's sha</a>.</li>
+<li>A path with no con row keeps today's rendering exactly — zero extra work when nothing is conflicted (DIFF-016's own no-op rule).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Weave-based only; no diff3, no marker parsing (DIFF-016 Constraints).</li>
+<li><code>--plain</code> output stays byte-identical — provenance is a COLOUR distinction, asserted on <code>--color</code> SGR digits (DIFF-016's deliberate no-fallback ruling).</li>
+<li>Verify through the real UI path, pager pty, not TLV probes (<a href="./[verify-through-real-ui-path.html">[verify-through-real-ui-path</a>]).</li>
+<li>The <code>con</code> row stays path-only unless gritzko rules otherwise — base+theirs are derivable from row order.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>RULING (gritzko 2026-08-03): one patch/conflict mode, 4 washes; a con path's FROM is the PRE-merge base off the rows — provenance needs it, uniform base-relativity yields for that one path.</li>
+<li>The banner mark off <code>conflicts()</code> stays: with yellow gone, the file-level conflict signal is status <code>!</code> + the banner, so it is load-bearing, not a fallback.</li>
+<li>OPEN: a clean abutment (green at an orange hole's EDGE) renders close to a real collision (<a href="../../wiki/Dirty.html">/wiki/Dirty</a>: adjacency in text != overlap in the weave); a 5th collision wash only if gritzko rules it.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> SIBLING accessor on the ULOG-004 scan (<code>conflictOrigins()</code> → <code>[{path, base, theirs}]</code>); <code>conflicts()</code> KEEPS returning bare paths — <code>post.js:886</code> and classify string-test it, and a shape change means a lockstep edit in two parallel tickets</li>
+<li class="open"><input type="checkbox" disabled> feed <code>expectedCtx</code> from that when <code>patchTheirs()</code> is empty; keep the patch arm untouched</li>
+<li class="open"><input type="checkbox" disabled> consume <code>ec.cons</code> — the path-granular cross-check DIFF-016 specified and never wired</li>
+<li class="open"><input type="checkbox" disabled> banner mark for a conflicted path (survives either way, and is the whole fallback arm)</li>
+<li class="open"><input type="checkbox" disabled> tests: get-merge conflict shows the 4 washes, <code>20-patch-conflict</code> regolds off yellow, <code>--plain</code> byte-identical, pty render</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="../STATUS/STATUS-018.html">/todo/STATUS/STATUS-018</a>: a staged conflict paints <code>...V</code> today, so the status row that ROUTES here reads as an ordinary edit; the nav itself already spells <code>diff &lt;path&gt;</code>.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DIFF-007</title>
+<title>DIFF-007: diff:&lt;largefile&gt; silently EMPTY — WEAVEEmitFull outtoks overflow</title>
+<meta property="og:title" content="DIFF-007: diff:&lt;largefile&gt; silently EMPTY — WEAVEEmitFull outtoks overflow">
+<meta property="og:description" content="be diff:&lt;file&gt; on a large file produces NO output and exits 0. Root cause: WEAVEEmitFull carves a fixed 65536-token buffer and accumulates the UNION of base+wt weave tokens into one hunk; when that union exceeds 65536 the u32bFeed1 returns NOROOM, which is swallowed (ret=fo; goto cleanup) → zero hunks emitted, exit 0. Real bug. Split from DIFF-005's bare-diff re-investigation. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIFF/DIFF-007.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -18,68 +22,32 @@
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Reproduced in <code>$HOME/todo/PTR-005</code>. <code>be diff:sniff/GET.c</code> (and <code>PATCH.c</code>,<p>
-<code>POST.c</code>) → EMPTY; smaller files render fine.
-</p>
-</li>
-<li>Measured threshold over all 17 changed files: EMPTY exactly when wt-tokens are<p>
-large — GET.c (35471), PATCH.c (31786), POST.c (48653) → ALL EMPTY; largest WORKING = SNIFF.exe.c (20170), then SUBS.c (19266), PUT.c (18602), AT.c (16511). Boundary sits between wt≈20K (works) and wt≈32K (empty) — matches the base∪wt UNION hitting the 65536 cap.
-</p>
-</li>
-<li>Code: <code>WEAVEEmitFull</code> carves <code>a_carve(u32, outtoks, 1UL &lt;&lt; 16)</code> = 65536<p>
-(<code>graf/WEAVE.c:1030</code>) and accumulates the union of base+wt tokens into ONE hunk; the only flush (<code>WEAVE.c:1092</code>) is BYTE-based at <code>WEAVE_FULL_HUNK_MAX</code> (1 MB), which a ~95 KB file never reaches. Once token count &gt; 65536, <code>u32bFeed1(outtoks,…)</code> returns NOROOM → <code>ret=fo; goto cleanup</code> (<code>WEAVE.c:1099-1101</code>) → no hunk, empty output, NOROOM swallowed to exit 0.
-</p>
-</li>
-<li>Same files render fine in BARE <code>be diff:</code> because <code>WEAVEEmitDiff</code> flushes each<p>
-small hunk separately and never accumulates the whole file.
-</p>
-</li>
-<li>Red herring: <code>./build-debug/bin/be</code> (relative argv<a href="./0.html">0</a>) makes the sub-recursion's<p>
-<code>execvp</code> fail after <code>chdir</code> into the sniff mount (<code>beagle/SUBS.c:331</code>); absolute-path invocation removes that message but the diff is STILL empty — the overflow is the real cause.
-</p>
-</li>
+<li>Reproduced in <code>$HOME/todo/PTR-005</code>. <code>be diff:sniff/GET.c</code> (and <code>PATCH.c</code>, <code>POST.c</code>) → EMPTY; smaller files render fine.</li>
+<li>Measured threshold over all 17 changed files: EMPTY exactly when wt-tokens are large — GET.c (35471), PATCH.c (31786), POST.c (48653) → ALL EMPTY; largest WORKING = SNIFF.exe.c (20170), then SUBS.c (19266), PUT.c (18602), AT.c (16511). Boundary sits between wt≈20K (works) and wt≈32K (empty) — matches the base∪wt UNION hitting the 65536 cap.</li>
+<li>Code: <code>WEAVEEmitFull</code> carves <code>a_carve(u32, outtoks, 1UL &lt;&lt; 16)</code> = 65536 (<code>graf/WEAVE.c:1030</code>) and accumulates the union of base+wt tokens into ONE hunk; the only flush (<code>WEAVE.c:1092</code>) is BYTE-based at <code>WEAVE_FULL_HUNK_MAX</code> (1 MB), which a ~95 KB file never reaches. Once token count &gt; 65536, <code>u32bFeed1(outtoks,…)</code> returns NOROOM → <code>ret=fo; goto cleanup</code> (<code>WEAVE.c:1099-1101</code>) → no hunk, empty output, NOROOM swallowed to exit 0.</li>
+<li>Same files render fine in BARE <code>be diff:</code> because <code>WEAVEEmitDiff</code> flushes each small hunk separately and never accumulates the whole file.</li>
+<li>Red herring: <code>./build-debug/bin/be</code> (relative argv<a href="./0.html">0</a>) makes the sub-recursion's <code>execvp</code> fail after <code>chdir</code> into the sniff mount (<code>beagle/SUBS.c:331</code>); absolute-path invocation removes that message but the diff is STILL empty — the overflow is the real cause.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>be diff:&lt;largefile&gt;</code> renders its full-file diff (or a bounded one) instead of<p>
-silently emitting nothing; the NOROOM is never swallowed into a success exit.
-</p>
-</li>
+<li><code>be diff:&lt;largefile&gt;</code> renders its full-file diff (or a bounded one) instead of silently emitting nothing; the NOROOM is never swallowed into a success exit.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>graf/WEAVE change gates for review. Add a large-file (&gt;65536-token) diff test that<p>
-asserts non-empty output.
-</p>
-</li>
+<li>graf/WEAVE change gates for review. Add a large-file (&gt;65536-token) diff test that asserts non-empty output.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Two complementary fixes: (1) flush <code>WEAVEEmitFull</code> by TOKEN-count too (not only the<p>
-1 MB byte cap) so the buffer never overflows; (2) stop swallowing NOROOM — propagate it so a truncated/failed diff is an error, not a silent exit 0.
-</p>
-</li>
-<li>Note: <a href="DIFF-005/README.html">DIFF-005</a> option-a (bound large files → <code>WEAVEEmitDiff</code>) would INCIDENTALLY<p>
-make GET.c/PATCH.c/POST.c render, masking this — but the swallowed-NOROOM and missing token-flush should be fixed regardless.
-</p>
-</li>
+<li>Two complementary fixes: (1) flush <code>WEAVEEmitFull</code> by TOKEN-count too (not only the 1 MB byte cap) so the buffer never overflows; (2) stop swallowing NOROOM — propagate it so a truncated/failed diff is an error, not a silent exit 0.</li>
+<li>Note: <a href="DIFF-005/README.html">DIFF-005</a> option-a (bound large files → <code>WEAVEEmitDiff</code>) would INCIDENTALLY make GET.c/PATCH.c/POST.c render, masking this — but the swallowed-NOROOM and missing token-flush should be fixed regardless.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro: <code>be diff:sniff/GET.c</code> empty; confirm token count &gt; 65536 and NOROOM at<p>
-  <code>WEAVE.c:1099</code>.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro: <code>be diff:sniff/GET.c</code> empty; confirm token count &gt; 65536 and NOROOM at <code>WEAVE.c:1099</code>.</li>
 <li class="open"><input type="checkbox" disabled> Fix: token-count flush in <code>WEAVEEmitFull</code> + propagate NOROOM (no swallow).</li>
-<li class="open"><input type="checkbox" disabled> Test: a &gt;65536-token file diff is non-empty (and errors instead of silently<p>
-  empties on genuine overflow).
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Re-verified 2026-07-07 (ticket audit): bug still present — `a_carve(u32, outtoks,<p>
-  1UL &lt;&lt; 16)<code> (</code>WEAVE.c:1030<code>), flush still BYTE-only (</code>WEAVE_FULL_HUNK_MAX<code>,   </code>WEAVE.c:1092/1105<code>), </code>u32bFeed1<code> NOROOM → </code>ret=fo; goto cleanup<code> (</code>:1099-1101`);   no DIFF-007 commit in be log.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Test: a &gt;65536-token file diff is non-empty (and errors instead of silently empties on genuine overflow).</li>
+<li class="done"><input type="checkbox" checked disabled> Re-verified 2026-07-07 (ticket audit): bug still present — <code>a_carve(u32, outtoks, 1UL &lt;&lt; 16)</code> (<code>WEAVE.c:1030</code>), flush still BYTE-only (<code>WEAVE_FULL_HUNK_MAX</code>, <code>WEAVE.c:1092/1105</code>), <code>u32bFeed1</code> NOROOM → <code>ret=fo; goto cleanup</code> (<code>:1099-1101</code>); no DIFF-007 commit in be log.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -89,5 +57,16 @@ make GET.c/PATCH.c/POST.c render, masking this — but the swallowed-NOROOM and 
 <ul>
 <li>(open — scan in <a href="DIFF-005/README.html">DIFF-005</a>)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

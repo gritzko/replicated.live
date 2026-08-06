@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GET-048</title>
+<title>GET-048: get weaves COMMITTED deltas as if dirty — divergent+clean must be a plain reset (spec /wiki/GET §intro+§4)</title>
+<meta property="og:title" content="GET-048: get weaves COMMITTED deltas as if dirty — divergent+clean must be a plain reset (spec /wiki/GET §intro+§4)">
+<meta property="og:description" content="Incident 2026-07-17, work/ABC-016: tree CLEAN at local head ?467fb44b (ahead 1, behind 5); jab get dissolved the committed delta into 11 mod rows AND del-ed test/EXIT.c (a file the local commit ADDED — the merge used the local head as diff base, so a local add read as an upstream deletion; data loss). gritzko clarified /wiki/GET the same day: get &quot;never changes history — it only resets the worktree to a chosen version, maybe re-applying uncommitted changes&quot;; §4: ONLY uncommitted changes are carried by weave. get.js classifies per-file &quot;differs from base&quot; as dirty without asking whether the delta is committed.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-048.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>GET-048 <a href="./HIGH.html">HIGH</a>: get weaves COMMITTED deltas as if dirty — divergent+clean must be a plain reset (spec <a href="/wiki/GET.html">GET</a> §intro+§4)</h1>
+<h1>GET-048: get weaves COMMITTED deltas as if dirty — divergent+clean must be a plain reset (spec <a href="/wiki/GET.html">GET</a> §intro+§4)</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
 <p>
 Incident 2026-07-17, work/ABC-016: tree CLEAN at local head <code>?467fb44b</code> (ahead 1, behind 5); <code>jab get</code> dissolved the committed delta into 11 <code>mod</code> rows AND <code>del</code>-ed <code>test/EXIT.c</code> (a file the local commit ADDED — the merge used the local head as diff base, so a local add read as an upstream deletion; data loss). gritzko clarified <a href="/wiki/GET.html">GET</a> the same day: get &quot;never changes history — it only resets the worktree to a chosen version, maybe re-applying uncommitted changes&quot;; §4: ONLY uncommitted changes are carried by weave. get.js classifies per-file &quot;differs from base&quot; as dirty without asking whether the delta is committed.
 </p>
@@ -22,6 +31,7 @@ Incident 2026-07-17, work/ABC-016: tree CLEAN at local head <code>?467fb44b</cod
 </p>
 <ul>
 <li>The four cases to differentiate (spec §3 x §4): target ahead/behind/same/divergent CROSS tree clean/dirty; committed-ness of the base→head delta is NOT dirtiness.</li>
+<li><a href="GET-053.html">GET-053</a> (2026-07-24) proposes bare get FF-ONLY: the diverged plain-reset here would then move behind <code>get!</code> and this ticket's machinery goes <a href="./STALE.html">STALE</a> — see there before extending it.</li>
 <li>Add-side evidence: with base = local head, target lacking a locally-added file → <code>del</code> (wrong under ANY reading; a true 3-way base keeps a local add of uncommitted files).</li>
 <li>Recovery of the incident file was manual (extracted from the commit diff; <code>cat path?ref</code> printing empty is separate, needs own ticket).</li>
 </ul>
@@ -42,7 +52,7 @@ get tests differentiate the case matrix; code complies with the clarified spec.
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <p>
-Fix is 3 spots in verbs/get/get.js: leaf weave base = cur (oldSha), never the merge base (~:986) — a committed delta reads clean and clean-overwrites to target; in diverged mode a path absent from the merge-base tree is a locally-committed add — unlinked by the reset but NO <code>del</code> row (~:951); basePaths demoted to del-row classifier (~:559). No auto-merge — divergent heads stay <code>patch</code>'s job.
+Fix is 3 spots in verbs/get/get.js: leaf weave base = cur (oldSha), never the merge base (<del>:986) — a committed delta reads clean and clean-overwrites to target; in diverged mode a path absent from the merge-base tree is a locally-committed add — unlinked by the reset but NO <code>del</code> row (</del>:951); basePaths demoted to del-row classifier (~:559). No auto-merge — divergent heads stay <code>patch</code>'s job.
 </p>
 <h3>TODOs</h3>
 <ul>
@@ -61,9 +71,13 @@ UNCOMMITTED in work/GET-048: mod verbs/get/get.js (3 hunks); test subrepo: 3 unk
 </p>
 <div class="footer">
 ❧
-<a href="/feed.rss">RSS feed</a> ❧
-<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
-<a href="https://github.com/gritzko/jab">JAB</a>
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
 ❧
 </div>
 </body>

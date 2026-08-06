@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GET-004</title>
+<title>GET-004: be:// path → store resolution (userinfo home, .be default, non-hidden .be, worktree)</title>
+<meta property="og:title" content="GET-004: be:// path → store resolution (userinfo home, .be default, non-hidden .be, worktree)">
+<meta property="og:description" content="GET-003 fixed the empty-path case; this ticket specifies the full be:// path→store resolution (authoritative semantics from the user). For be://user@host/path: the userinfo selects the peer home (be://gritzko@localhost → /home/gritzko, default = the ssh-login user); an empty path denotes that home's hidden default store &lt;home&gt;/.be (GET-003); a non-empty path is HOME-relative with one uniform rule — a path ending in .be is the store itself (be://localhost/store.be → $HOME/store.be, the .git analogue), and any other path gets /.be appended (be://localhost/src/beagle → $HOME/src/beagle/.be), where that .be resolves whether it is a directory (a store) or a file (a worktree pointer) — it does not matter which. Today keeper resolves a pathless ?/proj via a cwd walk-up from the login HOME to &lt;home&gt;/.be (GET-003) and a worktree/pathful form already negotiates (be://localhost/beagle?), but the explicit &lt;path&gt;/.be append, the .be named-store form, and the user@ → home selection are unspecified/unverified. See GET, URI, blog/uris.mkd, CLAUDE.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-004.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,8 +16,13 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>GET-004: <code>be://</code> path → store resolution (userinfo home, <code>.be</code> default, non-hidden <code>*.be</code>, worktree)</h1>
+<div>
 <p>
-<a href="">GET-003</a> fixed the empty-path case; this ticket specifies the <strong>full <code>be://</code> path→store resolution</strong> (authoritative semantics from the user). For <code>be://[user@]host[/path]</code>: the <strong>userinfo selects the peer home</strong> (<code>be://gritzko@localhost</code> → <code>/home/gritzko</code>, default = the ssh-login user); an <strong>empty path</strong> denotes that home's hidden default store <code>&lt;home&gt;/.be</code> (GET-003); a <strong>non-empty path is HOME-relative</strong> with one uniform rule — a path <strong>ending in <code>.be</code> is the store itself</strong> (<code>be://localhost/store.be</code> → <code>$HOME/store.be</code>, the <code>*.git</code> analogue), and <strong>any other path gets <code>/.be</code> appended</strong> (<code>be://localhost/src/beagle</code> → <code>$HOME/src/beagle/.be</code>), where that <code>.be</code> resolves <strong>whether it is a directory (a store) or a file (a worktree pointer) — it does not matter which</strong>. Today keeper resolves a pathless <code>?/proj</code> via a cwd walk-up from the login HOME to <code>&lt;home&gt;/.be</code> (GET-003) and a worktree/pathful form already negotiates (<code>be://localhost/beagle?</code>), but the explicit <code>&lt;path&gt;/.be</code> append, the <code>*.be</code> named-store form, and the <code>user@</code> → home selection are unspecified/unverified. See <a href="../../wiki/GET.html">GET</a>, <a href="../../wiki/URI.html">URI</a>, <a href="../../blog/uris.html">blog/uris.mkd</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
+Now: DONE
+</p>
+</div>
+<p>
+<a href="./GET-003.html">GET-003</a> fixed the empty-path case; this ticket specifies the <strong>full <code>be://</code> path→store resolution</strong> (authoritative semantics from the user). For <code>be://[user@]host[/path]</code>: the <strong>userinfo selects the peer home</strong> (<code>be://gritzko@localhost</code> → <code>/home/gritzko</code>, default = the ssh-login user); an <strong>empty path</strong> denotes that home's hidden default store <code>&lt;home&gt;/.be</code> (GET-003); a <strong>non-empty path is HOME-relative</strong> with one uniform rule — a path <strong>ending in <code>.be</code> is the store itself</strong> (<code>be://localhost/store.be</code> → <code>$HOME/store.be</code>, the <code>*.git</code> analogue), and <strong>any other path gets <code>/.be</code> appended</strong> (<code>be://localhost/src/beagle</code> → <code>$HOME/src/beagle/.be</code>), where that <code>.be</code> resolves <strong>whether it is a directory (a store) or a file (a worktree pointer) — it does not matter which</strong>. Today keeper resolves a pathless <code>?/proj</code> via a cwd walk-up from the login HOME to <code>&lt;home&gt;/.be</code> (GET-003) and a worktree/pathful form already negotiates (<code>be://localhost/beagle?</code>), but the explicit <code>&lt;path&gt;/.be</code> append, the <code>*.be</code> named-store form, and the <code>user@</code> → home selection are unspecified/unverified. See <a href="../../wiki/GET.html">GET</a>, <a href="../../wiki/URI.html">URI</a>, <a href="../../blog/uris.html">blog/uris.mkd</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
 </p>
 <h2>Issues</h2>
 <p>
@@ -28,7 +37,7 @@ The path slot of a <code>be://</code> URL means &quot;which store on the peer&qu
 </ul>
 <h2>Blockers</h2>
 <p>
-Builds on <a href="">GET-003</a> (the empty-path/<code>.be</code> base case) — land that first. Pure server-side store-resolution; no client grammar change beyond GET-003.
+Builds on <a href="./GET-003.html">GET-003</a> (the empty-path/<code>.be</code> base case) — land that first. Pure server-side store-resolution; no client grammar change beyond GET-003.
 </p>
 <h2>Planned</h2>
 <p>
@@ -40,5 +49,16 @@ Specify and implement the four-case <code>be://</code> path→store resolution; 
 <li>Keep git transports unaffected; keep GET-003's empty→<code>.be</code> default intact.</li>
 <li>Regression tests under <code>test/get</code>; update <code>keeper/INDEX.md</code> / <code>test/get/INDEX.md</code>.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

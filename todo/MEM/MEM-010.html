@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-010</title>
+<title>MEM-010 DONE: CURL unchecked alloc + handle/slist leaks (abc/CURL.c)</title>
+<meta property="og:title" content="MEM-010 DONE: CURL unchecked alloc + handle/slist leaks (abc/CURL.c)">
+<meta property="og:description" content="CURLGet/CURLPost dereference calloc() and curleasyinit() results without a NULL check (NULL write/deref under memory pressure or handle-init failure), the curlmultiaddhandle error path frees the request buffers but never curleasycleanups the easy handle, and every POST with a content type leaks its curlslist headers (libcurl does not take ownership). The goal is to null-check the allocations and free the handle and slist on the right paths.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-010.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>MEM-010: CURL unchecked alloc + handle/slist leaks (abc/CURL.c)</h1>
+<h1>MEM-010 <a href="./DONE.html">DONE</a>: CURL unchecked alloc + handle/slist leaks (abc/CURL.c)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>CURLGet</code>/<code>CURLPost</code> dereference <code>calloc()</code> and <code>curl_easy_init()</code> results without a NULL check (NULL write/deref under memory pressure or handle-init failure), the <code>curl_multi_add_handle</code> error path frees the request buffers but never <code>curl_easy_cleanup</code>s the easy handle, and every POST with a content type leaks its <code>curl_slist</code> headers (libcurl does not take ownership). The goal is to null-check the allocations and free the handle and slist on the right paths.
 </p>
@@ -34,11 +43,22 @@ Re-verified 2026-07-07 (now dog/abc/CURL.c): all three flaws present, sites re-c
 </p>
 <h3>TODOs</h3>
 <p>
- -<a href="./ .html"> </a> <code>dog/abc/CURL.c:201-202</code> <code>CURLGetTimed</code> and <code>:217-218</code> <code>CURLPost</code> — <code>calloc</code>/<code>curl_easy_init</code> (and <code>strdup</code>) still unchecked; add <code>if (!req) return ...</code> and <code>if (!req-&gt;easy) { free(req-&gt;url); free(req); return CURLFAIL; }</code> before any setopt.  -<a href="./ .html"> </a> <code>dog/abc/CURL.c:181-186</code> <code>CURLStart</code> — add-handle fail branch still frees <code>req-&gt;url</code>/<code>req</code> only; add <code>curl_easy_cleanup(req-&gt;easy)</code> (and free <code>req-&gt;headers</code>/<code>req-&gt;response</code> if allocated).  -<a href="./ .html"> </a> <code>dog/abc/CURL.c:228-235</code> <code>CURLPost</code> — slist still leaks per request (<code>// Note: headers leak</code> comment at :234); store the slist in <code>CURLreq</code>, <code>curl_slist_free_all</code> in <code>CURLTick</code>'s completion cleanup (:152-158) and in the CURLStart fail branch.  -<a href="./ .html"> </a> Repro first: fault-inject <code>calloc</code>/<code>curl_easy_init</code> NULL and a failing <code>multi_add_handle</code>; POST-with-content-type leak check under ASan/valgrind.
+ -<a href="./ .html"> </a> <code>dog/abc/CURL.c:201-202</code> <code>CURLGetTimed</code> and <code>:217-218</code> <code>CURLPost</code> — <code>calloc</code>/<code>curl_easy_init</code> (and <code>strdup</code>) still unchecked; add <code>if (!req) return ...</code> and <code>if (!req-&gt;easy) { free(req-&gt;url); free(req); return CURLFAIL; }</code> before any setopt. -<a href="./ .html"> </a> <code>dog/abc/CURL.c:181-186</code> <code>CURLStart</code> — add-handle fail branch still frees <code>req-&gt;url</code>/<code>req</code> only; add <code>curl_easy_cleanup(req-&gt;easy)</code> (and free <code>req-&gt;headers</code>/<code>req-&gt;response</code> if allocated). -<a href="./ .html"> </a> <code>dog/abc/CURL.c:228-235</code> <code>CURLPost</code> — slist still leaks per request (<code>// Note: headers leak</code> comment at :234); store the slist in <code>CURLreq</code>, <code>curl_slist_free_all</code> in <code>CURLTick</code>'s completion cleanup (:152-158) and in the CURLStart fail branch. -<a href="./ .html"> </a> Repro first: fault-inject <code>calloc</code>/<code>curl_easy_init</code> NULL and a failing <code>multi_add_handle</code>; POST-with-content-type leak check under ASan/valgrind.
 </p>
 <h3>Blockers and bummers</h3>
 <p>
 None.
 </p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

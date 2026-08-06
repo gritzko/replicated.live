@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>URI-002</title>
+<title>URI-002: unify bang-factor handling — a per-component bang bitflag byte + one dog/ debanger</title>
+<meta property="og:title" content="URI-002: unify bang-factor handling — a per-component bang bitflag byte + one dog/ debanger">
+<meta property="og:description" content="The ! (bang) modifier — force/whole-scope in the DIS-030/031 bang model (post! = --force, patch! = whole-branch, get! = force-reset per GET-008, #msg! = forget/foster) — is parsed ad-hoc today and there is no uniform representation of &quot;a bang was present, and on which component.&quot; Unify it per the maintainer's architecture: (1) a bang bitflag byte, one bit per component — bang-on-verb, path, query, fragment; (2) one dog/ debanger that, for each component slice, removes a ! by shifting the slice one byte and sets the bit. Transport rule: URIs are always forwarded as the full URI text (u8cs) — never reserialized from the uri struct — so the ! rides along transparently; every parser must DEBANG locally on parse. be is the ONLY URI normalizer/canonicalizer: it resolves paths/branches but MUST preserve bangs in its rewritten output. See URI, URI-spec, GET-008, Issues, CLAUDE.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/URI/URI-002.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,8 +16,13 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>URI-002: unify bang-factor handling — a per-component bang bitflag byte + one dog/ debanger</h1>
+<div>
 <p>
-The <code>!</code> (bang) modifier — force/whole-scope in the DIS-030/031 bang model (<code>post!</code> = <code>--force</code>, <code>patch!</code> = whole-branch, <code>get!</code> = force-reset per <a href="">GET-008</a>, <code>#msg!</code> = forget/foster) — is parsed ad-hoc today and there is no uniform representation of &quot;a bang was present, and on which component.&quot; Unify it per the maintainer's architecture: (1) a <strong>bang bitflag byte</strong>, one bit per component — bang-on-<strong>verb</strong>, <strong>path</strong>, <strong>query</strong>, <strong>fragment</strong>; (2) one <strong><code>dog/</code> debanger</strong> that, for each component slice, removes a <code>!</code> by shifting the slice one byte and sets the bit. <strong>Transport rule: URIs are always forwarded as the full URI text (<code>u8cs</code>) — never reserialized from the <code>uri</code> struct — so the <code>!</code> rides along transparently; every parser must DEBANG locally on parse. <code>be</code> is the ONLY URI normalizer/canonicalizer: it resolves paths/branches but MUST preserve bangs in its rewritten output.</strong> See <a href="README.html">URI</a>, <a href="../../wiki/URI.html">URI-spec</a>, <a href="">GET-008</a>, <a href="../../rule/Issues.html">Issues</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
+Now: DONE
+</p>
+</div>
+<p>
+The <code>!</code> (bang) modifier — force/whole-scope in the DIS-030/031 bang model (<code>post!</code> = <code>--force</code>, <code>patch!</code> = whole-branch, <code>get!</code> = force-reset per <a href="./GET-008.html">GET-008</a>, <code>#msg!</code> = forget/foster) — is parsed ad-hoc today and there is no uniform representation of &quot;a bang was present, and on which component.&quot; Unify it per the maintainer's architecture: (1) a <strong>bang bitflag byte</strong>, one bit per component — bang-on-<strong>verb</strong>, <strong>path</strong>, <strong>query</strong>, <strong>fragment</strong>; (2) one <strong><code>dog/</code> debanger</strong> that, for each component slice, removes a <code>!</code> by shifting the slice one byte and sets the bit. <strong>Transport rule: URIs are always forwarded as the full URI text (<code>u8cs</code>) — never reserialized from the <code>uri</code> struct — so the <code>!</code> rides along transparently; every parser must DEBANG locally on parse. <code>be</code> is the ONLY URI normalizer/canonicalizer: it resolves paths/branches but MUST preserve bangs in its rewritten output.</strong> See <a href="README.html">URI</a>, <a href="../../wiki/URI.html">URI-spec</a>, <a href="./GET-008.html">GET-008</a>, <a href="../../rule/Issues.html">Issues</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
 </p>
 <h2>Issues</h2>
 <p>
@@ -22,7 +31,7 @@ Bang detection is scattered and verb-specific; there is no component-level bang 
 <ul>
 <li><code>dog/CLI.c:61-81</code> (<code>CLIParse</code>) strips only the trailing VERB <code>!</code> and injects <code>--force</code>, so <code>get!</code>/<code>post!</code>/<code>patch!</code> are indistinguishable from <code>--force</code> downstream and a bang on any other component is read ad-hoc.</li>
 <li>A <code>!</code> legitimately attaches to non-verb components and is <strong>already serialized as literal text</strong> beyond parse time: a query/ref (<code>?&lt;sha&gt;!</code>, <code>?branch!</code>) is forwarded verbatim to sub-dogs (<code>be</code> <code>BEBuildArgv</code>), <strong>persisted into wtlog rows</strong> (<code>sniff/PATCH.c:1700</code>, read at <code>sniff/AT.c:492,517</code>), re-attached across transport→local (<code>beagle/DISPATCH.c:138-171</code>), and shed at the wire (<code>keeper/WIRECLI.c:353,1035</code>); a fragment <code>#msg!</code> is the live <strong>forget</strong> modifier (<code>sniff/SNIFF.exe.c:634-657</code>). Each reader re-detects the literal <code>!</code> independently.</li>
-<li>Each verb/dog re-derives bang semantics, so behavior drifts (DIS-030/031 added <code>post!</code>/<code>patch!</code> piecemeal; <a href="">GET-008</a> found <code>get!</code> ≡ <code>get --force</code> via the same shim).</li>
+<li>Each verb/dog re-derives bang semantics, so behavior drifts (DIS-030/031 added <code>post!</code>/<code>patch!</code> piecemeal; <a href="./GET-008.html">GET-008</a> found <code>get!</code> ≡ <code>get --force</code> via the same shim).</li>
 </ul>
 <h2>Blockers</h2>
 <p>
@@ -39,5 +48,16 @@ One bitflag byte + one debanger; forward full text; every parser debangs; <code>
 <li>Repro-first (<a href="../../CLAUDE.md">CLAUDE</a> §17), table-driven for the debanger (done) + a cross-process case: a bang on a forwarded/persisted/wired URI is honored by the receiving dog via its <code>DOGDebang</code>, and survives a <code>be</code> canonicalize.</li>
 <li>Update <code>dog/INDEX.md</code>.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

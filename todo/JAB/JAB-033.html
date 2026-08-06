@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-033 DONE: mmap/Buf objects must tell the collector what they pin — GC never feels a leaked mapping</title>
+<meta property="og:title" content="JAB-033 DONE: mmap/Buf objects must tell the collector what they pin — GC never feels a leaked mapping">
+<meta property="og:description" content="A jab mapping is a Uint8Array over foreign pages, and the collector is told NOTHING about them: 62749 live RO maps of a 183-byte file survived two hours in one process without a single collection (/todo/BRO/BRO-046). JSC lets an object declare that it pins a native resource; jab's map/Buf objects must do it, so a program that maps in a loop gets collected instead of dying at vm.maxmapcount. The unit that matters is the MAPPING COUNT, not the byte size — 62749 VMAs is fatal while the 250 MB they carry is nothing.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-033.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-033 <a href="./DONE.html">DONE</a>: mmap/Buf objects must tell the collector what they pin — GC never feels a leaked mapping</h1>
+<p>
+Now: DONE
+</p>
+<div>
+<p>
+Now: OPEN Sev: HIGH Ask: gritzko Env: webkitgtk-4.1 JSC C API, Linux vm.max_map_count=65530 Rev: ///jab#8335085b Rep: ///jab See: BRO-046
+</p>
+</div>
+<p>
+A jab mapping is a Uint8Array over foreign pages, and the collector is told NOTHING about them: 62749 live RO maps of a 183-byte file survived two hours in one process without a single collection (<a href="/todo/BRO/BRO-046">BRO-046</a>). JSC lets an object declare that it pins a native resource; jab's map/Buf objects must do it, so a program that maps in a loop gets collected instead of dying at <code>vm.max_map_count</code>. The unit that matters is the MAPPING COUNT, not the byte size — 62749 VMAs is fatal while the 250 MB they carry is nothing.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Found while diagnosing <a href="/todo/BRO/BRO-046">BRO-046</a>: an idle <code>be todo</code> pager leaked 19.2 RO ULOG mappings/sec and wedged at 65531 VMAs, 92% of its CPU in a kernel <code>mmap</code> that could no longer succeed.
+</p>
+<ul>
+<li><code>io.cpp:632</code> hands a mapping to JS as <code>JSObjectMakeTypedArrayWithBytesNoCopy</code> with a <code>JABCMapROFree</code>/<code>JABCMapFree</code> deallocator — the ONLY release path for an RO map.</li>
+<li><code>io.cpp:642</code> <code>io._munmap</code> is a documented SILENT NO-OP for a read map (ABC-023: no fd, no slot) — so RO mappings have NO explicit release at all, GC is the whole story.</li>
+<li>GC does not run: 62749 live 4 KiB maps = ~250 MB of pages plus a few MB of JS wrappers, far under any heap trigger, so the allocator never feels pressure.</li>
+<li><code>JABC.hpp:12-17</code> includes only the six PUBLIC JSC C headers; the sole collector control in them is <code>JSGarbageCollect</code> (<code>JSBase.h:140</code>).</li>
+<li>Unknown to be MEASURED first: whether <code>…BytesNoCopy</code> reports its external size to the collector at all under this JSC build — the observation says it is not enough either way.</li>
+<li>Same exposure for every other pinning binding: <code>abc.mmap</code>/<code>io.mmap</code>, <code>git.pack.mmap</code>, <code>abc.ram</code>/<code>io.ram</code>, and any Buf holding a booked fd.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+A JS program that maps in a loop and drops the handles must be collected before it exhausts VMAs or fds — the collector must know a mapping is expensive.
+</p>
+<ul>
+<li>Red-first probe: map one small file N times in a loop, dropping each handle; count <code>/proc/self/maps</code> lines. Grows without bound today; must plateau.</li>
+<li>Pressure is counted in MAPPINGS and FDS, not only bytes — a 4 KiB map costs one irreplaceable VMA slot and (for RW) one fd.</li>
+<li>The same accounting covers <code>abc.ram</code> and <code>git.pack.mmap</code>, not just <code>io.mmap</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+<code>jab/</code> is read-only reference for everything else in the fleet; this ticket is the exception that edits it, and only the binding layer.
+</p>
+<ul>
+<li>Public JSC C API only unless gritzko rules otherwise — if the pin has to be declared through an internal <code>JSC::Heap</code> entry point, STOP and report the tradeoff before writing it.</li>
+<li>A <code>JSGarbageCollect</code> call driven by a jab-side pinned-resource counter is an acceptable shape; a collection on EVERY map is not.</li>
+<li>Reuse the existing FILE slot book (<code>FILEBookedFD</code>, <code>JABCMapCtx</code>) for the count — no parallel registry of live mappings.</li>
+<li>This is the ENGINE half only: the JS-side &quot;do not open it in the first place&quot; work is <a href="/todo/BRO/BRO-046">BRO-046</a> and <a href="/todo/BE/BE-050.html">BE-050</a>, the explicit-release half is <a href="/todo/ABC/ABC-020.html">ABC-020</a>.</li>
+<li>Clone <code>///jab/</code> from the main tree per <a href="/meta/work.html">work</a>; stop and report on any clone failure, no improvised fallback.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> measure first: does a <code>…BytesNoCopy</code> array report ANY external cost to this JSC? probe with a map loop + heap stats</li>
+<li><a href="./ .html"> </a> red repro test: N × (map a small file, drop it) → <code>/proc/self/maps</code> line count, unbounded today</li>
+<li><a href="./ .html"> </a> declare the pin for <code>io.mmap</code>/<code>abc.mmap</code> RO and RW maps; count mappings and fds, not just bytes</li>
+<li><a href="./ .html"> </a> extend to <code>git.pack.mmap</code> and <code>abc.ram</code>/<code>io.ram</code></li>
+<li><a href="./ .html"> </a> threshold-driven <code>JSGarbageCollect</code> if the pin declaration alone does not move the collector</li>
+<li><a href="./ .html"> </a> re-run the <a href="/todo/BRO/BRO-046">BRO-046</a> idle-pager probe on the rebuilt jab; report the VMA slope</li>
+<li><a href="./ .html"> </a> update <code>jab/INDEX.md</code> + <code>jab/API.md</code> if the binding surface changes; full suite green</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

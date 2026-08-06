@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PUT-012: sub-mount checkout skips the GET-049 restamp — phantom-dirty subs, status and put disagree</title>
+<meta property="og:title" content="PUT-012: sub-mount checkout skips the GET-049 restamp — phantom-dirty subs, status and put disagree">
+<meta property="og:description" content="Reported by gritzko 2026-07-19 in //ABC-020/ (jab clone, subs dog, dog/abc): status flags the whole grandchild dirty (12:13 ...v .gitignore etc, 7 wt), yet jab put .gitignore errs put: nothing to stage and the diff is indeed empty — the files are misstamped, not modified. - Root cause: submount.mount checks out via checkout.apply, and checkout.materialise/writeFile never restamp — the GET-049 trySetMtime(g.stampTs) exists ONLY in get.js's root fanout (get.js:1085). Sub files keep RAW write mtimes. - The anchor rows are same-ms-bumped: ulog.write assigns the store row the real ms and the track row +1 &quot;honestly&quot; (into the future). //ABC-020/dog/abc rows: store ts ..421, track ..422; every checked-out file's mtime reads ron ..421 — it can NEVER match the track row's ..422. - Depth-1 //ABC-020/dog looks clean by LUCK: its files' write crossed into the next ms (..764) and collided with the bumped track row ts (..764). Same code path, opposite verdict — timing, not design. - The two classifiers then split: JS classify/stage (put, diff) treats mtime ∈ stamp-set OR content-equal as clean → put: nothing to stage; native status wants the expected stamp and marks every file v suspect → phantom 7 wt. - Evidence probe (ulog.each + io.lstat ron ts, work/ABC-020): dog/abc/.gitignore and 01.h mtime == store-row ts ..421 exactly; dog/INDEX.md mtime == dog track-row ts ..764 exactly.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PUT/PUT-012.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PUT-012: sub-mount checkout skips the GET-049 restamp — phantom-dirty subs, status and put disagree</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Reported by gritzko 2026-07-19 in //ABC-020/ (jab clone, subs dog, dog/abc): status flags the whole grandchild dirty (<code>12:13 ...v .gitignore</code> etc, <code>7 wt</code>), yet <code>jab put .gitignore</code> errs <code>put: nothing to stage</code> and the diff is indeed empty — the files are misstamped, not modified.
+</p>
+<ul>
+<li>Root cause: submount.mount checks out via checkout.apply, and checkout.materialise/writeFile never restamp — the GET-049 <code>trySetMtime(g.stampTs)</code> exists ONLY in get.js's root fanout (get.js:1085). Sub files keep RAW write mtimes.</li>
+<li>The anchor rows are same-ms-bumped: ulog.write assigns the store row the real ms and the track row +1 &quot;honestly&quot; (into the future). //ABC-020/dog/abc rows: store ts ..421, track ..422; every checked-out file's mtime reads ron ..421 — it can NEVER match the track row's ..422.</li>
+<li>Depth-1 //ABC-020/dog looks clean by LUCK: its files' write crossed into the next ms (..764) and collided with the bumped track row ts (..764). Same code path, opposite verdict — timing, not design.</li>
+<li>The two classifiers then split: JS classify/stage (put, diff) treats mtime ∈ stamp-set OR content-equal as clean → <code>put: nothing to stage</code>; native status wants the expected stamp and marks every file <code>v</code> suspect → phantom <code>7 wt</code>.</li>
+<li>Evidence probe (ulog.each + io.lstat ron ts, work/ABC-020): dog/abc/.gitignore and 01.h mtime == store-row ts ..421 exactly; dog/INDEX.md mtime == dog track-row ts ..764 exactly.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Sub-mount checkout restamps every materialised file to the sub's track-row ASSIGNED ts (GET-049 parity with the root fanout), at every depth; status then shows a fresh clone's subs clean, and status/put/diff agree.
+</p>
+<ul>
+<li>Red repro: fresh clone with a nested sub, then <code>jab status</code> inside the grandchild — today phantom wt files whenever the checkout lands in the same ms as the anchor rows; flat/clean after.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Stamp with the assigned row ts via the existing trySetMtime pattern (put.js/get.js twins); be.now/appendWtlog stay the one ts source per <a href="/meta">meta</a> norms — no log read-back.</li>
+<li>Symlinks stay unstamped (setMtime follows the link), matching get.js:1084.</li>
+<li>No behavior change to the root fanout stamping or to put's restamp.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> red repro test/submountstamp.js: anchor write + checkout.apply, assert every file mtime == track-row ASSIGNED ts — deterministic, red pre-fix at both halves (ulog return, restamp), green after</li>
+<li><a href="./v.html">v</a> shared/ulog.js write() returns assigned-ts array (append parity); shared/checkout.js apply() takes opts.stampTs, restamps non-symlink materialised files; shared/submount.js BOTH branches pass asg<a href="./1.html">1</a></li>
+<li><a href="./v.html">v</a> verify: real submount.mount off a jab-post store — all files stamped to the track ts, sub status clean, no phantom wt; full be JS unit suite green incl statusfast</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Wire mount branch not exercisable locally (no keeper binary); it shares the same fixed mechanism and unit-tested pieces.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+Suggested commit: <code>PUT-012: sub-mount restamps checkout to track-row ts</code>
+</p>
+<p>
+Staged in work/PUT-012: shared/ulog.js, shared/checkout.js, shared/submount.js, test/submountstamp.js, test/CMakeLists.txt.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

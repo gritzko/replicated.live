@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-038</title>
+<title>MEM-038: woof — POL callbacks run outside a call()/try() frame, so the HUNK BASS toks-carve is never rewound (unbounded server leak)</title>
+<meta property="og:title" content="MEM-038: woof — POL callbacks run outside a call()/try() frame, so the HUNK BASS toks-carve is never rewound (unbounded server leak)">
+<meta property="og:description" content="A long-running woof server leaks BASS arena on EVERY syntax-highlighted response. abc/POL.c POLLoop invokes at-&gt;callback(fd,at) directly (POL.c:248 timeout, :314 poll) with NO enclosing call()/try() frame — and only call/try/then snapshot+rewind ABCBASS (PRO.h:73-83). woof's readcb/pipecb/writecb are plain static short functions never invoked via call(), and they reach renderhunks → HUNKu8sDrain → hunkdraintoks, which acquire's a BASS region into hk-&gt;toks (HUNK.c:199-264) INTENTIONALLY without a call() wrapper so the toks outlive the drain for the renderer. With no frame to rewind it, every token-bearing hunk permanently consumes ABCBASS until acarve/align hit NOROOM and rendering (and in-process dog Exec carves on --api) fail — a self-inflicted DoS. Tests/fuzz miss it: the fuzz harness wraps inputs in a rewinding try() and never loops the live callback path. The one HIGH-severity finding of the MEM sweep.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-038.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>MEM-038: woof — POL callbacks run outside a call()/try() frame, so the HUNK BASS toks-carve is never rewound (unbounded server leak)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 A long-running woof server leaks BASS arena on EVERY syntax-highlighted response. abc/POL.c POLLoop invokes <code>at-&gt;callback(fd,at)</code> directly (POL.c:248 timeout, :314 poll) with NO enclosing call()/try() frame — and only call/try/then snapshot+rewind ABC_BASS (PRO.h:73-83). woof's read_cb/pipe_cb/write_cb are plain <code>static short</code> functions never invoked via call(), and they reach render_hunks → HUNKu8sDrain → hunk_drain_toks, which a_cquire's a BASS region into hk-&gt;toks (HUNK.c:199-264) INTENTIONALLY without a call() wrapper so the toks outlive the drain for the renderer. With no frame to rewind it, every token-bearing hunk permanently consumes ABC_BASS until a_carve/a_lign hit NOROOM and rendering (and in-process dog Exec carves on --api) fail — a self-inflicted DoS. Tests/fuzz miss it: the fuzz harness wraps inputs in a rewinding try() and never loops the live callback path. The one HIGH-severity finding of the <a href="MEM.html">MEM</a> sweep.
 </p>
@@ -38,5 +47,16 @@ Give the live callback path a per-request BASS rewind without freeing the toks t
 <li>Pick the design (A POL-frames the callback, or B woof brackets each request with an ABC_BASS snapshot/rewind); ensure hk-&gt;toks lifetime is covered by a frame that outlives the drain but not the request.</li>
 <li>Verify the in-process --api Exec carves still work after many requests.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

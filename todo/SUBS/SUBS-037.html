@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SUBS-037</title>
+<title>SUBS-037: JS (jab) submodule recursion for get + post</title>
+<meta property="og:title" content="SUBS-037: JS (jab) submodule recursion for get + post">
+<meta property="og:description" content="The JS reference impl (be/, run by jab) recursed submodules for the READ views only (status/diff/log/spot, JAB-004); the WRITE verbs did not. jab get recorded a gitlink then skipped it (&quot;mount recursion is a follow-up&quot;, get.js), and jab post had no sub recursion at all. So a nested-submodule clone/edit/ commit cycle diverged from native be. This ticket ports the get mount-recursion and the post recurse+gitlink-bump so jab matches be byte-for-byte across the full cycle, in plain AND --color. Driven by the new /be/test/sub/cycle gate.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/SUBS/SUBS-037.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -21,54 +25,30 @@ The JS reference impl (<code>be/</code>, run by <code>jab</code>) recursed submo
 A full get→put/delete→post→get cycle over a 3-level nested submodule repo (aa→bb→cc, path==project) was run with both executors and compared.
 </p>
 <ul>
-<li><code>jab get be://…?/aa</code> cloned only the top shard; subs unmounted (get.js:331<p>
-<code>if (kind === &quot;s&quot;) return</code>), so <code>bb</code>/<code>bb/cc</code> were missing from the worktree.
-</p>
-</li>
-<li><code>jab post</code> committed the top repo only — no <code>post post:bb/cc</code> recursion, no<p>
-<code>mod bb/cc</code> / <code>mod bb</code> gitlink bump; commit shas diverged from native.
-</p>
-</li>
+<li><code>jab get be://…?/aa</code> cloned only the top shard; subs unmounted (get.js:331 <code>if (kind === &quot;s&quot;) return</code>), so <code>bb</code>/<code>bb/cc</code> were missing from the worktree.</li>
+<li><code>jab post</code> committed the top repo only — no <code>post post:bb/cc</code> recursion, no <code>mod bb/cc</code> / <code>mod bb</code> gitlink bump; commit shas diverged from native.</li>
 </ul>
 <h3>Goals</h3>
 <p>
 <code>jab</code> matches native <code>be</code> byte-for-byte on the get/put/delete/post/get cycle.
 </p>
 <ul>
-<li>get: fetch each sub shard from the SAME remote (project swapped), drop the<p>
-secondary-wt anchor, check the pin tree out, recurse; emit <code>get &lt;sub&gt;?&lt;pin&gt;</code>.
-</p>
-</li>
-<li>post: depth-first post-order recursion — post dirty subs first (path-prefixed<p>
-banners, <code>[seg]</code> message tags), bump the parent gitlink (<code>mod &lt;sub&gt;</code>).
-</p>
-</li>
+<li>get: fetch each sub shard from the SAME remote (project swapped), drop the secondary-wt anchor, check the pin tree out, recurse; emit <code>get &lt;sub&gt;?&lt;pin&gt;</code>.</li>
+<li>post: depth-first post-order recursion — post dirty subs first (path-prefixed banners, <code>[seg]</code> message tags), bump the parent gitlink (<code>mod &lt;sub&gt;</code>).</li>
 <li>Identical worktrees AND identical output dumps (SGR included) in both modes.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>NO C changes — the port lives entirely in <code>be/</code>. Reuse existing kernels<p>
-(wire/ingest/checkout/store, core/recurse.js, fold-decide gitlink bump).
-</p>
-</li>
+<li>NO C changes — the port lives entirely in <code>be/</code>. Reuse existing kernels (wire/ingest/checkout/store, core/recurse.js, fold-decide gitlink bump).</li>
 <li>Clone via <code>be://</code> (full-store clone, own object store), not a <code>file:</code> wt.</li>
 <li>Commit shas are time-derived; the test ts-pins each level (postcase.sh trick).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>get: a gitlink leaf calls <code>mountSub</code> (fetch shard → <code>ingest.clone</code> sibling<p>
-shard → write <code>.be</code> anchor → <code>checkout.apply</code> → recurse); sub rows are <code>banner:true</code> so <code>--color</code> full-line-bands them like the seed banner.
-</p>
-</li>
-<li>post: <code>handle</code>→<code>postTree</code> (recurse mounted subs in <code>.gitmodules</code> order,<p>
-post-order)→<code>postOne</code> (the old single-repo body). An advanced sub's new tip is injected as a gitlink-bump <code>add</code> decision (<code>injectBumps</code>) so the existing fold-decide/commit path records <code>mod &lt;sub&gt;</code>. <code>fold-commit</code> skips the blob feed for a mode-160000 add (the sha is a commit in the sub shard).
-</p>
-</li>
-<li>emit: a generic <code>banner</code> row tag → <code>bannerColumnar</code> in color (also fixes the<p>
-<code>delete:</code> header band); <code>out.color</code> lets post lay 2 blank separators in plain but 1 in color (native's relay quirk).
-</p>
-</li>
+<li>get: a gitlink leaf calls <code>mountSub</code> (fetch shard → <code>ingest.clone</code> sibling shard → write <code>.be</code> anchor → <code>checkout.apply</code> → recurse); sub rows are <code>banner:true</code> so <code>--color</code> full-line-bands them like the seed banner.</li>
+<li>post: <code>handle</code>→<code>postTree</code> (recurse mounted subs in <code>.gitmodules</code> order, post-order)→<code>postOne</code> (the old single-repo body). An advanced sub's new tip is injected as a gitlink-bump <code>add</code> decision (<code>injectBumps</code>) so the existing fold-decide/commit path records <code>mod &lt;sub&gt;</code>. <code>fold-commit</code> skips the blob feed for a mode-160000 add (the sha is a commit in the sub shard).</li>
+<li>emit: a generic <code>banner</code> row tag → <code>bannerColumnar</code> in color (also fixes the <code>delete:</code> header band); <code>out.color</code> lets post lay 2 blank separators in plain but 1 in color (native's relay quirk).</li>
 </ul>
 <h3>TODOs</h3>
 <ul>
@@ -76,26 +56,14 @@ post-order)→<code>postOne</code> (the old single-repo body). An advanced sub's
 <li><a href="./v.html">v</a> post recurse + gitlink bump (post.js postTree/postOne/injectBumps)</li>
 <li><a href="./v.html">v</a> color parity (emit.js banner tag + color export; delete.js header)</li>
 <li><a href="./v.html">v</a> full-cycle parity test <a href="/be/test/sub/cycle">cycle</a>, plain + color, 80/81 green</li>
-<li><a href="./ .html"> </a> POSTNONE sub (clean sub under a dirty parent) emits the <code>post &lt;sub&gt;</code><p>
-   notice — caught+skipped now; the per-level (not single-top) post layout
-</p>
-</li>
+<li><a href="./ .html"> </a> POSTNONE sub (clean sub under a dirty parent) emits the <code>post &lt;sub&gt;</code> notice — caught+skipped now; the per-level (not single-top) post layout</li>
 <li><a href="./ .html"> </a> local <code>file:</code> parent sub-mount (GET-032 class) — remote path only here</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Gitlink path MUST equal the sub project/shard title for the clean clone<p>
-(else native itself prints HOMENOPROJ fallback noise); the test fixes this.
-</p>
-</li>
-<li><code>be post</code> does NOT push; the cycle's two gets are independent clones (a<p>
-re-get of an ahead wt is SNIFFNOFF), and parity is be-run vs jab-run.
-</p>
-</li>
-<li>Pre-existing: <code>be-js-bro-universal</code> is a stale <code>WILL_FAIL</code> xfail that now<p>
-passes (unrelated to this ticket — bro is untouched).
-</p>
-</li>
+<li>Gitlink path MUST equal the sub project/shard title for the clean clone (else native itself prints HOMENOPROJ fallback noise); the test fixes this.</li>
+<li><code>be post</code> does NOT push; the cycle's two gets are independent clones (a re-get of an ahead wt is SNIFFNOFF), and parity is be-run vs jab-run.</li>
+<li>Pre-existing: <code>be-js-bro-universal</code> is a stale <code>WILL_FAIL</code> xfail that now passes (unrelated to this ticket — bro is untouched).</li>
 </ul>
 <h2>Outcome</h2>
 <p>
@@ -104,5 +72,16 @@ LOST — NEVER COMMITTED (confirmed 2026-06-29). The work sat in an uncommitted 
 <p>
 CLOSED — SUPERSEDED (audit 2026-07-07): the redo LANDED under <a href="../DIS/DIS-058.html">DIS-058</a> D1-D9 (<code>da0c12c3</code> + <code>da7fa5a7</code>, be trunk 29Jun): get mounts+recurses subs (<code>shared/submount.js</code> + get.js recurseSubMounts), post recurses post-order + auto gitlink-bump (post.js postTree/postSubs/postOne).  The full-cycle gate lives at <code>be/test/sub/cycle</code> (be-js-sub-cycle), green jab-only per <code>d80bdb5c</code> (TEST-003 &quot;js tests pass, no native use&quot;).  Remaining sub gaps have their own tickets (SUBS-039/041/045 etc.); nothing left under this code.
 </p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

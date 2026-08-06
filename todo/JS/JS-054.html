@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-054</title>
+<title>JS-054: jabc error-exit paths leak the whole JS context</title>
+<meta property="og:title" content="JS-054: jabc error-exit paths leak the whole JS context">
+<meta property="og:description" content="main()'s script-file failure paths return directly, bypassing the JABCPolUninstall/JSClose/JABCioUninstall/u8bUnMap teardown the success path runs — so the entire JS context built by JSInit/JABCInstallModules leaks (LSan: 95 objects / 2358 B from JSC bmalloc). Sibling of JS-007, which fixed the read's correctness but not the leak on its failure paths. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-054.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,58 +15,39 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-054 <a href="">MED</a>: jabc error-exit paths leak the whole JS context</h1>
+<h1>JS-054: jabc error-exit paths leak the whole JS context</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>main()</code>'s script-file failure paths <code>return</code> directly, bypassing the <code>JABCPolUninstall</code>/<code>JSClose</code>/<code>JABCioUninstall</code>/<code>u8bUnMap</code> teardown the success path runs — so the entire JS context built by <code>JSInit</code>/<code>JABCInstallModules</code> leaks (LSan: 95 objects / 2358 B from JSC bmalloc). Sibling of <a href="JS-007.html">JS-007</a>, which fixed the read's <strong>correctness</strong> but not the <strong>leak</strong> on its failure paths. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>js/main.cpp:184-208</code>: <code>fopen</code>/<code>ftell</code>/<code>malloc</code> failures each <code>return 1</code><p>
-AFTER <code>JSInit</code>, skipping the bottom cleanup block (<code>:217-223</code>).
-</p>
-</li>
-<li>The blanket <code>js/lsan.supp</code> (<code>leak:libjavascriptcoregtk</code>) HIDES it under<p>
-ctest — the 2358 B are JSC's. Only an unsuppressed run shows it.
-</p>
-</li>
-<li>Repro: <code>jabc /no/such/file</code> → LSan fires; <code>jabc --eval 0</code> (success) is<p>
-leak-clean, proving the teardown is the only difference.
-</p>
-</li>
+<li><code>js/main.cpp:184-208</code>: <code>fopen</code>/<code>ftell</code>/<code>malloc</code> failures each <code>return 1</code> AFTER <code>JSInit</code>, skipping the bottom cleanup block (<code>:217-223</code>).</li>
+<li>The blanket <code>js/lsan.supp</code> (<code>leak:libjavascriptcoregtk</code>) HIDES it under ctest — the 2358 B are JSC's. Only an unsuppressed run shows it.</li>
+<li>Repro: <code>jabc /no/such/file</code> → LSan fires; <code>jabc --eval 0</code> (success) is leak-clean, proving the teardown is the only difference.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Error exits run the SAME teardown as the success path: a failed<p>
-script-file open frees the context (LSan-clean); exit code + stderr stay.
-</p>
-</li>
+<li>Error exits run the SAME teardown as the success path: a failed script-file open frees the context (LSan-clean); exit code + stderr stay.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li><code>js/main.cpp</code> only; output-equivalent. Verify under the existing ASAN<p>
-debug build. New repro is red-before/green-after WITHOUT the JSC suppression.
-</p>
-</li>
+<li><code>js/main.cpp</code> only; output-equivalent. Verify under the existing ASAN debug build. New repro is red-before/green-after WITHOUT the JSC suppression.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Extract the file read into a <code>JABCRunFile(path) → b8</code> worker (symmetric with<p>
-<code>JABCRun</code>); every failure returns <code>NO</code> → <code>main</code> sets <code>rc=1</code> and falls through to the shared teardown. Mirrors the abc wrapper/worker idiom (CLAUDE.md §5).
-</p>
-</li>
+<li>Extract the file read into a <code>JABCRunFile(path) → b8</code> worker (symmetric with <code>JABCRun</code>); every failure returns <code>NO</code> → <code>main</code> sets <code>rc=1</code> and falls through to the shared teardown. Mirrors the abc wrapper/worker idiom (CLAUDE.md §5).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Repro-first <code>run-054.sh</code> (ctest <code>JABCleakExit</code>, no JSC suppression,<p>
-  self-calibrated vs the clean <code>--eval</code> exit): missing-file run must not leak.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Extract <code>JABCRunFile</code>; the three <code>return 1</code> become <code>return NO</code>; <code>main</code><p>
-  funnels to cleanup. <code>js/INDEX.md</code> unchanged (main.cpp not documented there).
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Repro-first <code>run-054.sh</code> (ctest <code>JABCleakExit</code>, no JSC suppression, self-calibrated vs the clean <code>--eval</code> exit): missing-file run must not leak.</li>
+<li class="done"><input type="checkbox" checked disabled> Extract <code>JABCRunFile</code>; the three <code>return 1</code> become <code>return NO</code>; <code>main</code> funnels to cleanup. <code>js/INDEX.md</code> unchanged (main.cpp not documented there).</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -70,15 +55,23 @@ debug build. New repro is red-before/green-after WITHOUT the JSC suppression.
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li><strong>LANDED to beagle</strong> (2026-06-23): error exits now run the shared teardown, so<p>
-the missing-file exit is LSan-clean; stderr + exit code unchanged. ctest <code>JABCleakExit</code> red-before/green-after; full JABC suite 28/28.
-</p>
-<ul>
+<li><strong>LANDED to beagle</strong> (2026-06-23): error exits now run the shared teardown, so the missing-file exit is LSan-clean; stderr + exit code unchanged. ctest <code>JABCleakExit</code> red-before/green-after; full JABC suite 28/28.<ul>
 <li><code>ab4519af</code> — <code>main.cpp</code> <code>JABCRunFile</code> worker + <code>JABCleakExit</code> ctest reg.</li>
 <li><code>b10b311c</code> — <code>js/test/run-054.sh</code> repro script (staged first, harmless alone).</li>
 </ul>
 </li>
 <li>Journal ticket left UNPOSTED (lands with the session's other journal work).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

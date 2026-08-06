@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-041 DONE: diff row inline-vs-split must weigh max(in,rm), not in+rm</title>
+<meta property="og:title" content="BRO-041 DONE: diff row inline-vs-split must weigh max(in,rm), not in+rm">
+<meta property="og:description" content="A one-token edit renders as TWO rows (rm-row + in-row) where it must render as ONE inline row with only the changed token washed and the rest of the line white. The row classifier weighs an edit by changed = inb + rmb, so a symmetric token swap is charged twice and trips the changed 4 &lt; total inline gate. Ruling (gritzko, 2026-07-29): use changed = max(inb, rmb) and total = max + eqb (&quot;for now&quot;). C dog/HUNK.c hunklineclassify and JS bro.js lineKind are the deliberate BRO-009 pair and move in lockstep. Live repro in work/StrictMark; see BRO-009 for the two-pass renderer this sits in.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BRO/BRO-041.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-041 <a href="./DONE.html">DONE</a>: diff row inline-vs-split must weigh max(in,rm), not in+rm</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<p>
+A one-token edit renders as TWO rows (rm-row + in-row) where it must render as ONE inline row with only the changed token washed and the rest of the line white. The row classifier weighs an edit by <code>changed = in_b + rm_b</code>, so a symmetric token swap is charged twice and trips the <code>changed * 4 &lt; total</code> inline gate. Ruling (gritzko, 2026-07-29): use <code>changed = max(in_b, rm_b)</code> and <code>total = max + eq_b</code> (&quot;for now&quot;). C <code>dog/HUNK.c</code> <code>hunk_line_classify</code> and JS <a href="../../be/view/bro.js">bro.js</a> <code>lineKind</code> are the deliberate BRO-009 pair and move in lockstep. Live repro in <code>work/StrictMark</code>; see <a href="BRO-009.html">BRO-009</a> for the two-pass renderer this sits in.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro: <code>work/StrictMark</code>, <code>jab diff --color | cat -v</code> on <code>todo.mkd</code> — the row <code>-[ ] uniform headers</code> edited to <code>-[x] uniform headers</code> (ONE byte, <code> </code> → <code>x</code>).</li>
+<li>Observed: two rows — <code>-[ ] uniform headers</code> (bg 217 on <code>-[ ]</code>, bg 224 on the body) then <code>-[x] uniform headers</code> (bg 157 / bg 194). Expected: one row, <code>-[ ]</code>/<code>-[x]</code> washed, body white.</li>
+<li>Arithmetic today (<code>beagle/dog/HUNK.c:761</code>, <code>be/view/bro.js:350</code>): rm_b 4 + in_b 4 = 8 changed, eq_b 16, total 24; <code>8 * 4 = 32 &gt;= 24</code> → <code>MOD_SPLIT</code>.</li>
+<li>The gate admits inline only when <code>eq_b &gt; 3 * (in_b + rm_b)</code>, so a 4-byte token swap needs a 24+ byte unchanged remainder — unreachable for ordinary todo/prose lines.</li>
+<li>Token granularity is NOT the bug: the diff already marks exactly <code>-[ ]</code>/<code>-[x]</code>; the one-byte edit inflates to 4+4 only because the lexer glues the marker into one token.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>changed = max(in_b, rm_b)</code>, <code>total = changed + eq_b</code>; keep the <code>changed * 4 &lt; total</code> shape. The repro line (max 4, eq 16 → <code>16 &lt; 20</code>) classifies <code>MOD_INLINE</code>.</li>
+<li>Both impls change in lockstep: C <code>hunk_line_classify</code> and JS <code>lineKind</code> stay byte-equivalent in behaviour (BRO-009's one-C-one-JS invariant).</li>
+<li>Verified through the REAL UI path: <code>jab diff --color | cat -v</code> in the repro wt shows ONE row for the edited line.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Metric change only — no touching <code>bro_classify_lines</code>, the two-pass walk, <code>hunk_line_continues</code>, or the <code>eq_b == 0</code> pure/split arm above it.</li>
+<li><code>total = max + eq_b</code> is the ruling FOR NOW; do not &quot;improve&quot; it to <code>in_b + rm_b + eq_b</code> (also flips the repro, but is not what was ordered).</li>
+<li>Inline still renders both sides adjacently (<code>-[ ]-[x] uniform headers</code>); that widening is accepted, not a regression to fix.</li>
+<li>No native <code>be</code>/<code>graf</code> oracle exists for <code>--color</code> (it LAGS jab): <code>be/test/diff/lib/diffcase.sh:71-78</code> only smoke-tests that the render is non-empty and exits clean.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Two trees, one ticket: JS <code>///be/</code> is what <code>jab diff --color</code> actually renders; C <code>///jab/dog/</code> (libdog) is the twin that keeps <code>graf</code>/<code>bro</code> parity.</li>
+<li><code>beagle/dog/HUNK.c</code> is a SECOND libdog pin (branch <code>?/libdog/.beagle</code>) and is out of scope — the trunk copy is <code>///jab/dog/</code>.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./ .html"> </a> red repro first: a case asserting ONE row for a small symmetric token swap (extend <code>be/test/diff/13-color-word-wash</code>, do not edit other tests). -<a href="./ .html"> </a> <code>be/view/bro.js</code> <code>lineKind</code> (<del>:342-351): <code>changed = Math.max(li.inB, li.rmB)</code>, <code>total = changed + li.eqB</code>. -<a href="./ .html"> </a> <code>///jab/dog</code> <code>dog/HUNK.c</code> <code>hunk_line_classify</code> (</del>:749-762): the same two lines, comment updated to say max. -<a href="./ .html"> </a> verify <code>jab diff --color | cat -v</code> in a <code>work/StrictMark</code>-shaped repro; then the diff suite.
+</p>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

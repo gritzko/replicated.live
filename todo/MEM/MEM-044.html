@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-044</title>
+<title>MEM-044: spot — LSM open/merge leaks on error; SPOTOpenBranch hand-free + a logical double-unmap</title>
+<meta property="og:title" content="MEM-044: spot — LSM open/merge leaks on error; SPOTOpenBranch hand-free + a logical double-unmap">
+<meta property="og:description" content="spot's LSM plumbing acquires several mmaps/fds/heap tables then uses bare call()s that early-return without freeing them. SPOTOpenBranch (CAPO.c:1426) frees s-&gt;puppies + s-&gt;leafbranch by hand on exactly two early error branches but leaks them on the others after acquiring s-&gt;puppies (kv64bAllocate :1407) and s-&gt;leafbranch. CAPOMergeWorkers (CAPO.c:446) acquires wp (a kv64 puppy table holding every worker subdir's mmapped run) plus mbuf and leaks them on post-acquisition call() errors. Plus a benign-but-wrong logical double-unmap: capospotreplace (CAPO.c:692) does mapped=NULL on its LOCAL copy, so the caller capospotfilecb (CAPO.c:855) FILEUnMaps the same booked descriptor again. From the MEM sweep.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-044.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>MEM-044: spot — LSM open/merge leaks on error; SPOTOpenBranch hand-free + a logical double-unmap</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 spot's LSM plumbing acquires several mmaps/fds/heap tables then uses bare call()s that early-return without freeing them. SPOTOpenBranch (CAPO.c:1426) frees s-&gt;puppies + s-&gt;leaf_branch by hand on exactly two early error branches but leaks them on the others after acquiring s-&gt;puppies (kv64bAllocate :1407) and s-&gt;leaf_branch. CAPOMergeWorkers (CAPO.c:446) acquires <code>wp</code> (a kv64 puppy table holding every worker subdir's mmapped run) plus mbuf and leaks them on post-acquisition call() errors. Plus a benign-but-wrong logical double-unmap: capo_spot_replace (CAPO.c:692) does <code>mapped=NULL</code> on its LOCAL copy, so the caller capo_spot_file_cb (CAPO.c:855) FILEUnMaps the same booked descriptor again. From the <a href="MEM.html">MEM</a> sweep.
 </p>
@@ -37,5 +46,16 @@ Uniform release of the LSM resources on every error; fix the local-NULL so the d
 <li>Route SPOTOpenBranch + CAPOMergeWorkers error exits through one cleanup that frees puppies/leaf_branch/wp/mbuf.</li>
 <li>Make capo_spot_replace's unmap authoritative (clear the caller's pointer or don't unmap in the caller).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

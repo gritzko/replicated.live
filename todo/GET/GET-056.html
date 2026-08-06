@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-056: merge gate keys on kind, must key on content — text weaves, binary/link/gitlink reset</title>
+<meta property="og:title" content="GET-056: merge gate keys on kind, must key on content — text weaves, binary/link/gitlink reset">
+<meta property="og:description" content="The D5 dirty-merge gate at be/verbs/get/get.js:1053 reads kind === &quot;f&quot;, reusing checkout's leaf-kind (f/x/l/s) as a mergeability test. Two wrongs follow: a dirty EXECUTABLE text file (x) is clean-reset (its uncommitted edit silently dropped), and a dirty BINARY 644 file (f) is fed to weave3 as if it were text.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-056.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-056: merge gate keys on kind, must key on content — text weaves, binary/link/gitlink reset</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The D5 dirty-merge gate at <a href="./be/verbs/get/get.js:1053.html">get.js:1053</a> reads <code>kind === &quot;f&quot;</code>, reusing checkout's leaf-kind (f/x/l/s) as a mergeability test. Two wrongs follow: a dirty EXECUTABLE text file (<code>x</code>) is clean-reset (its uncommitted edit silently dropped), and a dirty BINARY 644 file (<code>f</code>) is fed to weave3 as if it were text.
+</p>
+<ul>
+<li>RULING (gritzko, 2026-07-28): symlink, gitlink or BINARY get reset; anything parseable (any text) gets MERGED.</li>
+<li><code>kindOf()</code> exists to tell checkout.materialise how to WRITE a leaf; mergeability is a property of the BYTES, not the mode bit.</li>
+<li>The binary predicate already exists: <code>isBinary</code> at <a href="./be/views/diff/diff.js:75.html">diff.js:75</a> — git's heuristic, NUL in the first 8000 bytes — but it is file-private.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Gate becomes: regular file (<code>f</code> or <code>x</code>) AND no side of the 3-way (base, on-disk, target) is binary → weave3; everything else clean-resets exactly as <code>l</code>/<code>s</code> do today.</li>
+<li>Export <code>isBinary</code> from <a href="./be/views/diff/diff.js.html">diff.js</a> and reuse it — no second copy of the heuristic.</li>
+<li>Repro tests FIRST, both directions: (a) dirty executable TEXT file across a get → must weave, edit preserved; (b) dirty BINARY 644 file across a get → must clean-reset, no fences/garbage.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>weave3</code> and <code>checkout.materialise(..., {kind})</code> already pass kind through unchanged — nothing downstream needs touching.</li>
+<li>No other tests edited; no commits (put + report only, per <a href="/meta/work.html">work</a>).</li>
+<li>Minimal diff: the gate condition + the isBinary export + the new tests.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Binary check covers base, on-disk and target bytes: weave3 output is only meaningful when all three sides are text.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro (a): dirty exec text file is clean-reset today (edit lost)</li>
+<li><a href="./ .html"> </a> repro (b): dirty binary 644 file is woven today (garbage/fences)</li>
+<li><a href="./ .html"> </a> export isBinary from views/diff/diff.js</li>
+<li><a href="./ .html"> </a> gate: <code>(kind === &quot;f&quot; || kind === &quot;x&quot;) &amp;&amp; !anySideBinary</code></li>
+<li><a href="./ .html"> </a> full test run</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

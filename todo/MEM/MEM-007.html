@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-007</title>
+<title>MEM-007 DONT: file.write(string) writes from advanced slice, invalid-frees interior pointer (js/io.cpp)</title>
+<meta property="og:title" content="MEM-007 DONT: file.write(string) writes from advanced slice, invalid-frees interior pointer (js/io.cpp)">
+<meta property="og:description" content="JABCioFileWrite's string branch calls JABCutf8CopyStringValue, which advances the slice HEAD past the written data (utf8.cpp:68 into0+=fact); on return ta0 points after the decoded string. The code then write(fd, ta0, $len(ta)) (reads the uninitialized tail with the leftover length) and $u8free((u8csp)ta) frees ta0 — an interior pointer, not the allocation base. The goal is to keep the written range and the allocation base distinct.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-007.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>MEM-007: file.write(string) writes from advanced slice, invalid-frees interior pointer (js/io.cpp)</h1>
+<h1>MEM-007 <a href="./DONT.html">DONT</a>: file.write(string) writes from advanced slice, invalid-frees interior pointer (js/io.cpp)</h1>
+<div>
+<p>
+Now: DONT
+</p>
+</div>
 <p>
 <code>JABCioFileWrite</code>'s string branch calls <code>JABCutf8CopyStringValue</code>, which advances the slice HEAD past the written data (<code>utf8.cpp:68</code> <code>into[0]+=fact</code>); on return <code>ta[0]</code> points after the decoded string. The code then <code>write(fd, ta[0], $len(ta))</code> (reads the uninitialized tail with the <strong>leftover</strong> length) and <code>$u8free((u8csp)ta)</code> frees <code>ta[0]</code> — an interior pointer, not the allocation base. The goal is to keep the written range and the allocation base distinct.
 </p>
@@ -39,5 +48,16 @@ Describe written data, free the base.
 <li>Make <code>JABCutf8CopyStringValue</code> leave the slice over WRITTEN bytes (<code>into[1]=into[0]+fact</code>, do not advance <code>into[0]</code>), or keep a separate <code>base</code> in <code>JABCioFileWrite</code> for both <code>write()</code> (<code>[base,base+fact)</code>) and <code>free()</code>; add a <code>if(str==NULL) return</code> guard.</li>
 <li>In <code>JABCutf8Encode</code>: <code>JSStringRelease(str)</code> after <code>JSStringGetUTF8CString</code>, and check <code>bytes!=NULL</code>/throw on alloc failure.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

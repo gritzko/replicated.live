@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIFF-014: jab diff &lt;sub&gt;/&lt;file&gt; from the parent root renders WHOLLY-ADDED — scoped diff still not sub-aware on the CLI path</title>
+<meta property="og:title" content="DIFF-014: jab diff &lt;sub&gt;/&lt;file&gt; from the parent root renders WHOLLY-ADDED — scoped diff still not sub-aware on the CLI path">
+<meta property="og:description" content="Repro 2026-07-19 in //ABC-020 (fresh clone of ///jab/ tip f562778c; dog/ is a mounted sub, attached pin-form //ABC-020/dog#f66c798c): - jab diff dog/abc/FILE.h | cat → @@ -1,0 +1,723 @@, every line + — old side EMPTY; the file's real delta is +3 lines. Untouched dog/abc/FILE.c shows the same (+1,1419), so ANY path under the sub renders wholly-added. - Unscoped jab diff | cat at the parent root is CORRECT for the same file (+3); in-sub cd dog &amp;&amp; jab diff abc/FILE.h | cat is CORRECT (@@ -1,720 +1,723 @@). Only the parent-root path-scoped invocation is broken. - /todo/DIFF/DIFF-011 DONE fixed exactly this class for the diff: view's wt+path branch via subMountSplit (views/diff/diff.js:548-558, :597-622, landed 34574bce) — so either (a) the CLI jab diff &lt;path&gt; routes through a branch subMountSplit does not cover, or (b) subMountSplit's mount detection fails on this tree (candidates: dog undeclared in the parent's .gitmodules — the GET-037 undeclared-gitlink class; or the NEW pin-form attach row breaking the recurse.isMount/be.find gate). Diagnose WHICH before touching anything. - Ruling lead (2026-07-10, BE-039): a verb arg's full path climbs to the nearest SUB and re-anchors the run via be.find — the in-sub invocation works, so re-anchoring dog/abc/FILE.h at the dog/ mount may be the correct fix shape, rather than more blobAtTree patching. Also establish WHICH jsrc actually served the verb (jab resolves jsrc/ up the path from the cwd) so the fix lands in the code that ran.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIFF/DIFF-014.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIFF-014: <code>jab diff &lt;sub&gt;/&lt;file&gt;</code> from the parent root renders WHOLLY-ADDED — scoped diff still not sub-aware on the CLI path</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Repro 2026-07-19 in <code>//ABC-020</code> (fresh clone of <code>///jab/</code> tip f562778c; <code>dog/</code> is a mounted sub, attached pin-form <code>//ABC-020/dog#f66c798c</code>):
+</p>
+<ul>
+<li><code>jab diff dog/abc/FILE.h | cat</code> → <code>@@ -1,0 +1,723 @@</code>, every line <code>+</code> — old side EMPTY; the file's real delta is +3 lines. Untouched <code>dog/abc/FILE.c</code> shows the same (<code>+1,1419</code>), so ANY path under the sub renders wholly-added.</li>
+<li>Unscoped <code>jab diff | cat</code> at the parent root is CORRECT for the same file (+3); in-sub <code>cd dog &amp;&amp; jab diff abc/FILE.h | cat</code> is CORRECT (<code>@@ -1,720 +1,723 @@</code>). Only the parent-root path-scoped invocation is broken.</li>
+<li><a href="/todo/DIFF/DIFF-011.html">DIFF-011</a> <a href="./DONE.html">DONE</a> fixed exactly this class for the <code>diff:</code> view's wt+path branch via subMountSplit (views/diff/diff.js:548-558, :597-622, landed 34574bce) — so either (a) the CLI <code>jab diff &lt;path&gt;</code> routes through a branch subMountSplit does not cover, or (b) subMountSplit's mount detection fails on this tree (candidates: <code>dog</code> undeclared in the parent's .gitmodules — the GET-037 undeclared-gitlink class; or the NEW pin-form attach row breaking the <code>recurse.isMount</code>/<code>be.find</code> gate). Diagnose WHICH before touching anything.</li>
+<li>Ruling lead (2026-07-10, BE-039): a verb arg's full path climbs to the nearest SUB and re-anchors the run via <code>be.find</code> — the in-sub invocation works, so re-anchoring <code>dog/abc/FILE.h</code> at the <code>dog/</code> mount may be the correct fix shape, rather than more blobAtTree patching. Also establish WHICH jsrc actually served the verb (jab resolves jsrc/ up the path from the cwd) so the fix lands in the code that ran.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>jab diff &lt;sub&gt;/&lt;file&gt;</code> and <code>jab diff &lt;sub&gt;/&lt;dir&gt;</code> from the parent root emit byte-identical output to the in-sub invocation (<code>cd &lt;sub&gt; &amp;&amp; jab diff &lt;rest&gt;</code>), for dirty, clean, and untouched-under-sub paths.</li>
+<li>Unscoped <code>jab diff</code> recursion and non-sub scoped paths stay byte-identical to today; DIFF-011's test/diff/14-sub-file-baseline stays green.</li>
+<li>Repro-first: extend the test/diff/14 harness shape with the parent-root scoped case — red before the fix, green after.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Reuse the existing mount resolution (subMountSplit / recurse.isMount / be.find + store.open, or the BE-039 re-anchor climb) — do NOT roll a third resolution path; ALL URI/path resolution stays on the canonical be/core routes.</li>
+<li>Minimal fix; no unrelated edits; no edits to existing tests (new cases are yours); if DIFF-011's range+path parity ruling (parent-tree-only on purpose, diff.js:522-529) is implicated, keep byte-parity with native and report rather than change it.</li>
+<li>Work in a fresh clone in work/DIFF-014 (<code>jab get '///be/'</code>); errors in plain words; suite green.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> establish the actual verb route: which jsrc served <code>jab diff dog/abc/FILE.h</code> in the repro, and which branch of views/diff (or verbs/) the path-scoped CLI hits — cite path:line</li>
+<li><a href="./ .html"> </a> red repro in the test/diff harness: parent wt + mounted sub + 3-line edit in a sub file; parent-root <code>jab diff &lt;sub&gt;/&lt;file&gt;</code> asserts a real inline diff (red today: wholly-added)</li>
+<li><a href="./ .html"> </a> diagnose (a) vs (b): routing gap around subMountSplit, or mount-detection failure (.gitmodules declaration? pin-form attach vs recurse.isMount/be.find?) — evidence, then fix at the established site</li>
+<li><a href="./ .html"> </a> cover <code>&lt;sub&gt;/&lt;dir&gt;</code> scoping and an untouched file under the sub (must diff empty, not wholly-added)</li>
+<li><a href="./ .html"> </a> full suite green incl. test/diff/14-sub-file-baseline; report byte-parity of parent-root vs in-sub output on the repro tree shape</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

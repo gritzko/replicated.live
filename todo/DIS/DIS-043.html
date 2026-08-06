@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DIS-043</title>
+<title>DIS-043: dog/WEAVE merge — concurrent-insert order is path-dependent</title>
+<meta property="og:title" content="DIS-043: dog/WEAVE merge — concurrent-insert order is path-dependent">
+<meta property="og:description" content="The new identity-keyed dog/WEAVE WEAVEMerge (the DIS-003 robust fix, built in DOG-003) recovers every revision correctly for linear and simple-fork histories, but a criss-cross / repeated merge still duplicates tokens: recovering an ancestor yields extra, doubled tokens (e.g. aae → a/aa/e, root r → rr). The DWEAVE fuzzer (below) finds these in seconds. Root cause is the ordering of concurrent inserts, not identity matching — two sibling tokens get ordered oppositely on two merge paths, so a later merge of those weaves desyncs the two-pointer and cascades into duplication. The real fix is a stable, path-independent order key per token (causal position + commit-id tiebreak, CRDT/RGA-style), not a counter recomputed in weave order. Links: DIS-003 (parent), DOG-003 (engine).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-043.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>DIS-043: dog/WEAVE merge — concurrent-insert order is path-dependent</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The new identity-keyed <code>dog/WEAVE</code> <code>WEAVEMerge</code> (the <a href="DIS-003.html">DIS-003</a> robust fix, built in <a href="../DOG/DOG-003.html">DOG-003</a>) recovers every revision correctly for linear and simple-fork histories, but a criss-cross / repeated merge still duplicates tokens: recovering an ancestor yields extra, doubled tokens (e.g. <code>aae</code> → <code>a/aa/e</code>, root <code>r</code> → <code>rr</code>). The DWEAVE fuzzer (below) finds these in seconds. Root cause is the ordering of <strong>concurrent</strong> inserts, not identity matching — two sibling tokens get ordered oppositely on two merge paths, so a later merge of those weaves desyncs the two-pointer and cascades into duplication. The real fix is a stable, path-independent order key per token (causal position + commit-id tiebreak, CRDT/RGA-style), not a counter recomputed in weave order. Links: <a href="DIS-003.html">DIS-003</a> (parent), <a href="../DOG/DOG-003.html">DOG-003</a> (engine).
 </p>
@@ -50,5 +59,16 @@ Two sub-bugs fixed on beagle.new (pending the DOG-003 gate), both pinned by test
 <li><code>NOROOM</code>: <code>wnext_diff</code>/<code>WEAVEMerge</code> sized the <code>rms</code> column at 8 B/token (one remover), but a token carried through a merge holds <code>count + N</code> removers; folding a third revision onto a merge overflowed. Capacities now budget existing remover bytes + one fresh remover/token. Pinned by <code>dog/test/WEAVE01</code> <code>merge_fold_multirm</code>.</li>
 <li>LCS → identity merge-JOIN: <code>WEAVEMerge</code> matched shared tokens with an LCS (<code>BRAMu64s</code>) over identity hashes, which pairs only a subsequence and dropped matches whose context diverged — the original <code>abac</code>/<code>aabc</code> class. Now pairs every equal-identity token. (Concurrent ordering remains open — this ticket.)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

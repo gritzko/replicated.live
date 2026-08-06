@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BE-005</title>
+<title>BE-005: unify verb output via the shared ROWS/HUNK state banner</title>
+<meta property="og:title" content="BE-005: unify verb output via the shared ROWS/HUNK state banner">
+<meta property="og:description" content="be's verb reports must all speak ONE output model: stream color to a tty, compose ONE H hunk per (sub)module for --tlv, each headed by a pale-yellow state banner — built through ROWS, never per-site fprintf or a pasted THEMEBANNER. Today only the per-file tables comply; the summaries / confirmations (be get, post/put, status!) still print raw. This is the umbrella; per-verb wiring lands as the child tickets GET-026, STATUS-001, POST-018.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BE/BE-005.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,63 +16,38 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>BE-005: unify verb output via the shared ROWS/HUNK state banner</h1>
+<div>
+<p>
+Now: STALE
+</p>
+</div>
 <p>
 <code>be</code>'s verb reports must all speak ONE output model: stream color to a tty, compose ONE <code>H</code> hunk per (sub)module for <code>--tlv</code>, each headed by a pale-yellow <strong>state banner</strong> — built through ROWS, never per-site <code>fprintf</code> or a pasted <code>THEME_BANNER</code>. Today only the per-file tables comply; the summaries / confirmations (<code>be get</code>, post/put, <code>status!</code>) still print raw. This is the umbrella; per-verb wiring lands as the child tickets <a href="../GET/GET-026.html">GET-026</a>, <a href="../STATUS/STATUS-001.html">STATUS-001</a>, <a href="../POST/POST-018.html">POST-018</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>ROWS (<code>dog/ROWS.c</code>) is the shared builder: <code>status</code> opens it with<p>
-<code>uri=&quot;status:&quot;</code> + <code>ROWS_BATCH</code> → one banner hunk (<code>SNIFF.exe.c:457</code>).
-</p>
-</li>
-<li>The get checkout opens ROWS with <code>empty_uri</code> + <code>ROWS_MODE_KEYED</code>;<p>
-<code>rows_stream_one</code> (<code>ROWS.c:172</code>) zeroes ts/verb/uri → flat, NO banner.
-</p>
-</li>
-<li>The banner IS the hunk header, single-sourced via <code>HUNKu8sFeedBanner</code><p>
-keyed on the hunk's <code>uri/verb/ts</code> and the global <code>HUNKMode</code>.
-</p>
-</li>
-<li>Verb-bang already wired (<code>DOG_BANG_VERB</code>/<code>cli.bang</code>); <code>be x!</code> ≡<p>
-<code>be x --force</code> — the <a href="../STATUS/STATUS-001.html">STATUS-001</a> extended toggle.
-</p>
-</li>
+<li>ROWS (<code>dog/ROWS.c</code>) is the shared builder: <code>status</code> opens it with <code>uri=&quot;status:&quot;</code> + <code>ROWS_BATCH</code> → one banner hunk (<code>SNIFF.exe.c:457</code>).</li>
+<li>The get checkout opens ROWS with <code>empty_uri</code> + <code>ROWS_MODE_KEYED</code>; <code>rows_stream_one</code> (<code>ROWS.c:172</code>) zeroes ts/verb/uri → flat, NO banner.</li>
+<li>The banner IS the hunk header, single-sourced via <code>HUNKu8sFeedBanner</code> keyed on the hunk's <code>uri/verb/ts</code> and the global <code>HUNKMode</code>.</li>
+<li>Verb-bang already wired (<code>DOG_BANG_VERB</code>/<code>cli.bang</code>); <code>be x!</code> ≡ <code>be x --force</code> — the <a href="../STATUS/STATUS-001.html">STATUS-001</a> extended toggle.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>ONE model for every verb report: ROWS table, state-banner header,<p>
-<code>HUNKMode</code>-keyed (color stream on tty / one <code>H</code> hunk on <code>--tlv</code>).
-</p>
-</li>
-<li>Streaming ROWS emits the module banner ONCE before the first row (and<p>
-on an empty result) — so KEYED (get/clone) matches BATCH (status).
-</p>
-</li>
-<li>Per-verb wiring split into <a href="../GET/GET-026.html">GET-026</a>, <a href="../STATUS/STATUS-001.html">STATUS-001</a>, <a href="../POST/POST-018.html">POST-018</a>; each<p>
-links back here and reuses the same ROWS banner path.
-</p>
-</li>
+<li>ONE model for every verb report: ROWS table, state-banner header, <code>HUNKMode</code>-keyed (color stream on tty / one <code>H</code> hunk on <code>--tlv</code>).</li>
+<li>Streaming ROWS emits the module banner ONCE before the first row (and on an empty result) — so KEYED (get/clone) matches BATCH (status).</li>
+<li>Per-verb wiring split into <a href="../GET/GET-026.html">GET-026</a>, <a href="../STATUS/STATUS-001.html">STATUS-001</a>, <a href="../POST/POST-018.html">POST-018</a>; each links back here and reuses the same ROWS banner path.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>No copy-pasted banner code at call sites — only the ROWS module-hunk<p>
-header. <code>dog/ROWS</code> + <code>sniff/</code> only; no <code>abc/</code> (<a href="">abc-changes-need-review</a>).
-</p>
-</li>
+<li>No copy-pasted banner code at call sites — only the ROWS module-hunk header. <code>dog/ROWS</code> + <code>sniff/</code> only; no <code>abc/</code> (<a href="./abc-changes-need-review.html">abc-changes-need-review</a>).</li>
 <li>Preserve live streaming for big clones (KEYED); do NOT force BATCH.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Core change in <code>dog/ROWS.c</code>: a streaming table with a non-empty<p>
-<code>uri/verb/ts</code> emits its banner once (and on empty), vs zeroing it — the single enabler every child depends on.
-</p>
-</li>
-<li>Children supply only their banner uri + rows; the banner, mode-keying<p>
-and <code>--tlv</code> relay stay in ROWS/HUNK.
-</p>
-</li>
+<li>Core change in <code>dog/ROWS.c</code>: a streaming table with a non-empty <code>uri/verb/ts</code> emits its banner once (and on empty), vs zeroing it — the single enabler every child depends on.</li>
+<li>Children supply only their banner uri + rows; the banner, mode-keying and <code>--tlv</code> relay stay in ROWS/HUNK.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -85,5 +64,16 @@ and <code>--tlv</code> relay stay in ROWS/HUNK.
 <ul>
 <li>(pending land)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

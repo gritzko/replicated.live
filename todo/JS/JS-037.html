@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-037</title>
+<title>JS-037: pack feed — base by offset|hash (REFDELTA emit)</title>
+<meta property="og:title" content="JS-037: pack feed — base by offset|hash (REFDELTA emit)">
+<meta property="og:description" content="Teach the pack writer to name a delta base by SHA (REFDELTA), not only by in-log offset (OFSDELTA). The missing primitive for a pure-JS thin-pack builder: a delta against a base the peer already has (not shipped). Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-037.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,76 +15,66 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-037 <a href="./MED.html">MED</a>: pack feed — base by offset|hash (REF_DELTA emit)</h1>
+<h1>JS-037: pack feed — base by offset|hash (REF_DELTA emit)</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
 <p>
 Teach the pack writer to name a delta base by SHA (REF_DELTA), not only by in-log offset (OFS_DELTA). The missing primitive for a pure-JS thin-pack builder: a delta against a base the peer already has (not shipped). Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>git.pack</code> <code>feed(type, content, prevOff, out)</code> emits raw or OFS_DELTA;<p>
-<code>dog/git/PACK.c::PACKu8sFeedObj</code> &quot;NEVER emits REF_DELTA&quot; by design (a stored-log concern). A thin pack on the wire DOES carry REF_DELTA.
-</p>
-</li>
-<li>Builds on <a href="JS-035.html">JS-035</a> (deflate) + <a href="JS-036.html">JS-036</a> (delta.encode) conceptually; the<p>
-dog/git writer does both internally, so no JS-API dep, but shares the files.
-</p>
-</li>
+<li><code>git.pack</code> <code>feed(type, content, prevOff, out)</code> emits raw or OFS_DELTA; <code>dog/git/PACK.c::PACKu8sFeedObj</code> &quot;NEVER emits REF_DELTA&quot; by design (a stored-log concern). A thin pack on the wire DOES carry REF_DELTA.</li>
+<li>Builds on <a href="JS-035.html">JS-035</a> (deflate) + <a href="JS-036.html">JS-036</a> (delta.encode) conceptually; the dog/git writer does both internally, so no JS-API dep, but shares the files.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>feed</code> base ref is offset (default → OFS) OR hash (→ REF_DELTA): pass the base<p>
-bytes + its 20-byte sha; the record names the base by sha, body is the delta.
-</p>
-</li>
-<li>Read-back parity: <code>git.pack</code> reader sees <code>ref-delta</code>, <code>_pack_ref</code> == base sha,<p>
-apply(delta, base) == target.
-</p>
-</li>
+<li><code>feed</code> base ref is offset (default → OFS) OR hash (→ REF_DELTA): pass the base bytes + its 20-byte sha; the record names the base by sha, body is the delta.</li>
+<li>Read-back parity: <code>git.pack</code> reader sees <code>ref-delta</code>, <code>_pack_ref</code> == base sha, apply(delta, base) == target.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>The REF framing is a <code>dog/git/PACK.c</code> writer (<code>PACKu8sFeedObjRef</code>) — NO manual<p>
-record framing in the binding (CLAUDE.md). Binding is pure marshalling.
-</p>
-</li>
+<li>The REF framing is a <code>dog/git/PACK.c</code> writer (<code>PACKu8sFeedObjRef</code>) — NO manual record framing in the binding (CLAUDE.md). Binding is pure marshalling.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>C: add <code>PACKu8sFeedObjRef(log,type,content,base,base_sha,cur_off,delta,out?)</code><p>
-to <code>dog/git/PACK.{c,h}</code> — REF header + 20-byte sha + deflated delta (reuses DELTEncode+ZINFDeflate internally, like the OFS path).
-</p>
-</li>
-<li>Binding: <code>_pack_feed_ref(buf,off,type,content,base,baseSha,delta)-&gt;end</code> leaf;<p>
-JS <code>feed</code> dispatches — number base → OFS (today), <code>{hash,base}</code> → REF.
-</p>
-</li>
+<li>C: add <code>PACKu8sFeedObjRef(log,type,content,base,base_sha,cur_off,delta,out?)</code> to <code>dog/git/PACK.{c,h}</code> — REF header + 20-byte sha + deflated delta (reuses DELTEncode+ZINFDeflate internally, like the OFS path).</li>
+<li>Binding: <code>_pack_feed_ref(buf,off,type,content,base,baseSha,delta)-&gt;end</code> leaf; JS <code>feed</code> dispatches — number base → OFS (today), <code>{hash,base}</code> → REF.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first ctest (a <code>packref.js</code> beside the jab runtime <code>test/pack.js</code>):<p>
-  feed a raw base + a REF_DELTA target naming it by sha; reader reports   ref-delta + sha; apply==target. Borrow a real base/target object pair from   <code>test/get/</code> fixtures.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Implement the dog/git writer + binding + <code>feed</code> dispatch; update<p>
-  <code>dog/git/PACK.md</code>/<code>dog/git/INDEX.md</code> + the runtime <code>INDEX.md</code>/<code>API.md</code>.   NB the binding moved: <code>js/pack.hpp</code>/<code>js/cont.cpp</code> → the jab runtime repo   <code>pack.hpp</code>/<code>cont.cpp</code> (JAB-001/JAB-005); PACK.c is libdog (dog/ submodule).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first ctest (a <code>packref.js</code> beside the jab runtime <code>test/pack.js</code>): feed a raw base + a REF_DELTA target naming it by sha; reader reports ref-delta + sha; apply==target. Borrow a real base/target object pair from <code>test/get/</code> fixtures.</li>
+<li class="open"><input type="checkbox" disabled> Implement the dog/git writer + binding + <code>feed</code> dispatch; update <code>dog/git/PACK.md</code>/<code>dog/git/INDEX.md</code> + the runtime <code>INDEX.md</code>/<code>API.md</code>. NB the binding moved: <code>js/pack.hpp</code>/<code>js/cont.cpp</code> → the jab runtime repo <code>pack.hpp</code>/<code>cont.cpp</code> (JAB-001/JAB-005); PACK.c is libdog (dog/ submodule).</li>
+</ul>
+<ul>
+<li>2026-07-10 revision: still OPEN — jab/dog/git/PACK.c:135 &quot;REF_DELTA is never emitted&quot;, no PACKu8sFeedObjRef exists; jab/pack.hpp:97 _pack_feed is raw|OFS only</li>
+<li>jab/test/packidx.js:134 still hand-builds REF bytes since the JS writer can't emit them; get+push both full-pack (GIT-012/020), nothing ships thin packs yet</li>
 </ul>
 <h3>Blockers</h3>
 <ul class="todo">
 <li class="done"><input type="checkbox" checked disabled> ← <a href="JS-036.html">JS-036</a> (landed <code>742c06ff</code>; shared files since moved to the jab repo).</li>
 </ul>
 <ul>
-<li>Re-verified OPEN 2026-07-07: <code>dog/git/PACK.c:135</code> still &quot;REF_DELTA is never<p>
-emitted into a stored log&quot;; no <code>PACKu8sFeedObjRef</code>, <code>feed</code> is OFS-only. The landed push path (<a href="../GIT/GIT-019.html">GIT-019</a>) full-packs, so nothing ships thin packs yet.
-</p>
-</li>
+<li>Re-verified OPEN 2026-07-07: <code>dog/git/PACK.c:135</code> still &quot;REF_DELTA is never emitted into a stored log&quot;; no <code>PACKu8sFeedObjRef</code>, <code>feed</code> is OFS-only. The landed push path (<a href="../GIT/GIT-019.html">GIT-019</a>) full-packs, so nothing ships thin packs yet.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>(pending)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

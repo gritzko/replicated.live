@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-032: fsw drops the wd, swallows queue overflow</title>
+<meta property="og:title" content="JAB-032: fsw drops the wd, swallows queue overflow">
+<meta property="og:description" content="FSWDir throws away inotifyaddwatch's return and FSWDrain never reports ev-&gt;wd, so every event reaches JS as {wd: 0, name} and the watcher fd is the only dir identity left — JAB-031 shipped one wfd + one pol handler + one drain Buf PER DIR, which its own Goals said it would not do. FSWDrain also skips every ev-&gt;len == 0 record, and that is exactly INQOVERFLOW: a burst past maxqueuedevents drops events silently, so a consumer cannot tell &quot;nothing changed&quot; from &quot;I lost your changes&quot;. Both block the per-repo cache, BRO-043.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-032.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-032: fsw drops the wd, swallows queue overflow</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+<p>
+Ask: gritzko Env: Linux (inotify); kqueue path untested
+</p>
+</div>
+<p>
+<code>FSWDir</code> throws away <code>inotify_add_watch</code>'s return and <code>FSWDrain</code> never reports <code>ev-&gt;wd</code>, so every event reaches JS as <code>{wd: 0, name}</code> and the watcher fd is the only dir identity left — <a href="JAB-031.html">JAB-031</a> shipped one wfd + one pol handler + one drain Buf PER DIR, which its own Goals said it would not do. <code>FSWDrain</code> also skips every <code>ev-&gt;len == 0</code> record, and that is exactly <code>IN_Q_OVERFLOW</code>: a burst past <code>max_queued_events</code> drops events silently, so a consumer cannot tell &quot;nothing changed&quot; from &quot;I lost your changes&quot;. Both block the per-repo cache, <a href="../BRO/BRO-043.html">BRO-043</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The consumer is the per-repo cache in the long-lived pager/watcher process: a bucket per repo dir (<code>jab/dog/abc</code>, <code>jab/dog</code>, <code>jab</code>), dropped with its ancestors on any event under it.
+</p>
+<ul>
+<li><code>dog/abc/FSW.c:36-40</code> — <code>int wd = inotify_add_watch(...)</code>, checked for <code>&lt; 0</code>, then discarded; <code>FSWDir</code> returns bare <code>ok64</code>.</li>
+<li><code>dog/abc/FSW.c:59</code> — <code>if (cb &amp;&amp; ev-&gt;len &gt; 0)</code>: <code>IN_Q_OVERFLOW</code> (wd <code>-1</code>, len 0) and <code>IN_IGNORED</code> (watch died) are both dropped on the floor.</li>
+<li><code>jab/fsw.cpp</code> packs a <code>wd</code> slot into the drain Buf and <code>fsw.records</code> parses it, but the value is a hardcoded 0 — the framing is right, the source is missing.</li>
+<li><code>jab/INDEX.md</code> already carries the admission as an owed fix-up: &quot;one wfd per dir is the only way to tell dirs apart&quot;.</li>
+<li>inotify's own model is one fd for a whole tree with <code>wd</code> as the dir key; the current shape burns one fd + one JS handler + one 64 KiB Buf per watched dir against <code>RLIMIT_NOFILE</code>, on top of the 8192 <code>max_user_watches</code> cap.</li>
+<li>The mask (<code>FSW.c:37-39</code>) has no <code>IN_DELETE_SELF</code>/<code>IN_MOVE_SELF</code>, so a watched dir being removed or renamed away is invisible to the cache.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+One watcher fd for many dirs, every event attributable to the dir it fell in, and a loud signal when the kernel dropped events.
+</p>
+<ul>
+<li><code>FSWDir(wfd, path, i32 *wd)</code> returns the watch descriptor; <code>FSWcb</code> takes <code>(i32 wd, u8cs name, void *ctx)</code>.</li>
+<li><code>FSWDrain</code> reports <code>len == 0</code> records instead of skipping them: overflow surfaces as <code>wd == -1</code> + empty name, a dead watch as its own <code>wd</code> + empty name.</li>
+<li><code>fsw.dir(wfd, path)</code> returns the wd to JS; <code>fsw.watch</code> keeps ONE wfd, a <code>wd -&gt; dir</code> map and one drain Buf, arming further dirs on the same watcher.</li>
+<li>Repro-first: two dirs on one wfd, a file created in each, the two records carry the two distinct wds <code>fsw.dir</code> handed back (red today — both 0).</li>
+<li><code>dog/abc/FSW.{h,md}</code>, <code>dog/abc/INDEX.md</code>, <code>jab/API.md</code>, <code>jab/INDEX.md</code> updated; the INDEX.md fix-up note goes away.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Two repos: <code>dog/abc/FSW.{c,h,md}</code> + <code>dog/abc/INDEX.md</code> in <a href="https://github.com/gritzko/libdog">dog</a>, the binding and docs in <a href="https://github.com/gritzko/beagle-ext">jab</a>. Every native op keeps its <code>call()</code> (<a href="JAB-008.html">JAB-008</a>).
+</p>
+<ul>
+<li><code>FSWDir</code>'s signature change is source-breaking; <code>FSW.c</code> has no consumer outside <code>jab/fsw.cpp</code>, so the blast radius is the binding.</li>
+<li>kqueue has no watch descriptor: report the pinned dir fd as the <code>wd</code> (it is already the dir's identity there) and keep the empty-name rescan contract.</li>
+<li>No macOS/BSD box here — the kqueue arm ships read-only-reviewed, flagged untested, exactly as <a href="JAB-031.html">JAB-031</a> left it.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Consumer contract (gritzko 2026-08-02): the watcher starts off the event loop once the project root is known, and the cache object exists only under a live watcher — a failed start leaves it <code>null</code> and everything is recomputed, so a missed event can never be read back as truth.</li>
+<li><code>wd</code> is <code>i32</code>, not <code>u32</code>: <code>-1</code> is the overflow sentinel and must not wrap into a plausible descriptor.</li>
+<li>Overflow is a record, not an error return — the drain must deliver the events it already read before the loss marker, and the JS consumer decides (drop everything) rather than the leaf.</li>
+<li><code>IN_DELETE_SELF</code>/<code>IN_MOVE_SELF</code> added to the mask: a vanished repo dir is a cache drop, and the resulting <code>IN_IGNORED</code> rides the same len-0 path.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./v.html">v</a> repro <code>test/fsw.js</code> §4: two dirs, one wfd — red pre-fix (&quot;fsw.dir returned no wd: 0,0&quot;); §5: 16384 creates — red pre-fix (&quot;16384 records, no overflow marker&quot;), re-verified by toggling the <code>ev-&gt;len &gt; 0</code> skip back -<a href="./v.html">v</a> <code>FSW.h</code>/<code>FSW.c</code> inotify: <code>FSWDir</code> out-param wd, <code>FSWcb</code> wd arg, len-0 records delivered, <code>FSWOVERFLOW</code> const, mask += DELETE_SELF/MOVE_SELF -<a href="./v.html">v</a> <code>FSW.c</code> kqueue arm: the pinned dir fd IS the wd (<code>ev.ident</code> hands it back); untested, no BSD box -<a href="./v.html">v</a> <code>jab/fsw.cpp</code>: <code>fsw.dir</code> returns wd, collector packs the real wd, record parsed as <code>getInt32</code> -<a href="./v.html">v</a> JS bundle: <code>fsw.watch</code> on ONE lazily-armed wfd + <code>wd -&gt; dir</code> map + <code>subs</code> table; <code>fsw.OVERFLOW</code>, <code>fsw.onoverflow</code>, <code>fsw.stop</code> -<a href="./v.html">v</a> docs: <code>FSW.h</code>, <code>FSW.md</code>, <code>dog/abc/INDEX.md</code>, <code>jab/API.md</code>, <code>jab/INDEX.md</code> (fix-up note dropped) -<a href="./v.html">v</a> ctest 108/108 green (was 108/108 at base) incl. <code>JABCfsw</code>; <code>test/fsw.js</code> runs in 0.25s
+</p>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Arming is LAZY (gritzko 2026-08-02): a dir nobody cached has nothing to invalidate, so a cache MISS is what subscribes — no eager tree walk, no <code>max_user_watches</code> wall on dirs no view ever touched.</li>
+<li>Ordering the consumer owes: arm the dir BEFORE computing the value, then store. Arm-after-compute leaves a window where a write lands between the read and <code>fsw.dir</code> and the entry is born stale.</li>
+<li>Overflow is now reported but not prevented: <code>max_queued_events</code> (16384) is a <code>sysctl</code>, and a <code>ninja</code> build under a watched tree will hit it.</li>
+<li><code>pol.init()</code> wipes the fd table and silently strands the shared watcher — the bundle still thinks it is registered, so events stop arriving with no error. <code>fsw.stop()</code> must precede any <code>pol.init()</code>; found by the §6 test, which failed exactly that way.</li>
+<li>A Buf too small for the burst still throws out of the raw <code>fsw.drain</code> (<a href="JAB-031.html">JAB-031</a>'s contract, unchanged); the <code>fsw.watch</code> sugar catches it and routes it to the same lost-events path, since &quot;my Buf overflowed&quot; and &quot;the kernel's queue overflowed&quot; are one fact to a cache.</li>
+<li><code>fsw.unwatch(wd)</code> forgets a dir but cannot remove the kernel watch (<code>FSWUndir</code> deleted under <a href="../ABC/ABC-013.html">ABC-013</a>), so its events keep arriving unclaimed — a long-lived watcher over a churning tree leaks kernel watches until <code>fsw.stop()</code>.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+Implemented in wt <code>//JAB-032</code> (base <code>///jab/#2980a754</code>), NOT staged and NOT committed — awaiting inspection.
+</p>
+<ul>
+<li><code>//JAB-032</code>: <code>fsw.cpp</code>, <code>API.md</code>, <code>INDEX.md</code>, <code>test/fsw.js</code>.</li>
+<li><code>//JAB-032/dog/abc</code>: <code>FSW.c</code>, <code>FSW.h</code>, <code>FSW.md</code>, <code>INDEX.md</code>.</li>
+<li>Suggested messages, one per repo: <code>JAB-032: one wfd per tree, report queue overflow</code>.</li>
+<li><code>//JAB-032/dog/abc/Bx.h</code> <code>bAllocate</code>: typed malloc replaces the <code>Balloc</code> <code>u8**</code> laundering — strict aliasing hoisted the head load in C++ TUs and <code>memset(NULL)</code>'d (<code>JABCindex</code>/<code>JABCpackidx</code> segfaults; 107/107 after). Suggested message: <code>JAB-032: bAllocate stores the block in its own type</code>. May also cure the optimized-build <code>listTopics</code> segfault — same miscompile class.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABC-022: gcc 15.2 Release -Warray-bounds false positive on the MSET sift-down</title>
+<meta property="og:title" content="ABC-022: gcc 15.2 Release -Warray-bounds false positive on the MSET sift-down">
+<meta property="og:description" content="Release build of jab is no longer warning-clean on gcc 15.2: the inlined MSETu64DownZ child probe hright is flagged as OOB when instantiated from test/MSET.c's 2-slot runs. The read is short-circuit-guarded by right &lt; n and dead at runtime, so this is a diagnostic bug, not a memory bug. It matters because ABC-017 bought a 0-warning build and the same class was already papered over twice in test code (MSETl, PAGEtest) by padding local arrays — padding does not generalize to a genuinely 2-run heap.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/ABC/ABC-022.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ABC-022: gcc 15.2 Release -Warray-bounds false positive on the MSET sift-down</h1>
+<div>
+<p>
+Now: OPEN Sev: LOW
+</p>
+</div>
+<p>
+Release build of <code>jab</code> is no longer warning-clean on gcc 15.2: the inlined <code>MSETu64_DownZ</code> child probe <code>h[right][0]</code> is flagged as OOB when instantiated from <code>test/MSET.c</code>'s 2-slot <code>runs</code>. The read is short-circuit-guarded by <code>right &lt; n</code> and dead at runtime, so this is a diagnostic bug, not a memory bug. It matters because <a href="ABC-017.html">ABC-017</a> bought a 0-warning build and the same class was already papered over twice in test code (<code>MSETl</code>, <code>PAGEtest</code>) by padding local arrays — padding does not generalize to a genuinely 2-run heap.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>gcc 15.2.0, <code>cmake -GNinja -DCMAKE_BUILD_TYPE=Release</code>, target <code>dog/abc/test/MSETtest</code>, build otherwise clean (383/383):</li>
+<li><code>MSETx.h:17:36: warning: array subscript 4 is outside array bounds of 'const u64 *[2][2]'</code>, inlined <code>MSETu64TopZ</code> (<code>MSETx.h:78</code>) ← <code>MSETk</code> (<code>test/MSET.c:459</code>); note &quot;at offset 32 into object 'runs' of size 32&quot; (<code>test/MSET.c:452</code>).</li>
+<li>Decode: the subscript is in <code>const u64 *</code> units, so offset 32 = <code>h[right][0]</code> with <code>right == 2</code> — the first sift-down (<code>i=0</code>, <code>left=1</code>, <code>right=2</code>) one past <code>u64cs runs[2]</code>.</li>
+<li>Guarded: <code>MSETx.h:17</code> reads <code>h[right]</code> only under <code>right &lt; n</code>, <code>n = $len(heap)</code> = the live run count; every other index (<code>j</code>, <code>left</code>) is bounded the same way. Nothing can read past <code>n</code>.</li>
+<li>Why gcc loses it: <code>MSETu64AdvZ</code> writes <code>heap[1]</code> (<code>MSETx.h:116</code>) inside <code>MSETk</code>'s loop, killing the value range for <code>n</code> at the inlined use; the object size stays known (32 B), so the guarded path is not provably dead.</li>
+<li>Prior art, same class, already worked around in tests: <code>test/MSET.c:471-475</code> (<code>MSETl</code> pads <code>runs[2]</code> for a 1-run heap) and <code>test/PAGE.c:213-218</code> (<code>u8b</code> wrapped in a full <code>page</code>).</li>
+<li>Warning flags come from <code>dog/abc/CMakeLists.txt:10</code> (<code>-Wall -Wextra</code>), landed by <a href="ABC-017.html">ABC-017</a>; MSETx.h was last reworked by <a href="ABC-021.html">ABC-021</a> (Yx/SORT tie loop).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>gcc 15.2 Release builds <code>MSETtest</code> with zero warnings, with no change to <code>MSETx.h</code> runtime semantics and no test rewritten to hide the diagnostic behind fake array padding.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Do NOT &quot;fix&quot; it by widening <code>runs[2]</code> in <code>MSETk</code> — the heap genuinely holds 2 runs; padding lies about the fixture.</li>
+<li>Must stay clean on clang Release/ASAN too (see <a href="ABC-017.html">ABC-017</a> lanes).</li>
+<li>Repro first (<code>meta/work.mkd</code> §3): a build of <code>MSETtest</code> at -O2 that emits the warning, and the same build silent after the fix.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Open — pick one, needs a ruling:<ol>
+<li><code>#pragma GCC diagnostic ignored &quot;-Warray-bounds&quot;</code> around the sift in <code>MSETx.h</code> + a 2-line ABC-022 comment (narrow, but puts a pragma in a hot template header).</li>
+<li><code>-Wno-array-bounds</code> on the <code>MSETtest</code> target only in <code>dog/abc/test/CMakeLists.txt</code> (keeps the header clean, but blinds one test target to real OOB).</li>
+<li>Restructure <code>_DownZ</code> so the child index is not a compile- time constant on the inlined path (e.g. hoist the <code>right</code> probe behind an explicitly range-limited <code>n</code>) — preferred if it works without pessimizing the sift.</li>
+</ol>
+</li>
+<li>Verify whichever option on gcc 15.2 AND clang before landing; option 3 must be confirmed to actually silence gcc, not assumed.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro: minimal -O2 build of MSETtest emitting the warning</li>
+<li class="open"><input type="checkbox" disabled> ruling on 1/2/3 above</li>
+<li class="open"><input type="checkbox" disabled> fix + re-verify Debug/Release x gcc/clang, suites green</li>
+<li class="open"><input type="checkbox" disabled> revisit the <code>MSETl</code>/<code>PAGEtest</code> paddings if 3 lands (they may become unnecessary — remove the fake slots then)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None; test-only fallout, no runtime defect implied.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Not started.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

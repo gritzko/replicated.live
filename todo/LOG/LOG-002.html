@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LOG-002</title>
+<title>LOG-002: jab log:&lt;submodule&gt; logs the SUPER-REPO's gitlink history, not the submodule's own (no sub-mount recursion)</title>
+<meta property="og:title" content="LOG-002: jab log:&lt;submodule&gt; logs the SUPER-REPO's gitlink history, not the submodule's own (no sub-mount recursion)">
+<meta property="og:description" content="From the journal root, be log:be (C) lists the be SUBMODULE's own commits (4bf8e3dc, f9180c2e, f3389efa, … — the beagle-ext JS history). jab log:be (JS) instead lists the JOURNAL/super-repo's commits that bumped the be gitlink (793e1161 &quot;bump be-&gt;4bf8e3dc…&quot;, 46f8ea42, ee286166, … back to 5a25305c &quot;the new be/ submodule beagle-ext&quot;) — the super-repo's history PATH-FILTERED to be, NOT the submodule's. jab log:./be is identically wrong; cd be &amp;&amp; jab log: is CORRECT (== C). So jab's log:&lt;sub&gt; never descends into the sub mount. The history isn't corrupt — it's the WRONG repo's. C is correct; JS-only fix. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/LOG/LOG-002.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>LOG-002: jab <code>log:&lt;submodule&gt;</code> logs the SUPER-REPO's gitlink history, not the submodule's own (no sub-mount recursion)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 From the journal root, <code>be log:be</code> (C) lists the <code>be</code> SUBMODULE's own commits (<code>4bf8e3dc</code>, <code>f9180c2e</code>, <code>f3389efa</code>, … — the beagle-ext JS history). <code>jab log:be</code> (JS) instead lists the JOURNAL/super-repo's commits that bumped the <code>be</code> gitlink (<code>793e1161 &quot;bump be-&gt;4bf8e3dc…&quot;</code>, <code>46f8ea42</code>, <code>ee286166</code>, … back to <code>5a25305c &quot;the new be/ submodule beagle-ext&quot;</code>) — the super-repo's history PATH-FILTERED to <code>be</code>, NOT the submodule's. <code>jab log:./be</code> is identically wrong; <code>cd be &amp;&amp; jab log:</code> is CORRECT (== C). So jab's <code>log:&lt;sub&gt;</code> never descends into the sub mount. The history isn't corrupt — it's the WRONG repo's. C is correct; JS-only fix. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -19,70 +28,37 @@ From the journal root, <code>be log:be</code> (C) lists the <code>be</code> SUBM
 <h3>Context</h3>
 <ul>
 <li>Repro (cwd = journal root):<ul>
-<li><code>be log:be</code>  → <code>4bf8e3dc f9180c2e f3389efa 4febec96 aef4caef …</code> (the be<p>
-submodule's OWN commits — CORRECT).
-</p>
-</li>
-<li><code>jab log:be</code> → <code>793e1161 46f8ea42 ee286166 fda1986f 7543ca39 … 5a25305c</code><p>
-(the JOURNAL's commits that touched the <code>be</code> gitlink — <code>jab log:</code> MINUS the commits that didn't bump <code>be</code>, e.g. ticket-only <code>b2bc09bf</code>/<code>297231c5</code> are gone).
-</p>
-</li>
+<li><code>be log:be</code>  → <code>4bf8e3dc f9180c2e f3389efa 4febec96 aef4caef …</code> (the be submodule's OWN commits — CORRECT).</li>
+<li><code>jab log:be</code> → <code>793e1161 46f8ea42 ee286166 fda1986f 7543ca39 … 5a25305c</code> (the JOURNAL's commits that touched the <code>be</code> gitlink — <code>jab log:</code> MINUS the commits that didn't bump <code>be</code>, e.g. ticket-only <code>b2bc09bf</code>/<code>297231c5</code> are gone).</li>
 <li><code>jab log:./be</code> → identical to <code>jab log:be</code> (also wrong).</li>
 <li><code>cd be &amp;&amp; jab log:</code> → <code>4bf8e3dc f9180c2e …</code> (CORRECT — matches C).</li>
 </ul>
 </li>
-<li><code>be/views/log/log.js</code> always operates on the CURRENT repo: handler <code>:401</code><p>
-<code>const repo = (ctx &amp;&amp; ctx.repo) || null;</code>; <code>:411</code> <code>store.open(repo.storePath, repo.project)</code>; <code>:413</code> <code>resolveTip(k, repo, parsed)</code>. <code>parseArg</code> (<code>:44</code>) takes a <code>path</code> but it is only ever used as a path WITHIN <code>ctx.repo</code> (the path-filtered walk / leaf descent) — log.js NEVER detects that <code>path</code> is a submodule MOUNT and switches into the sub's store.
-</p>
-</li>
-<li>Sub-mount detection ALREADY exists and is used by other views: <code>shared/subs.js</code><p>
-(+ <code>status.js</code>, <code>tree.js</code>, <code>blob.js</code> consume it). log.js is the outlier that doesn't. So <code>jab status</code> / <code>jab tree:be</code> descend, but <code>jab log:be</code> does not.
-</p>
-</li>
+<li><code>be/views/log/log.js</code> always operates on the CURRENT repo: handler <code>:401</code> <code>const repo = (ctx &amp;&amp; ctx.repo) || null;</code>; <code>:411</code> <code>store.open(repo.storePath, repo.project)</code>; <code>:413</code> <code>resolveTip(k, repo, parsed)</code>. <code>parseArg</code> (<code>:44</code>) takes a <code>path</code> but it is only ever used as a path WITHIN <code>ctx.repo</code> (the path-filtered walk / leaf descent) — log.js NEVER detects that <code>path</code> is a submodule MOUNT and switches into the sub's store.</li>
+<li>Sub-mount detection ALREADY exists and is used by other views: <code>shared/subs.js</code> (+ <code>status.js</code>, <code>tree.js</code>, <code>blob.js</code> consume it). log.js is the outlier that doesn't. So <code>jab status</code> / <code>jab tree:be</code> descend, but <code>jab log:be</code> does not.</li>
 <li>C <code>be log:&lt;sub&gt;</code> recurses into the sub mount and logs its history — the parity target.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>jab log:&lt;sub&gt;</code> for a submodule-mount path (<code>be</code>, <code>./be</code>) logs the SUB's own<p>
-history (open the sub's store/repo, walk ITS tips) — byte-parity with C <code>be log:&lt;sub&gt;</code> and with <code>cd &lt;sub&gt; &amp;&amp; jab log:</code>.
-</p>
-</li>
+<li><code>jab log:&lt;sub&gt;</code> for a submodule-mount path (<code>be</code>, <code>./be</code>) logs the SUB's own history (open the sub's store/repo, walk ITS tips) — byte-parity with C <code>be log:&lt;sub&gt;</code> and with <code>cd &lt;sub&gt; &amp;&amp; jab log:</code>.</li>
 <li><code>jab log:&lt;sub&gt;/&lt;path&gt;</code> logs <code>&lt;path&gt;</code> WITHIN the sub (strip the sub prefix, recurse).</li>
 <li>A NON-submodule path keeps the current-repo behavior (no regression).</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Reuse <code>shared/subs.js</code> mount detection (the <code>status.js</code>/<code>tree.js</code> precedent) — do<p>
-NOT hand-roll a second gitlink/<code>.be</code>-file probe. JS-only (C is correct).
-</p>
-</li>
-<li>Preserve <a href="LOG-001.html">LOG-001</a> inside the sub: first-parent spine + non-spine greyed parents,<p>
-and the BRO-006 <code>U</code> commit links. Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17).
-</p>
-</li>
+<li>Reuse <code>shared/subs.js</code> mount detection (the <code>status.js</code>/<code>tree.js</code> precedent) — do NOT hand-roll a second gitlink/<code>.be</code>-file probe. JS-only (C is correct).</li>
+<li>Preserve <a href="LOG-001.html">LOG-001</a> inside the sub: first-parent spine + non-spine greyed parents, and the BRO-006 <code>U</code> commit links. Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open) In log.js, BEFORE <code>resolveTip</code>/the walk: if <code>parsed.path</code> resolves to (or<p>
-starts at) a submodule mount, swap the working repo to the sub's <code>{storePath, project}</code> (via <code>shared/subs.js</code>) and strip the sub prefix from the remaining path. Mirror exactly how <code>tree.js</code>/<code>status.js</code> pick the sub repo so the three stay consistent.
-</p>
-</li>
-<li>(open) Whether the seam lives in log.js or in a shared `resolveRepoForPath(ctx,<p>
-path)` helper that tree/status/blob could also share (de-dup) — prefer the smallest change that matches the existing views, factor later.
-</p>
-</li>
+<li>(open) In log.js, BEFORE <code>resolveTip</code>/the walk: if <code>parsed.path</code> resolves to (or starts at) a submodule mount, swap the working repo to the sub's <code>{storePath, project}</code> (via <code>shared/subs.js</code>) and strip the sub prefix from the remaining path. Mirror exactly how <code>tree.js</code>/<code>status.js</code> pick the sub repo so the three stay consistent.</li>
+<li>(open) Whether the seam lives in log.js or in a shared <code>resolveRepoForPath(ctx, path)</code> helper that tree/status/blob could also share (de-dup) — prefer the smallest change that matches the existing views, factor later.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: a fixture super-repo + a <code>.be</code>-mount sub with ≥2 own commits; assert<p>
- <code>jab log:&lt;sub&gt;</code> lists the SUB's shas (not the super-repo's gitlink-bump shas), and  equals <code>cd &lt;sub&gt; &amp;&amp; jab log:</code> / C <code>be log:&lt;sub&gt;</code>. RED today (super-repo history).
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Detect the sub mount (shared/subs.js) and recurse: open the sub store, resolve its<p>
- tip, walk its history; strip the sub prefix for <code>log:&lt;sub&gt;/&lt;path&gt;</code>.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: a fixture super-repo + a <code>.be</code>-mount sub with ≥2 own commits; assert <code>jab log:&lt;sub&gt;</code> lists the SUB's shas (not the super-repo's gitlink-bump shas), and equals <code>cd &lt;sub&gt; &amp;&amp; jab log:</code> / C <code>be log:&lt;sub&gt;</code>. RED today (super-repo history).</li>
+<li class="open"><input type="checkbox" disabled> Detect the sub mount (shared/subs.js) and recurse: open the sub store, resolve its tip, walk its history; strip the sub prefix for <code>log:&lt;sub&gt;/&lt;path&gt;</code>.</li>
 <li class="open"><input type="checkbox" disabled> Non-sub path unchanged; be/ suite green; LOG-001 spine/grey + U links preserved.</li>
 </ul>
 <h3>Blockers and bummers</h3>
@@ -91,26 +67,22 @@ path)` helper that tree/status/blob could also share (de-dup) — prefer the sma
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED: be <code>97e2ffaf</code> (log.js) + be/test <code>755a5ea6</code>. Root cause confirmed by<p>
-repro: <code>jab log:vendor/sub</code> listed only the super-repo's <code>mount sub</code> gitlink- bump commit; the handler always opened <code>ctx.repo</code> and path-filtered it.
-</p>
-</li>
-<li>SEAM (<code>:399</code> <code>descendSub</code>): BEFORE <code>resolveTip</code>/the walk, if <code>parsed.path</code><p>
-is (or descends into) a sub MOUNT, swap to the sub's repo + strip the prefix. Mounts via <code>subs.mountWtDir</code> + the <code>&lt;wt&gt;/&lt;sub&gt;/.be</code>-is-a-regular-file gate and re-discovers with <code>be.find(subWt)</code> — EXACTLY tree.js/status.js's seam, no hand-rolled gitlink probe. Loops so a nested mount descends fully. The banner keeps the FULL original path (<code>bannerPath</code>) for C-parity.
-</p>
-</li>
-<li><code>jab log:be</code> now == C <code>be log:be</code> == <code>cd be &amp;&amp; jab log:</code>. <code>log:&lt;sub&gt;/&lt;path&gt;</code><p>
-strips the prefix → file history WITHIN the sub. Non-sub path unchanged.
-</p>
-</li>
-<li>TEST <code>be/test/log/sub/run.sh</code> (glob → <code>be-js-log-sub</code>, no CMakeLists edit):<p>
-pure-be parent mounting a 3-commit sub (à la parity/status-subs build_fixture); asserts sub-tip present / parent-tip absent, byte-parity with C <code>be log:&lt;sub&gt;</code> + <code>cd sub &amp;&amp; jab log:</code>, the <code>./</code> form, <code>log:&lt;sub&gt;/lib.c</code>, non-sub no-regression. RED proved (disabled descent → only <code>mount sub</code>), GREEN after.
-</p>
-</li>
-<li>LOG-001 (spine + greyed non-spine) + BRO-006 <code>U</code> <code>commit:?&lt;sha&gt;</code> links render<p>
-for the sub — branchHistory/appendRow are store-agnostic, unchanged. Suite green (sole reds = stale WILL_FAIL xfails: bro-universal + 2 diff, JS-071's, all pass-but-marked). Stopped before commit.
-</p>
-</li>
+<li>LANDED: be <code>97e2ffaf</code> (log.js) + be/test <code>755a5ea6</code>. Root cause confirmed by repro: <code>jab log:vendor/sub</code> listed only the super-repo's <code>mount sub</code> gitlink- bump commit; the handler always opened <code>ctx.repo</code> and path-filtered it.</li>
+<li>SEAM (<code>:399</code> <code>descendSub</code>): BEFORE <code>resolveTip</code>/the walk, if <code>parsed.path</code> is (or descends into) a sub MOUNT, swap to the sub's repo + strip the prefix. Mounts via <code>subs.mountWtDir</code> + the <code>&lt;wt&gt;/&lt;sub&gt;/.be</code>-is-a-regular-file gate and re-discovers with <code>be.find(subWt)</code> — EXACTLY tree.js/status.js's seam, no hand-rolled gitlink probe. Loops so a nested mount descends fully. The banner keeps the FULL original path (<code>bannerPath</code>) for C-parity.</li>
+<li><code>jab log:be</code> now == C <code>be log:be</code> == <code>cd be &amp;&amp; jab log:</code>. <code>log:&lt;sub&gt;/&lt;path&gt;</code> strips the prefix → file history WITHIN the sub. Non-sub path unchanged.</li>
+<li>TEST <code>be/test/log/sub/run.sh</code> (glob → <code>be-js-log-sub</code>, no CMakeLists edit): pure-be parent mounting a 3-commit sub (à la parity/status-subs build_fixture); asserts sub-tip present / parent-tip absent, byte-parity with C <code>be log:&lt;sub&gt;</code> + <code>cd sub &amp;&amp; jab log:</code>, the <code>./</code> form, <code>log:&lt;sub&gt;/lib.c</code>, non-sub no-regression. RED proved (disabled descent → only <code>mount sub</code>), GREEN after.</li>
+<li>LOG-001 (spine + greyed non-spine) + BRO-006 <code>U</code> <code>commit:?&lt;sha&gt;</code> links render for the sub — branchHistory/appendRow are store-agnostic, unchanged. Suite green (sole reds = stale WILL_FAIL xfails: bro-universal + 2 diff, JS-071's, all pass-but-marked). Stopped before commit.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

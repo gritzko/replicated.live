@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-034: the ULOG handle is a bare pointer-as-Number — no finalizer, no ownership, no guard</title>
+<meta property="og:title" content="JAB-034: the ULOG handle is a bare pointer-as-Number — no finalizer, no ownership, no guard">
+<meta property="og:description" content="ulogopen heap-boxes a booked mmap plus its wh128 sidecar and hands the raw pointer to JS as a Number. A Number owns nothing: drop it and the mapping, its fd and the sidecar leak for the life of the process — GC cannot reclaim what it was never told about. The reverse cast is unguarded too, so any JS number reaches raw memory. Found while measuring /todo/JAB/JAB-033; today's two callers happen to close correctly, so this is a LATENT defect of the binding contract, not a live leak.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-034.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-034: the ULOG handle is a bare pointer-as-Number — no finalizer, no ownership, no guard</h1>
+<div>
+<p>
+Now: OPEN Sev: MED Ask: gritzko Env: webkitgtk-4.1 JSC C API, jab/ulog.hpp Rev: ///jab#8335085b Rep: ///jab See: JAB-033
+</p>
+</div>
+<p>
+<code>_ulog_open</code> heap-boxes a booked mmap plus its <code>wh128</code> sidecar and hands the raw pointer to JS as a *<strong>Number</strong>*. A Number owns nothing: drop it and the mapping, its fd and the sidecar leak for the life of the process — GC cannot reclaim what it was never told about. The reverse cast is unguarded too, so any JS number reaches raw memory. Found while measuring <a href="/todo/JAB/JAB-033.html">JAB-033</a>; today's two callers happen to close correctly, so this is a LATENT defect of the binding contract, not a live leak.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Read-only inspection of <code>///jab#8335085b</code> on 2026-08-05, out of the <a href="/todo/JAB/JAB-033.html">JAB-033</a> measurement pass; the mmap side of the same question is <a href="/todo/ABC/ABC-020.html">ABC-020</a>.
+</p>
+<ul>
+<li><code>ulog.hpp:251</code> — the box is <code>typedef struct { u8bp data; wh128bp idx; } jabc_ulog</code>: a booked file mapping AND a sidecar index, both real OS resources.</li>
+<li><code>ulog.hpp:274-278</code> — <code>calloc</code> the box, <code>ULOGOpen</code> into it, return <code>JSValueMakeNumber(ctx, (double)(size_t)h)</code>. No JSClassRef, no private data, no finalizer callback.</li>
+<li>Contrast <code>io.cpp:632</code>, where a mapping goes out as a typed array WITH a <code>JABCMapFree</code> deallocator — there GC is at least an idempotent backstop. The ULOG handle has none at all.</li>
+<li><code>ulog.hpp:281-286</code> — <code>JABCulogHandle</code> runs <code>JSValueToNumber</code> and casts the result straight to <code>jabc_ulog*</code>, guarded only by <code>d &lt;= 0</code>. A stale, wrong or already-closed number is dereferenced: use-after-free or a wild pointer.</li>
+<li><code>ulog.hpp:250</code> says close &quot;frees the box (idempotent — nulls handle)&quot;, but nothing nulls the JS-side Number, so a double close passes the SAME value in twice.</li>
+<li>Consumers today are exception-proof by hand: <code>be/shared/ulog.js:169-188</code> closes on a catch arm, <code>:205-220</code> in a <code>finally</code>. Correctness rests entirely on every future caller repeating that.</li>
+<li>The pointer round-trips through a double — exact only under 2^53, fine now, silently wrong the day it is not.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+The handle OWNS its resources: dropping it on the floor is reclaimable, and a bogus value never reaches raw memory.
+</p>
+<ul>
+<li>Red-first probe: N x <code>_ulog_open</code> with the handle dropped, no close — count <code>/proc/self/maps</code> lines and fds; unbounded today, must plateau.</li>
+<li>A second red probe: pass a stale (closed) and a garbage handle to <code>_ulog_append</code> — must refuse in plain words, never dereference.</li>
+<li>Explicit <code>_ulog_close</code> stays THE deterministic release; GC is only the backstop, never the plan.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Reuse the object shape the map bindings already use (a real JS object with a finalizer, <code>io.cpp:632</code>) — no third handle convention invented for ULOG.</li>
+<li>ABC idioms per <a href="/meta/abc.html">abc</a>; PRO.h in <code>.c</code> files only; errors in plain words, never bare codes.</li>
+<li>Do not change the <code>_ulog_open/_append/_close</code> CALL SHAPE that <code>be/shared/ulog.js</code> writes through without landing the JS side in the same pass — a half-migration breaks every <code>put</code>.</li>
+<li>Keep the pin accounting <a href="/todo/JAB/JAB-033.html">JAB-033</a> adds: a ULOG handle pins a mapping and an fd and must be counted like one.</li>
+<li>Clone <code>///jab/</code> from the main tree per <a href="/meta/work.html">work</a>; stop and report on any clone failure, no improvised fallback.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> red probe: dropped handles leak maps + fds; red today</li>
+<li><a href="./ .html"> </a> red probe: stale / garbage handle must refuse, not dereference</li>
+<li><a href="./ .html"> </a> give the handle a JSClassRef with private data + a finalizer that closes idempotently</li>
+<li><a href="./ .html"> </a> validate the handle on every entry point (<code>_ulog_append/_count/_rowTime/_close</code>)</li>
+<li><a href="./ .html"> </a> count the handle's mapping + fd in the <a href="/todo/JAB/JAB-033.html">JAB-033</a> pin counters</li>
+<li><a href="./ .html"> </a> full suite green, <code>jab/test/ulog_book.js</code> included</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

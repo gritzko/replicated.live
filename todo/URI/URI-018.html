@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>URI-018: cat &lt;path&gt;?#&lt;commit&gt; resolves to a blob that is neither the commit's tree entry nor in the store</title>
+<meta property="og:title" content="URI-018: cat &lt;path&gt;?#&lt;commit&gt; resolves to a blob that is neither the commit's tree entry nor in the store">
+<meta property="og:description" content="Found 2026-07-19 during the /todo/STATUS/STATUS-008 re-investigation, in //STATUS-008-f21 (be clone at base c32ddd17): - jab cat 'verbs/mark/render.js?#c32ddd17' returns blob ce2d06c8, 19107 B. - c32ddd17's ACTUAL tree entry for that path is 2ea3e1bf, 19078 B (verified via store readTreeRecursive; the blob is in the store and equals the on-disk file). - ce2d06c8 is not resolvable via getObject in the store at all — cat fabricated or mis-derived content (~29 B larger; provenance unknown). - Consequence: cat ?#rev cannot be trusted for baseline byte comparisons — it actively misled the STATUS-008 manual verification (and the same idiom was used for the loop.js check earlier the same day, saved only by an independent store-API cross-check).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/URI/URI-018.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>URI-018: <code>cat &lt;path&gt;?#&lt;commit&gt;</code> resolves to a blob that is neither the commit's tree entry nor in the store</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Found 2026-07-19 during the <a href="/todo/STATUS/STATUS-008.html">STATUS-008</a> re-investigation, in <code>//STATUS-008-f21</code> (be clone at base c32ddd17):
+</p>
+<ul>
+<li><code>jab cat 'verbs/mark/render.js?#c32ddd17'</code> returns blob <code>ce2d06c8</code>, 19107 B.</li>
+<li>c32ddd17's ACTUAL tree entry for that path is <code>2ea3e1bf</code>, 19078 B (verified via store readTreeRecursive; the blob is in the store and equals the on-disk file).</li>
+<li><code>ce2d06c8</code> is not resolvable via getObject in the store at all — cat fabricated or mis-derived content (~29 B larger; provenance unknown).</li>
+<li>Consequence: <code>cat ?#rev</code> cannot be trusted for baseline byte comparisons — it actively misled the STATUS-008 manual verification (and the same idiom was used for the loop.js check earlier the same day, saved only by an independent store-API cross-check).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+<code>&lt;path&gt;?#&lt;commit&gt;</code> in cat (and any view sharing the leg) returns EXACTLY the commit's tree-recorded blob bytes, or fails loudly — never other content.
+</p>
+<ul>
+<li>Repro-first: pin the c32ddd17/render.js case shape in a fixture (path whose blob differs between the pinned rev and another rev/wt state); assert cat's bytes hash to the tree entry.</li>
+<li>Root-cause where the resolution diverges: views/cat vs <a href="/todo/URI/URI-016.html">URI-016</a>'s resolve_hash unification — is cat reading a woven/patched reconstruction instead of the tree blob?</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Resolution through be/core/resolve_hash.js only (the mandatory single path) — if cat bypasses or post-processes it, that IS the bug class <a href="./URI-016.html">URI-016</a> exists to end; fix by unifying, not by a cat-local patch.</li>
+<li>The 19107 vs 19078 delta (~29 B) smells like a banner/trailing artifact or an EOL/normalization pass — establish, don't guess.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro fixture + red golden: cat'd bytes vs tree-entry blob sha</li>
+<li class="open"><input type="checkbox" disabled> trace cat's <code>?#rev</code> leg to the divergence point; name file:line</li>
+<li class="open"><input type="checkbox" disabled> route through resolve_hash / tree entry; green; note in <a href="./URI-016.html">URI-016</a></li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

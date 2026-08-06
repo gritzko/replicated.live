@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>POST-020</title>
+<title>POST-020: git-push post path still emits raw stderr printfs</title>
+<meta property="og:title" content="POST-020: git-push post path still emits raw stderr printfs">
+<meta property="og:description" content="The be post ssh://… (git-remote push) path bypasses the BE-005 verb-output ULOG sweep: it prints sniff: N change(s) and the keeper synthetic-coordinate notice as bare fprintf(stderr, …) instead of ULOG rows/summaries. Route both through the shared ROWS machinery like post/put/delete/get/patch already do. See POST-019, BE-005.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/POST/POST-020.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>POST-020: git-push post path still emits raw stderr printfs</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The <code>be post ssh://…</code> (git-remote push) path bypasses the BE-005 verb-output ULOG sweep: it prints <code>sniff: N change(s)</code> and the keeper synthetic-coordinate notice as bare <code>fprintf(stderr, …)</code> instead of ULOG rows/summaries. Route both through the shared ROWS machinery like post/put/delete/get/patch already do. See <a href="POST-019.html">POST-019</a>, <a href="../BE/BE-005.html">BE-005</a>.
 </p>
@@ -21,40 +30,22 @@ The <code>be post ssh://…</code> (git-remote push) path bypasses the BE-005 ve
 <code>be post ssh://localhost/src/dogs</code> against a git remote emits raw stderr lines that should be ULOG (residual of the verb-output sweep).
 </p>
 <ul>
-<li><code>sniff: 0 change(s)</code> — the post change-count summary (<code>sniff/POST.c:2375</code>,<p>
-<code>fprintf(stderr, &quot;sniff: %u change(s)\n&quot;, …)</code>).
-</p>
-</li>
-<li>`keeper: post: branch ?.dogs/ is a be-only synthetic coordinate; pushing to git<p>
-remote &lt;url&gt; default branch<code> — informational notice (</code>keeper/KEEP.exe.c:939`).
-</p>
-</li>
-<li>Both are routine status/progress, not errors — they belong in the <code>post:</code> ROWS<p>
-stream, not bare stderr.
-</p>
-</li>
+<li><code>sniff: 0 change(s)</code> — the post change-count summary (<code>sniff/POST.c:2375</code>, <code>fprintf(stderr, &quot;sniff: %u change(s)\n&quot;, …)</code>).</li>
+<li><code>keeper: post: branch ?.dogs/ is a be-only synthetic coordinate; pushing to git remote &lt;url&gt; default branch</code> — informational notice (<code>keeper/KEEP.exe.c:939</code>).</li>
+<li>Both are routine status/progress, not errors — they belong in the <code>post:</code> ROWS stream, not bare stderr.</li>
 </ul>
 <h3>Goals</h3>
 <p>
 Route the post change-count and the keeper git-push notice through ULOG/ROWS.
 </p>
 <ul>
-<li><code>sniff: N change(s)</code> → a <code>post:</code> summary tail (or fold into the banner), like<p>
-put's staged-count handling.
-</p>
-</li>
-<li>The keeper synthetic-coordinate → git-default-branch notice → a ULOG progress<p>
-row in the active post stream.
-</p>
-</li>
+<li><code>sniff: N change(s)</code> → a <code>post:</code> summary tail (or fold into the banner), like put's staged-count handling.</li>
+<li>The keeper synthetic-coordinate → git-default-branch notice → a ULOG progress row in the active post stream.</li>
 <li>Repro test: a git-remote <code>be post</code> asserts no bare <code>sniff:</code>/<code>keeper:</code> stderr.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li><code>post/13-sub-dryrun-all-issues</code> greps <code>sniff: N change(s)</code> on STDERR to prove<p>
-per-level recursion — repoint it to the new ULOG location if the line moves.
-</p>
-</li>
+<li><code>post/13-sub-dryrun-all-issues</code> greps <code>sniff: N change(s)</code> on STDERR to prove per-level recursion — repoint it to the new ULOG location if the line moves.</li>
 <li>ABC idioms; keeper-side needs ROWS access (<code>dog/ROWS.h</code>). Errors stay (BE-003).</li>
 </ul>
 <h2>WIP</h2>
@@ -74,14 +65,19 @@ per-level recursion — repoint it to the new ULOG location if the line moves.
 </p>
 <h2>Outcome</h2>
 <ul>
-<li>Landed <code>8c7f5f3a</code>: <code>sniff: N change(s)</code> → a <code>post:</code> ROWS summary tail<p>
-(<code>sniff/POST.c</code>); the keeper synthetic-coordinate→git-default-branch notice → a transient-ROWS row (<code>keeper_post_notice</code>, <code>keeper/KEEP.exe.c</code>); <code>beagle/BE.cli.c</code> forwards HUNK/TLV mode so the captured sub-post relays the per-level summary.
-</p>
-</li>
-<li>Repro <code>test/post/25-dot-branch-no-git-wire</code> (real git-wire push asserts no bare<p>
-<code>sniff:</code>/<code>keeper:</code> stderr); <code>post/13</code> <code>change(s)</code> grep repointed. POSTCFLCT false-fire (comment at <code>POST.c:3036</code>, the <a href="POST-006.html">POST-006</a> bug) needed a one-scan <code>--force</code>.
-</p>
-</li>
+<li>Landed <code>8c7f5f3a</code>: <code>sniff: N change(s)</code> → a <code>post:</code> ROWS summary tail (<code>sniff/POST.c</code>); the keeper synthetic-coordinate→git-default-branch notice → a transient-ROWS row (<code>keeper_post_notice</code>, <code>keeper/KEEP.exe.c</code>); <code>beagle/BE.cli.c</code> forwards HUNK/TLV mode so the captured sub-post relays the per-level summary.</li>
+<li>Repro <code>test/post/25-dot-branch-no-git-wire</code> (real git-wire push asserts no bare <code>sniff:</code>/<code>keeper:</code> stderr); <code>post/13</code> <code>change(s)</code> grep repointed. POSTCFLCT false-fire (comment at <code>POST.c:3036</code>, the <a href="POST-006.html">POST-006</a> bug) needed a one-scan <code>--force</code>.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

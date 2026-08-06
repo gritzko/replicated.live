@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-037</title>
+<title>MEM-037: abc/FILE.c — FILEMapFD/FILEBookFD leak the opened fd on internal error (root cause)</title>
+<meta property="og:title" content="MEM-037: abc/FILE.c — FILEMapFD/FILEBookFD leak the opened fd on internal error (root cause)">
+<meta property="og:description" content="The lowest-level mapping primitives leak the file descriptor their wrappers hand them whenever the map/book itself fails. FILEMapRO/FILEMapRW/FILEMapCreate(At) and FILEBook/FILEBookRO/FILEBookAt/FILEBookCreate all call(FILEOpen) to get an fd, then pass it to FILEMapFD (FILE.c:671) / FILEBookFD (FILE.c:781), whose internal error branches return WITHOUT close()-ing that fd. Every per-dir 'leaks the fd on map failure' finding in the 2026-06-11 sweep traces back here, so this is the highest-leverage fix. abc is core — surface the diff for review. From the MEM error-path sweep.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-037.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>MEM-037: abc/FILE.c — FILEMapFD/FILEBookFD leak the opened fd on internal error (root cause)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The lowest-level mapping primitives leak the file descriptor their wrappers hand them whenever the map/book itself fails. FILEMapRO/FILEMapRW/FILEMapCreate(At) and FILEBook/FILEBookRO/FILEBookAt/FILEBookCreate all <code>call(FILEOpen)</code> to get an fd, then pass it to FILEMapFD (FILE.c:671) / FILEBookFD (FILE.c:781), whose internal error branches <code>return</code> WITHOUT <code>close()</code>-ing that fd. Every per-dir 'leaks the fd on map failure' finding in the 2026-06-11 sweep traces back here, so this is the highest-leverage fix. abc is core — surface the diff for review. From the <a href="MEM.html">MEM</a> error-path sweep.
 </p>
@@ -38,5 +47,16 @@ Make the map/book primitives close the fd on every internal error branch.
 <li>Give FILEMapFD/FILEBookFD ownership of the fd: every error <code>return</code> closes it; success keeps it in the book/map descriptor.</li>
 <li>Audit the wrappers so the fd is closed exactly once on each path.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

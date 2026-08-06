@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-062: every curlRun call loses its first flag — io.spawn consumes argv0, so curl never sees -sSf (no --fail, no silence)</title>
+<meta property="og:title" content="BE-062: every curlRun call loses its first flag — io.spawn consumes argv0, so curl never sees -sSf (no --fail, no silence)">
+<meta property="og:description" content="io.spawn(bin, argv) takes argv WITH argv0: io.spawn(&quot;/bin/echo&quot;, &quot;AAA&quot;,&quot;BBB&quot;) runs echo with argv0 AAA and prints BBB. Every other spawn site obeys that — classify() builds argv: keeperBin, verb, sp and sshBin, dest, cmd, bin repeated. curlRun does not: be/shared/wire.js:252 calls io.spawn(CURLBIN, argv) where all four callers pass &quot;-sSf&quot;, &quot;-A&quot;, &quot;git/2.0&quot;, …. So -sSf becomes argv0 and is DROPPED. curl therefore runs without -f: an HTTP 404/500 is written to stdout as a body and returned as success, and without -sS its progress meter goes to stderr on every fetch. Visible in any http clone. Found by the TEST-004 treadmill; method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BE/BE-062.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-062: every <code>curlRun</code> call loses its first flag — <code>io.spawn</code> consumes argv<a href="./0.html">0</a>, so curl never sees <code>-sSf</code> (no <code>--fail</code>, no silence)</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
+<p>
+<code>io.spawn(bin, argv)</code> takes argv WITH argv<a href="./0.html">0</a>: <code>io.spawn(&quot;/bin/echo&quot;, [&quot;AAA&quot;,&quot;BBB&quot;])</code> runs echo with argv0 <code>AAA</code> and prints <code>BBB</code>. Every other spawn site obeys that — <code>classify()</code> builds <code>argv: [keeperBin, verb, sp]</code> and <code>[sshBin, dest, cmd]</code>, bin repeated. <code>curlRun</code> does not: <code>be/shared/wire.js:252</code> calls <code>io.spawn(CURL_BIN, argv)</code> where all four callers pass <code>[&quot;-sSf&quot;, &quot;-A&quot;, &quot;git/2.0&quot;, …]</code>. So <code>-sSf</code> becomes argv0 and is DROPPED. curl therefore runs without <code>-f</code>: an HTTP 404/500 is written to stdout as a body and returned as success, and without <code>-sS</code> its progress meter goes to stderr on every fetch. Visible in any http clone. Found by the <a href="../TEST/TEST-004.html">TEST-004</a> treadmill; method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>be/shared/wire.js:252</code> <code>io.spawn(CURL_BIN, argv)</code> — the only spawn site in <code>be/</code> whose argv omits the binary.</li>
+<li>The four callers all lead with the lost flag: <code>curlPost</code> (<code>:287</code>), <code>fetchHttp</code> (<code>:349</code>), <code>pushHttp</code> (<code>:638</code>), <code>advertRefs</code> (<code>:681</code>) — each <code>[&quot;-sSf&quot;, &quot;-A&quot;, &quot;git/2.0&quot;, …]</code>.</li>
+<li>Convention confirmed 2026-07-27 against jab <code>22bec7d6</code>: <code>io.spawn(&quot;/bin/echo&quot;, [&quot;AAA&quot;,&quot;BBB&quot;])</code> → busybox reports <code>AAA: applet not found</code>; <code>[&quot;echo&quot;,&quot;CCC&quot;]</code> → prints <code>CCC</code>.</li>
+<li>Live evidence: <a href="../TEST/TEST-004.html">TEST-004</a>'s treadmill output carries curl's <code>% Total  % Received …</code> progress meter on every http clone — exactly what <code>-sS</code> exists to suppress.</li>
+<li>Consequence of the missing <code>-f</code>: <code>curlRun</code> only throws on a non-zero curl EXIT. An HTTP error page returns exit 0, so the error body is handed to the pkt-line parser and fails later as a malformed advertisement instead of &quot;the server said 404&quot;.</li>
+<li><code>-A git/2.0</code> and everything after it DO reach curl — only the first element is eaten, so the bug is silent rather than fatal.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+curl receives every flag its caller passed, and an HTTP error surfaces as an HTTP error.
+</p>
+<ul>
+<li><code>curlRun</code> spawns with argv<a href="./0.html">0</a> present: <code>io.spawn(CURL_BIN, [CURL_BIN].concat(argv))</code>, matching <code>classify()</code>'s shape.</li>
+<li><code>-f</code> actually applies, so a 4xx/5xx becomes a plain-words failure naming the URL and the status, not a parse error three layers down.</li>
+<li>A test pins it: a server returning 404 makes <code>jab get http://…</code> fail with a transport error, not a pkt-line complaint.</li>
+<li>Audit the rest of <code>be/</code> for the same slip — <code>io.spawnFds</code> sites (<code>verbs/vim/vim.js:55</code>) already pass the name, but confirm.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>be/</code> JS only — <code>io.spawn</code>'s convention is correct and <code>jab/</code> is not in scope.</li>
+<li>Do not change what the callers pass; the argv lists are right, only the spawn call is wrong.</li>
+<li>Keep the fix separate from <a href="BE-013.html">BE-013</a>'s child/fd lifecycle rework of the same function, or land them together deliberately.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>One-line fix at the spawn site rather than four caller edits: the callers already follow the documented convention for every other spawn.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> Repro test first: a 404-returning stub server; assert today's failure mode, then the fixed one.</li>
+<li><a href="./ .html"> </a> <code>io.spawn(CURL_BIN, [CURL_BIN].concat(argv))</code> in <code>curlRun</code>.</li>
+<li><a href="./ .html"> </a> Check the error message a failed <code>-f</code> produces reads in plain words with the URL and status.</li>
+<li><a href="./ .html"> </a> Grep <code>be/</code> for any other <code>io.spawn</code>/<code>io.spawnFds</code> whose argv omits argv<a href="./0.html">0</a>.</li>
+<li><a href="./ .html"> </a> Confirm the progress meter is gone from an http clone's stderr.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Touches the same function <a href="BE-013.html">BE-013</a> rewrites for child/fd lifecycle — coordinate so one does not clobber the other.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+Not started — filed 2026-07-27 from a <a href="../TEST/TEST-004.html">TEST-004</a> treadmill finding.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

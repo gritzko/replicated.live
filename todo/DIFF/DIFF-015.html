@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIFF-015 DONE: a tokenizer failure silently ERASES a file from the diff — every fold error masks as the &quot;out full&quot; blob-skip</title>
+<meta property="og:title" content="DIFF-015 DONE: a tokenizer failure silently ERASES a file from the diff — every fold error masks as the &quot;out full&quot; blob-skip">
+<meta property="og:description" content="A changed file whose bytes fail the native tokenizer VANISHES from be diff — bare and path-scoped both — with exit 0, no header, no warning, while be status still lists it dirty/staged. Chain: WEAVENext fails with JSTBAD, the jab binding collapses EVERY non-OK into the string weave.fold: failed (out full?) (jab/weave.hpp:189), and views/diff/diff.js:128 swallows anything containing &quot;full&quot; as the over-cap blob-skip. Found 2026-07-29 reviewing MARK-013: verbs/mark/render.js (+37 lines staged) was invisible in the wt diff and the work was nearly judged unchanged/discarded.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIFF/DIFF-015.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIFF-015 <a href="./DONE.html">DONE</a>: a tokenizer failure silently ERASES a file from the diff — every fold error masks as the &quot;out full&quot; blob-skip</h1>
+<div>
+<p>
+Now: DONE Sev: HIGH
+</p>
+</div>
+<p>
+A changed file whose bytes fail the native tokenizer VANISHES from <code>be diff</code> — bare and path-scoped both — with exit 0, no header, no warning, while <code>be status</code> still lists it dirty/staged. Chain: <code>WEAVENext</code> fails with JSTBAD, the jab binding collapses EVERY non-OK into the string <code>weave.fold: failed (out full?)</code> (<code>jab/weave.hpp:189</code>), and <code>views/diff/diff.js:128</code> swallows anything containing &quot;full&quot; as the over-cap blob-skip. Found 2026-07-29 reviewing MARK-013: <code>verbs/mark/render.js</code> (+37 lines staged) was invisible in the wt diff and the work was nearly judged unchanged/discarded.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Trigger content: a JS regex literal with <code>/</code> INSIDE a character class — <a href="/todo/DOG/DOG-021.html">DOG-021</a> (JST ends the literal at that <code>/</code>, derails, JSTBAD). render.js's punct table row <code>{ re: /[[\]()!*_~|\\:.\-+#&amp;&lt;&gt;{}=,;/'&quot;@^</code>]/y ... }` is one; the PRE-MARK-013 render.js carries the same class, so render.js has NEVER wt-diffed.</li>
+<li>Repro (wt <code>work/MARK-013/be</code>): append that one regex line to any healthy tracked file → its whole diff renders EMPTY; without it, a 90-of-101-line rewrite of the same file diffs fine. Prefix-bisect of render.js flips exactly at that line. <code>dogtok &lt;file-with-that-line&gt;.js</code> → <code>Error: JSTBAD</code>.</li>
+<li>Swallow site: <code>diffFile</code> (<code>be/views/diff/diff.js:127-129</code>) <code>catch (e) { if ((&quot;&quot; + e).includes(&quot;full&quot;)) return; throw e; }</code> — intended for the DIFF-010 fixed-buffer overflow, but <code>jab/weave.hpp:188-189</code> throws the SAME <code>weave.fold: failed (out full?)</code> for every <code>WEAVENext</code> failure, so JSTBAD/TOKBAD/any ok64 all match &quot;full&quot;.</li>
+<li>Same masked-skip class as <a href="/todo/DIFF/DIFF-007.html">DIFF-007</a> (C GRAF outtoks overflow → EMPTY) and <a href="/todo/DIFF/DIFF-009.html">DIFF-009</a> (tree diff drops files, exit 0): the diff view has no channel that says &quot;this file changed but could not be rendered&quot;.</li>
+<li>Operator harm: status and diff disagree with zero signal; the only truth was a manual byte-compare of <code>cat:&lt;path&gt;?&lt;base&gt;</code> vs the wt file. Second independent hit: <a href="/todo/DOG/DOG-021.html">DOG-021</a> Context logged the same render.js vanish in July (with <a href="/todo/STATUS/STATUS-008.html">STATUS-008</a>).</li>
+<li>Mechanism nuance from <a href="/todo/DOG/DOG-021.html">DOG-021</a>: the derailed lexer opens a string that runs to EOF, so the fold can ALSO overflow the markup buffer for real — an error code alone cannot fully separate &quot;over cap&quot; from &quot;lexer derail&quot;; the header+notice must therefore cover BOTH skip paths.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A changed file NEVER disappears: when tokenize/fold fails, still emit the <code>--- a/… +++ b/…</code> header plus a one-line notice, and prefer a fallback plain LINE diff (no tokens needed) over hiding the change.</li>
+<li>The binding forwards the real ok64 code (<code>jab/weave.hpp:189</code> includes it in the thrown string); diff.js gates the blob-skip on the GENUINE over-cap code only, never on a substring of a catch-all message.</li>
+<li>The notice is plain words per <a href="/todo/README.html">README</a> norms (e.g. &quot;cannot tokenize verbs/mark/render.js — showing plain line diff&quot;), not a bare C code.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The JST grammar fix itself (slash in a char class) stays <a href="/todo/DOG/DOG-021.html">DOG-021</a> ground — this ticket is the masking + fallback, and must help for ANY future lexer failure, not just this one.</li>
+<li>Touches two repos: <code>jab/weave.hpp</code> (error text/code) and be <code>views/diff/diff.js</code> (gate + fallback); repro-first in the be tree's test arrangement.</li>
+<li>DIFF-010's real over-cap skip must keep working (fold buffers are fixed-size; a genuinely over-dense source still blob-skips, but now says so on stderr).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Ruled (gritzko, 2026-07-29): on a fold failure the diff FALLS BACK to a plain-text line differ — header + plain-words notice + token-free line diff, never a silent skip. The grammar fix wt is <code>//DOG-021-dog</code> (<a href="/todo/DOG/DOG-021.html">DOG-021</a>).</li>
+<li>Ruled (gritzko, 2026-07-29): the fallback REUSES libdog's plain-text lexer <code>TXTT</code> — on a fold failure, retry the same fold with ext <code>&quot;&quot;</code> (DOG-021 measured the failing blob folds fine under <code>&quot;&quot;</code>/<code>txt</code>; dogtok on the poison line as <code>.txt</code> confirms). NO parallel differ: a first <code>//DOG-021-be</code> implementation with a hand-rolled Myers line differ was <code>rm -rf</code>-ed for exactly that.</li>
+<li>The notice stays: header + plain words (e.g. &quot;cannot tokenize &lt;name&gt; — diffing as plain text&quot;) with the TXTT-refolded hunks.</li>
+<li>The <code>jab/weave.hpp</code> ok64-forwarding TODO is NOT in the 2026-07-29 order (be/ and jab/dog only) — stays open here.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Repro: a be test with a tracked file carrying a slash-in-class regex — wt edit must yield a non-empty diff (header + fallback), watched failing first.</li>
+<li class="wontfix"><input type="checkbox" disabled> <del><code>jab/weave.hpp</code>: fold/merge throws carry the ok64 code, distinct over-cap vs tokenizer-fail. Moved to <a href="../CFOLD/CFOLD-002.html">CFOLD-002</a>: that throw is dead code, the live one is <code>jab/cfold.hpp:180</code>.</del></li>
+<li class="done"><input type="checkbox" checked disabled> <code>views/diff/diff.js</code>: catch gates on the over-cap code; other failures → header + notice + plain line-diff fallback.</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Sweep the other &quot;.includes(&quot;full&quot;)&quot;-style gates (merge/alive/produce callers) for the same masking. Moved to <a href="../CFOLD/CFOLD-002.html">CFOLD-002</a> — get/checkout/patch/expected still mask, causing false conflicts.</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Re-check DIFF-009's dropped-files repro once the notice channel exists — same class, may be the same mask. Stays <a href="./DIFF-009.html">DIFF-009</a>'s own ground (native C tree-diff).</del></li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="/todo/DOG/DOG-021.html">DOG-021</a> stays open meanwhile: until fixed, ANY file with a slash-in-class regex tokenizes JSTBAD — with the fallback it will at least show as a plain diff.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>da3cf823 (be): the diff-view fix landed under DOG-021's commit line — <code>views/diff/diff.js</code> TXTT refold plus <code>test/diff/tokfail</code>, both DIFF-015-commented.</li>
+<li>Verified 2026-08-04 at <code>///be#014aa381</code>: bare and path-scoped <code>jab diff</code> both show header + &quot;cannot tokenize … — diffing as plain text&quot; + plain hunks; DIFF-010's over-cap skip still passes.</li>
+<li>Spun off <a href="../CFOLD/CFOLD-002.html">CFOLD-002</a>: the merge-side mask (get/checkout/patch/expected) and the ok64 forwarding, with the false-conflict evidence.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

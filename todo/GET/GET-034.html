@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GET-034</title>
+<title>GET-034: graf/GET.c baseids/tgtids membership maps sized 4096 but GETMAXVERS=200000 → silent id drop (u8bFeed1 SNOROOM) for a file with &gt;4096 versions</title>
+<meta property="og:title" content="GET-034: graf/GET.c baseids/tgtids membership maps sized 4096 but GETMAXVERS=200000 → silent id drop (u8bFeed1 SNOROOM) for a file with &gt;4096 versions">
+<meta property="og:description" content="graf/GET.c builds per-side membership maps baseids / tgtids with only 4096 slots, while the version cap GETMAXVERS is 200000. A file with more than 4096 versions overruns the map: u8bFeed1 returns SNOROOM and the id is SILENTLY DROPPED (no error surfaced), so membership is computed against an incomplete set — a correctness loss, not a crash. Spotted auditing the weave path while fixing PATCH-004; out of that ticket's scope. Method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-034.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -18,64 +22,48 @@
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>graf/GET.c</code> sizes <code>base_ids</code>/<code>tgt_ids</code> at 4096 entries; <code>GET_MAX_VERS</code> = 200000. The<p>
-two limits disagree by ~50x, so any file with &gt;4096 versions exceeds the map.
-</p>
-</li>
-<li>The overflow path is <code>u8bFeed1(...)</code> returning <code>SNOROOM</code> whose result is not gated, so<p>
-the membership id is dropped without a trace (silent wrong answer in get/diff sizing).
-</p>
-</li>
-<li>Found by the PATCH-004 worker (cherry-pick hashlet fix); flagged, not acted on, as it<p>
-is unrelated to the cherry-pick use-after-scope.
-</p>
-</li>
+<li><code>graf/GET.c</code> sizes <code>base_ids</code>/<code>tgt_ids</code> at 4096 entries; <code>GET_MAX_VERS</code> = 200000. The two limits disagree by ~50x, so any file with &gt;4096 versions exceeds the map.</li>
+<li>The overflow path is <code>u8bFeed1(...)</code> returning <code>SNOROOM</code> whose result is not gated, so the membership id is dropped without a trace (silent wrong answer in get/diff sizing).</li>
+<li>Found by the PATCH-004 worker (cherry-pick hashlet fix); flagged, not acted on, as it is unrelated to the cherry-pick use-after-scope.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Membership maps cover the full version range (size to <code>GET_MAX_VERS</code>, or grow on<p>
-demand) so no id is dropped for a large-history file.
-</p>
-</li>
-<li>Any capacity overrun is a LOUD error (checked <code>u8bFeed1</code>/<code>sFeed</code> return), never a<p>
-silent SNOROOM drop.
-</p>
-</li>
+<li>Membership maps cover the full version range (size to <code>GET_MAX_VERS</code>, or grow on demand) so no id is dropped for a large-history file.</li>
+<li>Any capacity overrun is a LOUD error (checked <code>u8bFeed1</code>/<code>sFeed</code> return), never a silent SNOROOM drop.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Native graf. ABC bounds-checking (no fixed cap that just moves the cliff). Repro-first<p>
-(CLAUDE.md §17): a file with &gt;4096 versions exercised through the graf GET path, asserting every membership id is present (RED today). Don't regress small-history get.
-</p>
-</li>
+<li>Native graf. ABC bounds-checking (no fixed cap that just moves the cliff). Repro-first (CLAUDE.md §17): a file with &gt;4096 versions exercised through the graf GET path, asserting every membership id is present (RED today). Don't regress small-history get.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open) Localize the 4096 constant and the <code>u8bFeed1</code> call site in <code>graf/GET.c</code>; decide<p>
-fixed-to-<code>GET_MAX_VERS</code> vs a growable buffer; gate the feed return either way.
-</p>
-</li>
+<li>(open) Localize the 4096 constant and the <code>u8bFeed1</code> call site in <code>graf/GET.c</code>; decide fixed-to-<code>GET_MAX_VERS</code> vs a growable buffer; gate the feed return either way.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
 <li class="open"><input type="checkbox" disabled> Repro-first: a &gt;4096-version file through graf GET; assert membership complete (RED).</li>
-<li class="open"><input type="checkbox" disabled> Size/grow <code>base_ids</code>/<code>tgt_ids</code> and check the feed return (loud on overrun).<p>
-  Audit 2026-07-07 pinpoints (still live): <code>u32bMap(base_ids, 4096)</code>/<code>u32bMap(tgt_ids, 4096)</code> at <code>graf/GET.c:327-328</code>; the unchecked drop is <code>(void)u32bFeed1(base_ids, WEAVE_WT_SRC)</code> at :359 plus the collect-side feeds behind :350/:364; <code>GET_MAX_VERS</code>=200000 at :35 (the u32b* family, not u8bFeed1 as first filed; <code>GET_TREE_MAX_ENTRIES</code> 4096 at :38 is a separate limit).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Size/grow <code>base_ids</code>/<code>tgt_ids</code> and check the feed return (loud on overrun). Audit 2026-07-07 pinpoints (still live): <code>u32bMap(base_ids, 4096)</code>/<code>u32bMap(tgt_ids, 4096)</code> at <code>graf/GET.c:327-328</code>; the unchecked drop is <code>(void)u32bFeed1(base_ids, WEAVE_WT_SRC)</code> at :359 plus the collect-side feeds behind :350/:364; <code>GET_MAX_VERS</code>=200000 at :35 (the u32b* family, not u8bFeed1 as first filed; <code>GET_TREE_MAX_ENTRIES</code> 4096 at :38 is a separate limit).</li>
 <li class="open"><input type="checkbox" disabled> Green: large-history get/diff correct; full ctest.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>None; self-contained. Severity is silent data/correctness loss for very large<p>
-histories, so not urgent but should not stay latent.
-</p>
-</li>
+<li>None; self-contained. Severity is silent data/correctness loss for very large histories, so not urgent but should not stay latent.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>(open) — filed 2026-06-26 from the <a href="../PATCH/PATCH-004.html">PATCH-004</a> audit.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

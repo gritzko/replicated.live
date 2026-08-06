@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ABC-003</title>
+<title>ABC-003: UTF8LENbyte&gt;&gt;4 byte-length table is shifted (multibyte over-counts)</title>
+<meta property="og:title" content="ABC-003: UTF8LENbyte&gt;&gt;4 byte-length table is shifted (multibyte over-counts)">
+<meta property="og:description" content="abc/UTF8.h line 47's static u8 UTF8LEN16 — the byte-length lookup indexed by lead &gt;&gt; 4, used by utf8sDrain1utf8 and by every bro renderer (bro/BRO.c has five nch&gt;&gt;4 call sites for row width / wrap) — is off by one slot, so every multibyte lead byte reports the WRONG length. A 3-byte UTF-8 char (em-dash — = e2 80 94, lead &gt;&gt;4 = 0xE) returns 4 not 3, so a renderer walking bytes over-consumes the following byte. In brorowendpass that byte is the line's \n: the row never breaks there, so the multibyte-ending line and the NEXT line render as ONE row, and the next line ALSO gets its own index row — a duplicated line in colour mode. This is the root cause of BRO-004's CLI repro (be --color diff:ABC.md | cat duplicated 4 lines that each ended a paragraph with —). abc/core change — maintainer-reviewed. See Issues, CLAUDE, BRO-004.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/ABC/ABC-003.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>ABC-003: <code>UTF8_LEN[byte&gt;&gt;4]</code> byte-length table is shifted (multibyte over-counts)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>abc/UTF8.h</code> line 47's <code>static u8 UTF8_LEN[16]</code> — the byte-length lookup indexed by <code>lead &gt;&gt; 4</code>, used by <code>utf8sDrain1utf8</code> and by <strong>every bro renderer</strong> (<code>bro/BRO.c</code> has five <code>n[ch&gt;&gt;4]</code> call sites for row width / wrap) — is <strong>off by one slot</strong>, so every multibyte lead byte reports the WRONG length. A 3-byte UTF-8 char (em-dash <code>—</code> = <code>e2 80 94</code>, lead <code>&gt;&gt;4</code> = <code>0xE</code>) returns <strong>4</strong> not 3, so a renderer walking bytes over-consumes the following byte. In <code>bro_row_end_pass</code> that byte is the line's <code>\n</code>: the row never breaks there, so the multibyte-ending line and the NEXT line render as ONE row, and the next line ALSO gets its own index row — a <strong>duplicated line</strong> in colour mode. This is the root cause of <a href="../BRO/BRO-004.html">BRO-004</a>'s CLI repro (<code>be --color diff:ABC.md | cat</code> duplicated 4 lines that each ended a paragraph with <code>—</code>). abc/core change — maintainer-reviewed. See <a href="../../rule/Issues.html">Issues</a>, <a href="../../CLAUDE.md">CLAUDE</a>, <a href="../BRO/BRO-004.html">BRO-004</a>.
 </p>
@@ -40,18 +49,20 @@ One correct table + a direct test.
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li><strong>LANDED into the abc sub</strong> — abc-sub commit <code>02a23dc3</code> (on synthetic<p>
-<code>?/abc/.dogs</code>) + parent pin <code>cb71e65b</code>. The one-line table fix (<code>{…,1,1,1,1, 2,2, 3, 4}</code>) + a table-driven <code>UTF8test2</code> in <code>abc/test/UTF8.c</code> (8 cases: ASCII / 2-byte Я Ж / 3-byte — カ 漢 / 4-byte 😀 🚀; drains via <code>utf8sDrain1utf8</code>, re-decodes via <code>utf8sDrain32</code>). RED→GREEN confirmed (old table exited 74 <code>&lt;NODATA</code> on multibyte over-count; fixed exits 0); all 42 abc binaries pass.
-</p>
-</li>
-<li>Landing note: a sub-only change lands with the DEFAULT <code>be post -m</code> (fans into<p>
-the sub mount, commits on the dot-branch, bumps the parent pin); <code>--nosub</code> returns POSTNONE for an abc-only change (it opts OUT of the sub fan-out).
-</p>
-</li>
-<li>NB: <a href="../BRO/BRO-004.html">BRO-004</a> Part 2's incoherence was ISOLATED to a separate bro row-emit bug<p>
-(landed <code>2e271665</code>), NOT this table — so the &quot;root cause of BRO-004&quot; framing above overstated it. ABC-003 is a real width-math bug in its own right (still wrong for any multibyte width walk); just not BRO-004's cause.
-</p>
-</li>
+<li><strong>LANDED into the abc sub</strong> — abc-sub commit <code>02a23dc3</code> (on synthetic <code>?/abc/.dogs</code>) + parent pin <code>cb71e65b</code>. The one-line table fix (<code>{…,1,1,1,1, 2,2, 3, 4}</code>) + a table-driven <code>UTF8test2</code> in <code>abc/test/UTF8.c</code> (8 cases: ASCII / 2-byte Я Ж / 3-byte — カ 漢 / 4-byte 😀 🚀; drains via <code>utf8sDrain1utf8</code>, re-decodes via <code>utf8sDrain32</code>). RED→GREEN confirmed (old table exited 74 <code>&lt;NODATA</code> on multibyte over-count; fixed exits 0); all 42 abc binaries pass.</li>
+<li>Landing note: a sub-only change lands with the DEFAULT <code>be post -m</code> (fans into the sub mount, commits on the dot-branch, bumps the parent pin); <code>--nosub</code> returns POSTNONE for an abc-only change (it opts OUT of the sub fan-out).</li>
+<li>NB: <a href="../BRO/BRO-004.html">BRO-004</a> Part 2's incoherence was ISOLATED to a separate bro row-emit bug (landed <code>2e271665</code>), NOT this table — so the &quot;root cause of BRO-004&quot; framing above overstated it. ABC-003 is a real width-math bug in its own right (still wrong for any multibyte width walk); just not BRO-004's cause.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

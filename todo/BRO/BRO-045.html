@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-045 DONE: the pager does not repaint on a terminal resize — the screen stays stale until a keystroke</title>
+<meta property="og:title" content="BRO-045 DONE: the pager does not repaint on a terminal resize — the screen stays stale until a keystroke">
+<meta property="og:description" content="Pager.render() re-reads tty.size(this.fd) on every frame and rows(cols) already re-wraps and re-caches by width, so a resized terminal renders correctly — the FIRST time anything paints it. Nothing paints without a wake: the key loop spins on a 100ms io.read timeout and only leaves the spin for a key, a tick deadline or a CI-badge flip. A resize is none of those, so the frame on screen keeps the old cols/rows until the reader presses something. Add the size change as the THIRD non-key wake condition; the repaint machinery already exists and needs no change.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BRO/BRO-045.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-045 <a href="./DONE.html">DONE</a>: the pager does not repaint on a terminal resize — the screen stays stale until a keystroke</h1>
+<div>
+<p>
+Now: DONE Sev: MED Rep: ///be/
+</p>
+</div>
+<p>
+<code>Pager.render()</code> re-reads <code>tty.size(this.fd)</code> on every frame and <code>rows(cols)</code> already re-wraps and re-caches by width, so a resized terminal renders correctly — the FIRST time anything paints it. Nothing paints without a wake: the key loop spins on a 100ms <code>io.read</code> timeout and only leaves the spin for a key, a <code>tick</code> deadline or a CI-badge flip. A resize is none of those, so the frame on screen keeps the old <code>cols</code>/<code>rows</code> until the reader presses something. Add the size change as the THIRD non-key wake condition; the repaint machinery already exists and needs no change.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Read from the live pager 2026-08-04; no ticket covers it (BRO-036 sizes the elastic <code>B</code> span, it does not repaint).
+</p>
+<ul>
+<li><code>views/bro/pager.js:1466</code> — &quot;VMIN=0 VTIME=1 means io.read returns 0 on a 100ms timeout, so spin until a byte arrives&quot;.</li>
+<li>The spin already breaks WITHOUT a key twice: <code>due &amp;&amp; this._nowMs() &gt;= due</code> (CI-004 live views) and <code>this._ciBadge() !== ci0</code>.</li>
+<li><code>render()</code> (<code>pager.js:432</code>) re-reads <code>tty.size</code> every frame, defaulting 80x24; <code>rows(cols)</code> (<code>pager.js:415</code>) re-wraps whenever <code>cols</code> moves and caches per width.</li>
+<li>jab exposes NO signal API — <code>tty</code> is raw/cook/size/openpty/setSize only, and no SIGWINCH handler exists anywhere in <code>jab/</code>. The 100ms spin is the wake mechanism available, so this needs no <code>///jab</code> change.</li>
+<li>On the alt screen (BRO-027) a shrink lets the terminal reflow what is displayed, so the stale frame is not merely small — it is scrambled.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+A resize repaints the board within one spin tick, with no keystroke and no new binding.
+</p>
+<ul>
+<li>The key spin leaves on a <code>tty.size</code> change, exactly as it leaves on a tick deadline.</li>
+<li>Both axes count: a <code>cols</code> change re-wraps, a <code>rows</code>-only change repaints (viewRows and the bottom status/address bar move).</li>
+<li>The elastic <code>B</code> span (BRO-036) re-fits to the new width, which <code>rows(cols)</code> already does once it re-runs.</li>
+<li>Scroll position survives a resize — the reader stays where they were reading, not snapped to the top.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+The repaint path is not to be rewritten; this is a wake condition, not a render change.
+</p>
+<ul>
+<li>Up to one 100ms tick of latency after the resize is acceptable — do not add a busier spin.</li>
+<li><code>tty.size</code> per spin iteration is an ioctl; call it once per tick, not per inner loop pass, if that reads hot.</li>
+<li>No new jab binding, no signal handler: if the fix seems to need one, stop and report.</li>
+<li>BRO-027's alt-screen enter/exit bytes stay exactly as they are.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>The wake belongs in the inner spin beside <code>_tickDue()</code>/<code>_ciBadge()</code> — same shape, same place, one more <code>break</code>.</li>
+<li>Remember the size the LAST FRAME painted, compare against it; do not compare against a size captured before the spin.</li>
+<li>A <code>rows</code>-only change must still repaint even though the width cache is untouched — key the check on both fields.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: a pty session that renders a board, resizes the pty (<code>tty.setSize</code>), sends NO key, and asserts the next frame carries the new width.</li>
+<li><a href="./ .html"> </a> record the painted size; break the spin when <code>tty.size</code> differs.</li>
+<li><a href="./ .html"> </a> check the scroll offset and <code>pinEnd</code> survive a height change.</li>
+<li><a href="./ .html"> </a> <code>ctest -j16</code> green.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>none known.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

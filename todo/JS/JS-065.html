@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-065</title>
+<title>JS-065: path-traversal / arbitrary write on checkout</title>
+<meta property="og:title" content="JS-065: path-traversal / arbitrary write on checkout">
+<meta property="og:description" content="A malicious git tree drives be get/be patch to write or unlink files OUTSIDE the worktree. Tree-entry names flow byte-for-byte into io.open(..,&quot;c&quot;)/io.symlink/io.unlink with no ../absolute /empty-segment rejection, and ingest runs no fsck. One central guard in GET/PATCH's shared write sink closes it. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-065.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,34 +15,27 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-065 <a href="">CRIT</a>: path-traversal / arbitrary write on checkout</h1>
+<h1>JS-065: path-traversal / arbitrary write on checkout</h1>
+<div>
 <p>
-A malicious git tree drives <code>be get</code>/<code>be patch</code> to write or unlink files OUTSIDE the worktree.  Tree-entry names flow byte-for-byte into <code>io.open(..,&quot;c&quot;)</code>/<code>io.symlink</code>/<code>io.unlink</code> with no <code>..</code>/absolute /empty-segment rejection, and ingest runs no fsck.  One central guard in <a href="">GET</a>/<a href="">PATCH</a>'s shared write sink closes it.  Method: <a href="../../meta/work.html">Issues</a>.
+Now: DONE
+</p>
+</div>
+<p>
+A malicious git tree drives <code>be get</code>/<code>be patch</code> to write or unlink files OUTSIDE the worktree.  Tree-entry names flow byte-for-byte into <code>io.open(..,&quot;c&quot;)</code>/<code>io.symlink</code>/<code>io.unlink</code> with no <code>..</code>/absolute /empty-segment rejection, and ingest runs no fsck.  One central guard in <a href="./GET.html">GET</a>/<a href="./PATCH.html">PATCH</a>'s shared write sink closes it.  Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>shared/store.js:505</code> builds each leaf path as<p>
-<code>prefix + &quot;/&quot; + e.name</code> — <code>e.name</code> is raw git tree-entry bytes.
-</p>
-</li>
+<li><code>shared/store.js:505</code> builds each leaf path as <code>prefix + &quot;/&quot; + e.name</code> — <code>e.name</code> is raw git tree-entry bytes.</li>
 <li><code>shared/util/path.js:25-27</code> <code>join</code> is pure concat: <code>dir+&quot;/&quot;+name</code>.</li>
-<li><code>shared/checkout.js:95-104</code> <code>materialise</code> opens <code>join(wtRoot,rel)</code><p>
-via <code>io.open(full,&quot;c&quot;)</code> / <code>io.symlink</code> with NO name check.
-</p>
-</li>
+<li><code>shared/checkout.js:95-104</code> <code>materialise</code> opens <code>join(wtRoot,rel)</code> via <code>io.open(full,&quot;c&quot;)</code> / <code>io.symlink</code> with NO name check.</li>
 <li><code>verbs/get/get.js:342</code> get-leaf → <code>checkout.materialise(g.wt,rel..)</code>.</li>
 <li><code>verbs/get/get.js:328</code> delete-leaf → <code>io.unlink(join(g.wt,rel))</code>.</li>
 <li><code>verbs/patch/patch.js:316</code> theirs-side → same <code>checkout.materialise</code>.</li>
 <li><code>verbs/patch/patch.js:320</code> <code>deleteLeaf</code> → <code>io.unlink(join(wtRoot,..))</code>.</li>
-<li>A tree entry named <code>..</code> escapes the wt; <code>../../.ssh/authorized_keys</code><p>
-is writable; ingest (<code>shared/ingest.js</code>) does NO fsck/name validation.
-</p>
-</li>
-<li><code>shared/stage.js:51-55</code> <code>isMeta</code> blocks <code>.git</code>/<code>.be</code>/<code>..be.idx</code><p>
-segments but NOT <code>..</code> (so even staging would not catch it).
-</p>
-</li>
+<li>A tree entry named <code>..</code> escapes the wt; <code>../../.ssh/authorized_keys</code> is writable; ingest (<code>shared/ingest.js</code>) does NO fsck/name validation.</li>
+<li><code>shared/stage.js:51-55</code> <code>isMeta</code> blocks <code>.git</code>/<code>.be</code>/<code>..be.idx</code> segments but NOT <code>..</code> (so even staging would not catch it).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
@@ -49,28 +46,19 @@ segments but NOT <code>..</code> (so even staging would not catch it).
 <h3>Constraints</h3>
 <ul>
 <li>ONE central guard, no per-call-site copies; parity with C keeper/WALK.</li>
-<li>Enforce in <code>checkout.materialise</code> (covers get+patch file leaves) AND<p>
-at the producer <code>store.js::readTreeRecursive</code> (covers delete leaves).
-</p>
-</li>
+<li>Enforce in <code>checkout.materialise</code> (covers get+patch file leaves) AND at the producer <code>store.js::readTreeRecursive</code> (covers delete leaves).</li>
 <li>Extend <code>stage.js::isMeta</code> to also reject the <code>..</code> segment.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
 <li>Guard signature <code>safeRel(rel) -&gt; bool</code>: <code>/</code>-split, scan segments.</li>
-<li>Producer-side throw in <code>readTreeRecursive</code> stops poisoned deletes too,<p>
-since delete leaves bypass <code>materialise</code> (<code>io.unlink</code> direct).
-</p>
-</li>
+<li>Producer-side throw in <code>readTreeRecursive</code> stops poisoned deletes too, since delete leaves bypass <code>materialise</code> (<code>io.unlink</code> direct).</li>
 <li><code>materialise</code> guard is the belt-and-braces sink for both verbs.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: craft a tree with a <code>..</code> entry; assert <code>be get</code><p>
- writes nothing outside <code>wt</code> and errors (test/js/get/traversal).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: craft a tree with a <code>..</code> entry; assert <code>be get</code> writes nothing outside <code>wt</code> and errors (test/js/get/traversal).</li>
 <li class="open"><input type="checkbox" disabled> Add <code>safeRel</code> (one place) + wire into <code>materialise</code> + producer.</li>
 <li class="open"><input type="checkbox" disabled> Extend <code>isMeta</code> to reject <code>..</code>; assert stage rejects it.</li>
 </ul>
@@ -81,26 +69,22 @@ since delete leaves bypass <code>materialise</code> (<code>io.unlink</code> dire
 <h2>Outcome</h2>
 <ul>
 <li>LANDED: be <code>f9180c2e</code> + be/test <code>21d8ca90</code> (be-js-get-traversal).</li>
-<li>Root cause CONFIRMED: a tree subentry named <code>..</code> holding <code>evil.txt</code><p>
-flattens to leaf path <code>../evil.txt</code>; unpatched <code>jab get</code> wrote <code>PWNED</code> into <code>$WORK/evil.txt</code> OUTSIDE the wt; a delete leaf <code>../victim.txt</code> <code>io.unlink</code>ed an outside-wt sentinel.
-</p>
-</li>
-<li><code>safeRel(rel)</code> added in ONE place: <code>shared/util/path.js</code> (split on<p>
-<code>/</code>, reject `<code>/</code>.<code>/</code>..<code>/</code>.git<code>/</code>.be<code>/</code>..be.idx<code> seg, leading </code>/`, NUL).
-</p>
-</li>
-<li>Wired 3 sinks: <code>checkout.js::materialise</code> (get+patch file writes),<p>
-<code>store.js::readTreeRecursive</code> producer throw (patch full-tree map → covers its write+delete leaves; checkout.apply delete loop), and <code>stage.js::isMeta</code> now also rejects a <code>..</code> segment.
-</p>
-</li>
-<li>Test <code>be/test/get/traversal/run.sh</code> (be-js-get-traversal, glob-<p>
-picked, no CMakeLists edit): malicious get ERRORS + writes/unlinks nothing above wt + clean sibling tree still checks out.
-</p>
-</li>
-<li>RED (guards stripped): test FAILs &quot;malicious get SUCCEEDED&quot;.<p>
-GREEN (guards in): passes; jab errors &quot;checkout: unsafe path ../evil.txt&quot;.  Full be/ ctest 74/74 green (sole red is the pre-existing stale <code>be-js-bro-universal</code> WILL_FAIL xfail).
-</p>
-</li>
+<li>Root cause CONFIRMED: a tree subentry named <code>..</code> holding <code>evil.txt</code> flattens to leaf path <code>../evil.txt</code>; unpatched <code>jab get</code> wrote <code>PWNED</code> into <code>$WORK/evil.txt</code> OUTSIDE the wt; a delete leaf <code>../victim.txt</code> <code>io.unlink</code>ed an outside-wt sentinel.</li>
+<li><code>safeRel(rel)</code> added in ONE place: <code>shared/util/path.js</code> (split on <code>/</code>, reject `<code>/</code>.<code>/</code>..<code>/</code>.git<code>/</code>.be<code>/</code>..be.idx<code> seg, leading </code>/`, NUL).</li>
+<li>Wired 3 sinks: <code>checkout.js::materialise</code> (get+patch file writes), <code>store.js::readTreeRecursive</code> producer throw (patch full-tree map → covers its write+delete leaves; checkout.apply delete loop), and <code>stage.js::isMeta</code> now also rejects a <code>..</code> segment.</li>
+<li>Test <code>be/test/get/traversal/run.sh</code> (be-js-get-traversal, glob- picked, no CMakeLists edit): malicious get ERRORS + writes/unlinks nothing above wt + clean sibling tree still checks out.</li>
+<li>RED (guards stripped): test FAILs &quot;malicious get SUCCEEDED&quot;. GREEN (guards in): passes; jab errors &quot;checkout: unsafe path ../evil.txt&quot;.  Full be/ ctest 74/74 green (sole red is the pre-existing stale <code>be-js-bro-universal</code> WILL_FAIL xfail).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

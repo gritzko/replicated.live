@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-032: weave conflicts on pending edits must mark+record, never hard-err (GETCONF)</title>
+<meta property="og:title" content="POST-032: weave conflicts on pending edits must mark+record, never hard-err (GETCONF)">
+<meta property="og:description" content="Landing /todo/WORK/WORK-001 (2026-07-18): posting the WORK-001 wt onto its tracked ///be/ hit ONE genuine weave conflict (views/bro/pager.js, the driveSpell(s, …) line) and the flow HARD-ERRED instead of treating the conflict as a normal outcome. - Attempt 1 (post run in the be tree): the weave fenced pager.js and wrote a con row (26718LLuCr) — then ABORTED with no commit; the tip stayed at the prior rev with the fence stranded in the working tree. - Attempt 2 (:post from the WORK-001 wt): the wt-local commit LANDED (post ?#c32ddd17 in WORK-001/.be), then the target-side get leg died with err: be get: GETCONF 1 file(s) merged with conflicts — resolve the ma…, re-fencing be's pager.js and writing a SECOND con row (26718LQaF2) — target tip unmoved. - Self-hosting corollary observed: a fence woven into a LOADED .js of the be tree makes every next jab there die at parse (SyntaxError: Unexpected token '&lt;&lt;') — the marking itself is per spec; the hard-error duplication is not.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/POST/POST-032.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>POST-032: weave conflicts on pending edits must mark+record, never hard-err (GETCONF)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Landing <a href="/todo/WORK/WORK-001.html">WORK-001</a> (2026-07-18): posting the WORK-001 wt onto its tracked <code>///be/</code> hit ONE genuine weave conflict (views/bro/pager.js, the <code>driveSpell(s, …)</code> line) and the flow HARD-ERRED instead of treating the conflict as a normal outcome.
+</p>
+<ul>
+<li>Attempt 1 (post run in the be tree): the weave fenced pager.js and wrote a <code>con</code> row (26718LLuCr) — then ABORTED with no commit; the tip stayed at the prior rev with the fence stranded in the working tree.</li>
+<li>Attempt 2 (<code>:post</code> from the WORK-001 wt): the wt-local commit LANDED (<code>post ?#c32ddd17</code> in WORK-001/.be), then the target-side get leg died with <code>err: be get: GETCONF 1 file(s) merged with conflicts — resolve the ma…</code>, re-fencing be's pager.js and writing a SECOND <code>con</code> row (26718LQaF2) — target tip unmoved.</li>
+<li>Self-hosting corollary observed: a fence woven into a LOADED .js of the be tree makes every next <code>jab</code> there die at parse (<code>SyntaxError: Unexpected token '&lt;&lt;'</code>) — the marking itself is per spec; the hard-error duplication is not.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+<code>post</code> (and its get leg) treat a pending-edit conflict as a NORMAL merge outcome, per the ruling below: complete the weave, leave the fences, write the <code>con</code> wtlog row, report conflict status — and never exit through the GETCONF hard-error path.
+</p>
+<ul>
+<li>One attempt = one <code>con</code> row; a repeated post over an unresolved conflict must not stack duplicate rows.</li>
+<li>Exit status/report says &quot;merged with conflicts&quot; as a STATE, not an error; the rest of the op (unconflicted files, log rows) completes.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>RULING (gritzko, chat 2026-07-18): &quot;Conflicts for pending edits are not any special. Must merge, mark conflict, make wtlog record. Erring out is not correct.&quot; Matches the bare-track post spec (weave uncommitted + FF base, conflict status); the dirty-refusal/hard-err gate contradicts it.</li>
+<li><code>get</code> is likely affected the same way (GETCONF originates in the get path; bare <code>get</code> over dirty edits should mark+record too) — fix the shared leg, not a post-only wrapper.</li>
+<li>User-facing text in plain words; no bare C codes like GETCONF in the error line.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>SALVAGE (be reset 2026-07-18, the resolved hybrid lived only in be's working tree): the CORRECT pager.js merge of main's BE-039 shape with WORK-001's BRO-025 is — <code>_runSpell(spell, ctxOverride)</code> and <code>_actSpell(spell, ctxOverride)</code>; in both, <code>const ctx = ctxOverride || discover.navTree(this._context());</code> and <code>driveSpell(s, ctx || undefined)</code>; <code>view.call.context = ctx || &quot;&quot;</code>; main's <code>_fillAuth</code> compose-by-path stays AS IS (wt URIs compose by path).</li>
+<li>SALVAGE cont.: the click site becomes <code>const o = SPELL.parseOspell(target);</code> then mutation-gate on <code>o.spell</code>'s verb → <code>_actSpell(o.spell, o.context || undefined)</code> else <code>_runSpell(o.spell, o.context || undefined)</code>.</li>
+<li>WARNING: WORK-001's own pager.js carries the REGRESSIVE side (drops navTree threading in <code>_runSpell</code> and <code>_fillAuth</code>'s compose-by-path) — merge the hybrid INTO work/WORK-001 BEFORE the next landing attempt, else the same line re-conflicts or the regression lands silently.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> red-first repro: post a wt onto a tracked tree with one conflicting pending edit → expect fences + ONE <code>con</code> row + conflict status, tip advanced per spec, no hard error</li>
+<li><a href="./ .html"> </a> same for bare <code>get</code> over a conflicting pending edit</li>
+<li><a href="./ .html"> </a> dedup: re-run over unresolved fences adds no second <code>con</code> row</li>
+<li><a href="./ .html"> </a> locate the GETCONF throw path; route it into the conflict-status report</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Evidence trail: be/.be rows 26718LLuCr + 26718LQaF2 (duplicate <code>con</code>), WORK-001/.be <code>post ?#c32ddd17</code> (the stranded local commit awaiting a working target-side leg).</li>
+<li>Post-reset state (2026-07-18): be's working tree reset — the fence, the duplicate <code>con</code> fallout, AND the resolved hybrid all gone from be; the FULL WORK-001 change survives in work/WORK-001 (8 staged files + test sub + local commit c32ddd17); <a href="/todo/GRAF/GRAF-001.html">GRAF-001</a> landed earlier as ade2448b and is unaffected.</li>
+<li>Related unlanded: the GET-050 draft (same-pin re-point no-op + wtlog-write-before-checkout atomicity) with its fix+tests staged in work/GET-REPOINT.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

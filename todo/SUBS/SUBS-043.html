@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SUBS-043</title>
+<title>SUBS-043: jab status reports the be self-locator symlink as adv (it is not a submodule, not advanced)</title>
+<meta property="og:title" content="SUBS-043: jab status reports the be self-locator symlink as adv (it is not a submodule, not advanced)">
+<meta property="og:description" content="jab status in ~/journal/be prints adv be (63 ok, 1 adv), but be is the be -&gt; . extension self-locator — a 120000 SYMLINK, not a submodule — and is NOT declared in .gitmodules (only test is). A path that is not a declared submodule, and a symlink besides, must read CLEAN, never adv. This is a be/ JS status divergence and a member of the self-locator family (GET-039: a symlink is a 120000 blob, never followed, never a gitlink). be/ JS (reported by user, 2026-06-30). Parent DIS-058; spec Submodules / Dirty; method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/SUBS/SUBS-043.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>SUBS-043 <a href="./MED.html">MED</a>: jab status reports the <code>be</code> self-locator symlink as <code>adv</code> (it is not a submodule, not advanced)</h1>
+<h1>SUBS-043: jab status reports the <code>be</code> self-locator symlink as <code>adv</code> (it is not a submodule, not advanced)</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
 <p>
 <code>jab status</code> in <code>~/journal/be</code> prints <code> adv be</code> (<code>63 ok, 1 adv</code>), but <code>be</code> is the <code>be -&gt; .</code> extension self-locator — a 120000 SYMLINK, not a submodule — and is NOT declared in <code>.gitmodules</code> (only <code>test</code> is). A path that is not a declared submodule, and a symlink besides, must read CLEAN, never <code>adv</code>. This is a <code>be/</code> JS status divergence and a member of the self-locator family (<a href="../GET/GET-039.html">GET-039</a>: a symlink is a 120000 blob, never followed, never a gitlink). <code>be/</code> JS (reported by user, 2026-06-30). Parent <a href="../DIS/DIS-058.html">DIS-058</a>; spec <a href="../../wiki/Submodules.html">Submodules</a> / <a href="../../wiki/Dirty.html">Dirty</a>; method <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -19,92 +28,55 @@
 <h3>Context</h3>
 <ul>
 <li>Repro: <code>cd ~/journal/be &amp;&amp; jab status</code> → <code> 11:18  adv be</code> / <code>? 63 ok, 1 adv</code>.</li>
-<li><code>be</code> on disk is <code>be -&gt; .</code> (a 1-byte symlink to the wt root) — the be/ extension<p>
-self-locator (<a href="../GET/GET-036.html">GET-036</a>/<a href="../GET/GET-039.html">GET-039</a>).
-</p>
-</li>
-<li><code>~/journal/be/.gitmodules</code> declares ONLY <code>test</code> (<code>path = test</code>), NOT <code>be</code> — so<p>
-<code>be</code> is not a submodule by declaration.
-</p>
-</li>
-<li>A symlink is a 120000 git blob, never a 160000 gitlink (<a href="../GET/GET-039.html">GET-039</a>); it must read<p>
-<code>ok</code>/<code>eq</code>, never the submodule <code>adv</code> bucket.
-</p>
-</li>
-<li>Candidate code paths to pin (repro decides): <code>shared/subs.js::enumerate</code> (collects<p>
-baseline <code>kind === &quot;s&quot;</code> gitlinks) + <code>classifyMount</code> (the <code>adv</code> axis, <a href="SUBS-030.html">SUBS-030</a>); <code>shared/classify.js::classifyMerge</code> gitlink handling; <code>views/status/status.js</code> sub rows. <code>subs.js::isMountAt</code> already has a lnk NOFOLLOW guard, so the <code>adv</code> slips a different path — likely <code>be</code> is committed as a 160000 gitlink (a self-gitlink, <a href="../GET/GET-037.html">GET-037</a>) that <code>enumerate</code> reads as a sub and <code>classifyMount</code> follows <code>be -&gt; .</code> back to the wt (r4 = wt tip ≠ pin → <code>adv</code>), OR a non-mounted gitlink is adv-classified without the mount/symlink guard.
-</p>
-</li>
+<li><code>be</code> on disk is <code>be -&gt; .</code> (a 1-byte symlink to the wt root) — the be/ extension self-locator (<a href="../GET/GET-036.html">GET-036</a>/<a href="../GET/GET-039.html">GET-039</a>).</li>
+<li><code>~/journal/be/.gitmodules</code> declares ONLY <code>test</code> (<code>path = test</code>), NOT <code>be</code> — so <code>be</code> is not a submodule by declaration.</li>
+<li>A symlink is a 120000 git blob, never a 160000 gitlink (<a href="../GET/GET-039.html">GET-039</a>); it must read <code>ok</code>/<code>eq</code>, never the submodule <code>adv</code> bucket.</li>
+<li>Candidate code paths to pin (repro decides): <code>shared/subs.js::enumerate</code> (collects baseline <code>kind === &quot;s&quot;</code> gitlinks) + <code>classifyMount</code> (the <code>adv</code> axis, <a href="SUBS-030.html">SUBS-030</a>); <code>shared/classify.js::classifyMerge</code> gitlink handling; <code>views/status/status.js</code> sub rows. <code>subs.js::isMountAt</code> already has a lnk NOFOLLOW guard, so the <code>adv</code> slips a different path — likely <code>be</code> is committed as a 160000 gitlink (a self-gitlink, <a href="../GET/GET-037.html">GET-037</a>) that <code>enumerate</code> reads as a sub and <code>classifyMount</code> follows <code>be -&gt; .</code> back to the wt (r4 = wt tip ≠ pin → <code>adv</code>), OR a non-mounted gitlink is adv-classified without the mount/symlink guard.</li>
 <li>Native <code>be status</code> does not report this (confirm) — it is a JS-port divergence.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>jab status</code> in be/ reports <code>be</code> as clean (counted <code>ok</code>, no <code>adv</code> row), matching<p>
-native.
-</p>
-</li>
+<li><code>jab status</code> in be/ reports <code>be</code> as clean (counted <code>ok</code>, no <code>adv</code> row), matching native.</li>
 <li>A path NOT declared in <code>.gitmodules</code> is never classified as a submodule.</li>
-<li>The <code>be -&gt; .</code> self-locator (a 120000 symlink) reads as a normal clean file, never<p>
-<code>adv</code> (<a href="../GET/GET-039.html">GET-039</a>).
-</p>
-</li>
+<li>The <code>be -&gt; .</code> self-locator (a 120000 symlink) reads as a normal clean file, never <code>adv</code> (<a href="../GET/GET-039.html">GET-039</a>).</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li><code>be/</code> JS only. Use the <code>.gitmodules</code> declaration (now <code>shared/gitmodules.js</code>, from<p>
-PUT-004) as the authority for what IS a sub; reuse <code>subs.js::isMountAt</code>'s lnk NOFOLLOW guard. Do NOT regress real-sub <code>adv</code> detection (<a href="SUBS-030.html">SUBS-030</a>) or the <code>test</code> sub.
-</p>
-</li>
-<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): a be/-shaped wt (a <code>be -&gt; .</code> self-locator + an<p>
-undeclared symlink) shows no <code>adv</code>; a genuinely-advanced real sub still shows <code>adv</code>.
-</p>
-</li>
+<li><code>be/</code> JS only. Use the <code>.gitmodules</code> declaration (now <code>shared/gitmodules.js</code>, from PUT-004) as the authority for what IS a sub; reuse <code>subs.js::isMountAt</code>'s lnk NOFOLLOW guard. Do NOT regress real-sub <code>adv</code> detection (<a href="SUBS-030.html">SUBS-030</a>) or the <code>test</code> sub.</li>
+<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): a be/-shaped wt (a <code>be -&gt; .</code> self-locator + an undeclared symlink) shows no <code>adv</code>; a genuinely-advanced real sub still shows <code>adv</code>.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Gate sub/<code>adv</code> classification on <code>.gitmodules</code> declaration (<code>shared/gitmodules.js</code>)<p>
-AND the symlink NOFOLLOW guard, so an undeclared path and/or a symlink never enters the sub classifier — mirror <a href="../GET/GET-039.html">GET-039</a> (self-locator = 120000 blob, never followed).
-</p>
-</li>
+<li>Gate sub/<code>adv</code> classification on <code>.gitmodules</code> declaration (<code>shared/gitmodules.js</code>) AND the symlink NOFOLLOW guard, so an undeclared path and/or a symlink never enters the sub classifier — mirror <a href="../GET/GET-039.html">GET-039</a> (self-locator = 120000 blob, never followed).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Tree mode settled by <a href="../GET/GET-039.html">GET-039</a>: <code>be -&gt; .</code> is committed as a <code>120000</code> symlink blob<p>
- (<code>3026a5fb</code> + <code>d31b52ea</code>); guard tests <code>sub/selfloop</code>, <code>sub/symlink</code>.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Path pinned: <code>classifyMerge</code> sub-classified ANY base gitlink; <code>isMount</code> copies<p>
- followed the symlink (DIS-058 D18).
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Gate sub-classify on <code>.gitmodules</code> declaration — landed <code>36b1aec0</code><p>
- (<code>shared/classify.js:194,314</code> declaredSubs gate); symlink NOFOLLOW in  <code>subs.js::isMountAt</code> (lstat lnk → false).
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Green: verified live 2026-07-07 — <code>jab status</code> in be/ reads <code>77 ok</code>, NO <code>adv be</code>;<p>
- the <code>test</code> sub still classifies (<code>?/beagle-ext-tests/.beagle-ext 236 ok</code>).
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Tree mode settled by <a href="../GET/GET-039.html">GET-039</a>: <code>be -&gt; .</code> is committed as a <code>120000</code> symlink blob (<code>3026a5fb</code> + <code>d31b52ea</code>); guard tests <code>sub/selfloop</code>, <code>sub/symlink</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Path pinned: <code>classifyMerge</code> sub-classified ANY base gitlink; <code>isMount</code> copies followed the symlink (DIS-058 D18).</li>
+<li class="done"><input type="checkbox" checked disabled> Gate sub-classify on <code>.gitmodules</code> declaration — landed <code>36b1aec0</code> (<code>shared/classify.js:194,314</code> declaredSubs gate); symlink NOFOLLOW in <code>subs.js::isMountAt</code> (lstat lnk → false).</li>
+<li class="done"><input type="checkbox" checked disabled> Green: verified live 2026-07-07 — <code>jab status</code> in be/ reads <code>77 ok</code>, NO <code>adv be</code>; the <code>test</code> sub still classifies (<code>?/beagle-ext-tests/.beagle-ext 236 ok</code>).</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Root cause depends on whether <code>be</code> is committed as a 160000 gitlink or a 120000<p>
-symlink in the beagle-ext tree — the repro must read the tree mode (<a href="../GET/GET-039.html">GET-039</a>).
-</p>
-</li>
+<li>Root cause depends on whether <code>be</code> is committed as a 160000 gitlink or a 120000 symlink in the beagle-ext tree — the repro must read the tree mode (<a href="../GET/GET-039.html">GET-039</a>).</li>
 <li>Overlaps <a href="../DIS/DIS-058.html">DIS-058</a> / <a href="../GET/GET-039.html">GET-039</a> on the self-locator handling — reconcile on land.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED <code>36b1aec0</code> (the declared-only sub gate in <code>shared/classify.js</code>; comment there<p>
-tagged SUBS-045 — same commit, both tickets rode it) on top of <a href="../GET/GET-039.html">GET-039</a>'s symlink-as-blob (<code>3026a5fb</code>) and <code>subs.js::isMountAt</code> NOFOLLOW.
-</p>
-</li>
-<li>Verified live 2026-07-07: <code>jab status</code> in <code>~/src/journal/be</code> → <code>77 ok</code>, no <code>adv be</code>.<p>
-CLOSED (audit 2026-07-07).
-</p>
-</li>
+<li>LANDED <code>36b1aec0</code> (the declared-only sub gate in <code>shared/classify.js</code>; comment there tagged SUBS-045 — same commit, both tickets rode it) on top of <a href="../GET/GET-039.html">GET-039</a>'s symlink-as-blob (<code>3026a5fb</code>) and <code>subs.js::isMountAt</code> NOFOLLOW.</li>
+<li>Verified live 2026-07-07: <code>jab status</code> in <code>~/src/journal/be</code> → <code>77 ok</code>, no <code>adv be</code>. CLOSED (audit 2026-07-07).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-008</title>
+<title>JS-008: number marshalling precision — i64 truncation, NaN/Inf mis-routing, float→int UB</title>
+<meta property="og:title" content="JS-008: number marshalling precision — i64 truncation, NaN/Inf mis-routing, float→int UB">
+<meta property="og:description" content="The convert/rdx number path truncates 64-bit ints through a JS double and mis-routes NaN/Inf; POLAddTime((int)ms) is float→int UB. Convert path is DEAD (rdx unwired) — fix before wiring. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-008.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,58 +15,39 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-008 <a href="">HIGH when wired</a>: number marshalling precision — i64 truncation, NaN/Inf mis-routing, float→int UB</h1>
+<h1>JS-008: number marshalling precision — i64 truncation, NaN/Inf mis-routing, float→int UB</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The convert/rdx number path truncates 64-bit ints through a JS double and mis-routes NaN/Inf; <code>POLAddTime((int)ms)</code> is float→int UB. Convert path is DEAD (rdx unwired) — fix before wiring. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>(a) <code>convert.cpp:97</code> <code>JSValueMakeNumber(ctx, top-&gt;i)</code> truncates <code>i64</code><p>
-(<code>RDX.h:204</code>) above 2^53 → must use BigInt.
-</p>
-</li>
-<li>(b) <code>convert.cpp:65-73</code> number import uses <code>floor(d)!=d</code>, which mis-routes NaN<p>
-(→ float branch) and ±Inf (→ int branch); must gate on <code>isfinite</code> first.
-</p>
-</li>
-<li>(c) <code>io.cpp:219-222</code> <code>POLAddTime((int)ms)</code> is float→int UB for NaN/Inf/negative/<p>
-<code>&gt;INT_MAX</code>.
-</p>
-</li>
-<li><code>convert.cpp</code> is the DEAD rdx path (unwired in <code>main.cpp:40-42</code>); <code>io.cpp:219</code><p>
-timer is live. Priority: fix before the rdx path is wired.
-</p>
-</li>
+<li>(a) <code>convert.cpp:97</code> <code>JSValueMakeNumber(ctx, top-&gt;i)</code> truncates <code>i64</code> (<code>RDX.h:204</code>) above 2^53 → must use BigInt.</li>
+<li>(b) <code>convert.cpp:65-73</code> number import uses <code>floor(d)!=d</code>, which mis-routes NaN (→ float branch) and ±Inf (→ int branch); must gate on <code>isfinite</code> first.</li>
+<li>(c) <code>io.cpp:219-222</code> <code>POLAddTime((int)ms)</code> is float→int UB for NaN/Inf/negative/ <code>&gt;INT_MAX</code>.</li>
+<li><code>convert.cpp</code> is the DEAD rdx path (unwired in <code>main.cpp:40-42</code>); <code>io.cpp:219</code> timer is live. Priority: fix before the rdx path is wired.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>64-bit ints survive the round trip; NaN/Inf route correctly; the timer rejects<p>
-non-finite / out-of-range delays.
-</p>
-</li>
+<li>64-bit ints survive the round trip; NaN/Inf route correctly; the timer rejects non-finite / out-of-range delays.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>BigInt for 64-bit ints; <code>isfinite</code> + explicit range guards before any <code>(int)</code><p>
-cast.
-</p>
-</li>
+<li>BigInt for 64-bit ints; <code>isfinite</code> + explicit range guards before any <code>(int)</code> cast.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open) Emit/parse 64-bit ints as BigInt; classify with <code>isfinite</code> first; range-<p>
-check <code>ms</code> before the cast.
-</p>
-</li>
+<li>(open) Emit/parse 64-bit ints as BigInt; classify with <code>isfinite</code> first; range- check <code>ms</code> before the cast.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first (once convert is wired or via a unit harness): a value &gt; 2^53,<p>
-  NaN, +Inf, -Inf, and <code>setTimeout(NaN)</code> each marshal/route correctly.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first (once convert is wired or via a unit harness): a value &gt; 2^53, NaN, +Inf, -Inf, and <code>setTimeout(NaN)</code> each marshal/route correctly.</li>
 <li class="open"><input type="checkbox" disabled> Apply the BigInt + <code>isfinite</code> + range guards.</li>
 </ul>
 <h3>Blockers</h3>
@@ -71,15 +56,20 @@ check <code>ms</code> before the cast.
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li><strong>LANDED <code>71e5aaf8</code></strong> (2026-06-16): live <code>io.cpp</code> <code>JABCioWakeIn</code> now guards<p>
-the <code>double</code>-&gt;<code>int</code> timer delay (<code>isfinite(ms) &amp;&amp; 0 &lt;= ms &lt;= INT32_MAX</code>) before <code>POLAddTime((int)ms)</code>, throwing a clean exception on NaN/±Inf/ negative/<code>&gt;INT_MAX</code> and scheduling no timer; the dead <code>(JSObjectRef)args[0]</code> cast was dropped.  Repro: C++ harness <code>run_wake_range_repro</code> drives the bad values (red before: +Inf/-Inf/negative/&gt;INT_MAX leaked through with no exception) and a valid ms=5 (accepted) — contract-verified, ASAN-clean. <code>io.now()</code> boxes ms (<code>ns/POLNanosPerMSec</code>) through a <code>double</code>: lossless for integer ms up to 2^53 — acceptable, left as-is.
-</p>
-</li>
-<li>DEFERRED to rdx re-wiring (out of build, same as JS-004): <code>convert.cpp:97</code><p>
-<code>JSValueMakeNumber(ctx, top-&gt;i)</code> i64 truncation -&gt; must become BigInt; and <code>convert.cpp:65-73</code> <code>floor(d)!=d</code> NaN/Inf mis-routing -&gt; must gate on <code>isfinite</code> first.  <code>convert.cpp</code> is removed from the build (rdx unwired), so these can't be fixed/tested live.
-</p>
-</li>
+<li><strong>LANDED <code>71e5aaf8</code></strong> (2026-06-16): live <code>io.cpp</code> <code>JABCioWakeIn</code> now guards the <code>double</code>-&gt;<code>int</code> timer delay (<code>isfinite(ms) &amp;&amp; 0 &lt;= ms &lt;= INT32_MAX</code>) before <code>POLAddTime((int)ms)</code>, throwing a clean exception on NaN/±Inf/ negative/<code>&gt;INT_MAX</code> and scheduling no timer; the dead <code>(JSObjectRef)args[0]</code> cast was dropped.  Repro: C++ harness <code>run_wake_range_repro</code> drives the bad values (red before: +Inf/-Inf/negative/&gt;INT_MAX leaked through with no exception) and a valid ms=5 (accepted) — contract-verified, ASAN-clean. <code>io.now()</code> boxes ms (<code>ns/POLNanosPerMSec</code>) through a <code>double</code>: lossless for integer ms up to 2^53 — acceptable, left as-is.</li>
+<li>DEFERRED to rdx re-wiring (out of build, same as JS-004): <code>convert.cpp:97</code> <code>JSValueMakeNumber(ctx, top-&gt;i)</code> i64 truncation -&gt; must become BigInt; and <code>convert.cpp:65-73</code> <code>floor(d)!=d</code> NaN/Inf mis-routing -&gt; must gate on <code>isfinite</code> first.  <code>convert.cpp</code> is removed from the build (rdx unwired), so these can't be fixed/tested live.</li>
 <li>(open — filed 2026-06-16 from the js/ 7-lens review)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

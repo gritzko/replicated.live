@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-023: get.js swallows unmount/unlink/conflict-persist; store.locate silent miss</title>
+<meta property="og:title" content="CODE-023: get.js swallows unmount/unlink/conflict-persist; store.locate silent miss">
+<meta property="og:description" content="Deps: none (independent of the dedup tickets). Touches verbs/get/get.js and shared/store.js only. Repro-first (abc policy): each swallowed error needs a failing case before the catch is opened up. Sibling of the durable-status work in STATUS (the con row must survive get's exit).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-023.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>CODE-023: get.js swallows unmount/unlink/conflict-persist; store.locate silent miss</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
+<p>
+Deps: none (independent of the dedup tickets). Touches verbs/get/get.js and shared/store.js only. Repro-first (<a href="../../meta/abc.html">abc</a> policy): each swallowed error needs a failing case before the catch is opened up. Sibling of the durable-status work in <a href="../STATUS">STATUS</a> (the <code>con</code> row must survive get's exit).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>get.js:989 submodule unmount <code>io.rmdir(full, true)</code> is in a bare <code>catch {}</code>: a partial/failed unmount leaves the sub half-removed, no row, no error.</li>
+<li>get.js:998 delete-leaf <code>io.unlink(full)</code> swallowed: a failed unlink (EACCES/EBUSY) emits no <code>del</code> row yet get exits 0 — disk diverges silently.</li>
+<li>get.js:1058 &amp; :1068 the DURABLE conflict wtlog append is swallowed: if the persist fails, <code>status</code> later reads the path clean — defeats the stated intent.</li>
+<li>store.js:288 <code>locate()</code>: a candidate whose file_id has no live <code>.keeper</code> pack is skipped; a stale idx run as sole hit → object reads absent (<code>unk</code>), no diagnostic. Correctness hangs on idxmaint keeping runs↔packs in sync.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Surface each failure: a row, a diagnostic, or propagation — never a silent exit-0 while worktree/status state diverges from what get reported.</li>
+<li>Assert/log the locate() stale-run case instead of a silent absent.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Distinguish genuine best-effort cleanup (idempotent unlink of a known-absent file) from a failure that changes reported state — only the latter must speak up. be/ JS only, drive via jab.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro: read-only leaf makes unlink/rmdir fail, get still reports success</li>
+<li><a href="./ .html"> </a> get.js:989 rmdir unmount — surface failure (diagnostic / non-zero)</li>
+<li><a href="./ .html"> </a> get.js:998 unlink delete-leaf — surface failure, don't drop the <code>del</code></li>
+<li><a href="./ .html"> </a> get.js:1058/:1068 durable <code>con</code> append — surface a failed persist</li>
+<li><a href="./ .html"> </a> store.js:288 locate — log/assert when a file_id has no live pack</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Some of these catches are load-bearing on partial-state recovery; opening them up may re-surface errors currently absorbed — gate each with its repro.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Not started. Suggested commit: <code>CODE-023: surface get.js swallowed unmount/unlink/con errors</code>.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

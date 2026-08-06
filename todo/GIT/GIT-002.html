@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GIT-002</title>
+<title>GIT-002: object-by-object OFS-only writer — one growing log per shard, never REFDELTA</title>
+<meta property="og:title" content="GIT-002: object-by-object OFS-only writer — one growing log per shard, never REFDELTA">
+<meta property="og:description" content="Child of GIT-001. The store's two write paths diverge: local commits go through KEEPPackFeed (keeper/KEEP.c:1652) which emits OFSDELTA only when the base is raw in the same pack (keepfindrawinpack) and falls back to REFDELTA otherwise (:1724); ingest (KEEPIngestFile:2238) u8bFeeds a whole foreign pack verbatim. Converge both onto ONE per-object append — a dog/git format function that writes raw objects + OFSDELTA exclusively, base anywhere earlier in the log, addressed purely by offset — so keeper's KEEPPackFeed, the GIT-003 ingest funnel, AND the js/JABC binding all call one writer (the binding holds no pack-log logic). This is the foundational change; everything else in GIT-001 builds on it. See PackLog, CLAUDE.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GIT/GIT-002.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>GIT-002: object-by-object OFS-only writer — one growing log per shard, never REF_DELTA</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <h2>Input</h2>
 <h3>Context</h3>
 <p>
@@ -59,5 +68,16 @@ One writer: <code>KEEPPackFeed</code>-shaped, OFS-only, base = any earlier objec
 <li>Landed <code>e59a1c91</code> on <code>dogs</code> trunk (<code>GIT-002 OFS-only object-by-object pack writer in dog/git</code>): new <code>dog/git/PACK.PACKu8sFeedObj</code> (shared raw|OFS_DELTA writer) atop <code>PACKu8sFeedOfs</code>; <code>KEEPPackFeed</code> OFS-always (REF_DELTA emit deleted, <code>keep_find_raw_in_pack</code> scans the whole open log, raw fallback otherwise); <code>js/pack.hpp</code> calls the shared encoder; <code>DELTA_ROUND</code> rewritten OFS-only (zero REF_DELTA, <code>git index-pack</code> byte round-trip). 328/328 tests green; read-side REF resolver untouched.</li>
 <li>Cross-consumer adoption still pending: the GIT-003 ingest funnel and the GIT-007 JABC feed/resolve path converge onto <code>PACKu8sFeedObj</code> / the dog/git resolver in their own tickets.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

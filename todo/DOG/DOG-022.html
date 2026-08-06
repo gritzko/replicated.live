@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOG-022: promote spot/RXLITS into dog/tok + jab tok.rxlits binding</title>
+<meta property="og:title" content="DOG-022: promote spot/RXLITS into dog/tok + jab tok.rxlits binding">
+<meta property="og:description" content="RXLITS (regex → literal runs, the Russ Cox trigram-filter feed) sits in beagle/spot/RXLITS.c.rl but is another grammar for dog/tok by nature: a self-contained ragel machine over pattern bytes, depending on abc/INT.h only. /todo/SPOT/SPOT-003's JS regex filter needs it, and jab links only the dog submodule + abc-core — spot's C is out of reach from JS land; hand-parsing regex in JS is banned.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DOG/DOG-022.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG-022: promote spot/RXLITS into dog/tok + jab <code>tok._rx_lits</code> binding</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+RXLITS (regex → literal runs, the Russ Cox trigram-filter feed) sits in <code>beagle/spot/RXLITS.c.rl</code> but is another grammar for dog/tok by nature: a self-contained ragel machine over pattern bytes, depending on <code>abc/INT.h</code> only. <a href="../SPOT/SPOT-003.html">/todo/SPOT/SPOT-003</a>'s JS regex filter needs it, and jab links only the dog submodule + abc-core — spot's C is out of reach from JS land; hand-parsing regex in JS is banned.
+</p>
+<ul>
+<li>Interface today: <code>RXLITSu8sDrain(pattern, cb, ctx)</code> — cb gets each literal byte, flush=YES at meta-boundaries, final flush always.</li>
+<li>jab's tok surface is one leaf (<code>tok._tok_parse_into</code>, tok.cpp); the binding follows that pattern.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Move the machine into the dog submodule and expose it to JS.
+</p>
+<ul>
+<li>Relocate <code>RXLITS.c.rl</code>/<code>RXLITS.h</code> from <code>beagle/spot/</code> to <code>dog/tok/</code> (DOG-002 relocation model); spot's C includes update.</li>
+<li>EXTEND the grammar to a structural token stream (gritzko 2026-07-18): nesting like <code>((a|b)c|d)</code> makes flush-only insufficient — emit group open/close, alternation bar, quantifier, literal-run events; the ragel machine stays the ONLY regex reader.</li>
+<li>jab binding <code>tok._rx_lits(pattern)</code> → the event/token stream; JS folds it: concat = AND, <code>|</code> = OR, <code>?</code>/<code>*</code>-quantified subtree = contributes nothing → an AND-of-OR trigram filter (CNF), consumed by <a href="../SPOT/SPOT-003.html">/todo/SPOT/SPOT-003</a> <code>candidates</code>.</li>
+<li>Update <code>dog/INDEX.md</code> + spot includes; both trees build; C consumer (GREP.c regexlits) migrates or keeps a compat shim.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>VERIFY the C consumer's alternation semantics while relocating: flat-flush <code>foo|bar</code> yields two intersectable runs → over-filtering, silently dropped matches (GREP.c regexlits may carry this today; check, ticket separately if real). The structural stream is the fix; the fold's truth table is the repro.</li>
+<li>The ragel grammar is the truth — no JS reimplementation, the binding is a thin leaf.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> relocate RXLITS to dog/tok, fix spot includes, both builds green</li>
+<li><a href="./ .html"> </a> grammar: structural events (group/bar/quantifier/literal-run) alongside the byte stream</li>
+<li><a href="./ .html"> </a> <code>tok._rx_lits</code> JABC binding (event stream) + jab test leg (test/tok.js)</li>
+<li><a href="./ .html"> </a> JS fold → CNF filter; truth table: <code>foo|bar</code> → OR, <code>((a|b)c|d)</code> → nested, <code>(abc)?def</code> → def only, class/shorthand legs</li>
+<li><a href="./ .html"> </a> dog/INDEX.md + spot/INDEX.md rows</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Cross-repo (libdog + beagle + jab.be), lands as coordinated bumps.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+(pending)
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

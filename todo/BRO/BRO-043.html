@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-043 DONE: per-repo cache, dropped by the watcher</title>
+<meta property="og:title" content="BRO-043 DONE: per-repo cache, dropped by the watcher">
+<meta property="og:description" content="Every view recomputes from scratch — be status rewalks the worktree, recurses every sub and rebuilds the quad each time it re-fires, and a warm pager pays that again per click. With JAB-032 a drained event names the dir it fell in, so a resident process can keep ONE record per repo of what a view produced and drop it the moment anything under that repo is touched. Cache lifetime is bounded by the watcher's: a failed start leaves the cache null and everything recomputes, so a missed event is never read back as truth. Rulings gritzko 2026-08-02; invalidation IS the design, storage is a Map.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BRO/BRO-043.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-043 <a href="./DONE.html">DONE</a>: per-repo cache, dropped by the watcher</h1>
+<div>
+<p>
+Now: DONE
+</p>
+<p>
+Ask: gritzko Env: the resident pager process (a one-shot CLI never builds one)
+</p>
+</div>
+<p>
+Every view recomputes from scratch — <code>be status</code> rewalks the worktree, recurses every sub and rebuilds the quad each time it re-fires, and a warm pager pays that again per click. With <a href="../JAB/JAB-032.html">JAB-032</a> a drained event names the dir it fell in, so a resident process can keep ONE record per repo of what a view produced and drop it the moment anything under that repo is touched. Cache lifetime is bounded by the watcher's: a failed start leaves the cache <code>null</code> and everything recomputes, so a missed event is never read back as truth. Rulings gritzko 2026-08-02; invalidation IS the design, storage is a <code>Map</code>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The cache holds a view's OUTPUT, not its intermediate model — that is the difference between instant and 30%.
+</p>
+<ul>
+<li>Measured on the first (quad-level) attempt, real <code>status</code> in a resident process, 619 files + one sub: a cached HIT still read 2240 of 2425 objects — 7.6% saved, because the recursed sub carries <code>trackPin</code> and bypassed the cache by construction.</li>
+<li>Caching the OUTPUT makes that vanish: the sub's rows are already inside the parent's record, so a hit recurses into nothing and reads ~0 objects.</li>
+<li><code>core/emit.js</code> is a ROW SINK (<code>{uri, verb, ts}</code>) and ONE edge <code>flush</code>/<code>render</code> paints rows with theme + width — so the cacheable artifact is the ROW LIST, never the painted bytes.</li>
+<li><code>be status</code> inputs: wt bytes, the ulog/wtlog rows, the refs the quad reads, each sub's status (<a href="../../wiki/Status.html">Status</a>, <code>shared/quad.js</code>). The first two are files the watcher sees; the rest are not.</li>
+<li>A store change goes stale for EVERY wt backed by it: a post/fetch/tombstone from any process rewrites the tip the track column reads (<code>shared/store.js:420</code>, the mutable <code>&lt;shard&gt;/refs</code> ULOG), and no file under the repo changes.</li>
+<li><code>mintBe</code> re-mints <code>be</code> per verb invocation (<code>core/loop.js:466</code>), so the cache cannot hang off <code>be</code> — it is a module singleton, and its identity depends on the path it was required through (see Blockers).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+One record per repo, a fingerprint for what the watcher cannot see, and a hit that renders instantly.
+</p>
+<ul>
+<li>Per-repo ONLY (gritzko): the record key is the repo path; a SCOPED read (<code>be status src/</code>) caches NOTHING and recomputes. No per-path, per-arg or per-rev keys.</li>
+<li>The stored value is free-form: <code>{rows: [...], state: &quot;uri?track#base&quot;}</code> — rows for the flush to render, <code>state</code> as the validity fingerprint.</li>
+<li><code>state</code> covers every input the watcher CANNOT observe: the track tip, the base sha, each sub's pin, and the patch column's absorbed refs. A mismatch is a miss.</li>
+<li>Any fs event under a repo drops that repo's record AND its ANCESTORS' (a parent's rows embed its subs'); siblings and descendants keep theirs.</li>
+<li><code>R</code>/<code>r</code> in the pager drops the WHOLE cache (gritzko): refresh is the &quot;I do not trust this screen&quot; gesture and must recompute everything, not re-serve a record.</li>
+<li>A live watcher is the precondition for the cache existing at all; <code>fsw.OVERFLOW</code> (or a Buf-full loss) drops everything.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Pure performance work: with the cache disabled every view must behave exactly as it does today, byte for byte.
+</p>
+<ul>
+<li>Reuse (verified present 2026-08-02): the walk + sub-repo boundaries in <code>shared/classify.js</code> <code>wtWalk</code> (already extracted); <code>shared/util/ignore.js</code> <code>load</code>/<code>match</code>/<code>isMeta</code>; <code>core/resolve_hash.js</code> <code>treeAt</code>/<code>projectRoot</code>/<code>workRoot</code> (THE <code>.be</code> climb, never reimplemented); <code>shared/subs.js</code> <code>enumerate</code>; <code>shared/util/path.js</code> for joins.</li>
+<li><code>shared/cache.js</code> from the first attempt SURVIVES as-is (per-repo buckets, free-form values, ancestor drop, watcher-bound lifetime, lazy arm-before-compute). Only the CONSUMER changes.</li>
+<li>A one-shot CLI must not start a watcher: the process dies before the cache pays back.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Cache ROWS, not bytes: painted output freezes the width, the theme and the date column (rendered from <code>ts</code> at flush), so a resize or a <code>--plain</code> re-fire would serve output computed for the old geometry.</li>
+<li>The <code>state</code> fingerprint REPLACES the store-refs watching axis: rather than arming <code>&lt;shard&gt;/refs</code> and dropping across worktrees, each repo re-reads its own tips cheaply and compares. Same coverage, no cross-wt bookkeeping.</li>
+<li>A hit costs: open the repo, read refs + gitlink pins to build <code>state</code>, compare, flush rows — the ~6-object floor, which is the &quot;instant&quot; target.</li>
+<li>ONE read path, <code>take(repo, key, compute)</code> — no <code>get</code>/<code>put</code> pair, because a split surface is what lets a caller arm AFTER computing and be born stale.</li>
+<li>Arming is LAZY: a cache MISS is what subscribes; arm BEFORE computing, always.</li>
+<li><code>R</code>/<code>r</code> hooks the KEY (<code>views/bro/pager.js:565</code>), not <code>_refresh()</code>: back and editor-exit also call <code>_refresh</code>, and those do not need a full drop (an edited file fires its own event anyway).</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./ .html"> </a> REVERT the quad-level hook first (<code>shared/quad.js</code> <code>quadOf</code> + <code>cloneModel</code>) so the two designs never coexist half-done -<a href="./ .html"> </a> <code>state</code> builder: track tip + base sha + each sub's pin + patch-absorbed refs, one greppable string; a miss on ANY difference -<a href="./ .html"> </a> move the cache to the status verb's sink: on a hit hand the stored rows to the flush, on a miss run the verb and store <code>{rows, state}</code> -<a href="./ .html"> </a> <code>R</code>/<code>r</code> → <code>cache.dropAll()</code> at <code>views/bro/pager.js:565</code> -<a href="./ .html"> </a> tests: hit renders identical bytes to a miss; a touched file drops the repo AND its ancestors but not its siblings; a moved track tip misses via <code>state</code> with NO fs event; <code>R</code> drops all; overflow drops all; watcher-start failure = every read recomputes -<a href="./ .html"> </a> test the store axis through <code>state</code>: two wts on one store, <code>post</code> in wt A, wt B's status must recompute -<a href="./ .html"> </a> measure: a cached <code>status</code> hit must read ~0 objects (the first attempt read 2240 of 2425 — that is the bar to beat)
+</p>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The singleton can SILENTLY no-op: <code>jsrc</code> is a symlink to <code>.</code>, so requiring <code>shared/cache.js</code> through <code>&lt;root&gt;/</code> and through <code>&lt;root&gt;/jsrc/</code> yields TWO module instances. A bench run 2026-08-02 showed <code>live=true, hits=0</code> while the wall time still improved (JIT warm-up), which reads exactly like a working cache. Make the mismatch impossible or loud.</li>
+<li><code>pol.init()</code> wipes the fd table and would strand a pol-registered watcher; the first attempt sidesteps this by draining at the top of <code>take</code> — keep that.</li>
+<li><code>fsw.unwatch(wd)</code> cannot remove the kernel watch (<code>FSWUndir</code> deleted under <a href="../ABC/ABC-013.html">ABC-013</a>), so a long-lived watcher over a churning tree accumulates watches until <code>fsw.stop()</code>.</li>
+<li>A <code>ninja</code> build inside a watched tree overflows the queue routinely, so <code>dropAll</code> is a normal path, not a corner case.</li>
+<li>Statting is NOT the cost being saved: measured 2.7 us per <code>io.lstat</code> warm (0.26 us in C), so a 619-file repo stats in ~2 ms out of a 98 ms <code>status</code>. The win is skipped object reads and quad building.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

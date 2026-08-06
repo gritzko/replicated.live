@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GIT-004</title>
+<title>GIT-004: OFS-only native resolver — delete the REFDELTA arm and cross-file recursion</title>
+<meta property="og:title" content="GIT-004: OFS-only native resolver — delete the REFDELTA arm and cross-file recursion">
+<meta property="og:description" content="Child of GIT-001; lands LAST, gated on GIT-006 migration (no on-disk native log may still hold REFDELTA). Once storage is OFS-only, keepgetpackedrec (keeper/KEEP.c:692) simplifies to a pure offset chase: read header, if base type inflate, if OFSDELTA subtract ofsdelta and loop, apply chain bottom-up. The whole REFDELTA arm — index lookup per hop, cross-file recursion (keepgetrec rdepth, KEEPXFILERECURMAX), the buf3 aliasing dance, and the MEM-022 stack-DoS hardening that exists only because REF bases can ping-pong across fileids — is deletable. The surviving chase — read header, OFS→subtract offset and loop, apply bottom-up — is pure bytes + offsets, so it lands as a dog/git resolver shared by keeper's native get AND the js/JABC binding (which drops its hand-composed seek+delt.apply chain). This is net removal of the store's most fragile, security-sensitive code. See Keeper, CLAUDE.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GIT/GIT-004.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>GIT-004: OFS-only native resolver — delete the REF_DELTA arm and cross-file recursion</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <h2>Input</h2>
 <h3>Context</h3>
 <p>
@@ -52,10 +61,18 @@ Child of <a href="GIT-001.html">GIT-001</a>; lands LAST, gated on <a href="GIT-0
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>Landed <code>cd1e8a00</code> on beagle.new: shared <code>PACKResolveOfs</code> (<code>dog/git/PACK.c:184</code>,<p>
-decl <code>PACK.h:121</code>) — pure OFS chase, caller-owned scratch; <code>keep_get_packed_rec</code> is now a thin lookup→resolve. Deleted the REF_DELTA arm, cross-file recursion, <code>rdepth</code>/<code>KEEP_XFILE_RECUR_MAX</code>, buf3 aliasing, and the <a href="../MEM/MEM-022.html">MEM-022</a> stack-DoS hardening; any stray native REF → bounded <code>KEEPFAIL</code> (new <code>PACKREF</code>), never silent <code>KEEPNONE</code>. <code>UNPK</code> foreign reader intact; corruption bounds preserved; <code>KEEPDIRTY</code> REF clause dropped. New <code>dog/test/PACKRESOLVE.c</code> + <code>dog/fuzz/PACKRESOLVEfuzz</code> (120s/16-job, 0 crashes); 397/397, ASan/LSan clean. GIT-006 gate moot — store born OFS-only. js binding rewrite deferred to <a href="">GIT-007</a>.
-</p>
-</li>
+<li>Landed <code>cd1e8a00</code> on beagle.new: shared <code>PACKResolveOfs</code> (<code>dog/git/PACK.c:184</code>, decl <code>PACK.h:121</code>) — pure OFS chase, caller-owned scratch; <code>keep_get_packed_rec</code> is now a thin lookup→resolve. Deleted the REF_DELTA arm, cross-file recursion, <code>rdepth</code>/<code>KEEP_XFILE_RECUR_MAX</code>, buf3 aliasing, and the <a href="../MEM/MEM-022.html">MEM-022</a> stack-DoS hardening; any stray native REF → bounded <code>KEEPFAIL</code> (new <code>PACKREF</code>), never silent <code>KEEPNONE</code>. <code>UNPK</code> foreign reader intact; corruption bounds preserved; <code>KEEPDIRTY</code> REF clause dropped. New <code>dog/test/PACKRESOLVE.c</code> + <code>dog/fuzz/PACKRESOLVEfuzz</code> (120s/16-job, 0 crashes); 397/397, ASan/LSan clean. GIT-006 gate moot — store born OFS-only. js binding rewrite deferred to <a href="./GIT-007.html">GIT-007</a>.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-019</title>
+<title>MEM-019 DONT: graf call() early-return skips mmap/handle cleanup (graf/MERGE.c, MAP.c, LOG.c, REBASE.c)</title>
+<meta property="og:title" content="MEM-019 DONT: graf call() early-return skips mmap/handle cleanup (graf/MERGE.c, MAP.c, LOG.c, REBASE.c)">
+<meta property="og:description" content="Several graf entry points acquire resources mid-function then reach a call()/bare-return that short-circuits past their own cleanup label, leaking already-mapped files, fds, weave mmaps, or an owned graf-open on the error path — violating the acquire-at-top / release-by-owner discipline (CLAUDE.md §5). The goal is to route every failure through the single cleanup path.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-019.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>MEM-019: graf call() early-return skips mmap/handle cleanup (graf/MERGE.c, MAP.c, LOG.c, REBASE.c)</h1>
+<h1>MEM-019 <a href="./DONT.html">DONT</a>: graf call() early-return skips mmap/handle cleanup (graf/MERGE.c, MAP.c, LOG.c, REBASE.c)</h1>
+<div>
+<p>
+Now: DONT
+</p>
+</div>
 <p>
 Several graf entry points acquire resources mid-function then reach a <code>call()</code>/bare-<code>return __</code> that short-circuits past their own cleanup label, leaking already-mapped files, fds, weave mmaps, or an owned graf-open on the error path — violating the acquire-at-top / release-by-owner discipline (CLAUDE.md §5). The goal is to route every failure through the single cleanup path.
 </p>
@@ -35,11 +44,22 @@ Re-verified 2026-07-07: MAP.c and LOG.c sites were fixed by MEM-040's render-hel
 </p>
 <h3>TODOs</h3>
 <p>
- -<a href="./ .html"> </a> <code>graf/MERGE.c:33-35</code> <code>GRAFMerge</code> — three <code>call(graf_merge_read,…)</code> in a row; a failure of the 2nd/3rd bare-returns past the <code>cleanup:</code> label (:60-63), leaking the earlier map(s). Capture results and <code>goto cleanup</code>.  -<a href="./ .html"> </a> <code>graf/REBASE.c:1031-1033</code> <code>GRAFRebaseBlobMerge</code> — <code>call(WEAVEInit,&amp;w1/&amp;nu)</code> failure returns before <code>WEAVEFree(&amp;w0/&amp;w1)</code> (:1044-1046); capture-result the three inits.  -<a href="./v.html">v</a> <code>graf/MAP.c</code> <code>GRAFMap</code> — fixed by MEM-040 <code>d857a9cc</code>: post-open body funneled through <code>grafmap_render</code> so <code>if (own_graf) GRAFClose()</code> (:229-230) runs on every exit; the <code>wh128bAcquire</code> NOROOM (:249-250) now returns through it.  -<a href="./v.html">v</a> <code>graf/LOG.c</code> <code>graf_head_ahead_behind</code> — fixed by MEM-040 <code>d857a9cc</code>: post-open body funneled through <code>grafhead_render</code> so <code>if (own_open) GRAFClose()</code> (:1135-1136) runs on every exit, incl. the <code>GRAFSwitchBranch</code> failure (:1179-1181).  -<a href="./ .html"> </a> Repro first: <code>graf merge</code> with a missing <code>ours</code>/<code>theirs</code>; fault-inject <code>WEAVEInit</code>; assert no map/handle leak.
+ -<a href="./ .html"> </a> <code>graf/MERGE.c:33-35</code> <code>GRAFMerge</code> — three <code>call(graf_merge_read,…)</code> in a row; a failure of the 2nd/3rd bare-returns past the <code>cleanup:</code> label (:60-63), leaking the earlier map(s). Capture results and <code>goto cleanup</code>. -<a href="./ .html"> </a> <code>graf/REBASE.c:1031-1033</code> <code>GRAFRebaseBlobMerge</code> — <code>call(WEAVEInit,&amp;w1/&amp;nu)</code> failure returns before <code>WEAVEFree(&amp;w0/&amp;w1)</code> (:1044-1046); capture-result the three inits. -<a href="./v.html">v</a> <code>graf/MAP.c</code> <code>GRAFMap</code> — fixed by MEM-040 <code>d857a9cc</code>: post-open body funneled through <code>grafmap_render</code> so <code>if (own_graf) GRAFClose()</code> (:229-230) runs on every exit; the <code>wh128bAcquire</code> NOROOM (:249-250) now returns through it. -<a href="./v.html">v</a> <code>graf/LOG.c</code> <code>graf_head_ahead_behind</code> — fixed by MEM-040 <code>d857a9cc</code>: post-open body funneled through <code>grafhead_render</code> so <code>if (own_open) GRAFClose()</code> (:1135-1136) runs on every exit, incl. the <code>GRAFSwitchBranch</code> failure (:1179-1181). -<a href="./ .html"> </a> Repro first: <code>graf merge</code> with a missing <code>ours</code>/<code>theirs</code>; fault-inject <code>WEAVEInit</code>; assert no map/handle leak.
 </p>
 <h3>Blockers and bummers</h3>
 <p>
 None. Reached on missing inputs / mmap / BASS pressure.
 </p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORK-002: work-view get button mutates the LAUNCH tree, not the row's worktree</title>
+<meta property="og:title" content="WORK-002: work-view get button mutates the LAUNCH tree, not the row's worktree">
+<meta property="og:description" content="2026-07-18, live: in the /todo/WORK/WORK-001 work view (launched from work/WORK-001), gritzko clicked get on the //bro-why row; the get executed against the LAUNCH tree instead — one wrong-tree mutation row, same class as the day's main-tree hijack: launched from the project root it would have re-pointed the MAIN tree. - Evidence: 26718LFvB get ///be#43a754a0 appended to work/WORK-001/.be (the launch tree), re-pinning its track ade2448b→43a754a0; work/bro-why/.be UNTOUCHED (last row Jul 13). - No file bytes were rewritten (all mtimes predate the row) — the damage was the track re-pin + phantom status/diff against the older base. - The pager in that tree DOES carry BRO-025: the button minted the three-part invite //bro-why/: get ///be, the click site parses it (SPELL.parseOspell) and calls actSpell(o.spell, &quot;//bro-why&quot;) — yet the mutation still ran in the pager's own tree. - The diff button (a U nav spell, diff //KEY) errs on EVERY wt row: no hunks: diff //beagle-ext-tests //: work — the resolved spell has the view's own address (//: work) glued onto the tail, so the diff verb gets a mangled arg line and returns no hunks (runSpell's no-hunks report).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/WORK/WORK-002.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WORK-002: work-view <a href="./get.html">get</a> button mutates the LAUNCH tree, not the row's worktree</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+2026-07-18, live: in the <a href="/todo/WORK/WORK-001.html">WORK-001</a> work view (launched from work/WORK-001), gritzko clicked <code>[get]</code> on the <code>//bro-why</code> row; the get executed against the LAUNCH tree instead — one wrong-tree mutation row, same class as the day's main-tree hijack: launched from the project root it would have re-pointed the MAIN tree.
+</p>
+<ul>
+<li>Evidence: <code>26718LFvB_ get ///be#43a754a0</code> appended to work/WORK-001/.be (the launch tree), re-pinning its track ade2448b→43a754a0; work/bro-why/.be UNTOUCHED (last row Jul 13).</li>
+<li>No file bytes were rewritten (all mtimes predate the row) — the damage was the track re-pin + phantom status/diff against the older base.</li>
+<li>The pager in that tree DOES carry BRO-025: the button minted the three-part invite <code>//bro-why/: get ///be</code>, the click site parses it (<code>SPELL.parseOspell</code>) and calls <code>_actSpell(o.spell, &quot;//bro-why&quot;)</code> — yet the mutation still ran in the pager's own tree.</li>
+<li>The <code>[diff]</code> button (a U nav spell, <code>diff //KEY</code>) errs on EVERY wt row: <code>no hunks: diff //beagle-ext-tests  //: work</code> — the resolved spell has the view's own address (<code>//: work</code>) glued onto the tail, so the diff verb gets a mangled arg line and returns no hunks (_runSpell's no-hunks report).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+An O-invite mutation runs IN the invite's recorded context, full stop: <code>[get]</code> on <code>//bro-why</code> appends to bro-why's wtlog and touches nothing else; a run whose context cannot be anchored refuses loudly (no fallback to cwd/launch tree).
+</p>
+<ul>
+<li>Red-first repro: fixture forest, press <code>[get]</code> on a row whose context ≠ launch tree; assert the row's wt got the get row and the launch tree's <code>.be</code> is byte-identical.</li>
+<li>Root-cause where the context is dropped: <code>_actSpell(spell, ctxOverride)</code> → <code>driveSpell(s, ctx)</code> — does driveSpell's ctx only scope ARG resolution (nav) while the verb's TARGET wt stays the process cwd? The BRO-025 spec is chdir/serialize/restore — the recorded-call path — the verb must run AS IF cwd were the context.</li>
+<li>Fix in the shared drive path, not per-button.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Rulings in force: verbs resolve args via resolve(context,base,rel) — the pager is arg-blind (<a href="/todo/BE/BE-030.html">BE-030</a> family); <code>//authority</code> is consumed from arg0 ONLY (authorityRepo); context changes ONLY by navigation (<a href="/todo/BRO/BRO-024.html">BRO-024</a>).</li>
+<li>Distinct from the day's OTHER wrong-tree writes: the be/.be hijack rows (26718KcF3v/KhW83) were a poisoned-code cascade (pre-DIS-062 code) — THIS misfire ran current WORK-001 code, so it is a live tip bug in the O-context execution path.</li>
+<li>Related: <a href="/todo/POST/POST-032.html">POST-032</a> (conflict handling on the same landing), the unfiled GET-050 draft (same-pin no-op + wtlog-write-before-checkout atomicity) staged in work/GET-REPOINT.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro test: pager press on a foreign-context O invite → mutation lands in the CONTEXT wt only; launch tree <code>.be</code> unchanged</li>
+<li><a href="./ .html"> </a> <code>[diff]</code> repro + root cause: where <code>_resolveSpell</code> welds the view address (<code>//: work</code>) onto <code>diff //KEY</code> — the U follow path must hand the verb <code>diff //KEY</code> alone</li>
+<li><a href="./ .html"> </a> trace driveSpell(s, ctx): what the ctx actually scopes; add the chdir/serialize/restore leg (or context→target-wt plumbing) for mutation verbs</li>
+<li><a href="./ .html"> </a> refuse loudly when the O-context anchors no worktree (no cwd fallback — the NAVESCAPE spirit)</li>
+<li><a href="./ .html"> </a> recovery note: the stray row in WORK-001/.be (26718LFvB_) — strip or supersede once the landing settles</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The WORK-001 landing itself is stalled on <a href="/todo/POST/POST-032.html">POST-032</a>; this bug makes every work-view mutation button unsafe until fixed — buttons should be considered ARMED AND WRONG on any row whose wt ≠ the launch tree.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-056b: apply the GET-056 ruling to every kind-keyed gate, incl. sub checkout</title>
+<meta property="og:title" content="GET-056b: apply the GET-056 ruling to every kind-keyed gate, incl. sub checkout">
+<meta property="og:description" content="GET-056 fixed the flat D5 gate (be/verbs/get/get.js:1054 now f||x + 3-side isBinary) but the SUB checkout path has its own twin gate at be/shared/checkout.js:203 still reading kind === &quot;f&quot; — its comment codifies the overturned &quot;symlink/exec clean-reset&quot;. This unfixed twin clobbered the five exec-bit files in the GET-057 incident.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-056b.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-056b: apply the GET-056 ruling to every kind-keyed gate, incl. sub checkout</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+<a href="./GET-056.html">GET-056</a> fixed the flat D5 gate (<a href="./be/verbs/get/get.js:1054.html">get.js:1054</a> now <code>f||x</code> + 3-side <code>isBinary</code>) but the SUB checkout path has its own twin gate at <a href="./be/shared/checkout.js:203.html">checkout.js:203</a> still reading <code>kind === &quot;f&quot;</code> — its comment codifies the overturned &quot;symlink/exec clean-reset&quot;. This unfixed twin clobbered the five exec-bit files in the <a href="./GET-057.html">GET-057</a> incident.
+</p>
+<ul>
+<li>RULING (gritzko, 2026-07-28, via GET-056): mergeability is a property of the BYTES, not the mode bit; symlink, gitlink or BINARY get reset; anything parseable (any text) gets MERGED.</li>
+<li><a href="./GET-057.html">GET-057</a>'s worker staged a partial one-liner (<code>f||x</code>, no binary check, keep-ours not weave) in its own worktree <code>//GET-057</code> — not landed; this ticket supersedes that line on trunk.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Audit ALL gates keying mergeability/dirty-keep on leaf kind (grep <code>kind === &quot;f&quot;</code> and friends); bring every site to the ruling.</li>
+<li>Sub checkout gate: regular file (<code>f</code>/<code>x</code>) AND no side binary → preserve the dirty edit (weave like the flat D5 path if reachable; else keep-ours and flag); binary/symlink/gitlink clean-reset.</li>
+<li>Repro tests FIRST, both directions in a SUB: (a) dirty exec TEXT file across a get → edit preserved; (b) dirty BINARY 644 file across a get → clean-reset.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Reuse <code>isBinary</code> from <a href="./be/views/diff/diff.js.html">diff.js</a> (exported since GET-056); no second heuristic.</li>
+<li>No commits; put + report only, per <a href="/meta/work.html">work</a>; do not touch <code>//GET-057</code> or <code>//PATCH-025</code> worktrees.</li>
+<li>Minimal diff; no other tests edited.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>RULING (gritzko, 2026-07-30, mid-ticket): the merge matrix is text clean → theirs, text dirty → weave3, binary clean → theirs, binary DIRTY → OURS (an uncommitted edit is never silently dropped, binary is never woven). This OVERTURNS GET-056's &quot;dirty binary clean-resets&quot; in both paths.</li>
+<li><code>weave3</code> moved from <a href="./be/verbs/get/get.js.html">get.js</a> into <a href="./be/shared/weave.js.html">weave.js</a> so the sub checkout weaves through the SAME code; unweavable/marker cases emit durable <code>con</code> wtlog rows via <code>opts.bePath</code> handed down from <a href="./be/shared/submount.js.html">submount.js</a>.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> clone <code>///be/</code> into <code>//GET-056b</code>, base <code>///be/#543269d6</code></li>
+<li><a href="./v.html">v</a> grep audit: only <a href="./be/shared/checkout.js:203.html">checkout.js:203</a> non-compliant as a gate; checkout.js:112/133, spot/search.js:201, status.js:327 are write-path/UI</li>
+<li><a href="./v.html">v</a> repro red→green: <code>test/sub/dirty-exec-keep</code> (sub dirty exec text weaves, was clobbered), <code>test/sub/dirty-binary-keep</code> (sub dirty binary keeps ours), <code>test/get/dirty-exec-binary</code> part (b) flipped to keep-ours per the new ruling</li>
+<li><a href="./v.html">v</a> flat path: dirty-binary-keeps-ours arm added at get.js:1057; sub path: full matrix at checkout.js:227</li>
+<li><a href="./v.html">v</a> ctest -j16: 319/319; orchestrator re-ran the suite + inspected both gates, matches the matrix</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Stale put row: <code>test/sub/dirty-binary-reset/run.sh</code> was renamed to <code>dirty-binary-keep</code> mid-work; the old row skips on <code>jab delete</code> (&quot;deleted 0, 1 skipped&quot;) — row-only unstage isn't implemented (<a href="/todo/ULOG">ULOG</a> PUT/DELETE ruling); left rather than hand-editing the wtlog.</li>
+<li><code>jab diff verbs/get/get.js</code> (scoped, 82KB file) dies <code>hunk.render: out full</code> — filed <a href="/todo/DIFF/DIFF-019.html">DIFF-019</a>; bare <code>jab diff</code> renders the edit fine.</li>
+<li>Supersedes the <code>f||x</code>-only one-liner staged in <code>//GET-057</code> (no binary logic, keep-ours only) — reconcile at landing.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Landed 2026-07-30: <code>///be/#5c0d5c21</code> + <code>//be/test#4e59c1ac</code> &quot;GET-056b: text/binary clean/dirty get behavior matrix&quot;.</li>
+<li>Supersedes <code>//GET-057</code>'s staged one-liner; render bug found while reviewing → <a href="/todo/DIFF/DIFF-019.html">DIFF-019</a>.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

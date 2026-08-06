@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PACK-004: repack ingest REFUSES a REFDELTA that arrives in the source pack — thin packs and every non-ofs-delta peer abort</title>
+<meta property="og:title" content="PACK-004: repack ingest REFUSES a REFDELTA that arrives in the source pack — thin packs and every non-ofs-delta peer abort">
+<meta property="og:description" content="22bec7d6 restored REFDELTA on the READ side only. PACKResolve/PIDXScanRef take a packreffind so a rotated log's cross-log bases resolve, and REPACK.c:314 EMITS REFDELTA whenever a crossing delta lands in a new log — but REPACK.c:308 still carries test(obj.type != PACKOBJREFDELTA, REPACKBASE), so a source pack that CONTAINS a REFDELTA record aborts with &quot;pack: a delta cites a base that never arrived&quot;. That is not an exotic input: a THIN pack names its bases by sha by construction (KEEP-006 §Fetch-side rules says so outright), and so does any peer that did not negotiate ofs-delta. Every incremental fetch is a thin pack, so this bites the moment JAB-020 routes jab get through git.pack. Found by the TEST-004 treadmill; method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PACK/PACK-004.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PACK-004: repack ingest REFUSES a REF_DELTA that arrives in the source pack — thin packs and every non-<code>ofs-delta</code> peer abort</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<p>
+<code>22bec7d6</code> restored REF_DELTA on the READ side only. <code>PACKResolve</code>/<code>PIDXScanRef</code> take a <code>pack_ref_find</code> so a rotated log's cross-log bases resolve, and <code>REPACK.c:314</code> EMITS REF_DELTA whenever a crossing delta lands in a new log — but <code>REPACK.c:308</code> still carries <code>test(obj.type != PACK_OBJ_REF_DELTA, REPACKBASE)</code>, so a source pack that CONTAINS a REF_DELTA record aborts with &quot;pack: a delta cites a base that never arrived&quot;. That is not an exotic input: a THIN pack names its bases by sha by construction (<a href="../KEEP/KEEP-006.html">KEEP-006</a> §Fetch-side rules says so outright), and so does any peer that did not negotiate <code>ofs-delta</code>. Every incremental fetch is a thin pack, so this bites the moment <a href="../JAB/JAB-020.html">JAB-020</a> routes <code>jab get</code> through <code>git.pack</code>. Found by the <a href="../TEST/TEST-004.html">TEST-004</a> treadmill; method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>jab/dog/git/REPACK.c:308</code> — the <code>else</code> arm of the OFS branch is <code>test(obj.type != PACK_OBJ_REF_DELTA, REPACKBASE)</code>: a REF_DELTA record on input ends the run.</li>
+<li><code>jab/dog/git/REPACK.c:314</code> — the same loop emits <code>PACK_OBJ_REF_DELTA</code> when <code>baserow-&gt;slot != rp-&gt;slot</code>, so the writer produces exactly the record shape the reader refuses.</li>
+<li><code>REPACKRun(fd, buf, shard, conf, ibuf, st)</code> (<code>REPACK.h:72</code>) has no finder parameter; wiring one in is a signature change nothing has made yet.</li>
+<li>Verified 2026-07-27 with <a href="../TEST/TEST-004.html">TEST-004</a> <code>test/mill/pack.js</code>: git.git repacked 417,182/417,182 objects clean at a 128 MB cap — which under line 308 PROVES the input pack was OFS-only, not that REF input works.</li>
+<li><a href="../KEEP/KEEP-006.html">KEEP-006</a> measured that git's own repack emits all-OFS (315,878/315,878 type-6 in git.git), which is why a locally-cloned pack never trips this and a fetched one will.</li>
+<li>The bases a thin pack cites are the ones the client ALREADY HAS — they live in the shard's existing logs, not in the incoming stream, so resolving them needs the shard index too, not just the ingest-local map.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+<code>git.pack</code> ingests a pack containing REF_DELTA records, resolving each base out of the shard rather than aborting.
+</p>
+<ul>
+<li><code>REPACKRun</code> takes a base finder (sha → pack slice + offset), the same shape <code>PACKResolve</code> already accepts from <code>22bec7d6</code>.</li>
+<li>The finder answers from BOTH the ingest-local index being built AND the shard's pre-existing logs, since a thin pack's bases predate the fetch.</li>
+<li>A base that genuinely cannot be found stays a plain-words failure — &quot;a delta cites a base that never arrived&quot; is the right message, just not for every REF record.</li>
+<li>The <code>git.pack</code> binding grows no new argument: the shard path it already takes is what the finder searches.</li>
+<li><a href="../TEST/TEST-004.html">TEST-004</a> <code>pack.js --thin</code> flips from pinning today's refusal to asserting the objects land.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Read-side machinery is already there — reuse <code>pack_ref_find</code>/<code>PIDXScanRef</code>, do not write a second resolver.</li>
+<li>No waiter forest: <a href="../KEEP/KEEP-006.html">KEEP-006</a> established bases always land earlier, and for a thin pack they landed in an earlier FETCH; a lookup suffices.</li>
+<li><code>ZINFMORE</code> must keep propagating (<a href="../JAB/JAB-020.html">JAB-020</a>) — do not let the new branch collapse truncation into a base error.</li>
+<li>Errors cross the JS boundary in plain words, never as an ok64 code.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>The gap is INGEST-only; <code>22bec7d6</code>'s read-side work stands and needs no revisiting.</li>
+<li>Deciding whether the finder is passed in by JS or opened from the shard path inside libdog is open — libdog knows the shard already, and <a href="../KEEP/KEEP-006.html">KEEP-006</a> rules that JS keeps only routing.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> Add the finder to <code>REPACKRun</code>'s signature and thread it to the delta branch.</li>
+<li><a href="./ .html"> </a> Replace the <code>REPACK.c:308</code> refusal with a REF resolve: find the base by sha, apply the delta, emit as the base's type.</li>
+<li><a href="./ .html"> </a> Make the finder search the shard's existing logs as well as the run's own index (a thin pack's bases predate the fetch).</li>
+<li><a href="./ .html"> </a> Keep the genuine miss a plain-words error, distinct from a truncated stream.</li>
+<li><a href="./ .html"> </a> <a href="../TEST/TEST-004.html">TEST-004</a> <code>pack.js --thin</code>: build a thin pack with <code>git pack-objects --thin</code> and assert the objects land.</li>
+<li><a href="./ .html"> </a> Verify end-to-end through a real incremental <code>jab get</code>, not a unit probe.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Depends on nothing, but <a href="../JAB/JAB-020.html">JAB-020</a> should not declare the clone path converted until this lands: the first clone would work and every incremental fetch would fail.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+Not started — filed 2026-07-27 from a <a href="../TEST/TEST-004.html">TEST-004</a> treadmill finding, after gritzko's read of <code>22bec7d6</code>.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

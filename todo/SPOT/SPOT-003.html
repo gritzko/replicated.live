@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SPOT-003: spot.js tree search — lazy trigram index, seen-tree/blob memo, dirty bypass</title>
+<meta property="og:title" content="SPOT-003: spot.js tree search — lazy trigram index, seen-tree/blob memo, dirty bypass">
+<meta property="og:description" content="SPOT-002 locates within hunks; this ticket is the tree-wide search that feeds it candidate files. The C impl (spot/CAPO.h §&quot;Index entry layout&quot;, CAPO.c scan/tip-walk) is the model: an LSM stack of sorted 8-byte postings under .be/.spot.idx, a per-blob memo that makes indexing incremental, and a worktree scan where the index only ever EARLY-REJECTS clean files.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/SPOT/SPOT-003.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SPOT-003: spot.js tree search — lazy trigram index, seen-tree/blob memo, dirty bypass</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+<a href="SPOT-002.html">SPOT-002</a> locates within hunks; this ticket is the tree-wide search that feeds it candidate files. The C impl (spot/CAPO.h §&quot;Index entry layout&quot;, CAPO.c scan/tip-walk) is the model: an LSM stack of sorted 8-byte postings under <code>.be/*.spot.idx</code>, a per-blob memo that makes indexing incremental, and a worktree scan where the index only ever EARLY-REJECTS clean files.
+</p>
+<ul>
+<li>C twins: wh64 <code>[off:40|id:20|type:4]</code> postings, <code>SPOTIndexFromTips</code> + BLOBFN memo, <code>CAPOTri40</code> trigram packing, the <code>capo_class_step</code> dirty-bypass scan.</li>
+<li>JS substrate exists: <code>shared/store.js</code> (object reads), <code>shared/classify.js</code> (wt walk + clean/dirty), <code>tok.parse</code> (postings come off the token stream, no manual parsing).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+<code>shared/spotidx.js</code> (or views/spot/): trigram index maintained lazily AT SEARCH TIME — search never requires a prior index pass, the index only makes it faster.
+</p>
+<ul>
+<li>8-byte wh64 entries, one uniform shape <code>[off:40 | path_hl:20 | type:4]</code> (WHIFF: type LS nibble, off MS sorts first); natural u64 sort; sorted runs on disk, merged iteration, compaction (C 1/8 invariant).</li>
+<li>Record types: TRI posting <code>[tri:40 | path_hl:20 | TRI]</code> &quot;this path has ever contained this trigram&quot; (3 RON64 chars, 18 bits used); BLOB memo <code>[blob_hl:40 | path_hl:20 | BLOB]</code> &quot;this blob@path is already tokenized&quot;; TREE memo <code>[tree_hl:40 | dirpath_hl:20 | TREE]</code> &quot;this subtree@dir is already indexed&quot;; free type nibbles reserved (DEF/MEN symbol postings later, <code>[sym_hash:40 | path_hl:20 | type]</code>).</li>
+<li>Memos pair hash WITH path — load-bearing, not C nostalgia: a bare blob memo would skip a known blob at a NEW path (path gets no postings → filter wrongly rejects it); a bare tree memo would prune a MOVED subtree (same tree hash, all full paths new). The pair keying re-walks exactly those cases.</li>
+<li>Lazy indexing during search: walk the tip trees; TREE memo hit → prune the whole subtree; BLOB memo hit → skip the blob; else read blob, tok.parse, emit TRI postings, write the BLOB row; write the TREE row when a subtree completes.</li>
+<li>Search: needle → trigram set → intersect postings → candidate path-hash20 set; clean tracked files not in the set are rejected without opening; candidates are opened and matched by <a href="SPOT-002.html">SPOT-002</a> matchers (RAP20 collisions just rescan — filter, not truth).</li>
+<li>Dirty and untracked files are searched UNCONDITIONALLY, index bypassed — the index is authoritative only for clean tracked content (C: <code>apply_filter</code> iff CLASS_BOTH + known mtime stamp).</li>
+<li>Bro right-click = project-scoped symbol/token grep (the C browser's action, revived): right-clicking a visible token navigates to <code>spot://WT/path#token</code> — the substr locator over the worktree; blocked on THIS ticket, ships with it.</li>
+<li>The right-click search emits hunks like every view: one hunk per match window, 2-3 context lines each way (<a href="SPOT-002.html">SPOT-002</a> <code>window</code>, grepCtx twin), so results page/click/compose as usual.</li>
+<li>Scope rides the PATH slot, never the fragment (ruling 2026-07-18, kills today's <code>#'pattern'.ext</code>): <code>spot:.c#'pattern'</code> = all files of the <code>.c</code> lexer family; <code>spot:/root/path#'pattern'</code> = subtree scope, each file parsed with its OWN grammar (per-ext needle recompile — <a href="SPOT-002.html">SPOT-002</a> <code>compile(loc, ext)</code> / <code>scan</code> already does this); the fragment is the locator, nothing else.</li>
+<li>Wiki drift: /wiki/View.mkd §&quot;Search views&quot; still shows the fragment-<code>.ext</code> form (<code>spot:#'…'.c</code>) — stale under this ruling, needs the hand edit on landing.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>A NEW index format (ruling 2026-07-18: no bit-compat with CAPO.h required); the TRI/BLOB shapes still coincide with C's, TREE is the JS addition.</li>
+<li>Growth stays bounded because postings are PATH-keyed: an edited blob re-emits mostly identical (tri, path) entries which dedup at ingest (hash-set) and at compaction — index ~ O(one snapshot's distinct pairs), history costs one BLOB memo row per blob version. Blob-keyed postings would grow linearly with history (every edit mints a fully novel posting set) — rejected.</li>
+<li>Blob bytes come via shared/store.js only; wt walk + clean/dirty verdicts via classify.js — no parallel stat/walk code.</li>
+<li>Trigrams over the RON64 alphabet, <code>CAPOTri40</code> packing verbatim; needles with &lt;3 such chars get no filter (full scan, like C SPOT_SCAN_NO_FILTER).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>One search entry: <code>candidates(needle, ref)</code> — opens runs, lazily indexes unseen trees/blobs of <code>ref</code>'s tip, returns the path-hash filter set; the caller (spot view / <a href="SPOT-002.html">SPOT-002</a> <code>scan</code>) does the actual matching.</li>
+<li>Trigram-MS order ruled (2026-07-18) over path-MS: filtering intersects a few CONTIGUOUS trigram blocks once per query and can early-out &quot;no matches anywhere&quot; before walking; path-MS would random-probe every clean file across every run and never conclude globally. The filtering algo:</li>
+</ul>
+<pre><code>tris = trigrams(needle)                    // a handful
+cand = null
+for t in tris (rarest range first):
+    ids = k-way-merge over runs of the contiguous block [t]   // sorted path_hls
+    cand = cand==null ? ids : intersect(cand, ids)            // sorted merge
+    if empty(cand): return NO MATCHES ANYWHERE                // early out, no walk
+for file in classify(wt):
+    dirty/untracked      -&gt; open+match
+    path_hl(file) ∈ cand -&gt; open+match     // binary search in cand
+    else                 -&gt; reject
+</code></pre>
+<ul>
+<li>TREE memo is the JS win: the C tip-walk visits every leaf and memo-checks per blob; the tree row prunes whole unchanged directories — O(changed) walk on a warm index.</li>
+<li>Fresh postings buffer in RAM (typed-array sort at flush), flushed as one new run per search session; compaction folds runs when count exceeds the C ratio.</li>
+<li>API sketch (C twins: SPOTOpen, SPOTIndexFromTips, CAPOTri40, CAPOFlushRun, CAPOCompact):</li>
+</ul>
+<pre><code>open(repo)              // find + mmap .be/ *.spot.idx runs → idx {runs[], fresh}
+close(idx)              // flush fresh as ONE new run; compact past the 1/8 ratio
+ent(type, off40, hl20)  // pack; entType/entOff/entHl unpack — SPOT-002 side
+                        //  never touches raw entries
+trigrams(needle)        // RON64 trigram set, CAPOTri40 packing; null when no
+                        //  3-char run → no filter (full scan)
+pathHl(relpath)         // the 20-bit full-path hash, ONE fn: postings+memos+gate
+ensure(idx, ref)        // lazy tip-walk AT SEARCH TIME: TREE hit → prune subtree,
+                        //  BLOB hit → skip blob, else store-read + tok.parse →
+                        //  TRI postings + BLOB row; TREE row on subtree complete
+candidates(idx, tris)   // the filtering algo above; tris is CNF — AND-list of
+                        //  OR-clauses of trigrams (flat needle → singleton
+                        //  clauses; regex fold from [/todo/DOG/DOG-022] → real
+                        //  clauses); OR = union of blocks, AND = intersect;
+                        //  [] = no match anywhere, null = unfiltered
+gate(cand, step)        // classify verdict → SCAN | REJECT: dirty/untracked
+                        //  always SCAN; clean tracked → binsearch pathHl in cand
+</code></pre>
+<ul>
+<li>View flow: <code>open</code> → <code>ensure(ref)</code> → <code>candidates(needle)</code> → classify walk with <code>gate</code>, survivors' hunks go to <a href="SPOT-002.html">SPOT-002</a> <code>scan</code> → <code>close</code> persists what the walk learned (next search starts warm). <code>fresh</code> joins <code>candidates</code> as just another run — results never depend on flush timing; a killed session loses warmth, never correctness.</li>
+<li>Rename cost accepted (matches C): a moved file/dir re-indexes under its new path hash; stale entries under the old path linger as false positives — harmless, the index is a reject-filter, never truth.</li>
+<li>20-bit path hashes are filter-grade (~1/1M collisions): a posting collision only costs a wasted open; a memo-pair collision could wrongly skip indexing — same exposure C accepts with BLOBFN.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> wh64 pack/unpack + TRI/BLOB/TREE type constants, one shared module (abc.index u64 lane IS the wh64 substrate)</li>
+<li><a href="./v.html">v</a> run file writer/reader + merged sorted iteration + compaction (abc compact(), 1/8 ratio, <code>*spot.idx</code> family)</li>
+<li><a href="./v.html">v</a> lazy tip-walk: TREE prune, BLOB skip → TRI emit — DEVIATION: trigrams come off a byte-level RON64-run scan, not tok.parse (superset-safe: never ext-gates an unknown-lexer file into a wrong REJECT; identical set for identifier content)</li>
+<li><a href="./v.html">v</a> trigram extraction + <code>candidates()</code> intersection → path-hash set (CNF, early-out)</li>
+<li><a href="./v.html">v</a> classify-driven scan gate: dirty/untracked always SCAN; clean tracked binsearch</li>
+<li><a href="./-.html">-</a> bro right-click → <code>spot://WT/path#token</code> nav; result hunks via <code>window</code> — blocked on <a href="SPOT-002.html">SPOT-002</a> landing (parallel wt), the search.js integration is the join point</li>
+<li><a href="./-.html">-</a> parseURI: <code>.ext</code> / subtree scope from the PATH slot — same join point, with SPOT-002</li>
+<li><a href="./v.html">v</a> repro: golden — cold-indexes/warm-prunes (walk counts), new-session persistence, blob-at-new-path + moved-subtree (memo pair legs), dirty-edit-with-stale-index, edit-dedup growth</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Regex-locator trigram extraction blocks on <a href="../DOG/DOG-022.html">/todo/DOG/DOG-022</a> (RXLITS → dog/tok + <code>tok._rx_lits</code> binding); until it lands, <code>/re/</code> needles run unfiltered (full scan) — correct, just slow.</li>
+<li>View wiring (candidates/gate into search.js) + right-click blocked on <a href="SPOT-002.html">SPOT-002</a> landing; index layer is standalone-complete.</li>
+<li>/wiki/View.mkd §&quot;Search views&quot; still shows the stale fragment-<code>.ext</code> form — hand edit on landing.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Staged (put only, NOT posted) in //SPOT-003 on base //SPOT/#9928a0be: shared/spotidx.js; test sub: test/spotidx.js + CMakeLists.txt registration (be-js-unit-spotidx).</li>
+<li>Worker suite 305/306; the one red is pre-existing be-js-work-getctx (the retired-<a href="./get.html">get</a> pty click, known from <a href="/todo/WORK/WORK-007.html">WORK-007</a>'s side-find). Orchestrator re-ran test/spotidx.js 2026-07-19: OK.</li>
+<li>Suggested commit: <code>SPOT-003: shared/spotidx.js lazy trigram reject-filter + golden test</code></li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

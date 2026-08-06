@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-031: no jab binding for abc/FSW — JS cannot watch a directory</title>
+<meta property="og:title" content="JAB-031: no jab binding for abc/FSW — JS cannot watch a directory">
+<meta property="og:description" content="dog/abc/FSW.h already ships the cross-platform watcher — inotify on Linux, kqueue on macOS/BSD, #error elsewhere — and FSWInit hands back exactly the pollable fd that pol.watch(fd, pol.IN, fn) wants. No jab leaf calls it: dog/abc/INDEX.md lists FSW but the whole tree has zero consumers, so JS has no way to make a watcher and the kqueue half is unexercised. This ticket adds the fsw binding in jab/, shaped like pol.cpp (stateless C leaves, all per-watch state in a JS bundle).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-031.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-031: no jab binding for abc/FSW — JS cannot watch a directory</h1>
+<div>
+<p>
+Now: DONE
+</p>
+<p>
+Ask: gritzko Env: Linux (inotify), macOS/BSD (kqueue)
+</p>
+</div>
+<p>
+<code>dog/abc/FSW.h</code> already ships the cross-platform watcher — inotify on Linux, kqueue on macOS/BSD, <code>#error</code> elsewhere — and <code>FSWInit</code> hands back exactly the pollable fd that <code>pol.watch(fd, pol.IN, fn)</code> wants. No jab leaf calls it: <code>dog/abc/INDEX.md</code> lists FSW but the whole tree has zero consumers, so JS has no way to make a watcher and the kqueue half is unexercised. This ticket adds the <code>fsw</code> binding in <code>jab/</code>, shaped like <code>pol.cpp</code> (stateless C leaves, all per-watch state in a JS bundle).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The pager is the first plausible consumer (live re-render when a watched file changes), but the binding is missing, not the pager wiring.
+</p>
+<ul>
+<li><code>jab/dog/abc/FSW.{h,c,md}</code> — <code>FSWInit</code>/<code>FSWDir</code>/<code>FSWPoll</code>/<code>FSWDrain</code>/<code>FSWClose</code>; <code>FSWUndir</code> was deleted as a no-op lie under <a href="./ABC-013.html">ABC-013</a>.</li>
+<li>inotify costs one fd total plus a watch descriptor (~1 KB kernel memory) per dir; kqueue costs one open dir fd per watch, so <code>RLIMIT_NOFILE</code> is the macOS ceiling.</li>
+<li>kqueue events carry no filename — <code>FSWDrain</code> reports an empty path there, a wake-up signal the caller answers with a dir rescan.</li>
+<li>The inotify fd is level-triggered readable, so <code>pol</code>'s existing <code>poll(2)</code> loop drives it with no repeated polling and no idle wakeups.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+A <code>fsw</code> object in JS that opens a watcher, arms directories, and delivers changed names through the existing pol loop.
+</p>
+<ul>
+<li><code>fsw.init() -&gt; wfd</code>, <code>fsw.dir(wfd, path) -&gt; wd</code>, <code>fsw.drain(wfd, buf) -&gt; n</code>, <code>fsw.close(wfd)</code>.</li>
+<li>JS-side sugar <code>fsw.watch(dir, fn)</code> that owns the <code>wd -&gt; dir</code> map and registers the pol handler.</li>
+<li><code>jab/API.md</code> + <code>jab/INDEX.md</code> entries; a repro test that arms a temp dir and sees a created file's name.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+JABC rule #4 — the native layer is leaf-only, holds no memory and no long-lived JS refs; only fds and buffers cross the boundary.
+</p>
+<ul>
+<li>No per-event C-to-JS callback: <code>fsw.drain</code> fills a caller-owned <code>Buf</code> with packed records and JS parses them.</li>
+<li>Every native op goes through <code>call()</code> so BASS scratch rewinds (<a href="./JAB-008.html">JAB-008</a>).</li>
+<li>Do not touch <code>dog/abc/FSW.c</code> — the watcher's own lifetime bugs belong to <a href="./ABC-013.html">ABC-013</a>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+The binding is a thin leaf over the existing C API; framing and bookkeeping live in JS.
+</p>
+<ul>
+<li><code>fsw.drain</code> passes an internal collector <code>FSWcb</code> that packs <code>wd</code> + name length + name bytes into the Buf, returning the record count.</li>
+<li>The packed name is inotify's BARE basename, not a path: only the <code>wd</code> says which dir it fell in, so the JS <code>wd -&gt; dir</code> map is what composes a usable path.</li>
+<li>On kqueue the packed name is empty; the JS sugar turns that into a rescan of the <code>wd</code>'s dir rather than pretending it knows the file.</li>
+<li><code>FSWPoll</code> gets no binding — <code>pol.run</code> owns the blocking, and a second blocking primitive would fight it.</li>
+<li><code>fsw.close</code> wraps <code>FSWClose</code>; on kqueue the pinned dir fds survive it, so the JS sugar tracks them and the doc says so.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./ .html"> </a> <code>jab/fsw.cpp</code> — the four leaves plus <code>JABCFswInstall</code>, wired into the API table -<a href="./ .html"> </a> drain record framing (wd, len, name) agreed between the leaf and the bundle -<a href="./ .html"> </a> JS bundle: <code>fsw.watch(dir, fn)</code>, the <code>wd -&gt; dir</code> map, <code>pol.watch(wfd, pol.IN, ...)</code> registration -<a href="./ .html"> </a> test: mkdir a temp dir, arm it, create a file, drain, assert the name (Linux) -<a href="./ .html"> </a> <code>jab/API.md</code> and <code>jab/INDEX.md</code> entries -<a href="./ .html"> </a> follow-up ticket for the pager's live-refresh use — out of scope here
+</p>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>No macOS/BSD box in this environment: the kqueue path ships untested and must be flagged as such.</li>
+<li><code>max_user_watches</code> (8192 on stock kernels) is the arm-a-big-tree wall; a recursive-watch helper is not in this ticket's scope.</li>
+<li>Bursty writes overflow inotify's queue (<code>max_queued_events</code>, 16384) and drop events — the JS consumer must tolerate a missed name.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

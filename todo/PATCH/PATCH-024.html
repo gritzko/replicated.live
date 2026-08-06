@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PATCH-024: an absorbed patch must not move the base — kill baselineTip as a base tree</title>
+<meta property="og:title" content="PATCH-024: an absorbed patch must not move the base — kill baselineTip as a base tree">
+<meta property="og:description" content="An in-scope patch row silently becomes the BASE for several views, so patched-in content goes invisible exactly where it must show. wtlog.baselineTip() resolves &quot;the latest get/post/PATCH sha-row&quot; (shared/wtlog.js:17,249) and consumers then read that sha's tree as the base: diff renders wt-vs-patch (byte-identical → EMPTY output, exit 0) and classifyDir buckets a file that the real base commit tracks as unk. RULING (gritzko, 2026-07-29): patch must NOT affect the base commit; the patched stuff must show in diff and status. Status already says so — base is &quot;the recentmost get/post row&quot; and the patched-in lines are a SEPARATE column &quot;since the base&quot;. The correct baseline is curTip(), as classify and status already do.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PATCH/PATCH-024.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PATCH-024: an absorbed patch must not move the base — kill baselineTip as a base tree</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<p>
+An in-scope <code>patch</code> row silently becomes the BASE for several views, so patched-in content goes invisible exactly where it must show. <code>wtlog.baselineTip()</code> resolves &quot;the latest get/post/PATCH sha-row&quot; (<code>shared/wtlog.js:17,249</code>) and consumers then read that sha's tree as the base: <code>diff</code> renders wt-vs-patch (byte-identical → EMPTY output, exit 0) and <code>classifyDir</code> buckets a file that the real base commit tracks as <code>unk</code>. RULING (gritzko, 2026-07-29): patch must NOT affect the base commit; the patched stuff must show in diff and status. <a href="../../wiki/Status.html">Status</a> already says so — base is &quot;the recentmost <code>get</code>/<code>post</code> row&quot; and the patched-in lines are a SEPARATE column &quot;since the base&quot;. The correct baseline is <code>curTip()</code>, as <code>classify</code> and <code>status</code> already do.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Live incident (gritzko, 2026-07-29, <code>//BRO-041/be/test</code>): after <code>be patch ?2c927d8a</code>, <code>be status</code> correctly shows <code>..vv diff/13-color-word-wash/run.sh</code> (patch + wt columns lit) while <code>be diff</code> and <code>be diff &lt;path&gt;</code> print NOTHING, exit 0.</li>
+<li>Cause: <code>views/diff/diff.js:467</code> takes <code>baselineTip().sha</code> as the from-side, which after the patch row IS the patched sha, so the per-file sha-skip at <code>views/diff/diff.js:287</code> drops every path.</li>
+<li>Second symptom, same root: <code>be ls:post/sub-dirty-parent</code> calls the file <code>unk</code> though the base commit <code>4dd6f80f</code> tracks it — <code>classifyDir</code> reads its base tree from <code>baselineTip()</code> (<code>shared/classify.js:553</code>).</li>
+<li>Corroboration: <code>be diff ?4dd6f80f</code> (explicit range against the real base) renders the change fine — only the implicit wt-vs-base path is blind.</li>
+<li>The correct precedent is in-tree: <code>shared/classify.js:249-254</code> uses <code>curTip</code> and its comment already explains why (&quot;baselineTip folds a patch row's THEIRS sha into the baseline … <code>pat</code> never appeared&quot;); <code>views/status/status.js:341</code> does the same.</li>
+<li><code>wiki/Sniff.mkd</code> (whose line &quot;SNIFFAtBaseline resolves the baseline get/post/patch row&quot; seeded this reading) was DELETED by gritzko on 2026-07-29 — do not restore it, and do not cite it.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>The base tree for every wt-relative view is <code>curTip()</code> (recentmost <code>get</code>/<code>post</code>); an absorbed patch never moves it.</li>
+<li><code>be diff</code> after a <code>patch</code> renders the patched-in content as a real wt-vs-base diff, matching what <code>status</code> already reports.</li>
+<li><code>be ls</code>/<code>list</code> bucket a file tracked by the base commit as tracked, never <code>unk</code>, with a patch row in scope.</li>
+<li>Every remaining <code>baselineTip()</code> call site is reviewed one by one and either converted or justified in the ticket.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Do NOT change <code>status</code>'s quad semantics — the 4 columns of <a href="../../wiki/Status.html">Status</a> are correct today and are the oracle for this fix.</li>
+<li>Do NOT delete <code>baselineTip()</code> blindly: some call sites may genuinely want &quot;the latest row of any kind&quot; (e.g. <code>views/refs/refs.js:23</code> prints it as a <code>baseline:</code> field). Convert what means &quot;base tree&quot;, justify the rest.</li>
+<li>Sub baselines count: <code>views/diff/diff.js:307,556,639</code> resolve a MOUNTED sub's baseline the same way and must move together with the parent.</li>
+<li>JS <code>///be/</code> only; no C twin in scope.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>This is a semantics fix, not a new feature: <a href="../../wiki/Status.html">Status</a> already defines base = get/post row, patch = its own column.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./ .html"> </a> red repro first, under <code>be/test/diff/</code>: patch a sibling commit into a wt, assert <code>diff</code> renders the patched-in change (red today: empty, exit 0). -<a href="./ .html"> </a> second red case under <code>be/test/ls/</code> (or the nearest existing home): a file tracked by the base commit stays tracked with a patch row in scope (red today: <code>unk</code>). -<a href="./ .html"> </a> <code>views/diff/diff.js:467</code> + the sub baselines <code>:307,556,639</code> → <code>curTip()</code>. -<a href="./ .html"> </a> <code>shared/classify.js:553</code> (<code>classifyDir</code>) → <code>curTip()</code>, matching <code>classify</code> at <code>:254</code>. -<a href="./ .html"> </a> audit + report <code>views/why/why.js:99</code>, <code>views/refs/refs.js:23</code>, <code>shared/stage.js:92</code> — convert or justify each. -<a href="./ .html"> </a> verify through the real UI in a repro wt: <code>status</code>, <code>diff</code>, <code>ls</code> agree about the same path.
+</p>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

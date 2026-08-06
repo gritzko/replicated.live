@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PATCH-008</title>
+<title>PATCH-008: whole-tree be patch sub-of-sub (depth-2) recursion falls back to the github .gitmodules URL → WIRECLFL</title>
+<meta property="og:title" content="PATCH-008: whole-tree be patch sub-of-sub (depth-2) recursion falls back to the github .gitmodules URL → WIRECLFL">
+<meta property="og:description" content="After PATCH-005 (depth-1 sub-source) + PATCH-007 (multi-gitlink ULOG ts), the live be patch be://spot/journal?main! merges the journal level + the be and beagle subs cleanly (failed=0), then dies recursing into a NESTED sub-of-sub: beagle-ext-tests (declared under the be sub) is fetched from its .gitmodules remote git@github.com:gritzko/beagle-ext-tests.git (scp-style, unreachable) → sniff: submodule fetch failed for git@github.com:gritzko/beagle-ext-tests.git / WIRECLFL / BEDOGEXIT. PATCH-005 threaded the parent-relative source for depth-1 subs but it does NOT propagate to depth 2 — the inner recursion has no in-flight source and falls back to the declared github URL. GET recurses depth-2 fine (the clone mounted be/test parent-relative). Method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PATCH/PATCH-008.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,47 +15,34 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>PATCH-008 <a href="./HIGH.html">HIGH</a>: whole-tree <code>be patch</code> sub-of-sub (depth-2) recursion falls back to the github <code>.gitmodules</code> URL → WIRECLFL</h1>
+<h1>PATCH-008: whole-tree <code>be patch</code> sub-of-sub (depth-2) recursion falls back to the github <code>.gitmodules</code> URL → WIRECLFL</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 After <a href="PATCH-005.html">PATCH-005</a> (depth-1 sub-source) + <a href="PATCH-007.html">PATCH-007</a> (multi-gitlink ULOG ts), the live <code>be patch be://spot/journal?main!</code> merges the journal level + the <code>be</code> and <code>beagle</code> subs cleanly (<code>failed=0</code>), then dies recursing into a NESTED sub-of-sub: <code>beagle-ext-tests</code> (declared under the <code>be</code> sub) is fetched from its <code>.gitmodules</code> remote <code>git@github.com:gritzko/beagle-ext-tests.git</code> (scp-style, unreachable) → <code>sniff: submodule fetch failed for git@github.com:gritzko/beagle-ext-tests.git</code> / <code>WIRECLFL</code> / <code>BEDOGEXIT</code>. PATCH-005 threaded the parent-relative source for depth-1 subs but it does NOT propagate to depth 2 — the inner recursion has no in-flight source and falls back to the declared github URL. GET recurses depth-2 fine (the clone mounted <code>be/test</code> parent-relative). Method <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Repro (live): <code>be patch be://spot/journal?main!</code> in a fresh <code>be get be://localhost/journal</code><p>
-clone → <code>applied be</code> / <code>applied beagle</code> / <code>failed=0</code>, then <code>submodule fetch failed for git@github.com:gritzko/beagle-ext-tests.git</code> / WIRECLFL / BEDOGEXIT.
-</p>
-</li>
-<li>spot DOES serve a <code>beagle-ext-tests</code> sibling shard (<code>be://spot/journal/be/&lt;…&gt;</code> /<p>
-<code>be://spot/journal?/beagle-ext-tests</code>), so the parent-relative fetch is available; only the depth-2 recursion fails to use it.
-</p>
-</li>
-<li><a href="PATCH-005.html">PATCH-005</a>'s <code>BEActPatchSrc</code>/<code>bepatch_src_uri</code> captures the source for the TOP-level<p>
-recursion; the sub's own recursive patch (into ITS subs) doesn't re-derive a parent-relative source from the now-deeper context → <code>.gitmodules</code> fallback.
-</p>
-</li>
+<li>Repro (live): <code>be patch be://spot/journal?main!</code> in a fresh <code>be get be://localhost/journal</code> clone → <code>applied be</code> / <code>applied beagle</code> / <code>failed=0</code>, then <code>submodule fetch failed for git@github.com:gritzko/beagle-ext-tests.git</code> / WIRECLFL / BEDOGEXIT.</li>
+<li>spot DOES serve a <code>beagle-ext-tests</code> sibling shard (<code>be://spot/journal/be/&lt;…&gt;</code> / <code>be://spot/journal?/beagle-ext-tests</code>), so the parent-relative fetch is available; only the depth-2 recursion fails to use it.</li>
+<li><a href="PATCH-005.html">PATCH-005</a>'s <code>BEActPatchSrc</code>/<code>bepatch_src_uri</code> captures the source for the TOP-level recursion; the sub's own recursive patch (into ITS subs) doesn't re-derive a parent-relative source from the now-deeper context → <code>.gitmodules</code> fallback.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>PATCH's sub-recursion threads a parent-relative source at EVERY depth: a sub-of-sub<p>
-is fetched from the grandparent source's nested shard (<code>be://spot/journal/&lt;sub&gt;/&lt;subsub&gt;</code> or the <code>?/&lt;subsub&gt;</code> sibling), not its declared <code>.gitmodules</code> URL. <code>be patch be://spot/journal?main!</code> completes the WHOLE tree.
-</p>
-</li>
+<li>PATCH's sub-recursion threads a parent-relative source at EVERY depth: a sub-of-sub is fetched from the grandparent source's nested shard (<code>be://spot/journal/&lt;sub&gt;/&lt;subsub&gt;</code> or the <code>?/&lt;subsub&gt;</code> sibling), not its declared <code>.gitmodules</code> URL. <code>be patch be://spot/journal?main!</code> completes the WHOLE tree.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Native sniff/beagle. Reuse the PATCH-005 <code>SNIFFSubCandidateFromSource</code> resolver,<p>
-re-based per recursion level (the sub passes ITS resolved source down as the grandparent for its own subs — mirror how GET threads it). Repro-first (CLAUDE.md §17): a hermetic 3-level be:// merge where the depth-2 sub's <code>.gitmodules</code> url is unreachable. VERIFY against the LIVE merge, not only hermetic.
-</p>
-</li>
+<li>Native sniff/beagle. Reuse the PATCH-005 <code>SNIFFSubCandidateFromSource</code> resolver, re-based per recursion level (the sub passes ITS resolved source down as the grandparent for its own subs — mirror how GET threads it). Repro-first (CLAUDE.md §17): a hermetic 3-level be:// merge where the depth-2 sub's <code>.gitmodules</code> url is unreachable. VERIFY against the LIVE merge, not only hermetic.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>When PATCH recurses into a sub, it must compute that sub's own parent-relative source<p>
-(from the in-flight grandparent source + the sub basename) and pass it as the source for the sub's inner recursion — so depth-2/3 inherit the chain, exactly as GET does.
-</p>
-</li>
+<li>When PATCH recurses into a sub, it must compute that sub's own parent-relative source (from the in-flight grandparent source + the sub basename) and pass it as the source for the sub's inner recursion — so depth-2/3 inherit the chain, exactly as GET does.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -62,17 +53,22 @@ re-based per recursion level (the sub passes ITS resolved source down as the gra
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Live blocker for the whole-tree spot merge; the recursion-depth generalization of<p>
-the now-fixed depth-1 <a href="PATCH-005.html">PATCH-005</a>.
-</p>
-</li>
+<li>Live blocker for the whole-tree spot merge; the recursion-depth generalization of the now-fixed depth-1 <a href="PATCH-005.html">PATCH-005</a>.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>DISPROVEN / already-fixed on current trunk (<code>670ecc3b</code> guard test,<p>
-2026-06-26).  Like <a href="PATCH-005.html">PATCH-005</a> (depth-1), the depth-2 sub-of-sub re-get during a whole-tree patch resolves PARENT-RELATIVE via the GET-011 historical-REFS locator recovery (<code>subs_recover_locator</code>), applied RECURSIVELY at each depth: the sub-of-sub's own shard records its <code>be:</code> source row, so its re-get finds the grandparent store's sibling shard.  No explicit <code>--source</code> threading needed.  Verified hermetic 3-level be:// fixture (dead <code>.gitmodules</code> at both levels, consistent dead-basename shards): the patch tries the dead url first (fails benignly), then recovery lands gch@C2 at depth 2.  Kept as a regression guard <code>test/patch/41-subsub-parent-source</code>.  No code change.
-</p>
-</li>
+<li>DISPROVEN / already-fixed on current trunk (<code>670ecc3b</code> guard test, 2026-06-26).  Like <a href="PATCH-005.html">PATCH-005</a> (depth-1), the depth-2 sub-of-sub re-get during a whole-tree patch resolves PARENT-RELATIVE via the GET-011 historical-REFS locator recovery (<code>subs_recover_locator</code>), applied RECURSIVELY at each depth: the sub-of-sub's own shard records its <code>be:</code> source row, so its re-get finds the grandparent store's sibling shard.  No explicit <code>--source</code> threading needed.  Verified hermetic 3-level be:// fixture (dead <code>.gitmodules</code> at both levels, consistent dead-basename shards): the patch tries the dead url first (fails benignly), then recovery lands gch@C2 at depth 2.  Kept as a regression guard <code>test/patch/41-subsub-parent-source</code>.  No code change.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

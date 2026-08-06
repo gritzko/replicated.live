@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-005</title>
+<title>JS-005: JSFILES fd-table custody — GC-root leak, double-unprotect, std-stream close, table leak</title>
+<meta property="og:title" content="JS-005: JSFILES fd-table custody — GC-root leak, double-unprotect, std-stream close, table leak">
+<meta property="og:description" content="The JSFILES fd→object table mishandles JSC protect/unprotect and close(), leaking GC roots, double-unprotecting stdio, and closing the process std streams. Flagged by the lifecycle + custody lenses (high confidence). Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-005.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,52 +15,39 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-005 <a href="">HIGH</a>: <code>JS_FILES</code> fd-table custody — GC-root leak, double-unprotect, std-stream close, table leak</h1>
+<h1>JS-005: <code>JS_FILES</code> fd-table custody — GC-root leak, double-unprotect, std-stream close, table leak</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The <code>JS_FILES</code> fd→object table mishandles JSC protect/unprotect and <code>close()</code>, leaking GC roots, double-unprotecting stdio, and closing the process std streams. Flagged by the lifecycle + custody lenses (high confidence). Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>(a) <code>JABCioMakeFileObject</code> (<code>io.cpp:46-48</code>) does `JS_FILES<a href="">fd</a>=obj;<p>
-JSValueProtect<code> unconditionally — on fd reuse the prior protected object is overwritten with no </code>Unprotect` → permanent GC-root leak + stale object/fd.
-</p>
-</li>
-<li>(b) <code>JABCioUninstall</code> (<code>io.cpp:514-540</code>) unprotects <code>JABCio_STD[0..2]</code> AND the<p>
-<code>JS_FILES</code> loop unprotects the same stdio objects again (double-unprotect) AND <code>JABCioCloseFile</code> <code>close()</code>s fds 0/1/2 — closing the process std streams.
-</p>
-</li>
+<li>(a) <code>JABCioMakeFileObject</code> (<code>io.cpp:46-48</code>) does <code>JS_FILES[fd]=obj; JSValueProtect</code> unconditionally — on fd reuse the prior protected object is overwritten with no <code>Unprotect</code> → permanent GC-root leak + stale object/fd.</li>
+<li>(b) <code>JABCioUninstall</code> (<code>io.cpp:514-540</code>) unprotects <code>JABCio_STD[0..2]</code> AND the <code>JS_FILES</code> loop unprotects the same stdio objects again (double-unprotect) AND <code>JABCioCloseFile</code> <code>close()</code>s fds 0/1/2 — closing the process std streams.</li>
 <li>(c) <code>JS_FILES = malloc()</code> (<code>io.cpp:453</code>) is never freed.</li>
 <li><code>WITH_JS</code>-gated WIP, but custody bugs corrupt long-running JS sessions.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>No GC-root leak on fd reuse; stdio unprotected once; process std streams stay<p>
-open; the table is freed on uninstall.
-</p>
-</li>
+<li>No GC-root leak on fd reuse; stdio unprotected once; process std streams stay open; the table is freed on uninstall.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Unprotect any existing slot before overwrite; unprotect stdio exactly once; skip<p>
-<code>close()</code> for fds 0/1/2; <code>free(JS_FILES)</code> on uninstall.
-</p>
-</li>
+<li>Unprotect any existing slot before overwrite; unprotect stdio exactly once; skip <code>close()</code> for fds 0/1/2; <code>free(JS_FILES)</code> on uninstall.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open) Guard the slot overwrite, make <code>JABCioCloseFile</code> skip 0/1/2, dedup the<p>
-stdio unprotect between <code>JABCio_STD</code> and the table loop, free the table.
-</p>
-</li>
+<li>(open) Guard the slot overwrite, make <code>JABCioCloseFile</code> skip 0/1/2, dedup the stdio unprotect between <code>JABCio_STD</code> and the table loop, free the table.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: open + close enough files to force an fd reuse and assert the old<p>
-  object is unprotected; uninstall and assert stdout/stderr still write.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: open + close enough files to force an fd reuse and assert the old object is unprotected; uninstall and assert stdout/stderr still write.</li>
 <li class="open"><input type="checkbox" disabled> Apply the four custody fixes; verify under ASAN/LSAN.</li>
 </ul>
 <h3>Blockers</h3>
@@ -65,10 +56,18 @@ stdio unprotect between <code>JABCio_STD</code> and the table loop, free the tab
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li><strong>LANDED <code>08df5879</code></strong> (2026-06-16): guard the slot-overwrite unprotect in<p>
-<code>JABCioMakeFileObject</code>, skip <code>close()</code> for fds 0/1/2 in <code>JABCioCloseFile</code>, dedup the stdio unprotect (null <code>JS_FILES[0..2]</code> before the close-loop), and <code>free(JS_FILES)</code> on uninstall; C++ harness now drives io install/uninstall and asserts std fds survive + table freed (red-before/green-after, ASAN/LSan clean). (a) fd-reuse GC-root balance is logic-verified; (b)+(c) test-verified.
-</p>
-</li>
+<li><strong>LANDED <code>08df5879</code></strong> (2026-06-16): guard the slot-overwrite unprotect in <code>JABCioMakeFileObject</code>, skip <code>close()</code> for fds 0/1/2 in <code>JABCioCloseFile</code>, dedup the stdio unprotect (null <code>JS_FILES[0..2]</code> before the close-loop), and <code>free(JS_FILES)</code> on uninstall; C++ harness now drives io install/uninstall and asserts std fds survive + table freed (red-before/green-after, ASAN/LSan clean). (a) fd-reuse GC-root balance is logic-verified; (b)+(c) test-verified.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

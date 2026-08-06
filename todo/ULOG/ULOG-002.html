@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ULOG-002</title>
+<title>ULOG-002: ULOG open must back-scan the zero pad, not forward-scan the whole log</title>
+<meta property="og:title" content="ULOG-002: ULOG open must back-scan the zero pad, not forward-scan the whole log">
+<meta property="og:description" content="ULOGOpenBooked (dog/ULOG.c:494) forward-scans the ENTIRE log on every open via ulogscanlog (:196, called :537) only to position the buffer's DATA/IDLE division past the last complete row — an O(content) row-by-row walk paid on every be/jab command that touches refs/wtlog. The index that scan builds is then discarded (ulogidxfreeanon, :538); the real idx is loaded/rebuilt separately by ULOGOpenIdx (:555) against a freshness-checked .idx sidecar. The tail only ever needs finding at the zero pad: a booked file is grown to a page boundary and abnormal termination leaves trailing NULs, so the last row's end is O(page) back from the mapped end. Replace the forward tail-scan with a BACKWARD scan over the zero pad. Surfaced while reviewing JS-073 (JS ingest.add crash-safe refs append) and relates to the ULOG-001 torn-log / initial-NUL work. Method: work.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/ULOG/ULOG-002.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>ULOG-002 <a href="./MED.html">MED</a>: ULOG open must back-scan the zero pad, not forward-scan the whole log</h1>
+<h1>ULOG-002: ULOG open must back-scan the zero pad, not forward-scan the whole log</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>ULOGOpenBooked</code> (<code>dog/ULOG.c:494</code>) forward-scans the ENTIRE log on every open via <code>ulog_scan_log</code> (<code>:196</code>, called <code>:537</code>) only to position the buffer's DATA/IDLE division past the last complete row — an O(content) row-by-row walk paid on every <code>be</code>/jab command that touches <code>refs</code>/<code>wtlog</code>. The index that scan builds is then discarded (<code>ulog_idx_free_anon</code>, <code>:538</code>); the real idx is loaded/rebuilt separately by <code>ULOGOpenIdx</code> (<code>:555</code>) against a freshness-checked <code>.idx</code> sidecar. The tail only ever needs finding at the zero pad: a booked file is grown to a page boundary and abnormal termination leaves trailing NULs, so the last row's end is O(page) back from the mapped end. Replace the forward tail-scan with a BACKWARD scan over the zero pad. Surfaced while reviewing <a href="../JS/JS-073.html">JS-073</a> (JS <code>ingest.add</code> crash-safe refs append) and relates to the <a href="ULOG-001.html">ULOG-001</a> torn-log / initial-NUL work. Method: <a href="../../meta/work.html">work</a>.
 </p>
@@ -62,5 +71,16 @@
 <li>LANDED abc <code>e8d7c59d</code> (same session): <code>FILETrimBook</code> trims to PAST+DATA (<code>b[2]-b[0]</code>), dropping only IDLE.</li>
 <li>The commit message carries no ULOG-002 tag — grep <code>df3b5885</code>/&quot;self-heal&quot;, not the ticket code; the code comments cite ULOG-002 (<code>dog/ULOG.c:567</code>, <code>abc/FILE.c:1049</code>).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

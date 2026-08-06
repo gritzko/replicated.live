@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-059 DONE: get content-tests a file equal to the target, then discards the verdict — stamp it</title>
+<meta property="og:title" content="GET-059 DONE: get content-tests a file equal to the target, then discards the verdict — stamp it">
+<meta property="og:description" content="RULING (gritzko, 2026-08-04): status never restamps (membership only, STATUS-011 stands); the restamp belongs to the verbs that already paid for the content test — unknown timestamp → test (maybe write) → stamp. get's tested-equal skip (verbs/get/get.js:1062-1064) reads the on-disk file, proves it byte-equal to the incoming target via checkout.leafUnchanged, and returns with NO stamp. The file's bytes ARE the new baseline blob — the identical truth claim the GET-049 clean-overwrite stamp makes 30 lines down (get.js:1096-1099) — but the mtime stays off the stamp-set, so EVERY later be status re-opens and re-hashes it, forever. Measured: be status in be/ opens ~780 tracked files per run (test/ tree, mtimes from git checkout/editors). Siblings: /todo/GET/GET-049 (stamp what get writes), /todo/GET/GET-050 (band-stamp carried/woven), /todo/POST/POST-037 (post's half of the same ruling).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-059.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-059 <a href="./DONE.html">DONE</a>: get content-tests a file equal to the target, then discards the verdict — stamp it</h1>
+<div>
+<p>
+Now: DONE Sev: MED
+</p>
+</div>
+<p>
+RULING (gritzko, 2026-08-04): status never restamps (membership only, STATUS-011 stands); the restamp belongs to the verbs that already paid for the content test — unknown timestamp → test (maybe write) → stamp. get's tested-equal skip (<code>verbs/get/get.js:1062-1064</code>) reads the on-disk file, proves it byte-equal to the incoming target via <code>checkout.leafUnchanged</code>, and returns with NO stamp. The file's bytes ARE the new baseline blob — the identical truth claim the GET-049 clean-overwrite stamp makes 30 lines down (<code>get.js:1096-1099</code>) — but the mtime stays off the stamp-set, so EVERY later <code>be status</code> re-opens and re-hashes it, forever. Measured: <code>be status</code> in <code>be/</code> opens ~780 tracked files per run (test/ tree, mtimes from git checkout/editors). Siblings: <a href="/todo/GET/GET-049.html">GET-049</a> (stamp what get writes), <a href="/todo/GET/GET-050.html">GET-050</a> (band-stamp carried/woven), <a href="/todo/POST/POST-037.html">POST-037</a> (post's half of the same ruling).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>The skip cell: <code>leafUnchanged</code> hit at <code>get.js:1064</code> — existed, bytes equal target, <code>return</code> before any stamp. The comment (&quot;preserves dirty bytes equal to the target&quot;) is no objection: after the get, base == target == disk bytes, clean by definition, the stamp is truthful.</li>
+<li>The stamp pattern to copy is right below: <code>if (g.stampTs != null &amp;&amp; kind !== &quot;l&quot;) trySetMtime(full, g.stampTs)</code> (<code>get.js:1099</code>) — g.stampTs is the ASSIGNED get row ts (POST-029's append-returns-assigned discipline), symlinks stay unstamped, <code>stampTs == null</code> legs (restore/pick/mergeWorktreeTo, <code>get.js:626-627</code>) stay no-stamp.</li>
+<li>SUSPECT second cell: the GET-058 quad <code>noop</code> verdict (<code>get.js:1086</code>) returns unstamped too — but <code>wtChar</code> (<code>get.js:1084</code>) may have content-tested the wt bytes against base to get there. If the verdict rests on a content read that proved bytes == new base, the same ruling applies; if it was decided on stamps/shas alone, leave it. Verify, don't assume.</li>
+<li>NOT in scope: Merkle-pruned subtrees (<code>get.js:961</code>) were never visited, never tested — they stay untouched. The ruling adds ZERO new reads; it only stops discarding verdicts already paid for.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+<code>get</code> leaves every file it content-proved equal to the new base carrying a stamp-set mtime, so the next status confirms it clean with zero content reads.
+</p>
+<ul>
+<li>Repro-first: a wt whose files byte-equal the incoming target but carry off-stamp-set mtimes → get → assert every tested-equal file's mtime ∈ the wtlog stamp-set AND the next status does zero content reads on them (the STATUS-011 observable; <code>test/post/restamp/run.sh</code> + its <code>.stampchk.js</code> checker is the pattern to reuse).</li>
+<li>The GET-058 noop cell verified either way and the finding recorded here.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>A still-dirty file (bytes != new base) must NEVER be stamped — stamp only what a content test THIS RUN proved equal to the new base.</li>
+<li>Row-before-stamp: the mtime is always an ASSIGNED wtlog row ts (g.stampTs), never a resampled now — POST-029's ordering holds.</li>
+<li>Symlinks stay unstamped (setMtime follows the link, <code>get.js:1099</code> guard); <code>stampTs == null</code> legs stay no-stamp.</li>
+<li>No new reads: never descend a Merkle-pruned subtree to stamp it.</li>
+<li>Minimal diff in <code>verbs/get/get.js</code> (+ <code>shared/checkout.js</code> only if the equal-test must surface its verdict); status/classify untouched — status stays a strict reader.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ol>
+<li>The stamp goes AT the skip, not after it. The skip's own <code>if</code> IS the content test, so the verdict never has to travel: the <code>return</code> grows a body carrying the GET-049 line verbatim — <code>if (g.stampTs != null &amp;&amp; kind !== &quot;l&quot;) trySetMtime(full, g.stampTs)</code>. <code>shared/checkout.js</code> is untouched: nothing needs to surface a verdict that is already local.</li>
+<li>Same guards, same ts, no new state. <code>g.stampTs</code> is the ASSIGNED get row ts (POST-029), symlinks stay unstamped (setMtime follows the link), and the <code>stampTs == null</code> legs stay no-stamp — <code>restorePath</code> builds its own <code>ctx._get</code> with NO <code>stampTs</code> field at all, so <code>g.stampTs != null</code> is false there by construction.</li>
+<li>ZERO new reads. The stamp rides a test get had already paid for; a Merkle-pruned subtree is never visited, so nothing under it is opened, read or stamped (the GET-050 carried/pruned files keep their own band/clone stamps).</li>
+<li>The dirty side is untouched: bytes that FAIL the equal test fall through to the quad exactly as before (weave/ours/con → <code>bandStamp</code> under the ceiling), so no still-dirty file can be laundered into the stamp-set. The test asserts that in the same run.</li>
+<li>The GET-058 <code>noop</code> cell gets NO stamp — and the reason is stronger than &quot;it did not content-test&quot; (see below).</li>
+</ol>
+<h3>The GET-058 <code>noop</code> cell (verified, not assumed)</h3>
+<p>
+<code>v === &quot;noop&quot;</code> in the WRITE leaf takes no stamp, on two independent grounds:
+</p>
+<ol>
+<li>Ordering: the <code>leafUnchanged</code> skip runs EARLIER in the same leaf. So every path that reaches the quad either does not exist on disk (nothing to stamp), or was just content-tested and proved NOT equal to the target. <code>wtChar</code> may well have read the bytes to reach the verdict — it compares them to the BASE blob — but the run's verdict about the NEW BASE is already in: not equal. A stamp there would be exactly the false clean claim the ruling forbids.</li>
+<li>Reachability: the cell is dead in this leaf anyway. <code>noop</code> needs the quad key <code>..</code>, <code>.x</code> or <code>xx</code>; <code>xx</code> needs track <code>x</code>, impossible past the <code>if (!newSha)</code> delete branch; <code>..</code>/<code>.x</code> need <code>trackChar(oldSha, newSha) === '.'</code>, i.e. <code>oldSha === newSha</code> — and <code>reconcileDir</code> Merkle-prunes precisely those entries (<code>ne.sha === oe.sha</code> → <code>continue</code>) unless <code>g.noPrune</code>. But <code>noPrune = force || (sameTip &amp;&amp; !fresh)</code> while <code>recover = !force &amp;&amp; sameTip &amp;&amp; !fresh</code>: with <code>force</code> the whole quad block is bypassed (<code>if (!g.force &amp;&amp; !g.fresh)</code>), and without it <code>noPrune</code> implies <code>recover</code>, which forces <code>tch = CH.advanced</code>. <code>restorePath</code> (the other <code>noPrune: true</code> leg) sets <code>force = true</code>. So the track char is never <code>.</code> there.</li>
+</ol>
+<p>
+Both legs were checked on the live binary, not on paper: (a) an instrumented <code>leaf()</code> shows that the one natural &quot;equal shas&quot; candidate — a mode-only change (<code>chmod +x</code>, identical blob) — never even reaches the leaf, because the prune compares blob shas; (b) rigging <code>if (v === &quot;noop&quot;)</code> to THROW left the whole 354-case suite green (only the pre-existing rowcache pty failure), so no case in the suite enters the cell.
+</p>
+<p>
+Side observation, NOT this ticket: since the prune is sha-only and status is mode-blind, a mode-only change (<code>chmod +x</code> with identical bytes) is silently DROPPED by get and then reads clean. Worth its own ticket if that matters.
+</p>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> Repro test RED on pristine get.js: tested-equal files unstamped, status re-reads them.</li>
+<li><a href="./v.html">v</a> Stamp at the <code>leafUnchanged</code> return; GREEN.</li>
+<li><a href="./v.html">v</a> GET-058 noop cell: verify whether <code>wtChar</code> content-tested; stamp or record why not.</li>
+<li><a href="./v.html">v</a> Full <code>test/get/*</code> suite green; GET-049/GET-050 regression intact.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<p>
+<code>be-js-todo-rowcache</code> fails (pty assertion <code>…and-the-row-grew-the-staged-tick</code>) — PRE-EXISTING: it fails identically with get.js reverted to pristine on the same base. Not touched here.
+</p>
+<h2>Outcome</h2>
+<p>
+Landed in a worker wt off <code>///be/#94714be8</code>, staged only (<code>jab put</code>), no commit.
+</p>
+<p>
+RED (pristine get.js) — new case <code>test/get/equal-stamp</code>: a wt clone at c1 whose <code>a.txt</code>/<code>b.txt</code> are edited to c2's exact bytes with mtimes <code>touch -t 202001010000</code> (off the stamp-set), then <code>get</code> c2:
+</p>
+<div>
+<p>
+equal-stamp FAIL .../wt NOSTAMP a.txt mtime=2010100000 NOSTAMP b.txt mtime=2010100000 READ a.txt READ b.txt
+</p>
+</div>
+<p>
+— the two files get content-tested and skipped, then re-opened by the very next <code>classify</code> run (the STATUS-011 observable, counted with the <code>io.open</code> hook the POST-029 <code>.stampchk.js</code> uses).
+</p>
+<p>
+GREEN after the fix: <code>equal-stamp ok .../wt (3 tested-equal stamped, 1 dirty unstamped, 0 reads)</code>. The case carries its controls in the same run: <code>keep.txt</code> is Merkle-pruned (unchanged c1→c2, never visited — proves the ruling adds no reads and no re-stamps), and <code>d/f.txt</code> is a genuine local edit at a different anchor that weaves clean but <code>!=</code> the target — it must stay dirty and NOT enter the stamp-set (<code>FALSESTAMP</code>/<code>LAUNDERED</code> assertions).
+</p>
+<p>
+Suite: <code>ctest -LE big</code> = 354 cases, 353 pass, 1 fail (<code>be-js-todo-rowcache</code>, pre-existing — reproduced with the fix reverted). <code>test/get/*</code> = 50/50 green, including GET-049 (<code>be-js-get-stamp</code>) and GET-050 (<code>be-js-get-carry-stamp</code>).
+</p>
+<p>
+Diff summary — 3 files:
+</p>
+<ul>
+<li><code>verbs/get/get.js</code> (+8/-1): the <code>leafUnchanged</code> skip's bare <code>return</code> becomes a block that stamps to <code>g.stampTs</code> first, under the GET-049 guards, plus the ruling comment.</li>
+<li><code>test/get/equal-stamp/run.sh</code> (new): the two-commit repro + the pruned/dirty controls.</li>
+<li><code>test/get/equal-stamp/assert.js</code> (new): membership (<code>wtl.has(mtime)</code>), the counted-<code>io.open</code> fast-path check, and the row verdicts, via the same <code>wtlog.open</code>/<code>classify.classify</code> readers status.js uses.</li>
+</ul>
+<p>
+Suggested commit message:
+</p>
+<div>
+<p>
+GET-059: get stamps the files it proved equal to the target
+</p>
+<p>
+The leafUnchanged skip content-tested the file, proved its bytes ARE the incoming target — the same truth claim the GET-049 clean-overwrite stamp makes — then returned without stamping, so every later status re-opened and re-hashed it.  Stamp it to the get row ts under the GET-049 guards (symlinks and stampTs == null legs stay unstamped); the dirty legs and the Merkle-pruned subtrees are untouched, so the fix adds zero reads. The GET-058 noop cell stays unstamped: its paths already FAILED the equal test this run (and the cell is unreachable in the write leaf — an oldSha == newSha row only survives the prune under force/recover).
+</p>
+</div>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

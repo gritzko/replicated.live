@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABC-021: SORTu64 emits garbage — Yx tie loop drains the whole heap</title>
+<meta property="og:title" content="ABC-021: SORTu64 emits garbage — Yx tie loop drains the whole heap">
+<meta property="og:description" content="Found by the smoke-fuzz CI lane (2026-07-19, libabc@9131017): SORTfuzz differential vs u64sSort dies in &lt;10k iterations. This is the &quot;merge RESULT is independently broken ... tracked as a separate ticket&quot; note in test/SORT.c (MEM-003 session) — this IS that ticket. Four defects compose; the net effect is the sort emits only the global minimum (rest is stale memory), or NOROOMs. SORTu64 has no production callers yet, so no data paths are affected — but it blocks the smoke-fuzz CI lane.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/ABC/ABC-021.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ABC-021: SORTu64 emits garbage — Yx tie loop drains the whole heap</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<p>
+Found by the smoke-fuzz CI lane (2026-07-19, libabc@9131017): <code>SORTfuzz</code> differential vs <code>u64sSort</code> dies in &lt;10k iterations. This is the &quot;merge RESULT is independently broken ... tracked as a separate ticket&quot; note in test/SORT.c (<a href="../MEM/MEM-003.html">MEM-003</a> session) — this IS that ticket. Four defects compose; the net effect is the sort emits only the global minimum (rest is stale memory), or NOROOMs. <code>SORTu64</code> has no production callers yet, so no data paths are affected — but it blocks the smoke-fuzz CI lane.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>CI: ubuntu smoke-fuzz job, <code>assert fail element mismatch at SORTfuzz:24</code>; minimal input 16×<code>0x22</code>+<code>\n</code> = two equal u64 → output <code>{0x2222…, 0}</code>. Reproduced locally (session 2026-07-19, WORK-011 journal).</li>
+<li>Defect 1, Yx.h <code>_X(next)</code>: the tie-collection loop guard is <code>0 == _X(z)($head(lsm), &amp;next)</code> — z is strict less-than and next was just popped off a min-heap, so <code>head &gt;= next</code> always, z(head,next) always false → the loop drains the ENTIRE heap as one &quot;tie group&quot;. Args are swapped: the guard must be <code>0 == _X(z)(&amp;next, $head(lsm))</code> (tie ⟺ head==next).</li>
+<li>Defect 2, SORT.h <code>SORTu64y</code>: emits only <code>eqs[0]</code> of a tie group (dedup semantics); a sort must emit every tied element. Combined with defect 1, the whole merge emits one element, then <code>*into += $len(from)</code> claims full length → tail is stale memory.</li>
+<li>Defect 3, SORT.c ping-pong: pass N+1 takes the FULL extent of the destination buffer (<code>$mv(from64, into)</code> = whole idle slice) instead of the n elements pass N wrote → NOROOM (or garbage merged) whenever n &gt; 64 and <code>into</code> is bigger than n. The disabled test/SORT.c sizes buffers exactly to dodge this; the fuzz harness (LEN1=1024) cannot.</li>
+<li>Defect 4, Yx.h tie pad: a tie group larger than the Y_MAX_INPUTS=64 <code>in</code> pad is silently truncated (pre-ABC-007 dropped status) or NOROOMs (post-ABC-007 check). Unbounded equal runs are legal sort input; flush the group when the pad fills and let the next round carry the rest (order is stable among equals).</li>
+<li>Fix for all four verified out-of-tree (2026-07-19): CI crash input + n=65 (NOROOM path) + n=110 with a &gt;64 equal run all green; 2M <code>SORTfuzz</code> iterations clean under ASan.</li>
+<li>Repro seeds: n=2 equal; n=65 distinct; n=110 with &gt;64 equal elements (fuzz artifacts in the WORK-011 session scratch).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Repro first: revive <code>SORTtest</code> (commented out in test/CMakeLists.txt) with the three seed cases — red on base, green after; drop the &quot;result is broken&quot; caveat.</li>
+<li>All four defects fixed; <code>SORTfuzz</code> 10k smoke green; full ctest green.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Yx.h is a shared template; SORT.h is its only instantiation today. Flush-on-full splits tie groups — fine for a sort; a future dedup-style <code>y</code> gets the same key in two calls, so note the contract at the flush site.</li>
+<li><a href="../MEM/MEM-003.html">MEM-003</a>'s at-creation chunk clamp must survive the SORT.c rework; keep the ABC-007 FeedP status check.</li>
+<li>Comment budget 4 lines, mention the ticket.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Fix shape agreed + verified before ticketing (see Context); re-applied on the current tip in work/ABC-021.</li>
+<li>SORT.c rework: explicit n-element src/dst views per pass (n = <code>$len(from)</code>), no <code>$mv</code> of caller slices; final <code>dir==NO</code> copy checks the Feed status.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="wontfix"><input type="checkbox" disabled> <del>wt in work/ABC-021, patches re-applied on tip 3e047885</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>SORTtest revived, 10 result-checked cases (incl. the 3 seeds), red on base → green after</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>SORTfuzz 10k smoke + 500k extended clean; ctest 49/49</del></li>
+<li class="open"><input type="checkbox" disabled> human gate, then land</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

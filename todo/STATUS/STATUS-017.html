@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STATUS-017: classify splits dirt by EXPECTED; con liveness from rows, resolved==posted</title>
+<meta property="og:title" content="STATUS-017: classify splits dirt by EXPECTED; con liveness from rows, resolved==posted">
+<meta property="og:description" content="Per /todo/DIS/DIS-080: dirty stays wt != base — patched-in changes are still dirt, they must be posted. EXPECTED (base + in-scope patch-ins, weave reading) only splits the dirt into kinds: wt==EXPECTED → patched-in kind (posts as the merge commit); wt!=EXPECTED on a patched path → local edit on top; ok remains wt==base only. The con bucket is driven by the /todo/ULOG/ULOG-004 accessor alone — no marker scan, no mtime cnf slot; a conflict stays con until the next post (resolution is not detected, it is the post).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/STATUS/STATUS-017.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>STATUS-017: classify splits dirt by EXPECTED; con liveness from rows, resolved==posted</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+Per <a href="/todo/DIS/DIS-080.html">DIS-080</a>: dirty stays wt != base — patched-in changes are still dirt, they must be posted. EXPECTED (base + in-scope patch-ins, weave reading) only splits the dirt into kinds: wt==EXPECTED → patched-in kind (posts as the merge commit); wt!=EXPECTED on a patched path → local edit on top; <code>ok</code> remains wt==base only. The <code>con</code> bucket is driven by the <a href="/todo/ULOG/ULOG-004.html">ULOG-004</a> accessor alone — no marker scan, no mtime <code>cnf</code> slot; a conflict stays <code>con</code> until the next post (resolution is not detected, it is the post).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Today classify compares wt vs base (curTip, classify.js:255) and layers the fragile DIS-057 mtime band (pat/mrg/cnf, classify.js:192-217) plus con-row+marker liveness (classify.js:423-427, wtHasMarker :56-63). Markers retired ⇒ liveness rule and <code>cnf</code> slot die.</li>
+<li>Overlaps: <a href="/todo/STATUS/STATUS-013.html">STATUS-013</a> (patched-in trees as classify input — this ticket is the EXPECTED-based form of that reading); <a href="/todo/STATUS/STATUS-005.html">STATUS-005</a> marker-liveness half superseded, marked <a href="./STALE.html">STALE</a> pointer.</li>
+</ul>
+<h3>Goals</h3>
+<ol>
+<li>Classify consults EXPECTED per patched path: pat/mrg kinds fall out of wt-vs-EXPECTED + EXPECTED-vs-base, replacing the stamp-band special cases; unpatched paths keep the plain base comparison (degenerate EXPECTED==base).</li>
+<li><code>con</code> bucket := path ∈ ULOG-004 accessor result. Quad <code>!</code>, red SGR, summary tally unchanged in look; a <code>con</code> path stays <code>con</code> even after edits, until post.</li>
+<li>pat/mrg mtime stamps may remain as a fast path, but must not be load-bearing for correctness; <code>cnf</code> slot retired.</li>
+</ol>
+<h3>Constraints</h3>
+<ul>
+<li>Do not resurrect baselineTip as a base (<a href="./[patch-never-moves-the-base.html">[patch-never-moves-the-base</a>], PATCH-024).</li>
+<li><code>test/status/conflict</code> (marker-degrade-to-mod golden) is overturned — regold to row-based liveness.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>EXPECTED = <code>expectedSha()</code> local to classify.js (DIFF-016 owns any shared helper): weave.build of curTip + each <code>patchTheirs()</code> tip, one N-way <code>weave.merge</code>, read by <code>weave.mergedLive</code> (no WT layer), framed as a blob sha — wt/base/theirs compares are all sha-vs-sha, one wt read (<code>wtBlobSha</code>).</li>
+<li>Consult GATE = &quot;patch-TOUCHED&quot; = <code>theirs[path] &amp;&amp; (!inBase || t.sha !== b.sha)</code>; a touched path is decided on BYTES (never the mtime stamp-set), an untouched one keeps the plain base comparison verbatim.</li>
+<li>Kind table on a touched path: wt==base → <code>ok</code>; wt==EXPECTED==theirs → <code>pat</code>; wt==EXPECTED!=theirs → <code>mrg</code>; wt!=EXPECTED → <code>mod</code> (wt-only variant: <code>unk</code>).</li>
+<li>Stamp band demoted to a fallback: consulted only when EXPECTED is unweavable (BLOB/unreadable). <code>cnf</code> slot dropped; the get band's ceil-2ms <code>con</code> slot dropped too (both are conflict signals — now rows), ceil-1ms <code>mod</code> kept (GET-050 false-clean guard).</li>
+<li>quad.js NEEDS NO EDIT: <code>WT_BUCKET.con</code> already carries the red/<code>!</code> flag and reads the classify bucket — only its source (rows, not markers) changed.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> EXPECTED consult in classifyMerge; kind table pat/mrg/con vs mod/ok</li>
+<li class="done"><input type="checkbox" checked disabled> con bucket from accessor; drop wtHasMarker + cnf</li>
+<li class="done"><input type="checkbox" checked disabled> regold status tests; add edited-conflict-stays-con test</li>
+<li class="done"><input type="checkbox" checked disabled> quad/status render audit (no look change expected)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>THREE existing tests assert the retired DIS-057 band and CONTRADICT this ticket — not edited, per the no-other-test rule:<ul>
+<li><code>test/patchband.js:94</code> asserts the <code>cnf</code> slot resolves to <code>cnf</code> (retired by Goal 3).</li>
+<li><code>test/statusfast.js:145</code> scenario C asserts a <code>cnf</code>-slot mtime routes <code>con</code> (same retirement; live conflicts now carry a <code>con</code> row).</li>
+<li><code>test/patch/stampband/assert.js</code> asserts a clean apply is io.open-FREE — the EXPECTED consult reads bytes by construction; its bucket asserts (pat/mrg/con) still pass.</li>
+</ul>
+</li>
+<li>FIVE failures INHERITED from the PATCH-025 import (marker-grepping cases, listed in that ticket): <code>get/conf-state</code>, <code>get/confdrop</code>, <code>get/dirty</code>, <code>post/conf-state</code>, <code>post/patch-absorb</code>.</li>
+<li>Post-side barrier leg NOT tested here (a conflicted absorb still commits until <a href="/todo/POST/POST-035.html">POST-035</a>'s row-based gate lands); expiry is covered by ULOG-004's <code>test/wtlog_con.js</code>.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Not committed. Suggested commit message: <code>STATUS-017: row-based con, EXPECTED kinds</code></li>
+<li>Staged in <code>//STATUS-017</code> (<code>jab put</code>): <code>shared/classify.js</code> + new <code>test/status/edited-conflict</code>, <code>test/status/expected-kinds</code>, regolded <code>test/status/conflict</code>.</li>
+<li>Also staged, IMPORTED verbatim from <code>//PATCH-025</code> (dependency, not this ticket's work): <code>shared/weave.js</code>, <code>verbs/patch/patch.js</code>, <code>verbs/get/get.js</code>, <code>test/patch/{conflict,dirty-overlap,same-anchor-conflict,stacked-conflict}</code>.</li>
+<li>Full <code>ctest -j16</code>: 312/320 (base 543269d6 + import was 313/318; the 3 new reds are the contradicted band tests above).</li>
+<li>2026-07-30 update to <code>///be/#4b044ea6</code>: the 7 PATCH-025 imports ABSORBED (now trunk bytes — landed via DIFF-016/PATCH-025); <code>weave.js</code>/<code>get.js</code> conflict-salad reset to trunk; <code>test/status/conflict/run.sh</code> salad (ours row-scoped regold vs the landed PATCH-025 regold) rebuilt by worker-transcript replay onto trunk's version; the 3 new-test files survived as demoted <code>o</code> rows. All re-put: <code>classify.js</code>, <code>weave.js</code>, <code>get.js</code> (con acks), 4 status test files. Suite 320/323 — the sole reds are the 3 declared contradicted band tests; amending them needs gritzko's approval.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

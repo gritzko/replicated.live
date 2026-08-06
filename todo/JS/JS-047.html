@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-047</title>
+<title>JS-047: io.setMtime over a new abc/FILE utimensat leaf</title>
+<meta property="og:title" content="JS-047: io.setMtime over a new abc/FILE utimensat leaf">
+<meta property="og:description" content="The one native primitive the write verbs need: restamp a worktree file's mtime so a later be reads it clean (native SNIFFAtStampPath, sniff/AT.c:761, calls utimensat raw, no abc wrapper). Add a FILE wrapper in libabc, bind io.setMtime(path, ron60). Pure libabc — no keeper/dog. Blocks the write verbs. Part of JS-046. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-047.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,72 +15,58 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-047 <a href="./MED.html">MED</a>: <code>io.setMtime</code> over a new <code>abc/FILE</code> utimensat leaf</h1>
+<h1>JS-047: <code>io.setMtime</code> over a new <code>abc/FILE</code> utimensat leaf</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The one native primitive the write verbs need: restamp a worktree file's mtime so a later <code>be</code> reads it clean (native <code>SNIFFAtStampPath</code>, <code>sniff/AT.c:761</code>, calls <code>utimensat</code> raw, no abc wrapper). Add a <code>FILE</code> wrapper in libabc, bind <code>io.setMtime(path, ron60)</code>. Pure libabc — no keeper/dog. Blocks the write verbs. Part of <a href="JS-046.html">JS-046</a>. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>JABC has io.stat/lstat/chmod/readlink/symlink (<code>js/io.cpp</code>, <a href="JS-042.html">JS-042</a>) but NO<p>
-mtime setter; <code>abc/FILE.h</code> has no utimens wrapper either (grep confirms none).
-</p>
-</li>
-<li>Without it every JS put/post leaves files looking dirty → the next <code>be</code><p>
-re-stages the whole tree (the failure <code>put_visit_tracked</code> guards, <code>PUT.c:64</code>).
-</p>
-</li>
+<li>JABC has io.stat/lstat/chmod/readlink/symlink (<code>js/io.cpp</code>, <a href="JS-042.html">JS-042</a>) but NO mtime setter; <code>abc/FILE.h</code> has no utimens wrapper either (grep confirms none).</li>
+<li>Without it every JS put/post leaves files looking dirty → the next <code>be</code> re-stages the whole tree (the failure <code>put_visit_tracked</code> guards, <code>PUT.c:64</code>).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>abc/FILE.h</code>/<code>.c</code>: a <code>FILESetMtime(path8b, ron60)</code> wrapper over<p>
-<code>utimensat(AT_FDCWD, …, AT_SYMLINK_NOFOLLOW)</code>, error-propagating (ok64).
-</p>
-</li>
-<li><code>js/io.cpp</code>: <code>io.setMtime(path, ron60BigInt)</code> leaf over it; update API.md +<p>
-INDEX.md (the io.cpp module section).
-</p>
-</li>
+<li><code>abc/FILE.h</code>/<code>.c</code>: a <code>FILESetMtime(path8b, ron60)</code> wrapper over <code>utimensat(AT_FDCWD, …, AT_SYMLINK_NOFOLLOW)</code>, error-propagating (ok64).</li>
+<li><code>js/io.cpp</code>: <code>io.setMtime(path, ron60BigInt)</code> leaf over it; update API.md + INDEX.md (the io.cpp module section).</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>libabc only. ron60→timespec like the helper at <code>sniff/AT.c:688</code>. ASAN + ctest<p>
-green. NOFOLLOW so a symlink stamps the link, not its target (matches native).
-</p>
-</li>
+<li>libabc only. ron60→timespec like the helper at <code>sniff/AT.c:688</code>. ASAN + ctest green. NOFOLLOW so a symlink stamps the link, not its target (matches native).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>ron60 spans 2000–2099 in ms (per the codec); split into sec + nsec for the<p>
-timespec. Reuse the AT.c conversion math rather than reinventing it.
-</p>
-</li>
+<li>ron60 spans 2000–2099 in ms (per the codec); split into sec + nsec for the timespec. Reuse the AT.c conversion math rather than reinventing it.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Repro-first ctest (extend <code>JABCstat</code> or add <code>JABCmtime</code>): setMtime(path, r)<p>
-  then io.lstat(path).mtime round-trips r exactly. (<code>test/stat.js:71-78</code>.)
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Implement FILESetMtime + io.setMtime; update API.md + INDEX.md.<p>
-  (<code>ea9de45b</code> leaf + <code>4fd1d639</code> binding/docs.)
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Repro-first ctest (extend <code>JABCstat</code> or add <code>JABCmtime</code>): setMtime(path, r) then io.lstat(path).mtime round-trips r exactly. (<code>test/stat.js:71-78</code>.)</li>
+<li class="done"><input type="checkbox" checked disabled> Implement FILESetMtime + io.setMtime; update API.md + INDEX.md. (<code>ea9de45b</code> leaf + <code>4fd1d639</code> binding/docs.)</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Blocks <a href="./JS-049.html">JS-049</a>/<a href="./JS-050.html">JS-050</a>/<a href="./JS-051.html">JS-051</a> (every stamping path). File-disjoint from<p>
-<a href="JS-048.html">JS-048</a> → runs in parallel.
-</p>
-</li>
+<li>Blocks <a href="./JS-049.html">JS-049</a>/<a href="./JS-050.html">JS-050</a>/<a href="./JS-051.html">JS-051</a> (every stamping path). File-disjoint from <a href="JS-048.html">JS-048</a> → runs in parallel.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED <code>ea9de45b</code> (abc <code>FILESetMtime</code> utimensat leaf, now <code>dog/abc/FILE.{h,c}</code>)<p>
-+ <code>4fd1d639</code> (<code>io.setMtime</code> binding + docs; the jab-fork lineage carries it as <code>cf47a81</code>). Round-trip test lives in the jab runtime repo <code>test/stat.js</code> (JABCstat). Unblocked <a href="./JS-049.html">JS-049</a>/<a href="./JS-050.html">JS-050</a>/<a href="./JS-051.html">JS-051</a> — all landed 2026-06-22.
-</p>
-</li>
+<li>LANDED <code>ea9de45b</code> (abc <code>FILESetMtime</code> utimensat leaf, now <code>dog/abc/FILE.{h,c}</code>) + <code>4fd1d639</code> (<code>io.setMtime</code> binding + docs; the jab-fork lineage carries it as <code>cf47a81</code>). Round-trip test lives in the jab runtime repo <code>test/stat.js</code> (JABCstat). Unblocked <a href="./JS-049.html">JS-049</a>/<a href="./JS-050.html">JS-050</a>/<a href="./JS-051.html">JS-051</a> — all landed 2026-06-22.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

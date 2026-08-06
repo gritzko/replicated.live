@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-036 DONE: elastic fields — tag B marks ONE span per line the pager shrinks (ellipsis) or pads to fit cols (no-wrap mode)</title>
+<meta property="og:title" content="BRO-036 DONE: elastic fields — tag B marks ONE span per line the pager shrinks (ellipsis) or pads to fit cols (no-wrap mode)">
+<meta property="og:description" content="Ruled 2026-07-31, implementation not yet ordered. In tabular views (the work view's commit-message column, todo's ticket title) a line often overflows the viewport; BRO-014's no-wrap mode hard-truncates the whole line at the right edge, which eats the trailing fields. Ruling: the producer tags the field's bytes with tok32 tag B (both-ways elastic); in no-wrap mode the pager ellipsizes that span when the line is too wide and space-pads it to cols when too narrow, so the columns after it stay visible and flush right. Wrap stays pure presentation — producers only tag, never pre-shorten or pad.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BRO/BRO-036.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-036 <a href="./DONE.html">DONE</a>: elastic fields — tag <code>B</code> marks ONE span per line the pager shrinks (ellipsis) or pads to fit <code>cols</code> (no-wrap mode)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<p>
+Ruled 2026-07-31, implementation not yet ordered. In tabular views (the work view's commit-message column, todo's ticket title) a line often overflows the viewport; <a href="./BRO-014.html">BRO-014</a>'s no-wrap mode hard-truncates the whole line at the right edge, which eats the trailing fields. Ruling: the producer tags the field's bytes with tok32 tag <code>B</code> (both-ways elastic); in no-wrap mode the pager ellipsizes that span when the line is too wide and space-pads it to <code>cols</code> when too narrow, so the columns after it stay visible and flush right. Wrap stays pure presentation — producers only tag, never pre-shorten or pad.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><a href="./BRO-014.html">BRO-014</a> no-wrap truncates the display row at <code>cols</code>, so in the work view a long commit message pushes the trailing columns off-screen entirely.</li>
+<li>Today the hunk token stream has no notion of a shortenable field; the pager is field-blind and can only cut at the viewport edge.</li>
+<li>Open modelling question: is the commit message ONE token in the hunk stream or MANY (syntax-coloured words)? An elastic TAG must span the whole field either way.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Decide whether elastic-field shortening is worth having, and if yes, pick the mechanism: a token type / tag (like the <code>U</code> click-target tag) marking the shortenable span.</li>
+<li>In no-wrap mode the pager shortens only the tagged field (ellipsis), so fixed columns after it stay visible and aligned.</li>
+<li>Soft-wrap mode is untouched — elastic tags are ignored there.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Producers stay presentation-agnostic: they tag the field, the pager decides how much to cut at the live width — no width knowledge in producers.</li>
+<li>Must compose with existing per-token tags (colour, <code>U</code> click targets) and with <a href="./BRO-014.html">BRO-014</a>'s wrap toggle; piped <code>--plain</code>/<code>--color</code> output is unaffected.</li>
+<li>One elastic field per line at most; multi-elastic layout negotiation is out of scope.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>RULING (gritzko 2026-07-31): tag <code>B</code> — the ONE elastic tag, always both-ways; the field's bytes carry <code>B</code> as their tok32 tag directly (no hidden marker), so the field is one span, one theme color.</li>
+<li><code>B</code> was the only free letter in A–Z (jab/dog/THEME.h claims the rest for fg/bg/status roles); its theme slot renders neutral (ANSI_DEFAULT) like <code>S</code>.</li>
+<li>No-wrap mode, line wider than <code>cols</code>: the pager ellipsizes the <code>B</code> span (… at the cut) so trailing columns stay visible; still too wide after full shrink → hard-clip at the edge as today.</li>
+<li>Line narrower than <code>cols</code>: the pager space-pads the <code>B</code> span until the line hits <code>cols</code>, so trailing columns end flush right, aligned across rows.</li>
+<li>Soft-wrap mode and piped <code>--plain</code>/<code>--color</code> output ignore <code>B</code> entirely — bytes pass verbatim, no trim, no pad.</li>
+<li>One <code>B</code> span per line at most (unchanged constraint); first producers: work (commit message) and todo (ticket title).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Pager: tag <code>B</code> in the no-wrap render path — view/bro.js elasticRow/elasticClip + pager.js rows carry <code>els</code>; …-cut on overflow, pad to cols on underflow, hard-clip if shrink-to-nothing still overflows.</li>
+<li class="done"><input type="checkbox" checked disabled> Producers: views/work/work.js subject+pad and views/todo/todo.js list-row title are each the ONE <code>B</code> span (bytes verbatim, tags only).</li>
+<li class="done"><input type="checkbox" checked disabled> Theme: <code>B</code> dropped from the JS tables (neutral via ANSI_DEFAULT fallthrough); verb <code>hunk</code> re-slotted <code>B</code>→<code>E</code> in view/theme.js (same color in the 16 palette).</li>
+<li class="done"><input type="checkbox" checked disabled> Verified through the real UI path: test/bro/elastic/ drives the real Pager on a pty at 40 cols, incl. the click path onto the flush-right <a href="./done.html">done</a>; suite 328/328.</li>
+<li class="open"><input type="checkbox" disabled> C twin follow-up: dog THEME <code>B</code> slot → ANSI_DEFAULT AND ULOG.c hunk-verb rows stop emitting 'B' (native TLV in the JS pager currently gets its verb cell read as elastic).</li>
+<li class="done"><input type="checkbox" checked disabled> WORK-006 tension resolved (gritzko: &quot;bad trim&quot;): trim30 + producer ┄-pad deleted, full subject is the bare <code>B</code> span; zero-width <code>B</code> still pads so subject-less rows keep <a href="./done.html">done</a> flush right; WORK-006 pins amended minimally (golden's //DET-3 line full subject; fixed-column assert → presence per wt row). todo.js had no pre-trim.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><code>B</code> was NOT fully free: view/theme.js VERB_SLOT (mirroring C ULOG.c) stamped verb <code>hunk</code> rows with 'B'; JS side re-slotted, C side still emits it (see the C-twin TODO).</li>
+<li>A zero-width <code>B</code> span (todo title == bare key) gets no pad — keeps today's hard-clip behavior.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Implemented in //BRO-036 (be + test subs), staged via put, not committed; suggested msg <code>BRO-036: elastic B field — pager …-cut/pad in no-wrap</code>.</li>
+<li>Ruling addendum (gritzko 2026-07-31): the elastic pad renders as the work-style dotted leader — <code>&quot; &quot;+&quot;┄&quot;×(n-1)</code> after a non-empty span (breath flipped for a zero-width span), <code>B</code>-slot SGR + age fade, one column per glyph, clicks dead; …-cut and piped --plain unchanged.</li>
+<li>The 2026-07-31 10:59 jab binary's <code>M.w</code> WEAVE fold regression (blocked the suite at 228/328) is gone with the 11:23 binary; final tally 328/328.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

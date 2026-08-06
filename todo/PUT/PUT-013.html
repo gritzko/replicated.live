@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PUT-013: a STAGED file modified again is invisible — bare put skips it, status shows the stale stamp</title>
+<meta property="og:title" content="PUT-013: a STAGED file modified again is invisible — bare put skips it, status shows the stale stamp">
+<meta property="og:description" content="RULING (gritzko, chat 2026-07-20): jab put must stage ALL changed files, submodules included. Today the bare form stages a dirty file exactly once: modify it again AFTER it is staged and bare jab put silently stages nothing, while jab status keeps showing the staged marker and the OLD timestamp — so the working copy silently diverges from what would be committed. jab diff DOES see the change, so status and put disagree with diff. /todo/PUT/PUT-009's fold (mod→put, unk→skip) is right; the CLASSIFICATION is wrong — an already-staged file that changes again is no longer recognised as mod.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PUT/PUT-013.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PUT-013: a STAGED file modified again is invisible — bare put skips it, status shows the stale stamp</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<p>
+RULING (gritzko, chat 2026-07-20): <code>jab put</code> must stage ALL changed files, submodules included. Today the bare form stages a dirty file exactly once: modify it again AFTER it is staged and bare <code>jab put</code> silently stages nothing, while <code>jab status</code> keeps showing the staged marker and the OLD timestamp — so the working copy silently diverges from what would be committed. <code>jab diff</code> DOES see the change, so status and put disagree with diff. <a href="/todo/PUT/PUT-009.html">PUT-009</a>'s fold (mod→put, unk→skip) is right; the CLASSIFICATION is wrong — an already-staged file that changes again is no longer recognised as <code>mod</code>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro 2026-07-20 in <code>work/BRO-040</code> (pristine <code>///be/</code> clone, root tree + the mounted <code>test</code> sub), each step verified:<ol>
+<li>modify <code>shared/spell.js</code> (root) and <code>test/CMakeLists.txt</code> (sub) → <code>jab status</code> shows <code>...v</code> in BOTH trees.</li>
+<li>bare <code>jab put</code> → stages BOTH, prints <code>put shared/spell.js</code> / <code>put test/CMakeLists.txt</code>, markers go <code>...V</code>. Submodule recursion is CORRECT here.</li>
+<li>modify BOTH files AGAIN → <code>jab status</code> still shows <code>...V</code> with the ORIGINAL 12:46 stamp; no dirty marker, no hint the file changed.</li>
+<li>bare <code>jab put</code> → prints only the tree headers (<code>?</code>, <code>test</code>) and stages NOTHING, silently, exit 0.</li>
+<li><code>jab diff shared/spell.js</code> DOES show both probe lines pending → working ≠ staged, the change is real and detectable.</li>
+<li>explicit <code>jab put shared/spell.js</code> → re-stages, stamp advances to 12:47. The manual form is the only escape.</li>
+</ol>
+</li>
+<li>Live hit that surfaced it: the JS-120 comment-trim pass re-edited six ALREADY-STAGED files; bare <code>jab put</code> staged none of them and <code>status</code> showed the stale stamp — the worker only noticed because it named every path explicitly. A commit there would have carried the PRE-trim bytes.</li>
+<li>Sibling, different cause: <a href="/todo/PUT/PUT-012.html">PUT-012</a> (sub-mount checkout skips the GET-049 restamp) also ends in &quot;status and put disagree&quot;; <a href="/todo/PUT/PUT-005.html">PUT-005</a> is the same family of staging-display drift. <a href="/todo/PUT/PUT-008.html">PUT-008</a> (bare put ignores the cwd/nav context) is orthogonal — do not fold.</li>
+<li><a href="/todo/PUT/PUT-009.html">PUT-009</a> <a href="./DONE.html">DONE</a> is the governing ruling and STANDS: bare fold is mod→put, mis↔unk→mv auto-pair, ok→restamp, unk→skip, deletions are delete's job. Nothing here reopens the unk question.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Bare <code>jab put</code> stages a staged-then-modified file, in the root tree AND inside every mounted sub — &quot;all changed files, submods included&quot;.</li>
+<li><code>jab status</code> must never show a staged-and-since-modified file as settled: it carries a dirty marker and a current stamp, so status agrees with <code>jab diff</code>.</li>
+<li>The staged bytes always equal the working bytes after a bare put, or the file is reported — never a silent skip with exit 0.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Do NOT reopen <a href="/todo/PUT/PUT-009.html">PUT-009</a>: untracked stays manual-only, deletions stay delete's job.</li>
+<li>Fix the CLASSIFIER (<code>be/shared/classify.js</code>), not the put verb per-case; status, put and diff must read one classification.</li>
+<li>Rulings in force: errors and states in plain words; resolution via <code>be/core/resolve_hash.js</code>.</li>
+<li>Repro-first per <a href="/meta/work.html">work</a>: the 6-step dance above is the acceptance test, root tree and sub.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> red: the 6-step repro as a test — bare put after re-modify stages nothing, status stale</li>
+<li><a href="./ .html"> </a> root-cause the <code>mod</code> classification for a file whose staged bytes ≠ working bytes</li>
+<li><a href="./ .html"> </a> fix in the shared classifier; status/put/diff read the same state</li>
+<li><a href="./ .html"> </a> green: bare put re-stages in root + sub; status stamp advances; staged == working</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

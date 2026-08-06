@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CI-003: qemu/ checkpoint store — hash-named staged VM images</title>
+<meta property="og:title" content="CI-003: qemu/ checkpoint store — hash-named staged VM images">
+<meta property="og:description" content="CI runner disks live in a qemu/ dir as a chain of content-addressed qcow2 checkpoints: base OS → toolchain → jab-built, each file named by a hash of what produced it. A per-worktree be/test/ run boots a throwaway overlay backed by the jab-built checkpoint, so jab is built once per rev, never per run. This refines CI-001's flat &quot;base image + overlay per runner&quot; into a multi-stage chain; revert/close remains rm &lt;overlay&gt;.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CI/CI-003.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>CI-003: qemu/ checkpoint store — hash-named staged VM images</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+CI runner disks live in a <code>qemu/</code> dir as a chain of content-addressed qcow2 checkpoints: base OS → toolchain → jab-built, each file named by a hash of what produced it. A per-worktree <code>be/test/</code> run boots a throwaway overlay backed by the jab-built checkpoint, so jab is built once per rev, never per run. This refines <a href="./CI-001.html">CI-001</a>'s flat &quot;base image + overlay per runner&quot; into a multi-stage chain; revert/close remains <code>rm &lt;overlay&gt;</code>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><a href="./CI-001.html">CI-001</a> TODOs 2–3 (runner images) assume one base + one overlay; every run would redo clone+build of jab inside the VM.</li>
+<li>qcow2 backing chains layer like docker images: a child stores only blocks changed vs its parent; parents stay immutable while referenced.</li>
+<li>Measured on this host (qemu-img 10.1.3): overlay create 7 ms, discard (rm) 1 ms — the disk open/close is effectively free.</li>
+<li>The real open cost is boot, not disk: cold qemu boot <del>5–15 s Ubuntu, </del>20–40 s FreeBSD; <code>loadvm</code> restore of a running-state snapshot ~1–3 s (RAM-size bound). Numbers are estimates until measured on real images.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>qemu/</code> dir holding checkpoints <code>qemu/&lt;hash&gt;.qcow2</code>; hash identifies the stage content, so a runner picks its start state by name alone.</li>
+<li>Open a run = create overlay backed by a checkpoint (ms); close = rm the overlay (ms); the checkpoint chain is never mutated by a run.</li>
+<li>Rebuilding a stage (new jab rev) mints a new hash-named file; old chains stay bootable until GC'd.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>A checkpoint is immutable once any overlay backs onto it; rebuild means a new file, never in-place <code>qemu-img commit</code> into a referenced parent.</li>
+<li>Hash naming is content-addressed from (parent hash, stage recipe, source rev) — never mtime/serial; exact scheme to align with beagle hashlets.</li>
+<li>RAM checkpoints are per runner flavor, not per rev: a <code>savevm</code> stream costs ~0.3–1× guest RAM on disk (zero pages skipped), a few GB each.</li>
+<li>Same wire rules as <a href="./CI-001.html">CI-001</a>: no shared mounts; images provisioned over ssh/beagle wire only.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Chain: <code>&lt;os-base&gt;</code> ← <code>&lt;toolchain&gt;</code> ← <code>&lt;jab@rev&gt;</code> ← run overlay (throwaway). Per-commit increments still ride the warm ninja cache inside the <code>&lt;jab@rev&gt;</code> clone, checkpoints cover the coarse stages.</li>
+<li>Checkpoint creation: boot parent with no children, run the stage recipe, clean shutdown, hash, rename into <code>qemu/&lt;hash&gt;.qcow2</code>.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> 1. <code>qemu/</code> layout + hash-naming spec, folded into <code>meta/ci.mkd</code> (<a href="./CI-001.html">CI-001</a> TODO 1).</li>
+<li class="open"><input type="checkbox" disabled> 2. make-checkpoint script: boot parent → recipe → shutdown → hash → rename; refuse if parent already has children.</li>
+<li class="open"><input type="checkbox" disabled> 3. open-run/close-run script: overlay create / rm around a test run.</li>
+<li class="open"><input type="checkbox" disabled> 4. Measure real cold-boot and <code>loadvm</code> times on the actual Ubuntu and FreeBSD images; record here.</li>
+<li class="open"><input type="checkbox" disabled> 5. GC: delete checkpoints no run/child references, by hash.</li>
+<li class="open"><input type="checkbox" disabled> 6. loadvm fast-open: one &quot;booted, idle&quot; <code>savevm</code> RAM snapshot per runner flavor (drop guest caches before saving); open-run does <code>loadvm</code> (~1–3 s) instead of cold boot — kills the FreeBSD boot cost. Verify overlay+internal-snapshot interplay.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None; feeds <a href="./CI-001.html">CI-001</a> TODOs 2–3. FreeBSD viability still gated by <a href="./CI-001.html">CI-001</a> TODO 3.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Open. Filed 2026-07-24 from the incremental-snapshot discussion.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

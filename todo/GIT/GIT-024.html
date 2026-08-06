@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIT-024: sha1dc is vendored but its collision detection is switched off</title>
+<meta property="og:title" content="GIT-024: sha1dc is vendored but its collision detection is switched off">
+<meta property="og:description" content="Every SHA-1 wrapper in dog/git/SHA1.h calls SHA1DCSetSafeHash(ctx, 0) (disabling the safe-hash countermeasure) AND discards SHA1DCFinal's return value (1 = collision block detected). So the vendored sha1dc costs the detection cycles on every hash and protects nothing — a SHAttered-style colliding object ingests silently. Found in the 2026-07-24 dog/git review. Method: work.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GIT/GIT-024.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GIT-024: sha1dc is vendored but its collision detection is switched off</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
+<p>
+Every SHA-1 wrapper in <code>dog/git/SHA1.h</code> calls <code>SHA1DCSetSafeHash(ctx, 0)</code> (disabling the safe-hash countermeasure) AND discards <code>SHA1DCFinal</code>'s return value (1 = collision block detected).  So the vendored sha1dc costs the detection cycles on every hash and protects nothing — a SHAttered-style colliding object ingests silently.  Found in the 2026-07-24 dog/git review.  Method: <a href="../../meta/work.html">work</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>dog/git/SHA1.h:38-57</code> — <code>SHA1Sum</code>, <code>SHA1Open</code> (SetSafeHash 0), <code>SHA1Close</code>, plus <code>SHA1Sum</code>'s own Final: all four drop the result.</li>
+<li>git's own policy with sha1dc: safe-hash OFF (a mutated hash breaks interop) but Final's return CHECKED — it dies on detected collision.</li>
+<li>All object hashing routes here (<code>PIDXObjSha</code>, keeper's KEEPObjSha twin), so a check covers ingest and index alike.</li>
+<li><code>SHA1Sum</code>/<code>SHA1Close</code> are <code>fun void</code> — surfacing a code changes the signatures; callers ripple (dog, keeper, js binding).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A detected collision surfaces as a loud error (new RON60 code, e.g. <code>SHA1COLL</code>), never a silently-accepted object.</li>
+<li>Keep hashes byte-identical for honest input (safe-hash stays off).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Needs gritzko's verdict on the policy first: check-and-fail (git parity, recommended), re-enable safe-hash, or drop sha1dc for a plain SHA-1 and stop paying detection cost.  Error text in plain words.</li>
+<li>ABC style; <code>ok64</code> codes via <code>abc/ok64</code>; PRO.h stays out of headers.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending gritzko's policy verdict)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Get the policy verdict (check-and-fail vs drop sha1dc).</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: hash the public shattered-1.pdf collision block pair (or sha1dc's own test vectors) — expect detection to fire.</li>
+<li class="open"><input type="checkbox" disabled> Flip <code>SHA1Sum</code>/<code>SHA1Close</code> to <code>ok64</code>, thread the code through callers; ctest green across dog + keeper + js.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Signature ripple through <code>fun void</code> callers is the bulk of the diff.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

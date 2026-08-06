@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ABC-016</title>
+<title>ABC-016: bedrock scalar/crypto hygiene: popc64, unaligned sha256, SAN.h</title>
+<meta property="og:title" content="ABC-016: bedrock scalar/crypto hygiene: popc64, unaligned sha256, SAN.h">
+<meta property="og:description" content="01.h/SHA.h/NACL.h/OK.h/PRO.h grab-bag (2026-07-07 review): advertised-but- wrong bit helpers, an unaligned u64 read of a 1-aligned record, and support headers that don't do what they claim.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/ABC/ABC-016.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,87 +15,69 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>ABC-016: <a href="./MED.html">MED</a> bedrock scalar/crypto hygiene: popc64, unaligned sha256, SAN.h</h1>
+<h1>ABC-016: bedrock scalar/crypto hygiene: popc64, unaligned sha256, SAN.h</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
 <p>
 01.h/SHA.h/NACL.h/OK.h/PRO.h grab-bag (2026-07-07 review): advertised-but- wrong bit helpers, an unaligned u64 read of a 1-aligned record, and support headers that don't do what they claim.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>01.h:172</code> — <code>#define popc64(x) __builtin_popcount(x)</code>: 32-bit builtin,<p>
-top 32 bits never counted. Caller-less (BIT.h calls popcountll directly) but advertised in INDEX.md. <code>popcountll</code> it.
-</p>
-</li>
-<li><code>01.h:240</code> — <code>u64is2power(0)</code> returns YES; <code>01.h:248</code> <code>upper_log_2(0)</code><p>
-hits <code>clz64(0)</code> (UB for the builtin). Guard zero.
-</p>
-</li>
-<li><code>01.h:154-155</code> — <code>max</code>/<code>min</code> double-evaluate in the most-included<p>
-header (the roundup2 comment at :259 shows the codebase cares); same for <code>$off</code>/<code>$cut</code> (S.h:31,89). Statement-expression or typed forms.
-</p>
-</li>
-<li><code>01.h:289</code> — <code>Ocopy</code> uses assert without including &lt;assert.h&gt;; works<p>
-only via S.h include order.
-</p>
-</li>
-<li><code>SHA.h:11-14</code> <code>sha256empty</code> — reads <code>u8 data[32]</code> (alignof 1, lives at<p>
-arbitrary offsets in mmapped streams by design) through <code>u64c*</code>: unaligned-load UB, UBSan/strict-alignment trap. Same class as PTR-001's TLV casts, distinct site. memcmp/memcpy form.
-</p>
-</li>
-<li><code>NACL.h:35-41</code> — sign: <code>slen</code> possibly uninit when the NDEBUG-skipped<p>
-assert reads it; <code>NACLFAIL0 + ret</code> with negative ret mints undocumented codes. Blake wrappers (:52-66) discard libsodium returns, always OK.
-</p>
-</li>
-<li><code>PRO.h:379</code> / <code>TEST.h:29,35</code> — MAIN/TEST return ok64 from int main:<p>
-exit status truncates to the low byte; codes with low byte 0 report shell SUCCESS. Map non-OK to a fixed nonzero exit.
-</p>
-</li>
-<li><code>SAN.h:10-20</code> — &quot;sanitize the namespace&quot; undefs 7 macros but leaves the<p>
-high-collision ones (<code>is</code>, <code>on</code>, <code>test</code>, <code>scan</code>, <code>trace</code>, <code>must</code>, <code>want</code>, <code>min</code>, <code>max</code>, <code>zero</code>, …; <code>trace()</code> expanding to <code>;</code> silently swallows a third-party call) AND <code>#undef NULL</code> breaks the standard macro for the rest of the TU.
-</p>
-</li>
-<li><code>OK.h:24-25</code> — <code>static char _ok64_tmp[4][16]; static int _ok64_idx;</code><p>
-rotating static buffers in a header: per-TU state, non-thread-safe, 4-call lifetime — the pattern the canon bans (cf. PTR-001 Buf<a href="./4096.html">4096</a>).
-</p>
-</li>
-<li><code>RAP.h:26-36</code> — <code>RAPMicroSeed</code>/<code>RAPNano</code>/<code>RAPNanoSeed</code> take consumable<p>
-<code>u8cs</code> for read-only input where their siblings correctly take <code>u8csc</code>.
-</p>
-</li>
+<li><code>01.h:172</code> — <code>#define popc64(x) __builtin_popcount(x)</code>: 32-bit builtin, top 32 bits never counted. Caller-less (BIT.h calls popcountll directly) but advertised in INDEX.md. <code>popcountll</code> it.</li>
+<li><code>01.h:240</code> — <code>u64is2power(0)</code> returns YES; <code>01.h:248</code> <code>upper_log_2(0)</code> hits <code>clz64(0)</code> (UB for the builtin). Guard zero.</li>
+<li><code>01.h:154-155</code> — <code>max</code>/<code>min</code> double-evaluate in the most-included header (the roundup2 comment at :259 shows the codebase cares); same for <code>$off</code>/<code>$cut</code> (S.h:31,89). Statement-expression or typed forms.</li>
+<li><code>01.h:289</code> — <code>Ocopy</code> uses assert without including &lt;assert.h&gt;; works only via S.h include order.</li>
+<li><code>SHA.h:11-14</code> <code>sha256empty</code> — reads <code>u8 data[32]</code> (alignof 1, lives at arbitrary offsets in mmapped streams by design) through <code>u64c*</code>: unaligned-load UB, UBSan/strict-alignment trap. Same class as PTR-001's TLV casts, distinct site. memcmp/memcpy form.</li>
+<li><code>NACL.h:35-41</code> — sign: <code>slen</code> possibly uninit when the NDEBUG-skipped assert reads it; <code>NACLFAIL0 + ret</code> with negative ret mints undocumented codes. Blake wrappers (:52-66) discard libsodium returns, always OK.</li>
+<li><code>PRO.h:379</code> / <code>TEST.h:29,35</code> — MAIN/TEST return ok64 from int main: exit status truncates to the low byte; codes with low byte 0 report shell SUCCESS. Map non-OK to a fixed nonzero exit.</li>
+<li><code>SAN.h:10-20</code> — &quot;sanitize the namespace&quot; undefs 7 macros but leaves the high-collision ones (<code>is</code>, <code>on</code>, <code>test</code>, <code>scan</code>, <code>trace</code>, <code>must</code>, <code>want</code>, <code>min</code>, <code>max</code>, <code>zero</code>, …; <code>trace()</code> expanding to <code>;</code> silently swallows a third-party call) AND <code>#undef NULL</code> breaks the standard macro for the rest of the TU.</li>
+<li><code>OK.h:24-25</code> — <code>static char _ok64_tmp[4][16]; static int _ok64_idx;</code> rotating static buffers in a header: per-TU state, non-thread-safe, 4-call lifetime — the pattern the canon bans (cf. PTR-001 Buf<a href="./4096.html">4096</a>).</li>
+<li><code>RAP.h:26-36</code> — <code>RAPMicroSeed</code>/<code>RAPNano</code>/<code>RAPNanoSeed</code> take consumable <code>u8cs</code> for read-only input where their siblings correctly take <code>u8csc</code>.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Per-item fixes with table tests where observable (popc64, is2power,<p>
-exit codes); SAN.h completed or re-scoped; ok64str made caller-buffer or thread-local-documented.
-</p>
-</li>
+<li>Per-item fixes with table tests where observable (popc64, is2power, exit codes); SAN.h completed or re-scoped; ok64str made caller-buffer or thread-local-documented.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>01.h/S.h are included everywhere — zero-risk mechanical fixes only,<p>
-review-gated; anything with API impact (ok64str) needs a ruling.
-</p>
-</li>
+<li>01.h/S.h are included everywhere — zero-risk mechanical fixes only, review-gated; anything with API impact (ok64str) needs a ruling.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open)</li>
+<li>min/max/$off now GNU statement expressions — not usable in constant/file-scope contexts (zero in-tree callers of that shape; downstream unverified from the clone).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> popc64/u64is2power/upper_log_2 + tests</li>
-<li class="open"><input type="checkbox" disabled> sha256empty memcmp form; NACL return handling</li>
-<li class="open"><input type="checkbox" disabled> MAIN/TEST exit mapping; SAN.h scope ruling</li>
-<li class="open"><input type="checkbox" disabled> OK.h buffer strategy ruling; RAP.h signatures; min/max single-eval</li>
+<li class="done"><input type="checkbox" checked disabled> popc64/u64is2power/upper_log_2 + tests (BITSpow2/BITSminmax)</li>
+<li class="done"><input type="checkbox" checked disabled> sha256empty memcmp form; NACL return handling (slen init, documented NACLFAIL, Blake returns checked)</li>
+<li class="done"><input type="checkbox" checked disabled> MAIN/TEST exit mapping (EXITtest proves old macro exited 0 on 0x100); SAN.h ruling REQUESTED, untouched</li>
+<li class="done"><input type="checkbox" checked disabled> OK.h ruling REQUESTED, untouched; RAP.h u8csc; min/max/$off/$cut single-eval</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>(none)</li>
+<li>RULING 1 (SAN.h): undef list misses is/on/test/scan/trace/must/ want/min/max/zero AND <code>#undef NULL</code> kills the standard macro — complete the list vs re-scope; the NULL undef is a plain bug.</li>
+<li>RULING 2 (OK.h ok64str): static char<a href="./4.html">4</a><a href="./16.html">16</a> rotating per-TU buffers — caller-buffer API vs documented-thread-local; API impact.</li>
+<li>Semantic flip: <code>u64is2power(0)</code> now NO — downstream (dog/beagle) alignment checks that accepted 0 will see the change.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(open)</li>
+<li>Landed in work/ABC-016, NOT merged: <code>?467fb44b</code> &quot;ABC-016: scalar/ crypto hygiene&quot;. Suite 47/47 (was 46), new EXITtest + BITSpow2/ BITSminmax/offtest/SHAemptytest tables; orchestrator re-verified.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GIT-020</title>
+<title>GIT-020: a JS keeper SERVE side (jab upload-pack / receive-pack) to retire the native keeper daemon on the be:// wire</title>
+<meta property="og:title" content="GIT-020: a JS keeper SERVE side (jab upload-pack / receive-pack) to retire the native keeper daemon on the be:// wire">
+<meta property="og:description" content="jab is a wire CLIENT only (verbs get/put/post/patch/delete/head; no serve). The be:/keeper: transport (be/shared/wire.js dispatch) execs the NATIVE keeper daemon — keeper upload-pack locally or ssh host keeper … — which LAGS jab and is absent from the jab-only bin. Local file:// + git transport (git-upload-pack) already run keeper-free, so TEST-003 converts the local/ingest tests off be:. But the be:// WIRE-PROTOCOL tests (get/be, get/cached, any be-store push/fetch) genuinely need a beagle wire SERVER. Give jab one — a JS upload-pack/receive-pack serve loop — so the be:// wire runs jab-to-jab, fully native-binary-free.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GIT/GIT-020.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,71 +15,40 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>GIT-020 <a href="./JS.html">JS</a>: a JS keeper SERVE side (<code>jab upload-pack</code> / <code>receive-pack</code>) to retire the native keeper daemon on the be:// wire</h1>
+<h1>GIT-020: a JS keeper SERVE side (<code>jab upload-pack</code> / <code>receive-pack</code>) to retire the native keeper daemon on the be:// wire</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 jab is a wire CLIENT only (verbs get/put/post/patch/delete/head; no serve). The <code>be:</code>/<code>keeper:</code> transport (<code>be/shared/wire.js</code> dispatch) execs the NATIVE <code>keeper</code> daemon — <code>keeper upload-pack</code> locally or <code>ssh host keeper …</code> — which LAGS jab and is absent from the jab-only bin. Local <code>file://</code> + git transport (git-upload-pack) already run keeper-free, so <a href="../TEST/TEST-003.html">TEST-003</a> converts the local/ingest tests off <code>be:</code>. But the be:// WIRE-PROTOCOL tests (get/be, get/cached, any be-store push/fetch) genuinely need a beagle wire SERVER. Give jab one — a JS <code>upload-pack</code>/<code>receive-pack</code> serve loop — so the be:// wire runs jab-to-jab, fully native-binary-free.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><a href="../TEST/TEST-003.html">TEST-003</a> de-nativifies the be/ JS test suite (native <code>be</code> LAGS jab); the<p>
-only surviving native dependency is the <code>keeper</code> wire daemon on <code>be:</code>/<code>keeper:</code>.
-</p>
-</li>
-<li><code>wire.js</code> transport dispatch: <code>file:</code>/scheme-less local → read direct (no wire);<p>
-<code>//host</code>/<code>git:</code>/<code>ssh:</code>/http → git-upload-pack (keeper-free, tests pass); <code>be:</code>/<code>keeper:</code> → exec <code>keeper upload-pack</code> (local) or <code>ssh host keeper …</code>.
-</p>
-</li>
-<li><code>build/bin</code> ships no <code>keeper</code>; <code>build-debug/bin/keeper</code> is ABI-stale vs current<p>
-jab (<code>abc._ulog_open is not a function</code>). So get/be + get/cached SKIP.
-</p>
-</li>
-<li>Scope note: this ticket is for the be:// WIRE only (get/be, get/cached, be-store<p>
-push/fetch). A LOCAL <code>file://</code> submodule mount must NOT reach keeper at all — it should reuse the on-disk source store + make a (store-backed) worktree; that submount local-reuse gap (the <code>sub/*</code> + <code>spot/submount</code> <a href="../TEST/TEST-003.html">TEST-003</a> failures) is its OWN fix, tracked separately, NOT this JS-serve feature.
-</p>
-</li>
-<li>jab already has the SERVE primitives (client-side today): <code>serveReader</code> (store<p>
-open), <code>markReachable</code> (object closure), <code>buildPushPack</code> (pack build), plus <code>pkt.js</code> framing and GIT-013/014's report-status/pack logic.
-</p>
-</li>
+<li><a href="../TEST/TEST-003.html">TEST-003</a> de-nativifies the be/ JS test suite (native <code>be</code> LAGS jab); the only surviving native dependency is the <code>keeper</code> wire daemon on <code>be:</code>/<code>keeper:</code>.</li>
+<li><code>wire.js</code> transport dispatch: <code>file:</code>/scheme-less local → read direct (no wire); <code>//host</code>/<code>git:</code>/<code>ssh:</code>/http → git-upload-pack (keeper-free, tests pass); <code>be:</code>/<code>keeper:</code> → exec <code>keeper upload-pack</code> (local) or <code>ssh host keeper …</code>.</li>
+<li><code>build/bin</code> ships no <code>keeper</code>; <code>build-debug/bin/keeper</code> is ABI-stale vs current jab (<code>abc._ulog_open is not a function</code>). So get/be + get/cached SKIP.</li>
+<li>Scope note: this ticket is for the be:// WIRE only (get/be, get/cached, be-store push/fetch). A LOCAL <code>file://</code> submodule mount must NOT reach keeper at all — it should reuse the on-disk source store + make a (store-backed) worktree; that submount local-reuse gap (the <code>sub/*</code> + <code>spot/submount</code> <a href="../TEST/TEST-003.html">TEST-003</a> failures) is its OWN fix, tracked separately, NOT this JS-serve feature.</li>
+<li>jab already has the SERVE primitives (client-side today): <code>serveReader</code> (store open), <code>markReachable</code> (object closure), <code>buildPushPack</code> (pack build), plus <code>pkt.js</code> framing and GIT-013/014's report-status/pack logic.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>A JS serve entry — <code>jab upload-pack &lt;store&gt;</code> and <code>jab receive-pack &lt;store&gt;</code><p>
-(or one <code>jab serve</code>) — speaking the keeper wire protocol over stdin/stdout, so <code>be:</code> local-exec and <code>ssh host jab upload-pack …</code> both work jab-to-jab.
-</p>
-</li>
-<li>The <code>be:</code> dispatch execs the JS server via the EXISTING <code>KEEPER_BIN</code> override;<p>
-get/be + get/cached (and be-store push/fetch) pass with NO native keeper.
-</p>
-</li>
+<li>A JS serve entry — <code>jab upload-pack &lt;store&gt;</code> and <code>jab receive-pack &lt;store&gt;</code> (or one <code>jab serve</code>) — speaking the keeper wire protocol over stdin/stdout, so <code>be:</code> local-exec and <code>ssh host jab upload-pack …</code> both work jab-to-jab.</li>
+<li>The <code>be:</code> dispatch execs the JS server via the EXISTING <code>KEEPER_BIN</code> override; get/be + get/cached (and be-store push/fetch) pass with NO native keeper.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Match the wire protocol the jab CLIENT already speaks (<code>wire.js</code>): v0/v1 refs<p>
-advertisement, want/have negotiation, <code>NAK\n</code>, RAW pack after (keeper advertises NO side-band-64k, so no demux). Reuse <code>pkt.js</code>, not hand-rolled framing.
-</p>
-</li>
-<li>Reuse the existing serve primitives; do NOT fork a second pack/closure impl.<p>
-No pack-log logic in the verb (the format core stays shared, per <a href="README.html">GIT</a> topic).
-</p>
-</li>
+<li>Match the wire protocol the jab CLIENT already speaks (<code>wire.js</code>): v0/v1 refs advertisement, want/have negotiation, <code>NAK\n</code>, RAW pack after (keeper advertises NO side-band-64k, so no demux). Reuse <code>pkt.js</code>, not hand-rolled framing.</li>
+<li>Reuse the existing serve primitives; do NOT fork a second pack/closure impl. No pack-log logic in the verb (the format core stays shared, per <a href="README.html">GIT</a> topic).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>upload-pack serve: WRITE the local refs advertisement (store refs → pkt-lines),<p>
-read the client's wants/haves, flood the closure via <code>markReachable(wants) − haves</code>, build the pack with <code>buildPushPack</code>, stream it after <code>NAK</code>.
-</p>
-</li>
-<li>receive-pack serve: read update commands + the incoming pack, ingest (the<p>
-GIT-013/014 client push path in reverse), emit report-status.
-</p>
-</li>
-<li>Wire it as a bare <code>jab upload-pack</code>/<code>receive-pack</code> invocation (what ssh/local<p>
-exec spawns); the CLI must NOT emit its normal banners on these (raw wire only).
-</p>
-</li>
+<li>upload-pack serve: WRITE the local refs advertisement (store refs → pkt-lines), read the client's wants/haves, flood the closure via <code>markReachable(wants) − haves</code>, build the pack with <code>buildPushPack</code>, stream it after <code>NAK</code>.</li>
+<li>receive-pack serve: read update commands + the incoming pack, ingest (the GIT-013/014 client push path in reverse), emit report-status.</li>
+<li>Wire it as a bare <code>jab upload-pack</code>/<code>receive-pack</code> invocation (what ssh/local exec spawns); the CLI must NOT emit its normal banners on these (raw wire only).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -87,21 +60,24 @@ exec spawns); the CLI must NOT emit its normal banners on these (raw wire only).
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Protocol parity with the client is load-bearing: capabilities, the no-side-band<p>
-RAW-pack contract, and v0/v1 advert must match <code>wire.js</code> exactly or fetch hangs.
-</p>
-</li>
+<li>Protocol parity with the client is load-bearing: capabilities, the no-side-band RAW-pack contract, and v0/v1 advert must match <code>wire.js</code> exactly or fetch hangs.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>Open. Filed from the <a href="../TEST/TEST-003.html">TEST-003</a> jab-only test conversion: option-1 (be:→file://)<p>
-handles the local/ingest tests NOW; this ticket is option-2 — the JS keeper that lets the be:// WIRE itself be tested jab-to-jab, retiring the native daemon.
-</p>
-</li>
-<li>PARTIAL land <code>261680bf</code> (&quot;js upload-pack, also fix bro tests&quot;): the FETCH serve<p>
-side only — <code>shared/serve.js</code> <code>uploadPack</code> + the <code>jab upload-pack</code> raw-wire CLI entry + <code>test/serve/uploadpack</code> (be: local-exec fetch jab-to-jab via KEEPER_BIN=jab, incl. a want+have thin-serve drive). Remaining: receive-pack serve, the get/be + get/cached test flips, and an ssh-remote jab spawn form (see TODOs).
-</p>
-</li>
+<li>Open. Filed from the <a href="../TEST/TEST-003.html">TEST-003</a> jab-only test conversion: option-1 (be:→file://) handles the local/ingest tests NOW; this ticket is option-2 — the JS keeper that lets the be:// WIRE itself be tested jab-to-jab, retiring the native daemon.</li>
+<li>PARTIAL land <code>261680bf</code> (&quot;js upload-pack, also fix bro tests&quot;): the FETCH serve side only — <code>shared/serve.js</code> <code>uploadPack</code> + the <code>jab upload-pack</code> raw-wire CLI entry + <code>test/serve/uploadpack</code> (be: local-exec fetch jab-to-jab via KEEPER_BIN=jab, incl. a want+have thin-serve drive). Remaining: receive-pack serve, the get/be + get/cached test flips, and an ssh-remote jab spawn form (see TODOs).</li>
+<li>The receive-pack serve loop + <code>jab receive-pack</code> CLI entry landed later under POST-028 (<code>serve.js</code> <code>receivePack</code>, FF-gate + CAS + report-status); the leftover TODOs (ssh-remote jab spawn, test flips) are promoted to <a href="GIT-022.html">GIT-022</a>.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

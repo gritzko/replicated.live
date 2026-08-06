@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABC-023: slotless RO file maps — close(fd) right after mmap</title>
+<meta property="og:title" content="ABC-023: slotless RO file maps — close(fd) right after mmap">
+<meta property="og:description" content="Big read-mostly views (todo, work) map hundreds of files; every RO map pins its fd until JS GC collects the view, so a real drive outruns the collector and dies with &quot;too many open files&quot; (~1000 maps; ulimit -n 1024 == FILEMAXOPEN). Ruling (gritzko, 2026-08-04): at the very minimal level, close the fd right after mmapping. A PROTREAD map needs no fd after mmap, so RO maps leave the fd-keyed registry entirely — no slot, no collision.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/ABC/ABC-023.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ABC-023: slotless RO file maps — close(fd) right after mmap</h1>
+<div>
+<p>
+Now: DONE Sev: HIGH Rep: ///jab/ On1: ABC-020 See: BE-050
+</p>
+</div>
+<p>
+Big read-mostly views (todo, work) map hundreds of files; every RO map pins its fd until JS GC collects the view, so a real drive outruns the collector and dies with &quot;too many open files&quot; (~1000 maps; ulimit -n 1024 == FILE_MAX_OPEN). Ruling (gritzko, 2026-08-04): at the very minimal level, close the fd right after mmapping. A PROT_READ map needs no fd after mmap, so RO maps leave the fd-keyed registry entirely — no slot, no collision.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>The fd number IS the registry key: FILE_WANT_BUFS<a href="./fd.html">fd</a> slot, FILE_RW bitmap, JABC_MAP_GEN are all fd-indexed (FILE.c, io.cpp).</li>
+<li>That killed naive close-after-mmap in <a href="/todo/ABC/ABC-014.html">ABC-014</a>: a reused fd collides with a live slot, GC closes a stranger's fd.</li>
+<li>Release is GC-only in practice: <a href="/todo/ABC/ABC-020.html">ABC-020</a> found any read materializes the buffer, then abc.close silently no-ops.</li>
+<li>The common JS idiom <code>io.mmap(p,&quot;r&quot;).data().slice()</code> never closes at all (diff.js:520, why.js:32, ignore.js, gitmodules.js).</li>
+<li>The .slice() copy is cargo cult: view or copy, the fd dies at the same GC; the memcpy buys nothing for the leak (gritzko).</li>
+<li>io._ram already has the wanted release shape: plain munmap finalizer JABCRamFree off a per-array length box (io.cpp:620).</li>
+<li>ABC-020 established FILEReMap/pread are unreachable from the JS RO path; post-mmap the fd serves only as slot identity.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Kill fd exhaustion on read paths with zero JS call-site changes: a view's fd cost becomes 1-at-a-time and RO maps stop occupying the 1024-slot FILE_WANT_BUFS table.
+</p>
+<ul>
+<li>PROT_READ maps: open, mmap, close(fd) at once, register NO slot.</li>
+<li>GC finalizer = plain munmap(base, len), len carried in a ctx box (the io._ram pattern); no gen/ABA machinery needed.</li>
+<li>io._munmap stays idempotent and handles both map kinds.</li>
+<li>Red-first repro: loop io.mmap(path,&quot;r&quot;) + a read leg under a lowered RLIMIT_NOFILE; exhausts today, stays flat after.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>New FILE.h leaf for the tight RO map (slice out, fd closed inside) plus its plain-munmap counterpart; io.cpp reuses them, no reimplementation of open/mmap logic in the binding.</li>
+<li>dog-internal C callers of FILEMapRO keep the slotted API.</li>
+<li>&quot;rw&quot;/&quot;c&quot; modes unchanged (slot + fd as today); the RW rework is ABC-020's REWORK-1 ruling, out of scope here.</li>
+<li>User-facing errors in plain words; ABC idioms per <a href="/meta/abc.html">abc</a>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>New leaves FILEMapOnce (open+mmap+close, fills the CALLER's u8b, no slot) / FILEUnMapOnce (plain munmap of the RECORD's whole range b<a href="./3.html">3</a>-b<a href="./0.html">0</a>); both reuse FILEOpen/FILESize/FILEClose, wrapper+worker so the fd dies on every exit path.  LANDED 2026-08-04 under the ruled names (was ...ROSlotless/...Slotless with a base+len unmap — rejected, no fd/len in the API).</li>
+<li>io.cpp: &quot;r&quot; → slotless + JABCMapROFree finalizer off a malloc'd length box (the JABCRamFree pattern); &quot;rw&quot;/&quot;c&quot; untouched, keep the slot + the (gen,fd) JABCMapFree guard.</li>
+<li>RULING (gritzko, 2026-08-04): slotless maps are OK to unmap at GC — the deviation below is approved as the design.</li>
+<li>RULING (gritzko, 2026-08-04): the API is FILEMapOnce(u8bp, path8s) / FILEUnMapOnce(u8bp) — NO fd in the API; an empty file maps to the empty record, unmapping it is a noop.</li>
+<li>FILEUnMapOnce guards cross-pairing: a slot-backed record is refused (FILEBookedFD &gt;= 0), so a leaked fd cannot go silent. The reverse misuse already fails NONE, left as is.</li>
+<li>Empty file: FILEMapOnce skips mmap (length 0 is EINVAL) and yields the empty record (all four pointers NULL); io.cpp turns that into a plain 0-length Uint8Array — JSObjectMakeTypedArray- WithBytesNoCopy SEGVs on a NULL base (verified, exit 139).</li>
+<li>DEVIATION: io.<em>munmap does NOT eagerly release a slotless map — it stays the silent no-op it already is for a non-FILE base. Reasons: (1) eager release needs base→box lookup, i.e. a side table, and without a released-flag it reintroduces exactly the ABA the ticket says needs no machinery; (2) it would be dead code anyway — abc.close hands </em>munmap the TRANSFERRED husk, and on any materialized (i.e. every real) read transfer COPIES, so the husk's base is not the mapping's (ABC-020 evidence). With no fd left, deferring the munmap to GC costs VA only.</li>
+<li>abc.close on &quot;r&quot;: transfer detaches the views, msync/_munmap find nothing, no throw — verified in the test, no code change.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./v.html">v</a> repro: mmapfd.js read-then-drop RO loop + content check —
+</p>
+<div>
+<p>
+  RED base=9 after=457 fds (ulimit -n 64: dies at i=57), GREEN base=9 after=9 (ulimit -n 64: 2000 maps, 8 fds)
+</p>
+</div>
+<p>
+ -<a href="./v.html">v</a> FILE.h/c: FILEMapROSlotless + FILEUnMapSlotless -<a href="./v.html">v</a> rename to the ruled API: FILEMapOnce(u8bp, path8s) /
+</p>
+<div>
+<p>
+  FILEUnMapOnce(u8bp) + cross-pair guard + empty-record contract; io.cpp/API.md/INDEX.md x2 follow, ctest 108/108
+</p>
+</div>
+<p>
+ -<a href="./v.html">v</a> io.cpp: &quot;r&quot; mode slotless, RamFree-style length box;
+</p>
+<div>
+<p>
+  io._munmap left a no-op for slotless (see Design decisions)
+</p>
+</div>
+<p>
+ -<a href="./v.html">v</a> cont.cpp abc.close RO path re-checked: no slot, no error -<a href="./ .html"> </a> drop the .slice() copies at RO call-sites — be/ repo, OUT OF
+</p>
+<div>
+<p>
+  SCOPE for this worktree
+</p>
+</div>
+<p>
+ -<a href="./v.html">v</a> ctest 108/108; abc/INDEX.md + jab/INDEX.md + API.md entries
+</p>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>JABCrepack failed once under ctest -j16 and never again (8 full suites + 40 pack-trio runs green); no output captured, unrelated to the RO path as far as the code goes.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+Suggested commit: <code>ABC-023: read-only maps keep no fd (FILEMapOnce)</code>
+</p>
+<p>
+Files: dog/abc/FILE.c+.h (FILEMapOnce/FILEUnMapOnce), io.cpp (&quot;r&quot; once-map, JABCMapROFree rebuilds the record, empty-file arm), cont.cpp (comment), test/mmapfd.js (RO fd-flat + close + empty-file legs), INDEX.md x2, API.md. UNCOMMITTED in work/ABC-023, <code>jab put</code> only, per the no-post order.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

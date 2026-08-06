@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-020</title>
+<title>MEM-020: BROExec leaks mmap'd file (and keeper) on arena overflow (bro/BRO.exe.c)</title>
+<meta property="og:title" content="MEM-020: BROExec leaks mmap'd file (and keeper) on arena overflow (bro/BRO.exe.c)">
+<meta property="og:description" content="In BROExec's per-URI loop a file is FILEMapRO'd but only registered for cleanup (BRODefer → b-&gt;maps) several lines later; between the two, call(u8bHost, b-&gt;arena, …) can return BNOROOM when the 128MB arena fills, and the call returns from BROExec before the mapping is recorded — so BROClose (which iterates only b-&gt;maps) never unmaps it, and any open keeper teardown after the loop is skipped too. In an in-process be host this accumulates. The goal is to register the mapping before any returning call.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-020.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>MEM-020: BROExec leaks mmap'd file (and keeper) on arena overflow (bro/BRO.exe.c)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 In <code>BROExec</code>'s per-URI loop a file is <code>FILEMapRO</code>'d but only registered for cleanup (<code>BRODefer</code> → <code>b-&gt;maps</code>) several lines later; between the two, <code>call(u8bHost, b-&gt;arena, …)</code> can return <code>BNOROOM</code> when the 128MB arena fills, and the <code>call</code> returns from <code>BROExec</code> before the mapping is recorded — so <code>BROClose</code> (which iterates only <code>b-&gt;maps</code>) never unmaps it, and any open keeper teardown after the loop is skipped too. In an in-process <code>be</code> host this accumulates. The goal is to register the mapping before any returning call.
 </p>
@@ -35,5 +44,16 @@ Acquire-then-register; teardown on every exit.
 <li>Repro first: stage enough/large files to exhaust <code>b-&gt;arena</code> at the URI copy; assert the mapped file is unmapped (fd/map count stable).</li>
 <li>Move <code>BRODefer(mapped)</code> to immediately after <code>FILEMapRO</code>, or make :182 a non-returning <code>try</code>/checked form that <code>FILEUnMap(mapped); continue;</code> on <code>BNOROOM</code>; run keeper teardown in a single exit block.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

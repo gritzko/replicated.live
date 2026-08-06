@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORK-010: work view — ticket-named wt rows get a ? ticket link (todo:TKT-123 / todo:TKT), diff compacts to ±</title>
+<meta property="og:title" content="WORK-010: work view — ticket-named wt rows get a ? ticket link (todo:TKT-123 / todo:TKT), diff compacts to ±">
+<meta property="og:description" content="Work-view row chrome, split from the /todo/WORK/WORK-001 forest work. A worktree named after a ticket (//WORK-004) or a ticket topic (//WORK) should carry a ? button linking to that ticket page — todo:TKT-123 for a ticket name, todo:TKT for a bare topic — so the ticket is one click from its wt row. Independently, the diff button compacts to ±, shrinking the fixed button region.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/WORK/WORK-010.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WORK-010: work view — ticket-named wt rows get a <code>[?]</code> ticket link (<code>todo:TKT-123</code> / <code>todo:TKT</code>), <code>[diff]</code> compacts to <code>[±]</code></h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+Work-view row chrome, split from the <a href="/todo/WORK/WORK-001.html">WORK-001</a> forest work. A worktree named after a ticket (<code>//WORK-004</code>) or a ticket topic (<code>//WORK</code>) should carry a <code>[?]</code> button linking to that ticket page — <code>todo:TKT-123</code> for a ticket name, <code>todo:TKT</code> for a bare topic — so the ticket is one click from its wt row. Independently, the <code>[diff]</code> button compacts to <code>[±]</code>, shrinking the fixed button region.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>The view already resolves ticket-named wts: <code>[post]</code> takes its commit title via todo.pageTitle (views/work/work.js:333-339), and the <a href="/todo/WORK/WORK-001.html">WORK-001</a> <code>[done]</code>/<code>[dont]</code> ruling flips a ticket-named wt's ticket header status.</li>
+<li>Button slots today (work.js:379-393, reshaped by <a href="/todo/WORK/WORK-004.html">WORK-004</a>): <code>[diff]</code> mints <code>diff //KEY</code>; <code>[+N]</code>/<code>[-N]</code> mint bare post/get; no ticket-page link anywhere in the row.</li>
+<li>The row's key/URI click navigates to the wt's STATUS (<a href="/todo/WORK/WORK-001.html">WORK-001</a> ruling), so the ticket page needs its own click target.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A wt whose name is a ticket code gets <code>[?]</code> minting the <code>todo:TKT-123</code> link; a wt named for a bare topic (e.g. <code>//WORK</code>) gets <code>todo:TKT</code> (the topic's ticket dir).</li>
+<li><code>[diff]</code> renders as <code>[±]</code> — same verb minted (<code>diff //KEY</code>), just the compact face; slot widths and the aligned button column shrink accordingly.</li>
+<li>RULING (gritzko, chat 2026-07-19): <code>[?]</code> and <code>[±]</code> are the FIRST TWO buttons of the row, in that order, ahead of the rest of the button run.</li>
+<li>Non-ticket-named wts show no <code>[?]</code> (padded per the <a href="/todo/WORK/WORK-006.html">WORK-006</a> absent-button ┄-pad).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Ticket-name detection reuses the shared ticket lookup (the todo.pageTitle path) — no new name parsing; ticket/topic resolution through the standard resolvers only.</li>
+<li>Overlaps the unlanded WORK-001/003/004 cuts of views/work/work.js and the be/test/work/view/ layout test; build on be tip, expect weaves.</li>
+<li>Plain (no-pager) output: no buttons today, so no <code>[?]</code>/<code>[±]</code> there.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><a href="./?.html">?</a> mints an O-invite, EMPTY ctx, verb todo, key as ARG: <code>//: todo TKT</code>.</li>
+<li>Topic-named wt -&gt; <code>//: todo TOPIC</code> (topic dir must exist).</li>
+<li>Suffix-tolerant: PIN-1b / URI-016-adv -&gt; BASE key <code>//: todo PIN-1</code>.</li>
+<li>Base-key parse lives in todo.ticketKey (shared parser), not work.js.</li>
+<li><a href="./?.html">?</a> then <a href="./±.html">±</a> lead the buttons; <a href="./?.html">?</a> cyan V face, <a href="./±.html">±</a> = compact diff.</li>
+<li>Slots: <a href="./?.html">?</a> 4 + <a href="./±.html">±</a> 4 + <a href="./post.html">post</a> 7; absent <a href="./?.html">?</a> ┄-pads (WORK-006).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="wontfix"><input type="checkbox" disabled> <del>red: pinned <code>[±]</code> face + <code>[?]</code> on ticket/topic/suffixed wts, absent elsewhere.</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del><code>[?]</code> emits <code>//: todo TKT</code> / <code>//: todo TOPIC</code>; suffix -&gt; base key.</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del><code>[±]</code> face swap + width math; pty click fires <a href="./?.html">?</a> (nav) and <a href="./±.html">±</a>.</del></li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Mint site emits <code>//: todo TKT</code> (correct); pty nav reaches the page.</li>
+<li>RESOLVED by BE-053 (c2768ce7): pager <code>_isNavAddr</code> keeps ctx on a word-spell arg click; the address-bar weld is gone.  WORK-010's pty pin is behavioral (checks the PIN-1 page renders), so it needs no re-pin and stays green on the woven tip.</li>
+<li>WORK-010 (2b78b908) already landed on //WORK/ (now under WORK-012); re-verified on that tip: work/view, todo/view, done/buttons, graf/parity all PASS; only pre-existing work/getctx red (retired <a href="./get.html">get</a> button).  No get/post done — upstream is live-advancing.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Done: work-view <code>[?]</code>/<code>[±]</code> row chrome + suffix-tolerant ticket link.</li>
+<li>Files: views/work/work.js, views/todo/todo.js (+ticketKey), and the view test (check.js, run.sh, clickpty.py).  Tests green (view+todo).</li>
+<li>Suggested commit: WORK-010: work-view <a href="./?.html">?</a> ticket link + <a href="./±.html">±</a> diff face</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

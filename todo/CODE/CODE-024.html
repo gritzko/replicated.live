@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-024: io.mmap per-file read helpers leak mappings — use the pooled-fd read</title>
+<meta property="og:title" content="CODE-024: io.mmap per-file read helpers leak mappings — use the pooled-fd read">
+<meta property="og:description" content="Deps: none. The sanctioned replacement already exists — wtread readFileBytes (pooled open/readAll/close, landed under CODE-020 57ff502a). This ticket routes the remaining per-file mmap readers through it. Repro concern is the RESIDENT pager loop over a big tree, per classify's own documented rule.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-024.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>CODE-024: io.mmap per-file read helpers leak mappings — use the pooled-fd read</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
+<p>
+Deps: none. The sanctioned replacement already exists — <a href="../../be/shared/wtread.js">wtread</a> <code>readFileBytes</code> (pooled open/readAll/close, landed under <a href="CODE-020.html">CODE-020</a> <code>57ff502a</code>). This ticket routes the remaining per-file mmap readers through it. Repro concern is the RESIDENT pager loop over a big tree, per <a href="../../be/shared/classify.js">classify</a>'s own documented rule.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>classify.js:159-165 states the rule: <code>io.mmap</code> leaks the mapping (no JS-side unmap), so a wt with &gt;~1000 tracked files exhausts the process's mmap regions mid-sweep; every later map fails and the file reads as a false <code>mod</code> (the 279-file real-repo regression). Reads MUST use pooled fd.</li>
+<li>Offenders still mmap per-file/per-dir: ignore.js:157 (<code>readFileText</code>, per <code>.gitignore</code> during a tree scan), diff.js:317 (<code>readWtFile</code>, per changed file), why.js:27 (per file). ingest.js:242 <code>io._mmap</code> per appendRecords.</li>
+<li>In the resident loop these accumulate — the exact regression classify.js documents, just on the diff/search/ignore paths instead of status.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Route per-file/per-dir reads through the pooled fd path (<a href="../../be/shared/wtread.js">wtread</a> <code>readFileBytes</code> or a shared read helper), so no mapping outlives the call.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Behavior-preserving; pack-oriented mmaps with documented bounds (ingest.js:143/410, 31-bit caveat) are a SEPARATE concern — scope this to the unbounded per-wt-file readers. be/ JS only.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro/reason: &gt;~1000-file diff or spot search exhausts mappings</li>
+<li><a href="./ .html"> </a> ignore.js:157 <code>readFileText</code> → pooled fd read</li>
+<li><a href="./ .html"> </a> diff.js:317 <code>readWtFile</code> → <a href="../../be/shared/wtread.js">wtread</a> <code>readFileBytes</code></li>
+<li><a href="./ .html"> </a> why.js:27 file read → same</li>
+<li><a href="./ .html"> </a> ingest.js:242 <code>io._mmap</code> appendRecords — ensure unmap/close or document the bound</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>diff.js:188 notes an mmap-follows-symlink leak already; fold that concern in.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Not started. Suggested commit: <code>CODE-024: per-file reads off io.mmap onto pooled fd</code>.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

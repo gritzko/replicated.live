@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ULOG-004: cheap conflicts accessor — con paths since the last get/post barrier</title>
+<meta property="og:title" content="ULOG-004: cheap conflicts accessor — con paths since the last get/post barrier">
+<meta property="og:description" content="Per /todo/DIS/DIS-080: conflict liveness is row-scoped, not content-scoped (resolved==posted). Provide one cheap accessor that fishes out the current conflict list — an array of paths — by scanning the wtlog backward from the tip to the most recent get/post barrier, collecting con &lt;path&gt; rows. Every consumer (classify/status, diff view, post's gate) reads this instead of marker-scanning bytes.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/ULOG/ULOG-004.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ULOG-004: cheap conflicts accessor — con paths since the last get/post barrier</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<p>
+Per <a href="/todo/DIS/DIS-080.html">DIS-080</a>: conflict liveness is row-scoped, not content-scoped (resolved==posted). Provide one cheap accessor that fishes out the current conflict list — an array of paths — by scanning the wtlog backward from the tip to the most recent get/post barrier, collecting <code>con &lt;path&gt;</code> rows. Every consumer (classify/status, diff view, post's gate) reads this instead of marker-scanning bytes.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>wtlog.conPaths()</code> (shared/wtlog.js:333-341) already collects con rows but with the wrong floor for the new rule; classify then re-verifies markers on disk (classify.js:56-63, 423-427) — that liveness check dies with markers.</li>
+<li>wtlog is append-only; con rows are never deleted; a post/get row is the natural expiry barrier.</li>
+</ul>
+<h3>Goals</h3>
+<ol>
+<li><code>wtlog.conflicts()</code> (name TBD): backward scan, stop at the first get/post row, dedup, return paths. O(rows since last barrier).</li>
+<li>Consumers switch: classify's <code>con</code> bucket, quad's <code>!</code> wt char, status summary tally, <a href="/todo/POST/POST-035.html">POST-035</a> gate, <a href="/todo/DIFF/DIFF-016.html">DIFF-016</a> yellow spans — all row-driven, zero byte scans.</li>
+<li>Old <code>conPaths()</code> + marker liveness path retired with the switch.</li>
+</ol>
+<h3>Constraints</h3>
+<ul>
+<li>Which rows are barriers exactly (bare get vs scoped get, post commit vs post advance) — decide and document in the fn header; a scoped get should not amnesty unrelated paths.</li>
+<li>No log ts read-back games — row order in the log is the truth (<a href="./[no-log-readback-run-ts.html">[no-log-readback-run-ts</a>] applies to ts, not order).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Name: <code>wtlog.conflicts()</code> → array of paths, oldest-first, deduped (kept <code>conPaths()</code> untouched for its live callers).</li>
+<li>BARRIER = a <code>get</code>/<code>post</code> row bearing a full sha whose path is NOT wt-relative (absent, or under a scheme/authority — a seed/sub re-attach address). Both bare and scoped-branch gets and both post shapes (commit <code>?br#sha</code>, FF advance) qualify: each moves the tip.</li>
+<li>NOT barriers: <code>patch</code> (multi-patch stacking must accumulate con rows), <code>put</code>/<code>delete</code> (DIS-080 §4: put is not an ack), a ref-less store anchor (pins nothing), and a wt-relative path row — a scoped <code>get &lt;path&gt;</code> amnesties nothing (today <code>restorePath</code> writes no wtlog row at all, so the rule is a guard for the future).</li>
+<li>Ordering is row order only, no ts games; a merge-get's own con rows are written AFTER its tip row, so they survive their own barrier.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> accessor in shared/wtlog.js + unit test (con, con+post, con+get, multi-patch dups)</li>
+<li class="open"><input type="checkbox" disabled> switch classify/quad/status to it</li>
+<li class="open"><input type="checkbox" disabled> retire marker-liveness (wtHasMarker) once DIFF-016/POST-035 land</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><code>shared/wtlog.js</code> <code>conflicts()</code> + <code>test/wtlog_con.js</code> (9 legs), registered as <code>be-js-unit-wtlog_con</code>; full suite 317/317 green.</li>
+<li>Consumers NOT switched yet (TODO 2) — <code>conPaths()</code> and marker liveness untouched, so this lands as a pure addition.</li>
+<li>Landed as <code>///be/#543269d6</code> (2026-07-29 20:06).</li>
+<li>Consumer-switch + wtHasMarker retirement TODOs carried by <a href="/todo/STATUS/STATUS-017.html">STATUS-017</a> and <a href="/todo/POST/POST-035.html">POST-035</a>.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

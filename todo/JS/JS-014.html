@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-014</title>
+<title>JS-014: adopt a least-surprising C++ style (Google C++) + prune dead surface</title>
+<meta property="og:title" content="JS-014: adopt a least-surprising C++ style (Google C++) + prune dead surface">
+<meta property="og:description" content="js/ is deliberately C++ (JSC); ratify ONE external standard, add a checked-in .clang-format, converge naming, and prune the dead/unused surface. User-requested cleanup. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-014.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,44 +15,34 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-014 <a href="">cleanup</a>: adopt a least-surprising C++ style (Google C++) + prune dead surface</h1>
+<h1>JS-014: adopt a least-surprising C++ style (Google C++) + prune dead surface</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
 <p>
 <code>js/</code> is deliberately C++ (JSC); ratify ONE external standard, add a checked-in <code>.clang-format</code>, converge naming, and prune the dead/unused surface. User-requested cleanup. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Naming is mixed: <code>JS*</code> / <code>io_*</code> / <code>mmap_free</code> / <code>timeout_cb</code> snake-case vs<p>
-<code>JABCutf8b…</code>. No checked-in <code>.clang-format</code>; file/TU org is ad hoc.
-</p>
-</li>
-<li>Dead/unused surface: <code>JABC_FN_ARG_ALLOC_STRING</code> (uninitialised-pointer &quot;loaded<p>
-gun&quot;, unused), <code>JABC_FN_ARG_STRING</code> (raw VLA), the unused <code>JS_SET_PROPERTY_RO</code>/<code>JS_GET_PROPERTY</code>/<code>JS_TO_NUMBER</code>/<code>JS_ADD_METHOD</code>/ <code>JABC_FN_CALL</code> macros, the declared-but-undefined <code>JABCutf8cpMakeValueRef</code> / <code>JABCutf8bFeedStringRef</code>, the no-op <code>JABsane</code> empty-<code>if</code> assert (<code>utf8.cpp:50-61</code>), the dead <code>convert.cpp</code>/rdx chain (gate or remove), and the trace <code>printf</code>/<code>fprintf(stderr,…)</code> left in (<code>main.cpp:129/142</code>, <code>io.cpp:282/325/ 341</code> — violates CLAUDE.md §11).
-</p>
-</li>
+<li>Naming is mixed: <code>JS*</code> / <code>io_*</code> / <code>mmap_free</code> / <code>timeout_cb</code> snake-case vs <code>JABCutf8b…</code>. No checked-in <code>.clang-format</code>; file/TU org is ad hoc.</li>
+<li>Dead/unused surface: <code>JABC_FN_ARG_ALLOC_STRING</code> (uninitialised-pointer &quot;loaded gun&quot;, unused), <code>JABC_FN_ARG_STRING</code> (raw VLA), the unused <code>JS_SET_PROPERTY_RO</code>/<code>JS_GET_PROPERTY</code>/<code>JS_TO_NUMBER</code>/<code>JS_ADD_METHOD</code>/ <code>JABC_FN_CALL</code> macros, the declared-but-undefined <code>JABCutf8cpMakeValueRef</code> / <code>JABCutf8bFeedStringRef</code>, the no-op <code>JABsane</code> empty-<code>if</code> assert (<code>utf8.cpp:50-61</code>), the dead <code>convert.cpp</code>/rdx chain (gate or remove), and the trace <code>printf</code>/<code>fprintf(stderr,…)</code> left in (<code>main.cpp:129/142</code>, <code>io.cpp:282/325/ 341</code> — violates CLAUDE.md §11).</li>
 <li><code>WITH_JS</code>-gated WIP. This ticket is STYLE + dead-code only.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>One ratified external C++ standard (proposed: Google C++), a checked-in<p>
-<code>.clang-format</code>, converged naming, and the dead surface pruned/gated.
-</p>
-</li>
+<li>One ratified external C++ standard (proposed: Google C++), a checked-in <code>.clang-format</code>, converged naming, and the dead surface pruned/gated.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>ABC slice / <code>ok64</code> discipline STAYS at the C-data boundary (that's JS-002..005,<p>
-NOT this ticket). Ratify the exact standard in this ticket before reformatting.
-</p>
-</li>
+<li>ABC slice / <code>ok64</code> discipline STAYS at the C-data boundary (that's JS-002..005, NOT this ticket). Ratify the exact standard in this ticket before reformatting.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open) Ratify Google C++ (or the chosen standard); add <code>.clang-format</code>; converge<p>
-<code>JS*</code>/<code>io_*</code>/<code>mmap_free</code>/<code>timeout_cb</code>/<code>JABCutf8b…</code> naming; remove the listed dead macros/decls/the <code>JABsane</code> no-op; gate or remove <code>convert.cpp</code>/rdx; strip the trace <code>printf</code>/<code>fprintf</code> per §11.
-</p>
-</li>
+<li>(open) Ratify Google C++ (or the chosen standard); add <code>.clang-format</code>; converge <code>JS*</code>/<code>io_*</code>/<code>mmap_free</code>/<code>timeout_cb</code>/<code>JABCutf8b…</code> naming; remove the listed dead macros/decls/the <code>JABsane</code> no-op; gate or remove <code>convert.cpp</code>/rdx; strip the trace <code>printf</code>/<code>fprintf</code> per §11.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -57,16 +51,28 @@ NOT this ticket). Ratify the exact standard in this ticket before reformatting.
 <li class="open"><input type="checkbox" disabled> Prune the listed dead macros/decls; gate or remove <code>convert.cpp</code>/rdx.</li>
 <li class="open"><input type="checkbox" disabled> Strip the trace <code>printf</code>/<code>fprintf</code> (§11).</li>
 </ul>
+<ul>
+<li>2026-07-10 revision: still OPEN — no checked-in .clang-format in the jab tree (git ls-files: none; absent on disk &amp; in parent); dead-surface prune + trace-printf strip DID land</li>
+<li>convert.cpp/JABC_FN_ARG_ALLOC_STRING/JABsane all absent (pruned); io.cpp trace printfs gone (only legit error fprintf in main.cpp); only the .clang-format deliverable missing after the js/-&gt;jab repo split (JAB-005 46f87bcd)</li>
+</ul>
 <h3>Blockers</h3>
 <ul>
 <li>Pair the convert/rdx gate-or-remove with JS-008 (fix-before-wiring).</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li><strong>LANDED <code>9c6118b4</code></strong> (2026-06-16): Google C++ ratified + .clang-format<p>
-applied + dead surface pruned; deeper rename = optional follow-up.
-</p>
-</li>
+<li><strong>LANDED <code>9c6118b4</code></strong> (2026-06-16): Google C++ ratified + .clang-format applied + dead surface pruned; deeper rename = optional follow-up.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

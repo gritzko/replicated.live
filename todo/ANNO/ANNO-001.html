@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ANNO-001: src-root anno index — one LSM map hashlet60→ron60 tagging worktrees, tickets and URIs</title>
+<meta property="og:title" content="ANNO-001: src-root anno index — one LSM map hashlet60→ron60 tagging worktrees, tickets and URIs">
+<meta property="og:description" content="One unified way to tag worktrees, tickets and arbitrary URIs: an LSM multimap of wh128 rows at the SRC ROOT — key = hashlet60 of the canonical name (+ type4 LSB), val = a ron60 word (tag atom or a hashlet60 link to another URI, val nibble distinguishes). Reuses the existing wh-lane machinery (graf .graf.idx, ULOG sidecar, keeper LSM runs) — no new data structure. Since the Edwardian .be is a bare wtlog FILE (store elsewhere), the index forces .be/ to become a DIR; anno retraction needs generic wh-lane tombstones (mechanism open).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/ANNO/ANNO-001.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>ANNO-001: src-root anno index — one LSM map hashlet60→ron60 tagging worktrees, tickets and URIs</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+One unified way to tag worktrees, tickets and arbitrary URIs: an LSM multimap of <code>wh128</code> rows at the SRC ROOT — key = <code>hashlet60</code> of the canonical name (+ type4 LSB), val = a <code>ron60</code> word (tag atom or a hashlet60 link to another URI, val nibble distinguishes). Reuses the existing wh-lane machinery (graf <code>.graf.idx</code>, ULOG sidecar, keeper LSM runs) — no new data structure. Since the Edwardian <code>.be</code> is a bare wtlog FILE (store elsewhere), the index forces <code>.be/</code> to become a DIR; anno retraction needs generic wh-lane tombstones (mechanism open).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>wh64</code> = <code>off40|id20|type4</code>, type4 in the LSB (bits 0–3, <code>WHIFF_TYPE_MASK 0xf</code>, dog/WHIFF.h); hashlet keys put the hashlet60 in the top bits (<code>WHIFFKeyPack</code>), <code>wh128</code> = (key,val).</li>
+<li>Anchor semantics today (be/core/resolve_hash.js ~57–66): a <code>.be</code> DIR = own store in <code>.be/</code>; a <code>.be</code> FILE = wtlog whose first row references the store. A src-root index means <code>.be/</code> becomes a dir in the wtlog-only case — the anchor test must learn that a <code>.be/</code> dir WITHOUT shards but WITH a wtlog row0 reference is still the Edwardian shape, NOT an own-store anchor.</li>
+<li>Canonical keys exist: <code>WHIFFHashlet60</code>/<code>HexHashlet60</code>; name canonicalization is resolve_hash.js's job, nobody else's.</li>
+<li>Tombstone constraint (gritzko): a tombstone must SORT byte- identical to the record it deletes. type4 sits in the key's LSB, so an in-row TOMB nibble changes the sort position (adjacent within the hashlet, not equal) — and bare <code>wh64</code> set lanes have NO spare bits at all. No universal in-row bit layout exists.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>anno add URI ron60</code> / <code>anno get URI</code> from jab (and later verbs): add/get ron60 annotations for any URI or hash — worktree tags, ticket status atoms, wt→ticket links — through ONE map.</li>
+<li>Works in the store-elsewhere (Edwardian) worktree: the index lives at the src root under <code>.be/</code>, beside the wtlog, NOT in the remote store.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Reuse the wh128 lane code (sort, k-way merge, run files); no second LSM implementation, no new record types beyond WHIFF.</li>
+<li>ALL name→hashlet canonicalization through resolve_hash.js (and its native twin); no reimplemented URI handling anywhere.</li>
+<li>LSM discipline: append runs, merge on read, compact; no in-place edits. C side in ABC style; any parsing via ragel.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Key = <code>WHIFFKeyPack(type4, hashlet60(canonical name))</code>; the canonical name is the resolve_hash.js-resolved URI (or the resolved sha for object-shaped targets: commit = sha hashlet60).</li>
+<li>Val = <code>wh64(ron60 word, nibble)</code>; nibble says atom (tag) vs link (hashlet60 of another URI) — a wt→ticket tag is just an edge row.</li>
+<li>Multimap by construction; <code>get</code> = prefix scan over the key.</li>
+<li>Lane choice: multimap annos ride the wh128 lane (full-pair Z); single-val-per-key LWW annos (e.g. a ticket's one status atom) ride the keyed kv64 lane once <a href="../JS/JS-121.html">JS-121</a> un-defers it in abc.index.</li>
+<li><code>.be/</code> dir-ification (gritzko's lean): the former <code>.be</code> file rows become the wtlog member inside <code>.be/</code>, anno runs sit beside it; exact member names need a ruling.</li>
+<li>Tombstone proposal (pending verdict): RUN POLARITY — a negative run whose rows are byte-identical to the rows they kill; tombstone-ness lives in the run registry/header, so sorting is identical by construction and it works for bare wh64 sets and wh128 maps alike. Merge = newer-run-wins annihilation; a negative row reaching the bottom run evaporates.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> 1. Rulings to request: <code>.be/</code> member names + legacy-file migration story; anno write surface (a PUT/DELETE URI form vs a jab extension first); tombstone mechanism (negative runs vs per-run sidecar delete mask).</li>
+<li class="blocked"><input type="checkbox" disabled> 2. Anchor classification split out to <a href="../BE/BE-055/README.html">BE-055</a> (<code>.be/</code> dir for flat wts: the full dir⇒own-store site inventory + fix plan); blocked on it — the anno lane lands on the new anchor.</li>
+<li class="open"><input type="checkbox" disabled> 3. dog-side helpers: anno key/val pack (hashlet60-of-utf8 canon form, ron60 atom/link nibble) + table-driven tests; extend dog/WHIFF or a small dog/ANNO, update INDEX.md.</li>
+<li class="open"><input type="checkbox" disabled> 4. The lane: run files under <code>.be/</code>, append-a-run on write, k-way merged prefix scan on read, compaction; reuse the wh128 sort/merge; tests incl. crash-torn tail.</li>
+<li class="open"><input type="checkbox" disabled> 5. JS surface: abc.index-style binding + a <code>jab anno</code> extension (add/get); barewords resolve through the standard resolver.</li>
+<li class="open"><input type="checkbox" disabled> 6. First consumers: tag a worktree with its ticket (link row), ticket status atoms; a grep/list view over the map.</li>
+<li class="blocked"><input type="checkbox" disabled> 7. Anno retraction (delete) — blocked on the TODO-1 tombstone ruling; the generic wh-lane tombstone work then splits into its own DOG ticket serving keeper/graf/ULOG lanes too.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Anchor reclassification touches repo discovery for EVERY verb — the JS and native resolvers must stay twins; smallest possible diff, end-to-end verified on all three clone shapes.</li>
+<li>ron60 charset: tag atoms are RON base64 words (no dashes), so a ticket code like <code>CI-001</code> needs an encoding convention.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Open. Filed 2026-07-24 from the unified-tagging design chat; no code yet.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

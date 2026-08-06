@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-037 DONT: file click in an entered worktree resolves against CWD, degrades to phantom &quot;no plain-args handler&quot;</title>
+<meta property="og:title" content="BRO-037 DONT: file click in an entered worktree resolves against CWD, degrades to phantom &quot;no plain-args handler&quot;">
+<meta property="og:description" content="2026-07-19, live (gritzko), reproduces in a FRESH main-tree jab work session (journal root launch — no resident-state transient): enter //bro-why, click the file row views/bro/pager.js → err: … no plain-args handler. The file exists (work/bro-why/views/bro/pager.js). - Headless twin of the disease: jab bro '//bro-why/views/bro/pager.js' from the journal root → bro: cannot open views/bro/pager.js: FILENONE — the //bro-why authority is consumed but the remaining path is opened RELATIVE TO CWD, not the context tree (/todo/BE/BE-030/BE-039 law: paths resolve via resolve(context,base,rel), violated in the bro file-lowering leg). - Failure chain hypothesis (matches both symptoms): pager click mints the file target; driveSpell's bare-path lowering stats the cwd-relative path → miss (journal root has no views/bro/…) → dispatch falls through to verb resolution → resolveVerb('views/bro/pager.js') → null → loop.js &quot;verb '&lt;path&gt;' has no plain-args handler&quot; — the /todo/JS/JS-074 null-collapse masking the real story (path resolved in the wrong tree). - Same phantom text as the -12 incident earlier today — re-examine that one against THIS mechanism once fixed (clicks in entered-wt contexts, not stale cache, may explain both).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BRO/BRO-037.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-037 <a href="./DONT.html">DONT</a>: file click in an entered worktree resolves against CWD, degrades to phantom &quot;no plain-args handler&quot;</h1>
+<p>
+Now: DONT
+</p>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+2026-07-19, live (gritzko), reproduces in a FRESH main-tree <code>jab work</code> session (journal root launch — no resident-state transient): enter <code>//bro-why</code>, click the file row <code>views/bro/pager.js</code> → <code>err: … no plain-args handler</code>. The file exists (<code>work/bro-why/views/bro/pager.js</code>).
+</p>
+<ul>
+<li>Headless twin of the disease: <code>jab bro '//bro-why/views/bro/pager.js'</code> from the journal root → <code>bro: cannot open views/bro/pager.js: FILENONE</code> — the <code>//bro-why</code> authority is consumed but the remaining path is opened RELATIVE TO CWD, not the context tree (<a href="/todo/BE/BE-030.html">BE-030</a>/BE-039 law: paths resolve via resolve(context,base,rel), violated in the bro file-lowering leg).</li>
+<li>Failure chain hypothesis (matches both symptoms): pager click mints the file target; driveSpell's bare-path lowering stats the cwd-relative path → miss (journal root has no <code>views/bro/…</code>) → dispatch falls through to verb resolution → <code>resolveVerb('views/bro/pager.js')</code> → null → loop.js &quot;verb '&lt;path&gt;' has no plain-args handler&quot; — the <a href="/todo/JS/JS-074.html">JS-074</a> null-collapse masking the real story (path resolved in the wrong tree).</li>
+<li>Same phantom text as the <code>[-12]</code> incident earlier today — re-examine that one against THIS mechanism once fixed (clicks in entered-wt contexts, not stale cache, may explain both).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+A file click in an entered worktree opens THAT tree's file: the click target resolves via the row/view context (<code>//bro-why</code> + <code>views/bro/pager.js</code> → <code>work/bro-why/views/bro/pager.js</code>), pty-verified.
+</p>
+<ul>
+<li>The headless form <code>jab bro '//X/path'</code> opens the file in <code>//X</code> — red-first repro (it fails FILENONE today, no pty needed for the resolution leg; the click leg still gets its pty case per the UI-path rule).</li>
+<li>A genuinely missing file reports &quot;cannot open &lt;full resolved path&gt;&quot; — never a verb-dispatch fallthrough into &quot;no plain-args handler&quot; (bounded by the <a href="/todo/JS/JS-074.html">JS-074</a> unmask).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Resolution through the canonical path only: resolve(context,base,rel) / resolve_hash — no cwd fallback, no manual URI surgery (<a href="/todo/BE/BE-030.html">BE-030</a>, BE-039, <a href="/todo/BRO/BRO-024.html">BRO-024</a> context law).</li>
+<li>Fix the shared lowering leg (driveSpell / bro file-open), not per-view patches; pager stays arg-blind.</li>
+<li>Verify through the real UI path: pty enter-wt + file-click case that flips red→green (the <a href="/todo/WORK/WORK-009.html">WORK-009</a> investigator's fixture idiom).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> red headless: test/bro/wtfile — <code>jab bro '//X/dir/file'</code> FILENONE on baseline, //X bytes after</li>
+<li class="done"><input type="checkbox" checked disabled> red pty: test/bro/wtclick (pty.fork + SGR) — baseline mis-lists CWD (<code>//: ls</code> + decoy), fixed frame shows //X's bytes, dir click stays in //X</li>
+<li class="done"><input type="checkbox" checked disabled> fix in views/bro/bro.js ONLY (+73/−12): <code>argFsPath</code> routes every bro arg through the discover family (authority → wtdir, stripped → resolve(be.context, arg), plain CLI → cwd); tty loop opens via context-aware buildHunks first; driveSpell's pathless miss now refuses <code>cannot open &lt;full path&gt;</code> instead of falling into verb dispatch</li>
+<li class="done"><input type="checkbox" checked disabled> <code>[-12]</code> verdict: NOT this leg — mutation clicks go _actSpell→contextRepo, never bro's file-open; corroborates <a href="/todo/WORK/WORK-009.html">WORK-009</a>'s per-process-transient finding</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Root cause detail: authorityRepo strips <code>//X</code> and threads the tree as be.context, but bro re-derived fs paths with cwd-relative <code>bro.fsPath(u.path)</code>; the tty per-arg loop also re-entered loop.cli context-less (argline even split the path into verb <code>views</code> + rest).</li>
+<li>Pre-existing reds on pristine baseline (NOT this change): bro-color/bro-view goldens (readdir entry-order drift), work-getctx (fix pending in work/GETCTX).</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+Staged in work/BRO-037 (<code>jab put</code>, NO post), verified by orchestrator (both new tests PASS re-run; diff scope = bro.js + test/bro/{wtfile,wtclick}). Suites: 22 bro/work/uri011 pass + 38/38 status/ls/cat/diff/why. Clone is behind 1 (82ef082f landed mid-run; no file overlap). Suggested commit: <code>BRO-037: bro opens //X/path in that tree — file lowering resolves via the context, not cwd</code>
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

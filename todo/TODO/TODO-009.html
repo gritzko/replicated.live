@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TODO-009 DONE: metaidx key lexer diverges from the DOG-026 grammar</title>
+<meta property="og:title" content="TODO-009 DONE: metaidx key lexer diverges from the DOG-026 grammar">
+<meta property="og:description" content="shared/metaidx.js hand-rolls the meta-pair key as KEYRE A-Za-z: — but the DOG-026 grammar (the truth) is:">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/TODO/TODO-009.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>TODO-009 <a href="./DONE.html">DONE</a>: metaidx key lexer diverges from the DOG-026 grammar</h1>
+<div>
+<p>
+Now: DONE Sev: MED Rep: ///be/ On1: TODO-003 See: TODO-008 Ask: gritzko
+</p>
+</div>
+<p>
+<code>shared/metaidx.js</code> hand-rolls the meta-pair key as KEYRE <code>[A-Z][a-z][a-z]:</code> — but the DOG-026 grammar (the truth) is:
+</p>
+<div>
+<p>
+meta = (upper lower (lower|dig) ':' @mt_run) sp @mt_set ;
+</p>
+</div>
+<p>
+The 3rd key char may be a DIGIT: relation keys <code>On1:</code>, <code>On2:</code> … Key+colon IS the quad, the gap is content — <code>mt_set</code> fires on the gap, so <code>Due:x</code> stays a paragraph. metaidx must mirror this.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>KEYRE rejects <code>On1:</code>/<code>On2:</code>, which <a href="/meta/todo.html">todo</a> registers; the <a href="TODO-003.html">TODO-003</a> index never sees them.</li>
+<li>metaBlock stops at the first non-pair line — correct per the grammar (the block is consecutive pairs) — but the wrong KEYRE makes an <code>On1:</code> line END the block, so every pair BELOW it is silently dropped from the index.</li>
+<li><a href="TODO-008.html">TODO-008</a> repro'd the loss: an <code>Ask: gritzko</code> under an <code>On1:</code> line is invisible to <code>todo Ask:*</code>.  ABC-023, BE-063 and TODO-009 itself all carry that shape today.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>metaidx key class == the grammar, exactly: upper lower (lower|dig) ':' followed by the sp gap; no wider, no narrower.</li>
+<li>Pairs below a relation key index again; <code>todo On1:*</code> works.</li>
+<li>Red-first repro: fixture ticket with <code>Ask:</code> under <code>On1:</code> — <code>todo Ask:*</code> misses it today, finds it after.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The gap rule holds: <code>Due:x</code> (no sp after the colon) is NOT a pair — verify the JS verdicts against the real tokenizer (probe via jab; ///jab/dog is the dog reference) on the edge forms: gapless, empty value, digit key.</li>
+<li>Already-indexed tickets carry the truncated rows — check the <a href="TODO-003.html">TODO-003</a> index invalidation and force a reindex (format version bump or equivalent), or stale answers persist.</li>
+<li>No change to the registered-keys list or ticket format; <a href="/meta/todo.html">todo</a> and <a href="/meta/wiki.html">wiki</a> stay as written.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Fixed BY HAND in the main tree on gritzko's order (&quot;correct the regex&quot;, 2026-08-04) — no worktree, no worker.</li>
+<li>FOUR divergent copies corrected to <code>[A-Z][a-z][a-z0-9]</code>: metaidx.js KEYRE + codeOf, todo.js META_PAIR + the arg-lexer error text; clauseOf's error reworded too (Sta: was dead).</li>
+<li>The C tokenizer needed nothing: MKDTB.c.rl already emits <code>T</code> for digit keys — the JS copies were the whole gap.</li>
+<li>Stale rows: pre-fix-indexed tickets stay truncated until mtime moves.  The 7 On-carrying tickets got a <code>touch</code> sweep; a format-version bump for the general case stays open.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./v.html">v</a> repro: <code>todo Ask:gritzko</code> missed BE-063/TODO-009 pre-fix,
+</p>
+<div>
+<p>
+  finds them after; <code>todo On1:*</code> errored, now lists all 4
+</p>
+</div>
+<p>
+ -<a href="./v.html">v</a> KEYRE → grammar class; block walks THROUGH relation keys -<a href="./ .html"> </a> edge probes vs the real tokenizer: gapless, empty, digit -<a href="./ .html"> </a> stale index rows invalidated (reindex on format bump), not
+</p>
+<div>
+<p>
+  by hand-touching; moot for today's corpus (touched)
+</p>
+</div>
+<p>
+ -<a href="./ .html"> </a> golden: <code>todo On1:*</code> + truncation regression, as a test -<a href="./ .html"> </a> ctest green over the main-tree edit
+</p>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

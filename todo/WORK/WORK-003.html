@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORK-003: work-view post button dead — must do the commit-then-post-to-track two-step</title>
+<meta property="og:title" content="WORK-003: work-view post button dead — must do the commit-then-post-to-track two-step">
+<meta property="og:description" content="2026-07-18 live (be tip ba15c38d, work view launched from work/WORK-002): gritzko pressed post on the //WORK-002 row and got err: loop: verb 'post' has no plain-args handler //WORK-002: work — the //WORK-002: work tail is the status-bar message+address glue noted cosmetic in /todo/WORK/WORK-002. - The button mints post '&lt;ticket title&gt;' as an O-invite: views/work/work.js:390-391, SPELL.mintOspell(ctx, &quot;post '&quot; + title + &quot;'&quot;). - The throw is core/loop.js:415: plain dispatch demands conv.jab === &quot;args&quot;; core/registry.js:16 — an unmarked module has no plain-args handler. CLI jab post works, so post likely never got the JAB-004 plain-args conversion and the pager spell path is the first caller to notice. Hypothesis — verify. - 2026-07-18 later, same session: gritzko clicked the //WORK-003 row itself and got err: NAVNONE: no worktree //WORK-003 //WORK-002: work — work/WORK-003 EXISTED by then (fresh clone in progress/complete), so either the view/nav doesn't see worktrees born after launch, or //WORK-003 anchoring fails some other way; second defect, root-cause separately from the post dispatch. - Same session: gritzko ENTERED the SUBS-053 tree (nav) and typed :get → err: loop: verb 'get' has no plain-args handler — so get dies the same way when run from an OLD tree; hypothesis: registry.resolveVerb's cwd-climb (BE-029, nested jsrc shard wins) resolves the verb module from the NAVIGATED tree's shard, so a stale clone's unconverted verbs shadow the current ones; if true, the whole &quot;no plain-args handler&quot; family is one resolution-scope defect, not per-verb misses.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/WORK/WORK-003.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WORK-003: work-view <a href="./post.html">post</a> button dead — must do the commit-then-post-to-track two-step</h1>
+<div>
+<p>
+Now: DONT
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+2026-07-18 live (be tip ba15c38d, work view launched from work/WORK-002): gritzko pressed <code>[post]</code> on the <code>//WORK-002</code> row and got <code>err: loop: verb 'post' has no plain-args handler //WORK-002: work</code> — the <code> //WORK-002: work</code> tail is the status-bar message+address glue noted cosmetic in <a href="/todo/WORK/WORK-002.html">WORK-002</a>.
+</p>
+<ul>
+<li>The button mints <code>post '&lt;ticket title&gt;'</code> as an O-invite: views/work/work.js:390-391, <code>SPELL.mintOspell(ctx, &quot;post '&quot; + title + &quot;'&quot;)</code>.</li>
+<li>The throw is core/loop.js:415: plain dispatch demands <code>conv.jab === &quot;args&quot;</code>; core/registry.js:16 — an unmarked module has no plain-args handler. CLI <code>jab post</code> works, so post likely never got the JAB-004 plain-args conversion and the pager spell path is the first caller to notice. Hypothesis — verify.</li>
+<li>2026-07-18 later, same session: gritzko clicked the <code>//WORK-003</code> row itself and got <code>err: NAVNONE: no worktree //WORK-003  //WORK-002: work</code> — work/WORK-003 EXISTED by then (fresh clone in progress/complete), so either the view/nav doesn't see worktrees born after launch, or <code>//WORK-003</code> anchoring fails some other way; second defect, root-cause separately from the <a href="./post.html">post</a> dispatch.</li>
+<li>Same session: gritzko ENTERED the SUBS-053 tree (nav) and typed <code>:get</code> → <code>err: loop: verb 'get' has no plain-args handler</code> — so <code>get</code> dies the same way when run from an OLD tree; hypothesis: registry.resolveVerb's cwd-climb (BE-029, nested jsrc shard wins) resolves the verb module from the NAVIGATED tree's shard, so a stale clone's unconverted verbs shadow the current ones; if true, the whole &quot;no plain-args handler&quot; family is one resolution-scope defect, not per-verb misses.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+RULING (gritzko, chat 2026-07-18): <code>[post]</code> is a TWO-step: (1) commit the wt locally, <code>:post &quot;ticket title&quot;</code>; (2) then <code>:post</code> to the tracked tree (<code>///be</code>).
+</p>
+<ul>
+<li>Both steps run in the ROW's context per <a href="/todo/WORK/WORK-002.html">WORK-002</a> — the mutation targets the invite's tree, never the launch tree.</li>
+<li>Step 2 conflict handling per <a href="/todo/POST/POST-032.html">POST-032</a>: weave, mark, ONE <code>con</code> row, plain-words state — never hard-err.</li>
+<li>Red-first pty repro in the WORK-002 harness shape (test/work/getctx).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The WORK-002 fix (get.js targetWt, loop.js NAVNONE mutation gate) is UNLANDED in work/WORK-002 — <a href="./post.html">post</a>'s context anchoring needs the same treatment; reference it read-only, expect a weave when both land.</li>
+<li>Rulings in force: verbs resolve args via resolve(context,base,rel), pager arg-blind; //authority from arg0 only; errors in plain words; all URI/hash resolution via be/core/resolve_hash.js.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>RULING (gritzko, chat 2026-07-18, supersedes the one-button two-step): <code>--land</code> is VETOED. Bare get / bare post correspond 1:1 to the behind/ahead states, so the ahbeh indicator BECOMES the buttons: <code>[+N]</code> mints bare <code>post</code> (track advance), <code>[-N]</code> mints bare <code>get</code>; no ahbeh — no button. The <code>[post]</code> button does ONLY a commit with the ticket's title (<code>post '&lt;title&gt;'</code>).</li>
+<li>Split out 2026-07-19 (gritzko): the ahbeh-button UI (bracketed padded <code>[+N]</code>/<code>[-N]</code>, <code>[get]</code> retired, colors, view-test amendment) is <a href="/todo/WORK/WORK-004.html">WORK-004</a>; WORK-003 keeps the post-dispatch defect and the row-context anchoring.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> pty repro red: click <code>[post]</code> on a wt row → today's no-plain-args-handler err</li>
+<li><a href="./ .html"> </a> root-cause: convert post to the plain-args registry shape (or route the spell right)</li>
+<li><a href="./ .html"> </a> the two-step: local commit, then post to the tracked tree, both anchored on the row's tree</li>
+<li><a href="./ .html"> </a> green: click <code>[post]</code> → commit row + track post row in the ROW's wtlog; launch tree byte-identical</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Overlaps unlanded work/WORK-002 in the core/loop.js dispatch area and the target-anchoring idiom.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>URI-017: trailing slash must survive path handling — JS+C audit, violations</title>
+<meta property="og:title" content="URI-017: trailing slash must survive path handling — JS+C audit, violations">
+<meta property="og:description" content="Ordered by gritzko 2026-07-19: fleet audit of all path/URI handling in be/ (JS), beagle/ (C), jab/ (C++) and libdog for trailing-slash preservation. The invariant: a trailing slash is semantic — ///sub is the parent's de-jure pin, ///sub/ the sub's de-facto live tip (/wiki/URI); track paths same. Precedent URI-005 (PATHu8sBase returns EMPTY on …/.be/, fixed narrowly d09bd197); the wtdir collapse surfaced during /todo/WORK/WORK-007. - Canonical layers verified CLEAN: JS resolvehash.js reads entered/pin off the RAW path before normalizing; the URI class keeps .path verbatim; C URIMake (abc/URI.c:77) and DOGCanonURIFeed (DOG.c:531) round-trip the slash; jab uri.cpp parse/make faithful. - jab/dog/ is a vendored copy of libdog dog/+abc/ — libdog findings apply verbatim there.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/URI/URI-017.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>URI-017: trailing slash must survive path handling — JS+C audit, violations</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Ordered by gritzko 2026-07-19: fleet audit of all path/URI handling in be/ (JS), beagle/ (C), jab/ (C++) and libdog for trailing-slash preservation. The invariant: a trailing slash is semantic — <code>///sub</code> is the parent's de-jure pin, <code>///sub/</code> the sub's de-facto live tip (<a href="/wiki/URI.html">URI</a>); track paths same. Precedent <a href="./URI-005.html">URI-005</a> (PATHu8sBase returns EMPTY on <code>…/.be/</code>, fixed narrowly <code>d09bd197</code>); the wtdir collapse surfaced during <a href="/todo/WORK/WORK-007.html">WORK-007</a>.
+</p>
+<ul>
+<li>Canonical layers verified CLEAN: JS <code>resolve_hash.js</code> reads entered/pin off the RAW path before normalizing; the URI class keeps <code>.path</code> verbatim; C <code>URIMake</code> (abc/URI.c:77) and <code>DOGCanonURIFeed</code> (DOG.c:531) round-trip the slash; jab <code>uri.cpp</code> parse/make faithful.</li>
+<li><code>jab/dog/</code> is a vendored copy of libdog <code>dog/</code>+<code>abc/</code> — libdog findings apply verbatim there.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Fix the live JS violations; harden the latent C root helpers so one careless caller cannot reintroduce the URI-005 class.
+</p>
+<h3>Constraints</h3>
+<ul>
+<li>All resolution stays routed through the canonical layers (URI class, be/core/resolve_hash.js, URIMake/DOGCanonURIFeed) — no parallel slash logic.</li>
+<li>An fs dir cannot encode pin-vs-live: consumers must read the slash off the RAW URI before resolve (the resolve_hash <code>entered</code> / discover <code>argRel</code> / put.js:531 idiom), never off <code>wtdir</code>'s output.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<p>
+Live violations (JS, be/):
+</p>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> be/shared/relate.js:38 <code>resolveRef</code> THROWS &quot;empty ref segment&quot; on a trailing-slash branch query — <code>?branch/</code> composes <code>refs/heads/branch/</code> and is refused, though the spec (<a href="/wiki/URI.html">URI</a> <code>?/project/branch/</code>) makes the slash form valid de-facto tip; consume the slash for the wire ref instead of rejecting. Ad-hoc string composer, not routed through the URI codec (also noted in <a href="./URI-016.html">URI-016</a>).</li>
+<li class="open"><input type="checkbox" disabled> be/core/discover.js:241-264 <code>resolve</code> / :273-297 <code>wtdir</code> collapse <code>//X/sub</code> and <code>//X/sub/</code> to the SAME dir — root cause be/shared/util/path.js:62-73 <code>split()</code>/<code>merge()</code> drops the slash (via <code>resolveInTree</code>); any caller trusting resolve/wtdir output for pin-vs-live is silently wrong. Fix direction: surface the entered-bit alongside (or assert callers use the raw-URI idiom).</li>
+</ul>
+<p>
+Latent, C (harden, no live repro):
+</p>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> libdog abc/PATH.c:213 <code>PATHu8bNorm</code> + :162 <code>PATHu8bAdd</code>/<code>PATHu8bBuildN</code> skip empty segments, silently dropping a trailing slash — no URI/store path flows through them TODAY (only git/IGNO.c anchors); add slash preservation or an assert. Applies to the vendored jab/dog copy too.</li>
+<li class="open"><input type="checkbox" disabled> libdog abc/PATH.c:39 <code>PATHu8sBase</code> empty-on-slash is guarded at EVERY caller (HOME.c:774/894, ULOG.c:300, BE.cli.c:782, BRO.c:502) — the guard lives call-side; consider fixing/asserting in the helper so a new caller cannot regress <a href="./URI-005.html">URI-005</a>.</li>
+<li class="open"><input type="checkbox" disabled> libdog DPATH.h:111 <code>DPATHBranchResolveRel</code> emits branch WITHOUT the canonical trailing <code>/</code> (Pop+Push never re-appends), so <code>DPATHBranchAncestor</code> prefix tests can misfire — no in-tree caller, unproven; verify against the out-of-tree verb dogs before fixing.</li>
+</ul>
+<p>
+Secondary (manual-parsing law, ragel-only rule; slash-correct but hand-rolled):
+</p>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> byte-scanners of paths/URIs outside ragel: dog/DOG.h:186/227/263 (<code>/.be/</code> walks), dog/DOG.c:236-284 post-lex loops, sniff/SUBS.c:46-122 URL tokenizer, keeper/PROJ.c:200, keeper/WALK.c:245, graf/LOG.c, graf/MAP.c, dog/DPATH.h — file or fold into a CODE ticket if pursued.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>beagle/ C: 0 live violations — URI-005 generalized correctly (pre-trim guards, is_tree booleans captured before strip, serialization re-emits <code>/</code>). jab C++: 0 (require.cpp normalize touches only module specs; io.cpp:296 strips-then-restores correctly).</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

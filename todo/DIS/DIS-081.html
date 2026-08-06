@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-081: caller-supplied commit order; commits[] append-only</title>
+<meta property="og:title" content="DIS-081: caller-supplied commit order; commits[] append-only">
+<meta property="og:description" content="DIS-044 made the RGA tie-break the merged commit INDEX, and wmergecommits (dog/WEAVE.c:645-687) infers that index by re-deriving a topo order from two sorted lists — an O(n^2) ready-test plus a smaller-hashlet tie-break for concurrent heads. The weave stores no parent edges by design (dog/WEAVE.h:133-134): graf owns the DAG and already walks the closure in topo order (be/shared/weave.js build). So libdog reconstructs DAG knowledge it deliberately does not keep, from a shadow of it, on every merge. The cost is a full renumbering: WEAVEMerge permutes commits[] and remaps every token's ins/rms through ra/rb, so an index is not a stable name across a merge. Move the ordering contract to the API and the table becomes append-only.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-081.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-081: caller-supplied commit order; <code>commits[]</code> append-only</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+<a href="./DIS-044.html">DIS-044</a> made the RGA tie-break the merged commit INDEX, and <code>wmerge_commits</code> (<code>dog/WEAVE.c:645-687</code>) infers that index by re-deriving a topo order from two sorted lists — an O(n^2) ready-test plus a smaller-hashlet tie-break for concurrent heads. The weave stores no parent edges by design (<code>dog/WEAVE.h:133-134</code>): graf owns the DAG and already walks the closure in topo order (<code>be/shared/weave.js</code> <code>build</code>). So libdog reconstructs DAG knowledge it deliberately does not keep, from a shadow of it, on every merge. The cost is a full renumbering: <code>WEAVEMerge</code> permutes <code>commits[]</code> and remaps every token's <code>ins</code>/<code>rms</code> through <code>ra</code>/<code>rb</code>, so an index is not a stable name across a merge. Move the ordering contract to the API and the table becomes append-only.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+The weave's commit table serves two roles that only one of them needs order.
+</p>
+<ul>
+<li>Identity: a token names its inserter by INDEX into <code>commits[]</code> (<code>dog/WEAVE.h:75,118</code>), removers likewise (<code>:119</code>).</li>
+<li>Rank: the RGA tie-break sorts concurrent siblings by merged commit index DESC (<code>dog/WEAVE.c:691-695</code>), so the index must be a causal rank.</li>
+<li>Scope: <code>weavescope</code> is one bit per slot (<code>dog/WEAVE.h:131</code>), so slots must stay dense small integers — this constrains any redesign.</li>
+<li>Callers already have the order: <code>WEAVEScope</code> takes a reachable commit-id set supplied by graf (<code>dog/WEAVE.h:133-135</code>).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Specify the order as an API contract, then make the table append-only.
+</p>
+<ul>
+<li>State in the WEAVE API who assigns causal rank, what it guarantees, and what breaks if a caller violates it.</li>
+<li><code>commits[]</code> becomes append-only: parent <code>a</code>'s slots keep their numbers, <code>b</code>'s non-shared ids append.</li>
+<li><code>wmerge_commits</code> and the <code>ra</code> remap go away; <code>rb</code> shrinks to a dedup-aware offset.</li>
+<li>Path-independence is preserved: every clone must derive the same order for the same DAG.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+The contract moves outward, so the failure mode moves outward with it.
+</p>
+<ul>
+<li>A caller that supplies a non-causal or path-dependent rank corrupts merge order SILENTLY — today's self-contained version cannot be got wrong that way.</li>
+<li>Changing <code>commits[]</code> semantics touches the <code>'C'</code> column of the <code>'W'</code> blob: needs a version gate or a proven-compatible layout.</li>
+<li>Callers land FIRST (gritzko), so no window exists where WEAVE expects an order no caller supplies.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Split identity from rank; the caller owns rank.
+</p>
+<ul>
+<li>Rank is supplied by the caller, not inferred — the caller walked the DAG to build the weave in the first place.</li>
+<li>The caller pre-sorts its appends so the APPEND ORDER IS THE RANK; no side column, and the hot tie-break keeps a bare index compare.</li>
+<li>Identity <code>(commits[inserter], ordinal)</code> and <code>WEAVEIdHash</code> are untouched — this changes numbering, not identity.</li>
+<li><a href="./DIS-082.html">DIS-082</a> subsumes this if it lands: an append-only body never renumbers anything, so re-scope rather than implement both.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+Callers first, WEAVE second.
+</p>
+<ul>
+<li><a href="./ .html"> </a> Read <code>WEAVEMerge</code>'s remap pass end to end — this ticket is a proposal until that is done.</li>
+<li><a href="./ .html"> </a> Write the ordering contract into the WEAVE API docs and a wiki page.</li>
+<li><a href="./ .html"> </a> Caller side: make graf/<code>be/shared/weave.js</code> <code>build</code> supply the rank explicitly.</li>
+<li><a href="./ .html"> </a> Caller side: audit every <code>WEAVEMerge</code> and <code>WEAVENext</code> call for order compliance.</li>
+<li><a href="./ .html"> </a> WEAVE side: append-only <code>commits[]</code>, delete <code>wmerge_commits</code>, drop the <code>ra</code> remap.</li>
+<li><a href="./ .html"> </a> Blob: version-gate the <code>'C'</code> column change, or prove the layout unchanged.</li>
+<li><a href="./ .html"> </a> Fuzz the contract violation — a path-dependent caller rank must fail loudly, not silently.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The DIS-044 fuzzer keys commit-id = line index (monotonic), so it cannot surface an ordering regression — same gap that hid DIS-044 itself.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

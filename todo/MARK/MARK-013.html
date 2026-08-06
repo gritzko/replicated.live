@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MARK-013: mark, the HTML generator, must adapt to the DOG-024/DOG-025 grammar changes</title>
+<meta property="og:title" content="MARK-013: mark, the HTML generator, must adapt to the DOG-024/DOG-025 grammar changes">
+<meta property="og:description" content="Ruling (gritzko, 2026-07-29): mark is JS ONLY — the HTML generator is verbs/mark/mark.js + verbs/mark/render.js in the be tree; beagle/mark/MARK.c is NOT the site generator and is out of scope here. mark.js must support the new libdog StrictMark changes from BOTH DOG-024 (dog 737d196b: self-delimiting 4-char marker quads, blank-line-only paragraph breaks, one-tilde strike, literal escapes) and DOG-025 (code inners tokenized, formatting-blind).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MARK/MARK-013.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>MARK-013: mark, the HTML generator, must adapt to the DOG-024/DOG-025 grammar changes</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
+<p>
+Ruling (gritzko, 2026-07-29): mark is JS ONLY — the HTML generator is <code>verbs/mark/mark.js</code> + <code>verbs/mark/render.js</code> in the be tree; <code>beagle/mark/MARK.c</code> is NOT the site generator and is out of scope here. mark.js must support the new libdog StrictMark changes from BOTH <a href="../DOG/DOG-024.html">DOG-024</a> (dog 737d196b: self-delimiting 4-char marker quads, blank-line-only paragraph breaks, one-tilde strike, literal escapes) and <a href="../DOG/DOG-025.html">DOG-025</a> (code inners tokenized, formatting-blind).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Heading quads: a <code>#</code> run padded in ANY column (<code> ## </code>, <code>   #</code>, <code>####Smallest</code>), level = COUNT of <code>#</code>; bare <code>####</code> valid, a 3-char <code>#  </code> prefix is a paragraph; the renderer trims the leading content space at <code>depth*4+4</code>.</li>
+<li>Todo markers are exactly 4 chars (<code>-[v]New</code> gapless is a todo); one tab = one indent quad; <code>---</code> short ruler; <code>[x]:</code> refdef quad.</li>
+<li>A paragraph is broken by a blank line, not a line end — spans cross the wrap; <code>paraFlush</code> joins, but must agree with the lexer on continuation-prefix shedding (quote lines are <a href="./MARK-005.html">MARK-005</a> ground).</li>
+<li>Inline deltas: strike is ONE tilde <code>~x~</code> (<code>~~</code> is an unmatched delimiter), <code>\&lt;char&gt;</code> escapes are literal-next-char (the swallow-to-the-closer form is retired).</li>
+<li><a href="../DOG/DOG-025.html">DOG-025</a>: code span/fence inners tokenize at word granularity, all tokens keep 'H', NO nested formatting inside — the renderer keeps emitting code bodies verbatim (no span/link/escape resolution inside <code>&lt;code&gt;</code>), span and fence paths both.</li>
+<li><code>render.js</code> classify (<code>render.js:322</code>) had drifted from the C grammar before DOG-024 already — the JS grammar must rejoin the lexer case-for-case; the dog reference case list is <code>dog/test/TOK01.c</code> <code>MKDTBlockQuadTest</code> + <code>MKDTCodeInnerTest</code> (in wt <code>work/DOG-025</code>).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>mark.js/render.js accept exactly the DOG-024 marker shapes and trim the leading content space — rendered HTML for the existing corpus is byte-identical except where the old grammar was wrong.</li>
+<li>Inline conformance: one-tilde strike, literal escapes, spans crossing wraps, verbatim code bodies (<a href="../DOG/DOG-025.html">DOG-025</a>).</li>
+<li><code>make</code> re-renders the site; the <code>html/</code> diff is reviewed for stray changes and shows only intended fixes.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first: JS test cases mirroring <code>MKDTBlockQuadTest</code> and the inline/code deltas, in the be tree's existing test arrangement, before the fix.</li>
+<li>The quote/list continuation-join flush path stays <a href="./MARK-005.html">MARK-005</a>/MARK-001 ground — verify, don't rewrite.</li>
+<li>Main-tree items (<code>blog/follow-up.mkd:1</code> fourth prefix char, site re-render + <code>html/</code> diff review) execute at land time, not in the worker wt.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: be-tree test cases mirroring <code>MKDTBlockQuadTest</code> marker shapes, the inline deltas, and the DOG-025 code cases.</li>
+<li class="open"><input type="checkbox" disabled> Heading/todo quad acceptance + leading-content-space trim in classify/render.</li>
+<li class="open"><input type="checkbox" disabled> Inline pass: <code>~x~</code> strike, literal <code>\&lt;char&gt;</code>, spans across wraps, verbatim code bodies.</li>
+<li class="open"><input type="checkbox" disabled> <code>blog/follow-up.mkd:1</code> gets its fourth prefix char (land time; the one corpus break, a content fix not a test edit).</li>
+<li class="open"><input type="checkbox" disabled> <code>make</code> site re-render; review the <code>html/</code> diff for stray changes (land time).</li>
+<li class="open"><input type="checkbox" disabled> Wrapped spans in quotes join correctly — verify against <a href="./MARK-005.html">MARK-005</a>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="../DOG/DOG-025.html">DOG-025</a> is unlanded (wt <code>work/DOG-025</code>, staged, 72/72 green) — its dog-side behavior is the reference; landing order is gritzko's call.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-061: a pre-seeded empty .be/ makes the FIRST jab get into a worktree throw ToBigInt in hashlet60FromBytes — a second get succeeds</title>
+<meta property="og:title" content="BE-061: a pre-seeded empty .be/ makes the FIRST jab get into a worktree throw ToBigInt in hashlet60FromBytes — a second get succeeds">
+<meta property="og:description" content="Clone into a scratch worktree that already carries an empty .be/ directory — the shield test/lib/repo-setup.sh rsfreshwt/rsshield plant in EVERY test worktree — and the first jab get dies with TypeError: Invalid argument type in ToBigInt operation from hashlet60FromBytes ← locate ← getObject ← commitTree ← fanoutWholeTree ← get. Re-run the SAME command in the SAME worktree and it succeeds, so the bootstrap leaves something half-written that the first pass reads as undefined. A worktree with NO .be/ at all clones correctly first time. This is load-bearing: rsfreshwt is THE shared repo-setup procedure, so anything built on it is one transport away from this. Found by the TEST-004 treadmill; method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BE/BE-061.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-061: a pre-seeded empty <code>.be/</code> makes the FIRST <code>jab get</code> into a worktree throw <code>ToBigInt</code> in <code>hashlet60FromBytes</code> — a second get succeeds</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<p>
+Clone into a scratch worktree that already carries an empty <code>.be/</code> directory — the shield <code>test/lib/repo-setup.sh</code> <code>rs_fresh_wt</code>/<code>rs_shield</code> plant in EVERY test worktree — and the first <code>jab get</code> dies with <code>TypeError: Invalid argument type in ToBigInt operation</code> from <code>hashlet60FromBytes</code> ← <code>locate</code> ← <code>getObject</code> ← <code>commitTree</code> ← <code>fanoutWholeTree</code> ← <code>get</code>. Re-run the SAME command in the SAME worktree and it succeeds, so the bootstrap leaves something half-written that the first pass reads as undefined. A worktree with NO <code>.be/</code> at all clones correctly first time. This is load-bearing: <code>rs_fresh_wt</code> is THE shared repo-setup procedure, so anything built on it is one transport away from this. Found by the <a href="../TEST/TEST-004.html">TEST-004</a> treadmill; method <a href="../../meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro (2026-07-27, jab build <code>22bec7d6</code>), three lines: <code>mkdir -p $HOME/tmp/wt/.be; cd $HOME/tmp/wt; jab get 'http://127.0.0.1:PORT/repo'</code> against a smart-HTTP <code>git upload-pack</code> — first run throws, second run prints <code>?master#&lt;sha&gt;</code> and checks out correctly.</li>
+<li>The stack, verbatim: <code>TypeError: Invalid argument type in ToBigInt operation</code> / <code>BigInt@[native code]</code> / <code>hashlet60FromBytes@</code> / <code>locate@</code> / <code>getObject@</code> / <code>commitTree@</code> / <code>fanoutWholeTree@</code> / <code>get@</code>.</li>
+<li>Same command, worktree created as a BARE EMPTY DIR (no <code>.be/</code>): first run succeeds, tree correct. That is the only difference.</li>
+<li><code>test/lib/repo-setup.sh</code> §&quot;HOW this lib achieves isolation&quot;: an empty <code>.be/</code> dir is documented as the fresh-bootstrap anchor — &quot;the first <code>be</code>/<code>sniff</code> command bootstraps it into a real store in-place&quot;. That bootstrap is what misbehaves.</li>
+<li><code>test/get/http/run.sh</code> does NOT hit it: getcase.sh makes <code>$WORK/jT</code> with no <code>.be</code>, so the passing ctest case takes the working shape.</li>
+<li><a href="../TEST/TEST-004.html">TEST-004</a> worked around it by making its scratch worktrees bare dirs and relying on the <code>.be</code> firewall FILE above them; that is a workaround, not a fix.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+The first <code>jab get</code> into an empty-<code>.be/</code>-shielded worktree behaves exactly like the first get into a bare dir.
+</p>
+<ul>
+<li><code>hashlet60FromBytes</code> never receives an undefined/short value — whatever <code>locate</code> hands it is a real byte range or a clean miss.</li>
+<li>The bootstrap-in-place path initialises the shard fully BEFORE <code>fanoutWholeTree</code> reads it, or <code>locate</code> reports &quot;not in the store&quot; instead of crashing.</li>
+<li>A user-facing failure here is plain words, not a raw JSC <code>TypeError</code> with a stack (the standing ruling on error wording).</li>
+<li>A repro test pins the empty-<code>.be/</code> shape, since it is the shape every test worktree uses.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Do not &quot;fix&quot; it by retiring the empty-<code>.be/</code> shield: it is the documented isolation anchor and the firewall depends on the pair.</li>
+<li>Do not paper over it with a retry — the second get succeeding is the SYMPTOM, not the cure.</li>
+<li><code>be/</code> JS only; the fault is in the JS read path, not in a binding.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Unknown whether this is http-specific: the treadmill can only reach a vanilla git repo over the smart-HTTP wrapper on this box (no sshd by default, <code>be:</code>/<code>file:</code> want a beagle store). Re-run the repro over ssh before scoping the fix.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> Minimal repro as a test first (the <a href="../../meta/work.html">Issues</a> rule): empty-<code>.be/</code> worktree + first get.</li>
+<li><a href="./ .html"> </a> Find what <code>locate</code> returns on a freshly-bootstrapped-but-empty shard and why <code>hashlet60FromBytes</code> gets a non-BigInt-able value.</li>
+<li><a href="./ .html"> </a> Check whether the difference is a shard subdir that exists-but-is-empty vs absent (<code>home_dir_no_subdirs</code> reads the two differently).</li>
+<li><a href="./ .html"> </a> Confirm over ssh and over <code>be:</code>/<code>file:</code> whether the transport matters at all.</li>
+<li><a href="./ .html"> </a> Plain-words error on the genuine miss path, whatever the root cause turns out to be.</li>
+<li><a href="./ .html"> </a> Once fixed, revert <a href="../TEST/TEST-004.html">TEST-004</a>'s bare-dir workaround to the standard <code>rs_shield</code> shape.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The second-run-succeeds behaviour makes this easy to miss in any harness that retries or that reuses a worktree across cases.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+Not started — filed 2026-07-27 from a <a href="../TEST/TEST-004.html">TEST-004</a> treadmill finding.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

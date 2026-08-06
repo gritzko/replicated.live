@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-039: strict three-part O wire form — CTX: verb args, context MANDATORY, . = here, no silent fallback</title>
+<meta property="og:title" content="BRO-039: strict three-part O wire form — CTX: verb args, context MANDATORY, . = here, no silent fallback">
+<meta property="og:description" content="RULING (gritzko, chat 2026-07-19): the arg-into-context bug was fixed twice (/todo/BE/BE-053, /todo/BRO/BRO-038→BE-053) and returned (/todo/WORK/WORK-013) — the part gets REWORKED, not patched. Every O token is three-part CTX: verb args with the context slot ALWAYS present: . = empty (&quot;here&quot;, leaves the pager context), /… = absolute (REPLACES the context), anything else = relative (COMBINES with the context). Args pass to the verb VERBATIM. parseOspell becomes one strict regex; a non-matching token is NOT an O spell — loud error, never &quot;context-less spell&quot;.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BRO/BRO-039.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-039: strict three-part O wire form — <code>CTX: verb args</code>, context MANDATORY, <code>.</code> = here, no silent fallback</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<p>
+RULING (gritzko, chat 2026-07-19): the arg-into-context bug was fixed twice (<a href="/todo/BE/BE-053.html">BE-053</a>, <a href="/todo/BRO/BRO-038.html">BRO-038</a><a href="./DONT.html">DONT</a>→BE-053) and returned (<a href="/todo/WORK/WORK-013.html">WORK-013</a>) — the part gets REWORKED, not patched. Every O token is three-part <code>CTX: verb args</code> with the context slot ALWAYS present: <code>.</code> = empty (&quot;here&quot;, leaves the pager context), <code>/…</code> = absolute (REPLACES the context), anything else = relative (COMBINES with the context). Args pass to the verb VERBATIM. parseOspell becomes one strict regex; a non-matching token is NOT an O spell — loud error, never &quot;context-less spell&quot;.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>The reinfection door: shared/spell.js parseOspell (:154-162) arms the split only on a leading <code>//</code>; every other token silently degrades to <code>{context:&quot;&quot;, spell:token}</code> — so mis-baked mints keep working wrong, and the pager scavenges context from ARGS instead (<code>_fillAuth</code> graft pager.js:740, <code>_ctxFrom(arg)</code> reduction :744 — the audited leak list, 2026-07-19 bro-derivation inspection).</li>
+<li><a href="/todo/BRO/BRO-025.html">BRO-025</a> iter-1 &quot;context-less token = here&quot; impl decision is hereby OVERTURNED by the ruling; BRO-025's three-part concept and the drive-in-own-context machinery (<code>_actSpell</code>/<code>_runSpell</code> ctxOverride → driveSpell, loop context-first RAW args) STAND and are reused.</li>
+<li>Audit facts (2026-07-19, both inspections): all current O mints conform (empty/absolute ctx, args literal); kind 3 (relative) is unrepresentable in the codec; two producers bypass mintOspell (views/todo/todo.js:260 raw <code>done KEY</code>, views/why/why.js:154 hand-baked <code>#rgb commit ?hashlet</code>); <code>&quot;//&quot;</code> is used as an empty-context alias (work.js:444/446); pager persists the NEXT context off the ARG, not the O context (pager.js:720 vs :744).</li>
+<li>O tokens exist only inside rendered TLV hunks, regenerated per paint — mint+parse switch in ONE commit is a safe flag-day, nothing persisted to migrate; <code>view.call</code> stores context and spell separately already.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Wire form: <code>CTX: verb args</code>, CTX mandatory — <code>.: todo BE-021</code>, <code>///jab/dog/abc/: status</code>, <code>dog/abc: status</code>. parseOspell = one regex <code>^(\S+): (.*)$</code> (context = the space-free token before the FIRST <code>: </code>; contexts are URIs/paths, never contain spaces, so <code>: </code> inside args stays safe). Trailing <code>/</code> shed off the context as today.</li>
+<li>mintOspell always emits the context slot (<code>.</code> for empty); every O producer routes through mintOspell — the todo.js:260 and why.js:154 bypasses are converted (the <code>#rgb</code> tint becomes its own leading marker, not welded into the spell text).</li>
+<li>A token failing the regex is NOT an O spell: the pager rejects it loudly (plain-words error naming the token), never degrades. This is the anti-reinfection core.</li>
+<li>Pager context seam: ONE helper combine(current, ctx) — <code>.</code>/empty → current; leading <code>/</code> → replace; else → join — used BOTH for the drive context and the recorded next <code>this.ctx</code>; the <code>_fillAuth</code> graft and <code>_ctxFrom(arg)</code> reduction leave the O path; args are display-verbatim, never context donors.</li>
+<li>All three kinds round-trip mint→parse→combine; pty proof per kind.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>U tokens untouched here: U-follow arg→context reduction is a separate pending ruling (BRO-024 $PWD model vs args-verbatim) — do not change U behavior in this ticket.</li>
+<li>Typed <code>:</code> spells (<code>_applySpell</code>/<code>_driveApply</code>) and slot-edits keep today's behavior; only the O token path reworks.</li>
+<li>Rulings in force: pager arg-blind, resolution via core/resolve_hash.js, errors in plain words; the regex splits the three parts ONLY — the context substring goes to the standard URI/resolve machinery, never regex-parsed as a URI.</li>
+<li>Overlaps in-flight <a href="/todo/WORK/WORK-013.html">WORK-013</a> (work.js U→O mints via mintOspell — its output re-bases onto the new mint form cleanly); land order: whichever first, expect a weave.</li>
+<li>test/bro/ospell (BRO-025's 15 checks) pins the OLD optional-context form — amending it to the strict form is AUTHORIZED; test/work/view, test/todo/view, test/done/buttons token pins likewise; no other test edits.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(impl 2026-07-19) parseOspell = ONE regex <code>^(\S+): (.*)$</code>; a non-match returns NULL (no silent <code>{context:&quot;&quot;,spell}</code> degrade). Trailing dir <code>/</code> shed via <code>([^/])\/+$</code> so <code>///</code> (main tree) is KEPT intact (coordinator: WORK-013 <code>///: status</code> must not collapse to &quot;&quot;).  mintOspell ALWAYS emits the slot; &quot;&quot;/&quot;//&quot; → <code>.</code>.</li>
+<li>(impl) pager seam: <code>_combine(current,ctx)</code> — <code>.</code>/empty keep, a leading <code>/</code> (<code>//WT</code>,<code>///</code>,<code>///sub</code>) REPLACES verbatim (resolve machinery owns URI→tree), else COMBINES (joinPath as a dir). Used for BOTH the drive context AND the recorded <code>this.ctx</code> in the O paths; <code>_fillAuth</code>/<code>_ctxFrom(arg)</code> stay ONLY on the U path.</li>
+<li>(impl) O-vs-U at the click: <code>clickTargetAt</code> returns {text,tag}; the O path strict-parses, the U/F/line path follows verbatim (U behavior untouched, per constraint).  <code>_uriAt</code> string contract preserved (why/blame, commit/*, rowclick, sub/advput all read it).</li>
+<li>(impl, DEVIATION — RESOLVED iter 2) the drive-as-&quot;here&quot; softening is REMOVED: gritzko authorized the sweep 2026-07-20, both producers (status.js <code>[put]/[del]</code>, why.js commit O) now mint via mintOspell, and a parse-NULL token is rejected loudly in <em>mouse (<code>not an action link: &lt;token&gt;</code>, pager.js:1264, plain words). Authorized pin re-pins: test/why/blame, test/sub/advput, test/status/buttons (assert</em>buttons + click_refresh), test/why/range, plus 4 new loud-reject seam checks in bro/ospell.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> red: ospell unit + real-click seam — strict round-trip all 3 kinds (<code>.</code>, <code>//WT</code>/<code>///</code>/<code>///sub</code>, <code>dog/abc</code>), <code>///</code> kept, old slotless token REJECTED (null pinned), quoted <code>: </code> safe; RED shown: old parse collapsed <code>///</code>→&quot;&quot; and degraded slotless silently</li>
+<li class="done"><input type="checkbox" checked disabled> codec: parseOspell strict/null + mintOspell mandatory <code>.</code>; convert todo.js:260 (<code>done KEY</code>→mintOspell); &quot;&quot;/&quot;//&quot; alias route through mint.  DEFERRED: why.js:154 — see Blockers</li>
+<li class="done"><input type="checkbox" checked disabled> pager: <code>_combine</code> drives AND persists; <em>fillAuth/</em>ctxFrom leave the O path; slotless-O reject softened to &quot;here&quot; (see decision)</li>
+<li class="done"><input type="checkbox" checked disabled> green: real-click seam per kind (leave/replace/combine) + WORK-013 arg-not-context proof; work/view+todo/view+done/buttons+graf green</li>
+<li class="done"><input type="checkbox" checked disabled> sweep (iter 2, authorized 2026-07-20): why.js + status.js → mintOspell (tint is its own leading marker); loud reject lands; 5 test pins re-pinned to strict form, no assertion weakened</li>
+<li class="done"><input type="checkbox" checked disabled> broad: in-wt ctest 307 tests, 1 FAIL = work/getctx (baseline, cure staged in //WORK-010); bro/color + bro/view now GREEN</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>why.js:154 conversion (RESOLVED iter 2): authorized 2026-07-20, mints <code>.: commit ?hashlet</code> with the <code>#rgb</code> tint as its own leading marker; why/blame + why/range re-pinned, both green.</li>
+<li><code>jab diff &lt;big-file&gt;</code> in this wt dies <code>hunk.render: out full</code> — sibling of <a href="/todo/DIFF/DIFF-010.html">DIFF-010</a> (weave.fold grow-on-full landed, hunk.render's out buffer still fixed); proposed as its own ticket, small diffs render fine, ctest diff suites green.</li>
+<li>test/work/getctx STAYS red (baseline red, NOT my regression): its pty driver hardcodes the RETIRED <code>[get]</code>/<code>[diff]</code> labels (WORK-004/010 replaced them with <code>[±]</code>/<code>[-N]</code>), so its frames never paint.  Green needs a getctx.py label update — outside the authorised edit set.  The <a href="./get.html">get</a>→row-wt threading it targets DOES work now (proved headless in test/bro/ospell).</li>
+<li>pre-existing reds unrelated to BRO-039: bro/color, bro/view (readdir-order stale goldens, per BRO-025).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Suggested commit: <code>BRO-039: strict 3-part O wire form CTX: verb</code></li>
+<li>iter 1 (this wt, UNCOMMITTED, per order): shared/spell.js (parseOspell strict+null, mintOspell mandatory <code>.</code>, <code>///</code> kept), views/bro/pager.js (clickTargetAt tag, <em>combine, O-path in </em>runSpell/<em>actSpell, tag-aware </em>mouse), views/todo/todo.js:260 (mint the <code>done</code> O).  Tests: test/bro/ospell NEW (codec + real _feed click seam, 55 checks), test/work/view + test/todo/view + test/done/buttons re-pinned to <code>.</code>-ctx.  <code>jab put</code> staged all 8.</li>
+<li>WORK-013 weave: it mints work-view tree rows <code>///: status</code> / <code>///vend/ext/: status</code> in its OWN wt via mintOspell; my mint emits that exact form and my parse+combine keep <code>///</code> intact and persist it — clean weave, both mint via the shared codec.</li>
+<li>green (JABC=~/bin/jab): bro/ospell, work/view, todo/view, done/buttons, graf/parity PASS.  Broad regression 89 PASS / 10 SKIP / 3 FAIL — the 3 (bro/color, bro/view, work/getctx) all pre-existing, none my regression (sub/advput + why/blame stay green under the new pager).</li>
+<li>iter 2 (sweep, staged): views/why/why.js, views/status/status.js, views/bro/pager.js (loud reject), test pins why/blame, why/range, sub/advput, status/buttons ×2, bro/ospell +4 checks.  15 files staged total.  In-wt ctest <code>-LE big</code>: 307 tests, 306 pass, sole red work/getctx (baseline, //WORK-010 owns the cure); orchestrator re-ran the 9 target suites independently — 10/10 pass.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

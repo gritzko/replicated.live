@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>README</title>
+<title>GET tickets: checkout / fetch / view / search</title>
+<meta property="og:title" content="GET tickets: checkout / fetch / view / search">
+<meta property="og:description" content="be get fetches, checks out, and indexes a version/branch/project (with be head as its dry-run). Tickets below close gaps in be:// store resolution and wire-fetch sizing/dedup. Each entry is one active ticket with its live state; an entry drops off once the whole ticket lands (landed commits stay on the board's GET line). The fix-and-land method is Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/README.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -17,7 +21,8 @@
 </p>
 <h2>Active tickets</h2>
 <ul>
-<li><a href="GET-041.html">GET-041</a> <a href="./HIGH.html">HIGH</a> — be/ worktree bring-up is broken end-to-end, fix FIRST: store-selector <code>jab get</code> of beagle-ext loops resolution through the checked-out <code>be -&gt; .</code> (partial checkout), a retry self-hosts jab from that partial tree, native ASan <code>be get</code> stack-overflows after a sniff miss (<code>hexlen=15</code> diag anomaly). Umbrella over <a href="GET-036.html">GET-036</a>/<a href="GET-037.html">GET-037</a>/<a href="GET-038.html">GET-038</a>/<a href="GET-039.html">GET-039</a>; until landed, workers clone the WORKTREE source (<code>jab get file:…/journal/be</code>). Filed 2026-07-07. Audit same day: the established-wt clone guard (<code>get.js seedRemote</code>) landed in <code>50e90012</code>; the jab run-pin (<code>require.cpp</code> per-require upward scan) + the native sniff ASan abort remain.</li>
+<li><a href="GET-044.html">GET-044</a> <a href="./JS.html">JS</a> <a href="./HIGH.html">HIGH</a> — <code>wire.js fetch</code> buffered the ENTIRE pack in RAM (linux.git clone died at EOF: <code>RangeError: length too large</code> in the readToEof Uint8Array concat). FIX DONE on worker branch <code>GET-044</code> (wt <code>/home/gritzko/src/GET-044</code>, <code>f9a9c781</code>+<code>68d3b802</code>): stream to <code>tmp_pack_*</code> in the destination shard, incremental SHA-1 trailer verify, atomic rename; GitHub gate 6.45 GB at 46.7 MB RSS flat, suite = pristine baseline. PENDING user inspect/merge; full checkout still walled by pre-existing <a href="../JAB/JAB-007.html">JAB-007</a> (mmap 2^31-1 cap) + <a href="../GIT/GIT-021.html">GIT-021</a> (bad tree entry). Filed 2026-07-14.</li>
+<li><a href="GET-043/README.html">GET-043</a> <a href="./HIGH.html">HIGH</a> — a <code>jab get</code> conflict DROPS every still-queued checkout leaf: the D5 CONFMARK throw-sentinel is tail-appended to the get FIFO, later dir-reconciles enqueue their leaves AFTER it, the GETCONF throw kills them — while the seed already advanced the wtlog tip, so the un-written files read as local <code>mod</code>s and a repair get cements the loss (<code>mrg</code> keeps stale bytes, exit 0). Hit 3 worktrees 2026-07-11 (JS-111b/113b/114). Fix pattern known (JSQUE-020: sentinel → finalizeGet). Repro attached (exit 3). Filed 2026-07-11.</li>
 <li><a href="GET-039.html">GET-039</a> — store symlinks as git blobs and NEVER follow them (git's model): a <code>120000</code> symlink is a leaf (target == blob bytes), classified/committed/checked-out generically, never mounted or recursed. Dissolves ALL <code>be</code> self-locator special-casing of <a href="GET-036.html">GET-036</a>/<a href="GET-037.html">GET-037</a>. <code>be/</code> JS; own worktree. Filed 2026-06-29. PARTIAL (audit 2026-07-07): core landed <code>3026a5fb</code>+<code>d31b52ea</code> (tests <code>test/sub/symlink</code>/<code>selfloop</code>, special-casing gone); formal close pending <a href="GET-041.html">GET-041</a>.</li>
 <li><a href="GET-038.html">GET-038</a> — <code>jab get</code> from a WORKTREE source (<code>file:&lt;wt&gt;?/proj</code>) records the worktree path as the store anchor → <code>jab status</code> reports everything <code>unk</code> (baseline unresolvable; the wt is a redirect, not a store). Must record the resolved real store. GET-037's deferred worktree-source stretch. Filed 2026-06-29. PARTIAL (audit 2026-07-07): redirect fix + <code>test/sub/wtsrc</code> in-tree, but NO ticket-coded landing commit — pending hashlet/suite confirmation.</li>
 <li><a href="GET-037.html">GET-037</a> — <code>jab get</code> of beagle-ext crashes on the <code>be</code> self-gitlink: DIS-058's mount-recursion sub-mounts the self-locator (no <code>.gitmodules</code> entry) → <code>SUBFETCH</code>/raw <code>Not a directory</code> (worktree source) + partial checkout. Must materialise <code>be -&gt; .</code> like <a href="GET-036.html">GET-036</a>, not sub-mount. Filed 2026-06-29. PARTIAL (audit 2026-07-07): crash class fixed <code>dbb828e6</code>+<code>064c15f5</code> (.gitmodules gate, atomic sub-mount); beagle-ext end-to-end still fails per <a href="GET-041.html">GET-041</a>.</li>
@@ -56,5 +61,16 @@ GET-030 (<code>be get be://host</code> wire <code>keeper: not found</code> — <
 <p>
 GET-020 (<code>be get file:&lt;wt&gt;</code> left a HALF-POPULATED tree + <code>SNIFFFAIL</code> under concurrent worktree creation) landed <code>49039f36</code>. GET-026 (bare <code>be get</code> = default GET + resulting-state banner via the shared ROWS path; orphaned overview moved to <a href="../STATUS/STATUS-001.html">STATUS-001</a>) landed <code>1b5d3def</code> + sub-test fix <code>cb94e64e</code>. GET-027 (<code>be get be://</code> clone read a degenerate zero-length pack bookmark → WIRECRPT; the &quot;off-by-one hashlet&quot; theory was wrong, two independent bugs fixed) landed <code>a8fa2e87</code>. GET-023 (<code>be get '?#&lt;sha&gt;'</code> silently dropped the <code>#fragment</code> → landed on the tip; classify-or-reject arm + composer-built source URI) landed <code>d6f35358</code>; its regression GET-024 (<code>?#&lt;sha&gt;</code> recorded a DETACHED cur-tip → POSTDET, broke the SSH-gated <code>be-put-06-triangle</code>) landed <code>134b9e30</code> — fixed in the same arm (record trunk-state) + a non-SSH-gated guard in <code>test/get/33-detached-refuse-commit</code>. GET-025 (a SHORT <code>?#&lt;short&gt;</code> recorded the wtlog cur-tip + keeper REFS tip verbatim → the 40-char-only baseline resolver read EMPTY: whole tree <code>new</code>, <code>be head</code> stuck) landed <code>4737404d</code> — record the RESOLVED full sha (<code>a_sha1hex(tgt_commit_sha)</code>) in the row + <code>REFSAppendVerb</code>; step 6 in <code>get/33</code> + <code>fragref</code> case 2. Also repaired the live <code>dogs/refs</code> (2 short rows the bug had written last night, blocking all posts).
 </p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

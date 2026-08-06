@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-069</title>
+<title>JS-069: diff follows tracked symlinks via io.mmap (info leak)</title>
+<meta property="og:title" content="JS-069: diff follows tracked symlinks via io.mmap (info leak)">
+<meta property="og:description" content="be diff's wt-vs-base path reads symlink leaves by dereferencing the link, so a TRACKED symlink to /etc/passwd leaks that file into the wt side of the diff. Symlink leaves wrongly land in the files map and get io.mmap'd. Reachable once an attacker tree is checked out. Masked today by DIFF handler unreachability (JS-071). Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-069.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,33 +15,23 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-069 <a href="">MED</a>: diff follows tracked symlinks via io.mmap (info leak)</h1>
+<h1>JS-069: diff follows tracked symlinks via io.mmap (info leak)</h1>
+<div>
 <p>
-<code>be diff</code>'s wt-vs-base path reads symlink leaves by dereferencing the link, so a TRACKED symlink to <code>/etc/passwd</code> leaks that file into the wt side of the diff.  Symlink leaves wrongly land in the <code>files</code> map and get <code>io.mmap</code>'d.  Reachable once an attacker tree is checked out. Masked today by <a href="">DIFF</a> handler unreachability (<a href="./JS-071.html">JS-071</a>).  Method: <a href="../../meta/work.html">Issues</a>.
+Now: DONE
+</p>
+</div>
+<p>
+<code>be diff</code>'s wt-vs-base path reads symlink leaves by dereferencing the link, so a TRACKED symlink to <code>/etc/passwd</code> leaks that file into the wt side of the diff.  Symlink leaves wrongly land in the <code>files</code> map and get <code>io.mmap</code>'d.  Reachable once an attacker tree is checked out. Masked today by <a href="./DIFF.html">DIFF</a> handler unreachability (<a href="./JS-071.html">JS-071</a>).  Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>views/diff/diff.js:134-135</code> <code>treeMap</code> routes only <code>kind === &quot;s&quot;</code><p>
-to <code>subs</code>; symlink leaves (<code>kind === &quot;l&quot;</code>) fall into <code>files</code>.
-</p>
-</li>
-<li><code>views/diff/diff.js:201-211</code> per base file: <code>join(repo.wt,p)</code> then<p>
-<code>readWtFile(wtPath)</code> — no lstat, no symlink kind branch.
-</p>
-</li>
-<li><code>views/diff/diff.js:216-218</code> <code>readWtFile</code> does<p>
-<code>io.mmap(path,&quot;r&quot;).data().slice()</code> — FOLLOWS the link, reads target.
-</p>
-</li>
-<li>A tracked symlink <code>link -&gt; /etc/passwd</code> thus emits the TARGET's<p>
-bytes as the wt-side blob, not the link target string.
-</p>
-</li>
-<li>Read sink is real now; the diff handler is just currently<p>
-unreachable (see <a href="./JS-071.html">JS-071</a>) so it is not yet exploitable end-to-end.
-</p>
-</li>
+<li><code>views/diff/diff.js:134-135</code> <code>treeMap</code> routes only <code>kind === &quot;s&quot;</code> to <code>subs</code>; symlink leaves (<code>kind === &quot;l&quot;</code>) fall into <code>files</code>.</li>
+<li><code>views/diff/diff.js:201-211</code> per base file: <code>join(repo.wt,p)</code> then <code>readWtFile(wtPath)</code> — no lstat, no symlink kind branch.</li>
+<li><code>views/diff/diff.js:216-218</code> <code>readWtFile</code> does <code>io.mmap(path,&quot;r&quot;).data().slice()</code> — FOLLOWS the link, reads target.</li>
+<li>A tracked symlink <code>link -&gt; /etc/passwd</code> thus emits the TARGET's bytes as the wt-side blob, not the link target string.</li>
+<li>Read sink is real now; the diff handler is just currently unreachable (see <a href="./JS-071.html">JS-071</a>) so it is not yet exploitable end-to-end.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
@@ -54,18 +48,12 @@ unreachable (see <a href="./JS-071.html">JS-071</a>) so it is not yet exploitabl
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Split symlinks out of <code>files</code> into a <code>links</code> map (like <code>subs</code>);<p>
-diff their target-string blobs, never <code>mmap</code> the wt path.
-</p>
-</li>
+<li>Split symlinks out of <code>files</code> into a <code>links</code> map (like <code>subs</code>); diff their target-string blobs, never <code>mmap</code> the wt path.</li>
 <li>For wt side, <code>io.lstat</code> kind==&quot;lnk&quot; → <code>io.readlink</code>, else mmap.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: tracked symlink → outside file; assert diff body<p>
- shows only the link target string (test/js/diff/symlink-leak).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: tracked symlink → outside file; assert diff body shows only the link target string (test/js/diff/symlink-leak).</li>
 <li class="open"><input type="checkbox" disabled> Route <code>kind === &quot;l&quot;</code> to a links map; readlink wt side.</li>
 </ul>
 <h3>Blockers and bummers</h3>
@@ -76,5 +64,16 @@ diff their target-string blobs, never <code>mmap</code> the wt path.
 <ul>
 <li>(pending)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

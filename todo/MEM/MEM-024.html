@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-024</title>
+<title>MEM-024 DONT: push-side recursive walk holds 1MB mmap per frame (keeper/WIRECLI.c)</title>
+<meta property="og:title" content="MEM-024 DONT: push-side recursive walk holds 1MB mmap per frame (keeper/WIRECLI.c)">
+<meta property="og:description" content="On the push path wpushwalkcommit and wpushwalktree mmap a 1MB buffer and recurse before unmapping, so a long linear commit chain or deep tree stacks one C frame plus one live mmap per level. The dedup count caps bound distinct objects, not single-chain depth: haveset-build callers pass out==NULL so no count cap applies at all, and pack mode's cap (65536) far exceeds the ~8MB C stack. A deep/force-pushed history → stack-overflow SIGSEGV; the discarded recursive return also drops errors. (Category is unbounded recursion — the NORESERVE mmap is reclaimed on unwind, not leaked.) The goal is to bound depth and stop holding the buffer across recursion.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-024.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>MEM-024: push-side recursive walk holds 1MB mmap per frame (keeper/WIRECLI.c)</h1>
+<h1>MEM-024 <a href="./DONT.html">DONT</a>: push-side recursive walk holds 1MB mmap per frame (keeper/WIRECLI.c)</h1>
+<div>
+<p>
+Now: DONT
+</p>
+</div>
 <p>
 On the push path <code>wpush_walk_commit</code> and <code>wpush_walk_tree</code> mmap a 1MB buffer and recurse <strong>before</strong> unmapping, so a long linear commit chain or deep tree stacks one C frame plus one live mmap per level. The dedup count caps bound distinct objects, not single-chain depth: haveset-build callers pass <code>out==NULL</code> so no count cap applies at all, and pack mode's cap (65536) far exceeds the ~8MB C stack. A deep/force-pushed history → stack-overflow SIGSEGV; the discarded recursive return also drops errors. (Category is unbounded recursion — the NORESERVE mmap is reclaimed on unwind, not leaked.) The goal is to bound depth and stop holding the buffer across recursion.
 </p>
@@ -35,11 +44,22 @@ Re-verified 2026-07-07: the tree arm was fixed by KEEP-001/POST-021; the commit-
 </p>
 <h3>TODOs</h3>
 <p>
- -<a href="./v.html">v</a> <code>wpush_walk_tree</code> — no longer hand-recurses: delegates to depth-capped <code>KEEPWalkTree</code> via <code>try()</code> so per-call BASS scratch rewinds (keeper/WIRECLI.c:1265-1291; <code>0eb0afab</code> KEEP-001, <code>387a6f99</code> POST-021).  -<a href="./ .html"> </a> <code>keeper/WIRECLI.c:1303-1359</code> <code>wpush_walk_commit</code> — 1MB <code>u8bMap(cbuf)</code> (:1319-1320) still live across the per-parent recursion (:1352), unmapped only at :1356; capture parents by value and unmap BEFORE recursing, or convert to a bounded work-stack.  -<a href="./ .html"> </a> <code>keeper/WIRECLI.c:1352</code> — recursive return still discarded; no depth cap in either mode (haveset callers :1997-2002 pass <code>out=NULL</code> so even the <code>*n&gt;=cap</code> count check (:1312) is skipped → depth = full chain length).  -<a href="./ .html"> </a> NEW same-pattern site: <code>keeper/WIRECLI.c:1366-1395</code> <code>wpush_collect_commits</code> — 1MB map (:1373-1374) live across the :1390 parent recursion, recursive return discarded, no depth cap (<code>seen</code> dedups revisits, not first-visit chain depth).  -<a href="./ .html"> </a> Repro first: build a long unshared linear commit chain and <code>WIREPush</code> it; assert bounded failure rather than SIGSEGV.
+ -<a href="./v.html">v</a> <code>wpush_walk_tree</code> — no longer hand-recurses: delegates to depth-capped <code>KEEPWalkTree</code> via <code>try()</code> so per-call BASS scratch rewinds (keeper/WIRECLI.c:1265-1291; <code>0eb0afab</code> KEEP-001, <code>387a6f99</code> POST-021). -<a href="./ .html"> </a> <code>keeper/WIRECLI.c:1303-1359</code> <code>wpush_walk_commit</code> — 1MB <code>u8bMap(cbuf)</code> (:1319-1320) still live across the per-parent recursion (:1352), unmapped only at :1356; capture parents by value and unmap BEFORE recursing, or convert to a bounded work-stack. -<a href="./ .html"> </a> <code>keeper/WIRECLI.c:1352</code> — recursive return still discarded; no depth cap in either mode (haveset callers :1997-2002 pass <code>out=NULL</code> so even the <code>*n&gt;=cap</code> count check (:1312) is skipped → depth = full chain length). -<a href="./ .html"> </a> NEW same-pattern site: <code>keeper/WIRECLI.c:1366-1395</code> <code>wpush_collect_commits</code> — 1MB map (:1373-1374) live across the :1390 parent recursion, recursive return discarded, no depth cap (<code>seen</code> dedups revisits, not first-visit chain depth). -<a href="./ .html"> </a> Repro first: build a long unshared linear commit chain and <code>WIREPush</code> it; assert bounded failure rather than SIGSEGV.
 </p>
 <h3>Blockers and bummers</h3>
 <p>
 None.
 </p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

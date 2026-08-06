@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GIT-011</title>
+<title>GIT-011: ZINFInflate wraps output on fill, never signals NOROOM</title>
+<meta property="og:title" content="GIT-011: ZINFInflate wraps output on fill, never signals NOROOM">
+<meta property="og:description" content="ZINFInflate (dog/git/ZINF.c) mishandles a too-small into slice: when availout hits 0 it WRAPS nextout back to into0 and keeps inflating (corrupting already-produced bytes), then the trailing u8sFed(into, totalout) — all-or-nothing — no-ops because totalout exceeds capacity, so the head never advances and the call returns OK with produced 0. A genuine empty result also yields 0, so overflow is undetectable by the caller. Surfaced by JS-035 (zip.inflate grow-and-retry), which had to add an XOR head-sentinel hack to guess at overflow. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GIT/GIT-011.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,79 +15,64 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>GIT-011 <a href="./MED.html">MED</a>: <code>ZINFInflate</code> wraps output on fill, never signals NOROOM</h1>
+<h1>GIT-011: <code>ZINFInflate</code> wraps output on fill, never signals NOROOM</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
 <p>
 <code>ZINFInflate</code> (<code>dog/git/ZINF.c</code>) mishandles a too-small <code>into</code> slice: when <code>avail_out</code> hits 0 it WRAPS <code>next_out</code> back to <code>into[0]</code> and keeps inflating (corrupting already-produced bytes), then the trailing <code>u8sFed(into, total_out)</code> — all-or-nothing — no-ops because <code>total_out</code> exceeds capacity, so the head never advances and the call returns <code>OK</code> with produced 0. A genuine empty result also yields 0, so overflow is undetectable by the caller. Surfaced by <a href="../JS/JS-035.html">JS-035</a> (<code>zip.inflate</code> grow-and-retry), which had to add an XOR head-sentinel hack to guess at overflow. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Bug is the <code>avail_out == 0</code> reset block, <code>dog/git/ZINF.c:31-34</code>, inside the<p>
-inflate loop (lines 27-35); resets <code>next_out</code>/<code>avail_out</code> instead of erroring.
-</p>
-</li>
-<li>Native callers pre-size <code>into</code> to the object's known uncompressed length<p>
-(<code>keeper/UNPK.c:336,618</code>, <code>dog/git/PACK.c:177</code>), so the wrap is LATENT there; it only bites a caller that doesn't know the size up front.
-</p>
-</li>
-<li><a href="../JS/JS-035.html">JS-035</a> <code>js/zip.cpp</code> works around it with a head sentinel (`into<a href="">0</a> ^=<p>
-0xa5`, re-checked after the call) — that hack is deletable once this lands.
-</p>
-</li>
+<li>Bug is the <code>avail_out == 0</code> reset block, <code>dog/git/ZINF.c:31-34</code>, inside the inflate loop (lines 27-35); resets <code>next_out</code>/<code>avail_out</code> instead of erroring.</li>
+<li>Native callers pre-size <code>into</code> to the object's known uncompressed length (<code>keeper/UNPK.c:336,618</code>, <code>dog/git/PACK.c:177</code>), so the wrap is LATENT there; it only bites a caller that doesn't know the size up front.</li>
+<li><a href="../JS/JS-035.html">JS-035</a> <code>js/zip.cpp</code> works around it with a head sentinel (<code>into[0][0] ^= 0xa5</code>, re-checked after the call) — that hack is deletable once this lands.</li>
+<li>Audit 24Jul26 review: wrap intact.  The pre-sized callers are NOT fully latent — a record whose stream inflates PAST its declared size wraps and corrupts; <code>PACKInflate</code> (<code>dog/git/PACK.c:171-182</code>) never cross-checks <code>total_out == size</code>, and <code>UNPK.c:618</code> CONSUMES the inflated delta bytes. Related: <a href="GIT-025.html">GIT-025</a> (PACKRecordEnd's measure-by-inflate needs the fix).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>On a stream needing more room than <code>into</code> holds, return a NOROOM-style error<p>
-(new <code>ZINFROOM</code>) so the caller can grow and retry — never wrap or corrupt.
-</p>
-</li>
-<li>On <code>OK</code>, <code>total_out</code> equals the bytes actually present in <code>into</code>; the success<p>
-path stays byte-identical for the pre-sized native callers.
-</p>
-</li>
+<li>On a stream needing more room than <code>into</code> holds, return a NOROOM-style error (new <code>ZINFROOM</code>) so the caller can grow and retry — never wrap or corrupt.</li>
+<li>On <code>OK</code>, <code>total_out</code> equals the bytes actually present in <code>into</code>; the success path stays byte-identical for the pre-sized native callers.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li><code>dog/git</code> libdog, ABC style; new code RON60-encoded, <code>ZINF</code>-prefixed<p>
-(<code>abc/ok64</code>), declared in <code>ZINF.h</code> beside <code>ZINFFAIL</code>/<code>ZINFINIT</code>/<code>ZINFTOOBIG</code>.
-</p>
-</li>
+<li><code>dog/git</code> libdog, ABC style; new code RON60-encoded, <code>ZINF</code>-prefixed (<code>abc/ok64</code>), declared in <code>ZINF.h</code> beside <code>ZINFFAIL</code>/<code>ZINFINIT</code>/<code>ZINFTOOBIG</code>.</li>
 <li>Must not regress the native callers (they must still receive <code>OK</code>).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Replace the wrap block: when <code>inflate</code> returns <code>Z_OK</code> with <code>avail_out == 0</code><p>
-(stream not ended, no room left) → <code>inflateEnd(&amp;zs); return ZINFROOM;</code>.
-</p>
-</li>
+<li>Replace the wrap block: when <code>inflate</code> returns <code>Z_OK</code> with <code>avail_out == 0</code> (stream not ended, no room left) → <code>inflateEnd(&amp;zs); return ZINFROOM;</code>.</li>
 <li>Run <code>u8csUsed</code>/<code>u8sFed</code> only on the <code>Z_STREAM_END</code> success path.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: a <code>keeper/test/ZINF.c</code> case inflating a known stream into an<p>
-  undersized <code>into</code> expects <code>ZINFROOM</code> (today: <code>OK</code> + produced 0 + corruption).
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Add <code>ZINFROOM</code> to <code>ZINF.h</code>; fix the loop in <code>ZINF.c</code>; <code>ctest</code> green across<p>
-  <code>ZINF</code>/<code>PACK</code>/<code>UNPK</code> (the pre-sized callers must stay green).
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Follow-up (own commit; <a href="../JS/JS-035.html">JS-035</a> HAS landed — the sentinel sits at jab<p>
-  <code>zip.cpp:46-55</code>): drop the XOR hack, grow directly on a <code>ZINFROOM</code> throw.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: a <code>keeper/test/ZINF.c</code> case inflating a known stream into an undersized <code>into</code> expects <code>ZINFROOM</code> (today: <code>OK</code> + produced 0 + corruption).</li>
+<li class="open"><input type="checkbox" disabled> Add <code>ZINFROOM</code> to <code>ZINF.h</code>; fix the loop in <code>ZINF.c</code>; <code>ctest</code> green across <code>ZINF</code>/<code>PACK</code>/<code>UNPK</code> (the pre-sized callers must stay green).</li>
+<li class="open"><input type="checkbox" disabled> <code>PACKInflate</code>: a lying size header (stream inflates past <code>size</code>) must surface as PACKBADOBJ (<code>total_out == size</code> check), not silent corruption.</li>
+<li class="open"><input type="checkbox" disabled> Follow-up (own commit; <a href="../JS/JS-035.html">JS-035</a> HAS landed — the sentinel sits at jab <code>zip.cpp:46-55</code>): drop the XOR hack, grow directly on a <code>ZINFROOM</code> throw.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>None known. Audit 07Jul26: bug still present — the wrap block is intact<p>
-(<code>ZINF.c</code> <code>avail_out==0</code> reset) and <code>ZINF.h</code> declares no <code>ZINFROOM</code>.
-</p>
-</li>
+<li>None known. Audit 07Jul26: bug still present — the wrap block is intact (<code>ZINF.c</code> <code>avail_out==0</code> reset) and <code>ZINF.h</code> declares no <code>ZINFROOM</code>.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>(pending)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

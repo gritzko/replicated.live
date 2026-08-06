@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIFF-017: mid-line EQ runs break line-ification — glued indents and torn statements</title>
+<meta property="og:title" content="DIFF-017: mid-line EQ runs break line-ification — glued indents and torn statements">
+<meta property="og:description" content="A diff hunk where an EQ token run starts or ends mid-line renders inconsistently: a line whose only change is leading whitespace is emitted ONCE with both sides' indents concatenated (6 new spaces + 8 old spaces back to back), while an EQ run bracketed by changes on both sides is DUPLICATED into the rm and in rows with pale wash. Weave-order emission then tears statements apart: the new side's continuation line lands after the old side's closing brace, three rows from its opener. Found by gritzko 2026-07-29 reviewing jab diff //POST-035/verbs/post/post.js (trunk jab, pre-existing — not DIFF-016).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIFF/DIFF-017.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIFF-017: mid-line EQ runs break line-ification — glued indents and torn statements</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+A diff hunk where an EQ token run starts or ends mid-line renders inconsistently: a line whose only change is leading whitespace is emitted ONCE with both sides' indents concatenated (6 new spaces + 8 old spaces back to back), while an EQ run bracketed by changes on both sides is DUPLICATED into the rm and in rows with pale wash. Weave-order emission then tears statements apart: the new side's continuation line lands after the old side's closing brace, three rows from its opener. Found by gritzko 2026-07-29 reviewing <code>jab diff //POST-035/verbs/post/post.js</code> (trunk jab, pre-existing — not DIFF-016).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro: <code>jab diff --color '//POST-035/verbs/post/post.js' | cat</code>, the POST-035 conflict pre-flight hunk (~L878). Old: 3-line <code>throw refuse(...refuse(named,\n&quot;conflict marker...&quot;));</code> + <code>}</code>; new: 2-line <code>throw refuse(...refuse(named, &quot;conflict in...&quot;));</code> at one indent less.</li>
+<li>Symptom 1: shared line <code>throw refuse(named + &quot; (--force overrides)&quot;,</code> renders once as <code>[bg194]      [bg224]        [bg49]throw refuse(...</code> — both indent variants glued, a 14-space line matching neither side.</li>
+<li>Symptom 2: row order comes out <code>throw(shared) / old refuse(named, / old &quot;conflict marker...&quot; / old } / new refuse(named,...)</code> — the new statement's tail is separated from its opener by the whole old block.</li>
+<li>Symptom 3 (the inconsistency): the <code>refuse ( named ,</code> EQ tokens are duplicated into BOTH rows wearing pale wash (bg224/bg194), while the throw line's EQ content single-emits on default bg — same shape, two renderings.</li>
+</ul>
+<h3>Goals</h3>
+<ol>
+<li>One rule for EQ runs crossing line boundaries: a display row belongs to ONE side (or is fully EQ); a whitespace-only line change renders as rm-row + in-row (or one row with only the indent marked), never a glued chimera.</li>
+<li>Row grouping per change region: rm rows contiguous, then in rows — a statement's lines stay adjacent to their side, no old/new interleave inside one region.</li>
+<li>C HUNK.c and JS bro.js lockstep (<a href="./[inline-vs-split-metric-max.html">[inline-vs-split-metric-max</a>] discipline); row weights must not double-count duplicated EQ tokens.</li>
+</ol>
+<h3>Constraints</h3>
+<ul>
+<li>Fix in the emit walk / row builder (views/diff emitDiff consumption, view/bro.js; C twin beagle HUNK.c) — the weave itself is fine, this is line-ification.</li>
+<li>Verify through the real UI path (pty render), plus <code>--color | cat</code> goldens (<a href="./[verify-through-real-ui-path.html">[verify-through-real-ui-path</a>]).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>DIAGNOSIS: symptom 3 is the CORRECT rendering (a split rm row = EQ pale salmon + RM strong; the in row its salad twin), symptom 1 is the odd one out. <code>lineKind</code> sent the indent-only line to K_MOD_INLINE (changed*4 &lt; total: 8 changed bytes against 44 shared), and an INLINE row is PASS_NORMAL — nothing is hidden, so both indents paint back to back.  Symptom 2 falls out of that: an inline row is a block BOUNDARY in <code>walkHunk</code>, so the opener left the change region and the new tail landed after the whole old block.</li>
+<li>THE RULE (view/bro.js <code>lineKind</code>): an inline row carries BOTH sides, so it may only hold changes a reader can tell apart IN PLACE.  A two-sided change is refused inline — and SPLITS into an rm row + an in row — when it<ul>
+<li>GLUES THE INDENTS: the segment's leading-whitespace run carries both IN and RM bytes (<code>li.glue</code>), or</li>
+<li>IS INVISIBLE: every changed byte on both sides is whitespace (<code>li.wsOnly</code>).</li>
+</ul>
+<p>
+Otherwise the BRO-041 gate stands unchanged.  So a row is one-sided or fully EQ wherever the two sides are not distinguishable inline; a symmetric VISIBLE swap (<code>-[ ]</code> -&gt; <code>-[x]</code>, test/diff/13) still renders as ONE inline row — that test is pinned by BRO-041 and may not be edited.
+</p>
+</li>
+<li>CHOSEN over &quot;one row with only the indent marked&quot;: rm-row + in-row also cures symptom 2 (the split line rejoins its change region, so <code>walkHunk</code> emits old opener/old body/old <code>}</code> then new opener/new body — the new statement whole), while the single-marked-indent row would leave the tear in place.</li>
+<li><code>classifyLines</code> grew the two flags only: <code>lead</code>/<code>leadIn</code>/<code>leadRm</code> walk the segment's leading-whitespace run, <code>nwIn</code>/<code>nwRm</code> count VISIBLE changed bytes. No new pass, no extra allocation, <code>lo/hi/inB/rmB/eqB/pIn/pRm/bnd</code> untouched.</li>
+<li>METRIC: unchanged and already correct — <code>eqB</code> is counted ONCE per segment in <code>classifyLines</code>, so an EQ run duplicated into the rm and in rows is not double-charged; row weight stays <code>max(inB,rmB)</code>, total <code>max + eqB</code> (<a href="./[inline-vs-split-metric-max.html">[inline-vs-split-metric-max</a>], DIFF-016's patched-in extension intact).</li>
+<li>DIFF-016's provenance is untouched: the wash FAMILY is picked by <code>tokClasses</code> (bit-26 runs), this ticket only decides WHICH ROW a byte lands on.  Its three tests stay green with NO regold.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> minimal repro golden: indent-only line change + shared mid-line run (the post.js shape, distilled)</li>
+<li class="done"><input type="checkbox" checked disabled> one line-ification rule in the JS row builder; regold affected diff goldens (list them)</li>
+<li class="done"><input type="checkbox" checked disabled> HUNK.c twin note or fix (jab/ read-only in journal — record exact fn if not done)</li>
+</ul>
+<h3>HUNK.c follow-up (the lockstep C twin, NOT done here — C is read-only)</h3>
+<ul>
+<li><code>beagle/dog/HUNK.c</code>: <code>bro_classify_lines</code> (:701, the twin of <code>classifyLines</code>) and the static <code>hunk_line_classify</code> (:749, the twin of <code>lineKind</code>); the struct is <code>bro_lineinfo</code> in <code>beagle/dog/HUNK.h</code> (:188).</li>
+<li>Add <code>b8 glue; b8 ws_only;</code> to <code>bro_lineinfo</code>; in <code>bro_classify_lines</code> carry <code>lead</code>/<code>lead_in</code>/<code>lead_rm</code> over the segment's leading-whitespace run (' ', 't', 'r') and <code>nw_in</code>/<code>nw_rm</code> for VISIBLE changed bytes, exactly as the JS does; set <code>glue = lead_in &amp;&amp; lead_rm</code>, <code>ws_only = in_b &amp;&amp; rm_b &amp;&amp; !nw_in &amp;&amp; !nw_rm</code> at both push sites (the 'n' case and the no-trailing-newline tail).</li>
+<li>In <code>hunk_line_classify</code>, right after the <code>eq_b == 0</code> block: <code>if (li-&gt;glue || li-&gt;ws_only) return HUNK_LINE_MOD_SPLIT;</code></li>
+<li>PRE-EXISTING lockstep gap, NOT introduced here: C still weighs <code>changed = li-&gt;in_b + li-&gt;rm_b</code> while JS is <code>max(in_b, rm_b)</code> — BRO-041's ruling never reached the C side.  Fix it in the same pass.</li>
+<li><code>bro_cell_ansi</code> needs no change (this ticket moves bytes between rows, it does not repaint them).</li>
+</ul>
+<h3>Regolded goldens</h3>
+<ul>
+<li>NONE.  No diff (or any other) golden moved: <code>--plain</code> is byte-identical (the C HUNK render never sees <code>lineKind</code>), and no existing <code>--color</code> case carries an indent-only or whitespace-only two-sided line.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Depends on <a href="/todo/PATCH/PATCH-025.html">PATCH-025</a> + <a href="/todo/DIFF/DIFF-016.html">DIFF-016</a>, neither merged — their files were imported into this worktree by orchestrator order.  DIFF-017 cannot land before them.</li>
+<li>The 5 pre-existing failures carried in from PATCH-025/DIFF-016 are UNCHANGED and out of scope: <code>get/conf-state</code>, <code>get/confdrop</code>, <code>get/dirty</code>, <code>post/conf-state</code> (marker greps needing a markerless regold) and <code>post/patch-absorb</code> (<a href="/todo/POST/POST-035.html">POST-035</a>'s row-based gate).</li>
+<li>Goal 1's strict reading (&quot;a display row belongs to ONE side&quot;) would retire two-sided INLINE rows entirely — that contradicts BRO-041 and its <code>test/diff/13-color-word-wash</code> assert (<code>-[ ]</code> -&gt; <code>-[x]</code> must stay ONE row), which this ticket may not edit.  Implemented as the narrow rule above; a ruling is needed if the strict reading was meant.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Not committed.  Suggested commit message: <code>DIFF-017: no glued-indent diff rows</code></li>
+<li>Staged in <code>//DIFF-017</code> (<code>jab put</code>): edited <code>view/bro.js</code>; imported (DIFF-016) <code>shared/expected.js</code>, <code>views/diff/diff.js</code>, <code>view/theme.js</code>; imported (PATCH-025) <code>shared/weave.js</code>, <code>verbs/patch/patch.js</code>, <code>verbs/get/get.js</code>.</li>
+<li>Staged in <code>//DIFF-017/test</code>: new <code>test/diff/22-indent-eq-run/{run.sh,pty.js}</code>; imported DIFF-016 <code>test/diff/{19,20,21}-*</code> and the PATCH-025 conflict goldens.</li>
+<li>Full suite 317/322 (the 5 imported failures, no new ones); diff 21/21, patch 28/28, status 14/14.</li>
+<li><code>22-indent-eq-run</code> is RED on the pre-fix <code>view/bro.js</code>: row shape <code>EEBRRRIE</code> (the <code>B</code> = the glued chimera) against the fixed <code>EERRRRIIE</code>.</li>
+<li>Pager verified through the real UI path: <code>jab diff --tlv</code> reparsed by <code>views/bro/pager.js</code> and <code>Pager.render()</code>-ed onto a <code>tty.openpty()</code> slave in raw mode — the frame bytes read back off the master carry no two-family row, all rm rows before all in rows, and the new opener + its tail adjacent.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

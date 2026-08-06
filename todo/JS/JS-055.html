@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-055</title>
+<title>JS-055: git.pack scratch sized to pack length → resolve/scan NOROOM on an object bigger than the pack</title>
+<meta property="og:title" content="JS-055: git.pack scratch sized to pack length → resolve/scan NOROOM on an object bigger than the pack">
+<meta property="og:description" content="git.pack's scratch() sizes the resolve scratch to the pack's OWN byte length on the assumption it bounds any single object — false for a compressible blob. One historical ~46 MB tree-sitter parser.c (sha 7ff79400, inflated 46 386 339 B &gt; the 40 220 837 B pack) overflows the 40 MB bsc → PACKResolveOfs NOROOM → that ONE object makes the WHOLE PIDXScan fail, mis-reported as &quot;ref-delta? out full?&quot;. This forces store.js off its fast index path into the O(all-objects) JS walk (~11 s / 2.5 GB on a fresh all-OFS journal pack). Found tracing a jab status &quot;hang&quot;. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-055.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,81 +15,64 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-055 <a href="">BUG</a>: <code>git.pack</code> scratch sized to pack length → resolve/scan NOROOM on an object bigger than the pack</h1>
+<h1>JS-055: <code>git.pack</code> scratch sized to pack length → resolve/scan NOROOM on an object bigger than the pack</h1>
+<div>
 <p>
-<code>git.pack</code>'s <code>_scratch()</code> sizes the resolve scratch to the pack's OWN byte length on the assumption it bounds any single object — false for a compressible blob. One historical ~46 MB tree-sitter <code>parser.c</code> (sha <code>7ff79400</code>, inflated 46 386 339 B &gt; the 40 220 837 B pack) overflows the 40 MB <code>_bsc</code> → <code>PACKResolveOfs</code> NOROOM → that ONE object makes the WHOLE <code>PIDXScan</code> fail, mis-reported as &quot;ref-delta? out full?&quot;. This forces <code>store.js</code> off its fast index path into the O(all-objects) JS walk (~11 s / 2.5 GB on a fresh all-OFS journal pack). Found tracing a <code>jab status</code> &quot;hang&quot;. Method: <a href="../../rule/Issues.html">Issues</a>.
+Now: DONE
+</p>
+</div>
+<p>
+<code>git.pack</code>'s <code>_scratch()</code> sizes the resolve scratch to the pack's OWN byte length on the assumption it bounds any single object — false for a compressible blob. One historical <del>46 MB tree-sitter <code>parser.c</code> (sha <code>7ff79400</code>, inflated 46 386 339 B &gt; the 40 220 837 B pack) overflows the 40 MB <code>_bsc</code> → <code>PACKResolveOfs</code> NOROOM → that ONE object makes the WHOLE <code>PIDXScan</code> fail, mis-reported as &quot;ref-delta? out full?&quot;. This forces <code>store.js</code> off its fast index path into the O(all-objects) JS walk (</del>11 s / 2.5 GB on a fresh all-OFS journal pack). Found tracing a <code>jab status</code> &quot;hang&quot;. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>js/cont.cpp</code> <code>PACK_PROTO._scratch()</code>: `n = this.byteLength; _bsc = u8<a href="">n</a>;<p>
-_dsc = u8<a href="">2n</a>` — comment claims byteLength is &quot;an upper bound for any single object/delta&quot;; an inflated &gt;pack-sized blob breaks that.
-</p>
-</li>
-<li><code>js/pack.hpp:281</code> <code>JABCpackScan</code>: ANY <code>PIDXScan != OK</code> throws the lumped<p>
-&quot;pack.scan: scan (ref-delta? out full?)&quot; — hides NOROOM-on-scratch behind a ref-delta guess (the pack here has ZERO ref-delta: commit/tree/blob/ofs only).
-</p>
-</li>
-<li>Repro store <code>/home/gritzko/beagle-journal/.be/beagle/0000000001.keeper</code>: 37 591<p>
-objects, all 37 590 resolve, the lone 46 MB blob fails; a bigger <code>out</code> buffer does not help (the limiter is <code>_bsc</code>, not <code>out</code>).
-</p>
-</li>
+<li><code>js/cont.cpp</code> <code>PACK_PROTO._scratch()</code>: <code>n = this.byteLength; _bsc = u8[n]; _dsc = u8[2n]</code> — comment claims byteLength is &quot;an upper bound for any single object/delta&quot;; an inflated &gt;pack-sized blob breaks that.</li>
+<li><code>js/pack.hpp:281</code> <code>JABCpackScan</code>: ANY <code>PIDXScan != OK</code> throws the lumped &quot;pack.scan: scan (ref-delta? out full?)&quot; — hides NOROOM-on-scratch behind a ref-delta guess (the pack here has ZERO ref-delta: commit/tree/blob/ofs only).</li>
+<li>Repro store <code>/home/gritzko/beagle-journal/.be/beagle/0000000001.keeper</code>: 37 591 objects, all 37 590 resolve, the lone 46 MB blob fails; a bigger <code>out</code> buffer does not help (the limiter is <code>_bsc</code>, not <code>out</code>).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>pk.resolve</code>/<code>pk.scan</code> succeed on any object whose inflated size exceeds the<p>
-pack length (size scratch off the record, not the pack).
-</p>
-</li>
+<li><code>pk.resolve</code>/<code>pk.scan</code> succeed on any object whose inflated size exceeds the pack length (size scratch off the record, not the pack).</li>
 <li>Disambiguate the scan error: NOROOM-grow vs a true REF_DELTA (no sha base).</li>
 <li>Repro-first: a property test resolving an object larger than its pack.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li><code>js/cont.cpp</code> (<code>_scratch</code>) + <code>js/pack.hpp</code> (<code>JABCpackScan</code> error) + maybe<p>
-<code>dog/git/PIDX.c</code>/<code>PACK</code> if NOROOM must surface distinctly. Repro-first (CLAUDE.md §17); keep the OFS-only invariant; ASAN/ctest green.
-</p>
-</li>
+<li><code>js/cont.cpp</code> (<code>_scratch</code>) + <code>js/pack.hpp</code> (<code>JABCpackScan</code> error) + maybe <code>dog/git/PIDX.c</code>/<code>PACK</code> if NOROOM must surface distinctly. Repro-first (CLAUDE.md §17); keep the OFS-only invariant; ASAN/ctest green.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Size <code>_bsc</code> to the record's DECLARED resolved size (PACK header carries it;<p>
-<code>pk.size</code>) and grow-on-NOROOM, rather than to <code>this.byteLength</code>; <code>_dsc</code> likewise. Mirror <code>store.js readRecord</code>'s grow-and-retry, but at the scratch.
-</p>
-</li>
-<li>Surface a distinct NOROOM code from <code>PIDXScan</code>/<code>PACKResolveOfs</code> so the binding<p>
-can report (and the caller can grow) instead of guessing ref-delta.
-</p>
-</li>
+<li>Size <code>_bsc</code> to the record's DECLARED resolved size (PACK header carries it; <code>pk.size</code>) and grow-on-NOROOM, rather than to <code>this.byteLength</code>; <code>_dsc</code> likewise. Mirror <code>store.js readRecord</code>'s grow-and-retry, but at the scratch.</li>
+<li>Surface a distinct NOROOM code from <code>PIDXScan</code>/<code>PACKResolveOfs</code> so the binding can report (and the caller can grow) instead of guessing ref-delta.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Repro: property test — feed/resolve an object whose inflated size &gt; pack<p>
-  byteLength; assert resolve+scan succeed (currently NOROOM/scan-fail).
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Repro: property test — feed/resolve an object whose inflated size &gt; pack byteLength; assert resolve+scan succeed (currently NOROOM/scan-fail).</li>
 <li class="done"><input type="checkbox" checked disabled> Fix <code>_scratch()</code> to size off the record's declared size + grow on NOROOM.</li>
 <li class="done"><input type="checkbox" checked disabled> Disambiguate the <code>js/pack.hpp</code> scan error (NOROOM vs REF_DELTA).</li>
 <li class="done"><input type="checkbox" checked disabled> Verify <code>pk.scan</code>/<code>pk.resolve</code> green on the journal pack (the 46 MB blob).</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Independent of the lazy-index rework (the <code>store.js</code> perf discussion); this<p>
-bug bites ANY &gt;pack-sized resolve, lazy lookup just stops hitting it per-run.
-</p>
-</li>
+<li>Independent of the lazy-index rework (the <code>store.js</code> perf discussion); this bug bites ANY &gt;pack-sized resolve, lazy lookup just stops hitting it per-run.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED <code>1c70e9d8</code>: <code>_scratch(need)</code> sizes off <code>pk.size</code> (record's declared<p>
-resolved size), a <code>_grow(need, op)</code> wrapper re-runs doubling the scratch on the binding's NOROOM throw (capped 40 tries); <code>resolve</code>/<code>scan</code>/<code>feed</code> all route through it. <code>js/pack.hpp</code> surfaces NOROOM vs REF_DELTA as DISTINCT throws (<code>PACKResolveOfs</code>/<code>PIDXScan</code> codes), no more &quot;ref-delta? out full?&quot; guess.
-</p>
-</li>
-<li>Repro <code>js/test/pack.js</code> (over-pack resolve, 2 MB inflated into a 256 KB pack) +<p>
-<code>js/test/packidx.js</code> (over-pack scan + REF_DELTA-not-misreported). Full JABC suite 29/29 + PACK C tests green under ASAN.
-</p>
-</li>
+<li>LANDED <code>1c70e9d8</code>: <code>_scratch(need)</code> sizes off <code>pk.size</code> (record's declared resolved size), a <code>_grow(need, op)</code> wrapper re-runs doubling the scratch on the binding's NOROOM throw (capped 40 tries); <code>resolve</code>/<code>scan</code>/<code>feed</code> all route through it. <code>js/pack.hpp</code> surfaces NOROOM vs REF_DELTA as DISTINCT throws (<code>PACKResolveOfs</code>/<code>PIDXScan</code> codes), no more &quot;ref-delta? out full?&quot; guess.</li>
+<li>Repro <code>js/test/pack.js</code> (over-pack resolve, 2 MB inflated into a 256 KB pack) + <code>js/test/packidx.js</code> (over-pack scan + REF_DELTA-not-misreported). Full JABC suite 29/29 + PACK C tests green under ASAN.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

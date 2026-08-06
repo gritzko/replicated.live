@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>README</title>
+<title>ABC tickets: core library primitives</title>
+<meta property="og:title" content="ABC tickets: core library primitives">
+<meta property="og:description" content="Discrepancies in abc/ — the foundational slice/buffer/net/poll/curl layer every other module builds on. Each entry is one ticket with its live state; it drops off once the ticket closes. The fix-and-land method is Issues. Memory-safety findings live under MEM; this topic is for behavioural/correctness gaps. The 2026-07-07 five-agent full-library review landed as ABC-005..018; every ticketed finding was verified against source first.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/ABC/README.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -16,63 +20,27 @@
 Discrepancies in <code>abc/</code> — the foundational slice/buffer/net/poll/curl layer every other module builds on. Each entry is one ticket with its live state; it drops off once the ticket closes. The fix-and-land method is <a href="../../meta/work.html">Issues</a>. Memory-safety findings live under <a href="../MEM/README.html">MEM</a>; this topic is for behavioural/correctness gaps. The 2026-07-07 five-agent full-library review landed as ABC-005..018; every ticketed finding was verified against source first.
 </p>
 <h2>Active tickets</h2>
+<div>
+<p>
+<code>s_purge</code> skips the swapped-in tail (LIVE via LSM/Y), <code>$rm</code>/<code>$rm1</code> memmove the wrong count, <code>u8sPop</code> copies head yet sheds tail, <code>sDrain</code> breaks its own contract, <code>$tailshift</code> cannot compile, <code>$feedf</code> returns OK on end-of-template truncation. (armed for any non-u8 T), <code>bReMap</code> shrink OOB (macOS path), <code>bAcquire</code> alignment + size-overflow math. overflow + no-op sift-up, <code>LSMSort</code> silently loses data on roughly-sorted input, Yx <code>$sort</code> b8-comparator-through-qsort UB, PRO.h included by LSM.h. nibble (&quot;0g&quot; decodes OK), <code>OKscan</code> matches &quot;KO&quot; not &quot;OK&quot; (0x518 vs 0x614), RON pad-feed breaks the Feed contract, ZINT-128 feeds unchecked. huge records (bit-0x20 test) → stream desync; probe shift UB; leftover unaligned casts; missing u32 length guards.
+</p>
+</div>
 <ul>
-<li><a href="ABC-005.html">ABC-005</a> <a href="./CRIT.html">CRIT</a> — S.h/Sx.h/BUF.h slice-edit primitives broken:<p>
-<code>s_purge</code> skips the swapped-in tail (LIVE via LSM/Y), <code>$rm</code>/<code>$rm1</code> memmove the wrong count, <code>u8sPop</code> copies head yet sheds tail, <code>sDrain</code> breaks its own contract, <code>$tailshift</code> cannot compile, <code>$feedf</code> returns OK on end-of-template truncation.
-</p>
+<li><a href="ABC-010.html">ABC-010</a> <a href="./MED.html">MED</a> — numeric/unicode parsing: overlong U+FFFF accepted, JSON unescape emits CESU-8 its own validator rejects, decimal drains wrap u64 → OK with a wrong value, float parse truncates at 31 chars, <code>i64Zig</code> signed-overflow UB.</li>
+<li><a href="ABC-011.html">ABC-011</a> <a href="./HIGH.html">HIGH</a> — HTTP serializer emits ZERO headers (same-pointer slice <code>{h[0], *h}</code>; verified empirically); RFC-legal empty reason-phrase rejected by the grammar.</li>
+<li><a href="ABC-012.html">ABC-012</a> <a href="./HIGH.html">HIGH</a> — socket layer: <code>NETInfo</code> returns OK without copying the result out, <code>aNETAddress</code> stack OOB on long hosts, bind walk aborts instead of trying the next address, CURL callbacks return OK on OOM (truncated body as HTTP 200), pol mask clobber, EINTR/EAGAIN collapse.</li>
+<li><a href="ABC-013.html">ABC-013</a> <a href="./HIGH.html">HIGH</a> — FILE/FSW: <code>FILEFlushThreshold</code> loses data on a short write (<code>Bate</code> eats all), <code>FILETrimMap</code> truncates PAST off the file, FILE_BOOK grows over uninit memory vs its NULL sentinel, no O_CLOEXEC anywhere, FSW watches unremovable + kqueue fd leak.</li>
+<li><a href="ABC-014.html">ABC-014</a> <a href="./HIGH.html">HIGH</a> — PACK/PAGE/SLOG/NEST stores: crafted PACK trailer → wild DATA terminator (u64 wrap), PACKClose leaks on error, SLOG writer emits skip records its own reader cannot expand (64 vs 127), NESTFeed self-corrupts past its one-time room check.</li>
+<li><a href="ABC-015.html">ABC-015</a> <a href="./MED.html">MED</a> — container templates: SSTx.h is non-compiling bit-rot (ruling: revive or delete), HASHx converge compares a stale hash, MSET seeks with the wrong comparator, instantiation traps (X-clobber, leaked T/Key typedefs).</li>
+<li><a href="ABC-016.html">ABC-016</a> <a href="./MED.html">MED</a> — bedrock hygiene: <code>popc64</code> is the 32-bit builtin, <code>sha256empty</code> unaligned u64 reads, MAIN exit-code truncation, SAN.h incomplete + undefs NULL, OK.h static rotating buffers.</li>
+<li><a href="ABC-017.html">ABC-017</a> <a href="./MED.html">MED</a> — build/CI: no -Wall anywhere, WITH_INET undeclared so the net stack + fuzz targets never run in CI, LEX generator drifted from its committed output (fbreak vs goto) — blocks regens.</li>
+<li><a href="ABC-018.html">ABC-018</a> <a href="./GATED.html">GATED</a> — style sweep (the <a href="../PTR/PTR-001.html">PTR-001</a> pattern, review-gated): DNS name codec + NFA regex compiler are manual parsers, slice-from-arith cluster, naming/error-code drift, misc LOW list.</li>
+<li><a href="ABC-019.html">ABC-019</a> <a href="./MED.html">MED</a> — bracketed IPv6 host never resolves: the URI lexer hands <code>[::1]</code> framing-included, <code>NETResolve</code> feeds it verbatim to getaddrinfo → <code>Invalid argument</code>; IPv6 dead end-to-end even after <a href="../JS/JS-110.html">JS-110</a>'s compose-side fix.</li>
+<li><a href="ABC-021.html">ABC-021</a> <a href="./HIGH.html">HIGH</a> — SORTu64 emits garbage: Yx tie-loop guard has swapped args (drains the whole heap as one tie group), SORTu64y emits only eqs<a href="./0.html">0</a>, ping-pong passes use full buffer extents,<blockquote>
+tie pad overflow; smoke-fuzz CI red. Fix verified, landing.
+</blockquote>
 </li>
-<li><a href="ABC-006.html">ABC-006</a> <a href="./HIGH.html">HIGH</a> — Bx.h template: <code>bSplice</code> mixes bytes and elements<p>
-(armed for any non-u8 T), <code>bReMap</code> shrink OOB (macOS path), <code>bAcquire</code> alignment + size-overflow math.
-</p>
-</li>
-<li><a href="ABC-007.html">ABC-007</a> <a href="./HIGH.html">HIGH</a> — LSM/Y merge stack: <code>LSMMore</code> unchecked memcpy<p>
-overflow + no-op sift-up, <code>LSMSort</code> silently loses data on roughly-sorted input, Yx <code>$sort</code> b8-comparator-through-qsort UB, PRO.h included by LSM.h.
-</p>
-</li>
-<li><a href="ABC-008.html">ABC-008</a> <a href="./HIGH.html">HIGH</a> — HEX/OK/RON/ZINT: hex drain never checks the low<p>
-nibble (&quot;0g&quot; decodes OK), <code>OKscan</code> matches &quot;KO&quot; not &quot;OK&quot; (0x518 vs 0x614), RON pad-feed breaks the Feed contract, ZINT-128 feeds unchecked.
-</p>
-</li>
-<li><a href="ABC-009.html">ABC-009</a> <a href="./HIGH.html">HIGH</a> — TLV drain fast path misparses the module's own<p>
-huge records (bit-0x20 test) → stream desync; probe shift UB; leftover unaligned casts; missing u32 length guards.
-</p>
-</li>
-<li><a href="ABC-010.html">ABC-010</a> <a href="./MED.html">MED</a> — numeric/unicode parsing: overlong U+FFFF accepted,<p>
-JSON unescape emits CESU-8 its own validator rejects, decimal drains wrap u64 → OK with a wrong value, float parse truncates at 31 chars, <code>i64Zig</code> signed-overflow UB.
-</p>
-</li>
-<li><a href="ABC-011.html">ABC-011</a> <a href="./HIGH.html">HIGH</a> — HTTP serializer emits ZERO headers (same-pointer<p>
-slice <code>{h[0], *h}</code>; verified empirically); RFC-legal empty reason-phrase rejected by the grammar.
-</p>
-</li>
-<li><a href="ABC-012.html">ABC-012</a> <a href="./HIGH.html">HIGH</a> — socket layer: <code>NETInfo</code> returns OK without copying<p>
-the result out, <code>aNETAddress</code> stack OOB on long hosts, bind walk aborts instead of trying the next address, CURL callbacks return OK on OOM (truncated body as HTTP 200), pol mask clobber, EINTR/EAGAIN collapse.
-</p>
-</li>
-<li><a href="ABC-013.html">ABC-013</a> <a href="./HIGH.html">HIGH</a> — FILE/FSW: <code>FILEFlushThreshold</code> loses data on a<p>
-short write (<code>Bate</code> eats all), <code>FILETrimMap</code> truncates PAST off the file, FILE_BOOK grows over uninit memory vs its NULL sentinel, no O_CLOEXEC anywhere, FSW watches unremovable + kqueue fd leak.
-</p>
-</li>
-<li><a href="ABC-014.html">ABC-014</a> <a href="./HIGH.html">HIGH</a> — PACK/PAGE/SLOG/NEST stores: crafted PACK trailer →<p>
-wild DATA terminator (u64 wrap), PACKClose leaks on error, SLOG writer emits skip records its own reader cannot expand (64 vs 127), NESTFeed self-corrupts past its one-time room check.
-</p>
-</li>
-<li><a href="ABC-015.html">ABC-015</a> <a href="./MED.html">MED</a> — container templates: SSTx.h is non-compiling<p>
-bit-rot (ruling: revive or delete), HASHx converge compares a stale hash, MSET seeks with the wrong comparator, instantiation traps (X-clobber, leaked T/Key typedefs).
-</p>
-</li>
-<li><a href="ABC-016.html">ABC-016</a> <a href="./MED.html">MED</a> — bedrock hygiene: <code>popc64</code> is the 32-bit builtin,<p>
-<code>sha256empty</code> unaligned u64 reads, MAIN exit-code truncation, SAN.h incomplete + undefs NULL, OK.h static rotating buffers.
-</p>
-</li>
-<li><a href="ABC-017.html">ABC-017</a> <a href="./MED.html">MED</a> — build/CI: no -Wall anywhere, WITH_INET undeclared<p>
-so the net stack + fuzz targets never run in CI, LEX generator drifted from its committed output (fbreak vs goto) — blocks regens.
-</p>
-</li>
-<li><a href="ABC-018.html">ABC-018</a> <a href="./GATED.html">GATED</a> — style sweep (the <a href="../PTR/PTR-001.html">PTR-001</a> pattern, review-gated):<p>
-DNS name codec + NFA regex compiler are manual parsers, slice-from-arith cluster, naming/error-code drift, misc LOW list.
-</p>
-</li>
+<li><a href="ABC-022.html">ABC-022</a> <a href="./LOW.html">LOW</a> — gcc 15.2 Release -Warray-bounds false positive on the inlined MSET sift-down child probe (<code>h[right]</code>, guarded by <code>right &lt; n</code>, dead at runtime); breaks <a href="ABC-017.html">ABC-017</a>'s 0-warning build.</li>
 </ul>
 <h2>Sessions</h2>
 <ul>
@@ -84,5 +52,16 @@ ABC-003 (<code>UTF8_LEN[byte&gt;&gt;4]</code> byte-length table shifted; multiby
 <p>
 ABC-004 (<code>abc/BIT.h</code> u1 bitmap + set algebra; <code>BitUnset</code> <code>|=~</code> bug killed by construction; <code>FILE_RW</code> migrated; backs <a href="../DOG/DOG-001/README.html">DOG-001</a>'s weavescope) landed into the abc sub — <code>7dafb8d7</code> + u64s rework <code>6e3b93f8</code> + pin <code>876315d1</code>; the optional NFA class-bitmap migration was dropped as scope — see <a href="ABC-004.html">ABC-004</a>.
 </p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-079</title>
+<title>JS-079: verbs/get/get.js fan-out reads ctx.get with no guard</title>
+<meta property="og:title" content="JS-079: verbs/get/get.js fan-out reads ctx.get with no guard">
+<meta property="og:description" content="The get fan-out smuggles whole-run state through ctx.get (the pinned reader + wt + kinds map), but ONLY handleSeed sets it; reconcileDir/leaf/delSweep all assume it is present. Fine on a fresh run where the seed row dispatches first, but if the queue ever resumes PAST the consumed seed (a survivor resume, JSQUE-003), these children dispatch with ctx.get===undefined and throw a bare TypeError instead of a clean refusal. It also violates the loop per-row contract (state on ctx, not the row). Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-079.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,88 +15,65 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-079 <a href="./MED.html">MED</a>: <code>verbs/get/get.js</code> fan-out reads <code>ctx._get</code> with no guard</h1>
+<h1>JS-079: <code>verbs/get/get.js</code> fan-out reads <code>ctx._get</code> with no guard</h1>
+<div>
+<p>
+Now: STALE
+</p>
+</div>
 <p>
 The get fan-out smuggles whole-run state through <code>ctx._get</code> (the pinned reader + wt + kinds map), but ONLY <code>handleSeed</code> sets it; <code>reconcileDir</code>/<code>leaf</code>/<code>delSweep</code> all assume it is present. Fine on a fresh run where the seed row dispatches first, but if the queue ever resumes PAST the consumed seed (a survivor resume, JSQUE-003), these children dispatch with <code>ctx._get===undefined</code> and throw a bare TypeError instead of a clean refusal. It also violates the loop per-row contract (state on ctx, not the row). Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>verbs/get/get.js:187</code> — `ctx._get = { k, wt, tip, oldTip, fresh, branch,<p>
-ts, kinds, dels }<code> is set ONLY in </code>handleSeed`.
-</p>
-</li>
-<li><code>:268</code> <code>reconcileDir</code>: <code>const g = ctx._get;</code> then <code>treeMap(g.k, …)</code> — a<p>
-null <code>g</code> throws <code>TypeError: Cannot read properties of undefined</code> at <code>g.k</code>.
-</p>
-</li>
-<li><code>:318</code> <code>leaf</code>: <code>const g = ctx._get, out = ctx.out;</code> then <code>g.wt</code>/<code>g.k</code> — same<p>
-bare TypeError on a seed-less dispatch.
-</p>
-</li>
+<li><code>verbs/get/get.js:187</code> — <code>ctx._get = { k, wt, tip, oldTip, fresh, branch, ts, kinds, dels }</code> is set ONLY in <code>handleSeed</code>.</li>
+<li><code>:268</code> <code>reconcileDir</code>: <code>const g = ctx._get;</code> then <code>treeMap(g.k, …)</code> — a null <code>g</code> throws <code>TypeError: Cannot read properties of undefined</code> at <code>g.k</code>.</li>
+<li><code>:318</code> <code>leaf</code>: <code>const g = ctx._get, out = ctx.out;</code> then <code>g.wt</code>/<code>g.k</code> — same bare TypeError on a seed-less dispatch.</li>
 <li><code>:365</code> <code>delSweep</code>: <code>ctx._get.delSwept = res.acc;</code> — null-deref on assign.</li>
-<li>Dispatch (<code>:165-170</code>) routes a non-seed, non-delsweep row straight to<p>
-<code>handleReconcileOrLeaf</code>; no row carries the pinned reader (the queue round-trip keeps only the URI, comment <code>:264-266</code>).
-</p>
-</li>
+<li>Dispatch (<code>:165-170</code>) routes a non-seed, non-delsweep row straight to <code>handleReconcileOrLeaf</code>; no row carries the pinned reader (the queue round-trip keeps only the URI, comment <code>:264-266</code>).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>A reconcile/leaf/delsweep row arriving before its seed REFUSES cleanly<p>
-(a named throw), never a bare TypeError.
-</p>
-</li>
-<li>A repro that dispatches a <code>get ?&lt;tree&gt;#&lt;old&gt;</code> row on a ctx with no <code>_get</code><p>
-and asserts the clean refusal.
-</p>
-</li>
+<li>A reconcile/leaf/delsweep row arriving before its seed REFUSES cleanly (a named throw), never a bare TypeError.</li>
+<li>A repro that dispatches a <code>get ?&lt;tree&gt;#&lt;old&gt;</code> row on a ctx with no <code>_get</code> and asserts the clean refusal.</li>
 <li>Keep the fresh-run fan-out byte-identical (the guard is a no-op there).</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
 <li><code>verbs/get/get.js</code> only; no change to the seed-pin shape (JSQUE-004).</li>
-<li>Either guard the children or re-derive coordinates from <code>ctx.resolved</code>;<p>
-do NOT widen the per-row contract. A few LoC.
-</p>
-</li>
+<li>Either guard the children or re-derive coordinates from <code>ctx.resolved</code>; do NOT widen the per-row contract. A few LoC.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Cheapest: a guard at the head of each child — `if (!ctx._get) throw &quot;be<p>
-get: reconcile row before seed&quot;;` — turns the latent TypeError into a named refusal and documents the seed-first invariant.
-</p>
-</li>
-<li>Alternative: re-derive <code>{ k, wt }</code> from <code>ctx.resolved</code>/<code>io.cwd()</code> so a<p>
-resumed fan-out self-heals; heavier, only if resume must survive.
-</p>
-</li>
+<li>Cheapest: a guard at the head of each child — <code>if (!ctx._get) throw &quot;be get: reconcile row before seed&quot;;</code> — turns the latent TypeError into a named refusal and documents the seed-first invariant.</li>
+<li>Alternative: re-derive <code>{ k, wt }</code> from <code>ctx.resolved</code>/<code>io.cwd()</code> so a resumed fan-out self-heals; heavier, only if resume must survive.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="wontfix"><input type="checkbox" disabled> <del>Seed-less child repro: MOOT — fan-out rows live only in the in-fn FIFO of the same</del><p>
- <code>get()</code> call that ran the seed; no cross-process queue can replay them.
-</p>
-</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>Seed-less child repro: MOOT — fan-out rows live only in the in-fn FIFO of the same <code>get()</code> call that ran the seed; no cross-process queue can replay them.</del></li>
 <li class="wontfix"><input type="checkbox" disabled> <del>Per-child guards: SUPERSEDED — dispatch itself gates on <code>ctx._get</code> (get.js:322-324).</del></li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul class="todo">
-<li class="wontfix"><input type="checkbox" disabled> <del>&quot;Can a get queue resume past the seed?&quot; — NO, by construction since <a href="./JSQUE-020.html">JSQUE-020</a></del><p>
- (queue removed, dispatch by recursion); the hardening premise is structurally gone.
-</p>
-</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>&quot;Can a get queue resume past the seed?&quot; — NO, by construction since <a href="./JSQUE-020.html">JSQUE-020</a> (queue removed, dispatch by recursion); the hardening premise is structurally gone.</del></li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>MOOT via <a href="./JSQUE-020.html">JSQUE-020</a> <code>928aaad5</code> (be/): the resumable file queue (JSQUE-003) is gone; the<p>
-get driver owns an in-fn FIFO and <code>dispatchRow</code> (get.js:313-326) routes fan-out children ONLY when <code>ctx._get</code> is set (<code>ctx._get</code> set ⇒ fan-out; unset ⇒ seed) — the documented invariant.
-</p>
-</li>
-<li>2026-07-07 audit: <code>verbs/get/get.js:322-324</code> guards <code>_leaf</code>/<code>_dir</code>/root children on <code>ctx._get</code>;<p>
-<code>:317</code> reads <code>ctx._get &amp;&amp; ctx._get.conf</code> guarded; a seed-less child dispatch is unreachable.
-</p>
-</li>
+<li>MOOT via <a href="./JSQUE-020.html">JSQUE-020</a> <code>928aaad5</code> (be/): the resumable file queue (JSQUE-003) is gone; the get driver owns an in-fn FIFO and <code>dispatchRow</code> (get.js:313-326) routes fan-out children ONLY when <code>ctx._get</code> is set (<code>ctx._get</code> set ⇒ fan-out; unset ⇒ seed) — the documented invariant.</li>
+<li>2026-07-07 audit: <code>verbs/get/get.js:322-324</code> guards <code>_leaf</code>/<code>_dir</code>/root children on <code>ctx._get</code>; <code>:317</code> reads <code>ctx._get &amp;&amp; ctx._get.conf</code> guarded; a seed-less child dispatch is unreachable.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

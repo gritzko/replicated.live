@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>README</title>
+<title>BE — the be/ JS project (dispatcher + kernel + verbs + views)</title>
+<meta property="og:title" content="BE — the be/ JS project (dispatcher + kernel + verbs + views)">
+<meta property="og:description" content="be's front-end (verb/projector dispatch, bareword routing, the error/UX surface) plus the be/ JS kernel/verbs/views the 2026-07-07 review covered (BE/REVIEW). One topic dir, Plan-shaped tickets cleared by the Issues fix-and-land loop.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BE/README.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -37,14 +41,61 @@ Parallelized 5-dimension review of be/ (54 confirmed, adversarially verified) �
 <li><a href="BE-024.html">BE-024</a> <a href="./MED.html">MED</a> — robustness/doctrine: unguarded parse aborts walk, non-crash-safe _book, wrong-target rollback, +4.</li>
 <li><a href="BE-025.html">BE-025</a> <a href="./LOW.html">LOW</a> — perf/style: repeated full-wtlog scans, double hunk retention, redundant re-encode, whitespace.</li>
 </ul>
+<h2>BE-011 follow-up: wt-open confinement audit (BE-026..028)</h2>
+<p>
+<a href="BE-011.html">BE-011</a> landed segment path helpers (<code>shared/util/path.js</code> <code>split</code>/<code>merge</code>/<code>resolveInTree</code>/<code>wtJoin</code>) + the unified <code>discover.resolve()</code>. A codebase-wide audit of worktree-file opens then surfaced THREE more live <code>..</code>-escapes of the same class, each its own ticket (fix in progress, same tree):
+</p>
+<ul>
+<li><a href="BE-026.html">BE-026</a> <a href="./HIGH.html">HIGH</a> — <code>core/recurse.js</code> composes wt paths from UNVALIDATED <code>.gitmodules</code> <code>path=</code>; a crafted submodule escapes via stat/be.find.</li>
+<li><a href="BE-027.html">BE-027</a> <a href="./HIGH.html">HIGH</a> — pager <code>_fsCompletions</code> Tab-completion raw-concats an uncollapsed <code>../</code> stem into readdir/lstat (enumerates ABOVE the wt).</li>
+<li><a href="BE-028.html">BE-028</a> <a href="./HIGH.html">HIGH</a> — <code>classifyDir</code> opens the <code>ls</code> nav scope via <code>relDir</code>'s lexical prefix that <code>..</code> defeats (<code>ls:../../etc</code>).</li>
+</ul>
+<p>
+Then a universal <code>wtJoin</code> routing pass (P2/P3) confined the remaining wt-file opens: <code>cat</code>/<code>why</code>/<code>diff</code> untrusted URI paths, a LIVE destructive <code>delete --force ../x</code> unlink escape, <code>get</code>'s raw-concat + sub sites, and defense-in-depth leaf guards in <code>checkout</code>/<code>submount</code>/<code>stage</code>. All six landings share the <code>shared/util/path.js</code> <code>wtJoin</code>/<code>resolveInTree</code> chokepoint; final combined suite 136 pass / 10 skip / 0 fail.
+</p>
+<h2>Context-URI / hive audit 2026-07-09 (BE-031..035)</h2>
+<p>
+The hive ruling (worktrees → <code>&lt;meta&gt;/work/</code>, scheme-less <code>//name</code> = worktree, remotes always scheme-ful, <code>--at</code> retired) landed in the wiki 2026-07-09; a two-agent be/ audit against the settled model produced the migration plan and four conformance bugs:
+</p>
+<ul>
+<li><a href="BE-031.html">BE-031</a> <a href="./HIGH.html">HIGH</a> — the hive migration: S1 gitignore + S2 srcRoot/topWt/navCwd flip + S3 get seeds cells DONE 2026-07-09 (uncommitted, suite 157/160 = baseline, live-smoked: <code>work/beagle-ext-tests</code> minted, <code>//name</code> + hop + meta-blind status all pass); open: S4 tests/prose, S5 self-hosting ruling, drop the <code>SRC_ROOT=~/src</code> shell export.</li>
+<li><a href="BE-032.html">BE-032</a> <a href="./HIGH.html">HIGH</a> — CLI drops the cwd sub-path: verbs resolve args at the wt ROOT (<code>cd MAIN/src &amp;&amp; be cat main.c</code> reads <code>MAIN/main.c</code>); pager sees the sub-path, CLI doesn't.</li>
+<li><a href="BE-033.html">BE-033</a> <a href="./MED.html">MED</a> — RULED + implemented 2026-07-09 (uncommitted): cached-remote dropped, scheme-less <code>//X</code> = wtdir hit or NAVNONE everywhere (loop/get/head/put); cached tests dropped (head-cached, get-cached deleted; nav-navnone part b flipped to assert NAVNONE); suite = baseline. Pending land only.</li>
+<li><a href="BE-034.html">BE-034</a> <a href="./MED.html">MED</a> — <code>be get //name</code> FFs the NAMED wt to its branch tip; spec: checkout, in the context wt, the rev that wt is ON (curTip); compounds <a href="BE-030.html">BE-030</a>.</li>
+<li><a href="BE-035.html">BE-035</a> <a href="./LOW.html">LOW</a> — ls/status silently drop a <code>?rev</code> context (live wt shown at a pinned rev); <code>_snapBe</code> omits authority/verb, leaking spell scope past reentry.</li>
+</ul>
 <h2>Active tickets (dispatcher/UX)</h2>
 <ul>
+<li><a href="BE-061.html">BE-061</a> <a href="./HIGH.html">HIGH</a> — a pre-seeded empty <code>.be/</code> (the <code>rs_fresh_wt</code>/<code>rs_shield</code> shape every test worktree uses) makes the FIRST <code>jab get</code> throw <code>ToBigInt</code> in <code>hashlet60FromBytes</code> ← <code>locate</code> ← <code>fanoutWholeTree</code>; a second get into the same wt succeeds. Found by <a href="../TEST/TEST-004.html">TEST-004</a>.</li>
+<li><a href="BE-062.html">BE-062</a> <a href="./MED.html">MED</a> — <code>curlRun</code> calls <code>io.spawn</code> with an argv missing argv<a href="./0.html">0</a>, so curl never receives <code>-sSf</code>: no <code>--fail</code> (HTTP errors return success) and the progress meter leaks to stderr. Same function as <a href="BE-013.html">BE-013</a>. Found by <a href="../TEST/TEST-004.html">TEST-004</a>.</li>
+</ul>
+<ul>
+<li><a href="BE-037.html">BE-037</a> <a href="./HIGH.html">HIGH</a> — FIXED 2026-07-09 (uncommitted, repro-first, suite 161/162 = baseline): <code>./</code> canonicalized in diff/cat/why (+ <code>diff ./file</code> wholly-added bonus leg); <code>//</code> = topWt in resolve/wtdir (memoized launchTop, matches navCwd); authorityRepo NAVNONEs every miss; new cases diff/15-dot-dir-scope + uri011/nav-empty-host-top. Pending land.</li>
+<li><a href="BE-038.html">BE-038</a> <a href="./MED.html">MED</a> — <code>todo</code> view verb: <code>:todo</code> open-ticket board / <code>:todo TOPIC</code> topic list / <code>:todo TOPIC-123</code> one ticket; titles, ticket ids and wiki links are click-targets (requested 2026-07-09, iterate till NICE).</li>
+<li><a href="BE-040.html">BE-040</a> <a href="./MED.html">MED</a> — <code>done</code> verb LANDED <code>9dad5857</code> (header <code>[DONE]</code> flip incl multi-mark collapse, README delist); residual: round-3 <code>[done]</code> buttons in <code>:todo</code> rows staged in wt <code>work/BE-040</code>, pending land.</li>
+<li><a href="BE-041.html">BE-041</a> <a href="./MED.html">MED</a> — <code>[put]</code> buttons on pager status rows (unk/mod/new): visible <code>Y</code> label + hidden O <code>put &lt;path&gt;</code> spell, plain byte-unchanged; DONE in wt <code>work/BE-041</code>, pending land.</li>
+<li><a href="BE-042.html">BE-042</a> <a href="./OPEN.html">OPEN</a> — formal context model: context(cwd) total (tree root → <code>//</code> + first segment as authority, <code>~/src/journal/wiki</code> → <code>//wiki</code>; hive wt → <code>//N</code>; sub → parent+mount); two <code>//X</code> rulings open; sequences <a href="./URI-010.html">URI-010</a> merge + <a href="BE-032.html">BE-032</a> sweep.</li>
+<li><a href="BE-049.html">BE-049</a> <a href="./HIGH.html">HIGH</a> — <code>//</code>-empty-host nav anchors rootTop, not the tree you stand in: from a nested worktree (<code>work/*</code>) a <code>///path</code> mutation arg0 / <code>//</code> context silently rescopes to the OUTER repo. Needs the <code>//X</code> ruling (<a href="BE-042.html">BE-042</a>); spin-off of <a href="/todo/PUT/PUT-008.html">PUT-008</a>.</li>
+<li><a href="BE-039/README.html">BE-039</a> <a href="./HIGH.html">HIGH</a> — pager put/delete crossing a sub mount: <code>authorityRepo</code> anchors on arg0's FULL path (<code>be.find</code> climbs from the file, lands on the SUB), raw rest args then resolve in the wrong tree; delete can mis-target same-named sub files. RULED 2026-07-10: pager passes context + RAW args (arg0 too — no ctx-merge); put/delete resolve each arg via <code>resolve(context,base,rel)</code> (<a href="BE-030.html">BE-030</a>). Repro in the ticket dir; found exercising <a href="BE-036.html">BE-036</a>.</li>
+<li><a href="BE-036.html">BE-036</a> <a href="./LOW.html">LOW</a> — pager word spells expand shell-style globs (<code>put *.c</code>, <code>delete src/*</code>): today the literal pattern reaches the verb (FILENONE); reuse the Tab-completion confined FS walk (<a href="BE-027.html">BE-027</a>), pager multiplies raw words, verbs still resolve (<a href="BE-030.html">BE-030</a>).</li>
+<li><a href="BE-030.html">BE-030</a> <a href="./HIGH.html">HIGH</a> — context-confined path resolution: <code>get</code> anchors its write/clone on raw <code>io.cwd()</code> (a <code>:get</code> under a <code>//parent</code> nav context with cwd in a SUBMODULE writes the sub's wtlog + clobbers it), and <code>discover.resolve(base,ref)</code> lets a <code>//authority</code> in the ref slot escape the context tree; unify onto <code>resolve(context,base,rel)</code> confined to <code>$SRC_ROOT/&lt;name&gt;</code>. Continues <a href="BE-011.html">BE-011</a>.</li>
+<li><a href="./BE-029.html">BE-029</a> — verb discovery must be-climb from CWD so a nested <code>be/</code> shard (<code>html/be</code> publication verbs) is found while core/shared inherit up-tree; <code>registry.verbFile</code>/<code>resolveVerb</code> + repro landed in the BE-029 wt, pending land into <code>journal/be</code> (prereq for <a href="./MARK.html">MARK</a> <code>mark</code>).</li>
 <li><a href="BE-003.html">BE-003</a> — every dog must print <strong>name + verb + URI + error code</strong> on an error exit (one uniform line, single-sourced) — today error exits are contextless (<code>Error: SNIFFFAIL</code>, <code>bro: cannot open …: FILENONE</code>); general form of BE-002.</li>
-<li><a href="BE-006.html">BE-006</a> — one unreachable-remote <code>be post</code> prints FIVE lines for one failure (raw <code>ssh:</code> leak + <code>be: remote unreachable</code> + <code>Error: WIREUNRCH</code> + <code>Error: BEDOGEXIT</code> ×2, one per spawned <code>be</code> level); collapse to a single uniform error line. Concrete instance of <a href="BE-003.html">BE-003</a>.</li>
 <li><a href="BE-008/README.html">BE-008</a> — <code>be put</code>/<code>be post</code> leak a sub's empty-put cascade (<code>sniff: put: no changes</code> + empty <code>put put:</code> + <code>Error: PUTNONE</code> + <code>Error: NONE</code>) when recursing into an UNCHANGED submodule. PARTIAL: the <code>be post</code> arm landed (quiet captured gitlink bump); the bare <code>be put</code> arm (BEActSubsRelay, no <code>-q</code>) still sprays. Evidence in the ticket dir; kin of <a href="../POST/POST-019.html">POST-019</a> (closed).</li>
 </ul>
 <p>
 BE-007 (root out ROWS — deleted <code>dog/ROWS.{h,c}</code> + 4 types, 18 callers repointed to the typeless <code>HUNKu8sFeedRow</code> ULOG→HUNK serializer; fixed POST-022's wrecked output) landed <code>1a006d08</code>; retires <a href="BE-005.html">BE-005</a> (the ROWS-banner umbrella).
 </p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-034: sub gitlink bump flips the parent to selective, dropping its own dirty files</title>
+<meta property="og:title" content="POST-034: sub gitlink bump flips the parent to selective, dropping its own dirty files">
+<meta property="og:description" content="A commit-all post '#msg' in a tree with a dirty MOUNTED sub commits the sub and the gitlink but SILENTLY DROPS every dirty file of the parent. postSubs records the bump by appending a real put &lt;sub&gt;#&lt;newtip&gt; row to the PARENT wtlog (post.js:740), then postOne → fold-decide.decide re-derives anyPd from that just-mutated wtlog, reads &quot;something is staged&quot;, and switches the whole parent commit to SELECTIVE — so each dirty tracked file takes the if (anyPd) keep(...) baseline arm (fold-decide.js:158) instead of add. Data loss is silent: the post reports success. Same class as the bug POST-026 fixed one layer up (mode decided ONCE into ctx.selective, post.js:611-617), which postOne never consults. Contradicts POST (wiki/POST.mkd:64): commit-all is &quot;nothing staged ANYWHERE ⇒ auto-stage all changes, dirty subs bottom-up, the parent last&quot;.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/POST/POST-034.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>POST-034: sub gitlink bump flips the parent to selective, dropping its own dirty files</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<p>
+A commit-all <code>post '#msg'</code> in a tree with a dirty MOUNTED sub commits the sub and the gitlink but SILENTLY DROPS every dirty file of the parent. <code>postSubs</code> records the bump by appending a real <code>put &lt;sub&gt;#&lt;newtip&gt;</code> row to the PARENT wtlog (<code>post.js:740</code>), then <code>postOne</code> → <code>fold-decide.decide</code> re-derives <code>anyPd</code> from that just-mutated wtlog, reads &quot;something is staged&quot;, and switches the whole parent commit to SELECTIVE — so each dirty tracked file takes the <code>if (anyPd) keep(...)</code> baseline arm (<code>fold-decide.js:158</code>) instead of <code>add</code>. Data loss is silent: the post reports success. Same class as the bug <a href="POST-026.html">POST-026</a> fixed one layer up (mode decided ONCE into <code>ctx._selective</code>, <code>post.js:611-617</code>), which <code>postOne</code> never consults. Contradicts <a href="../../wiki/POST.html">POST</a> (<code>wiki/POST.mkd:64</code>): commit-all is &quot;nothing staged ANYWHERE ⇒ auto-stage all changes, dirty subs bottom-up, the parent last&quot;.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Live incident (gritzko, 2026-07-29, <code>work/BRO-041/be</code>): a bare <code>jab post</code> from the wt root with <code>view/bro.js</code> modified AND the <code>test</code> sub carrying a modified <code>13-color-word-wash/run.sh</code>.</li>
+<li>Result: commit <code>861d2ee2</code> holds ONLY the <code>test</code> gitlink bump (+ the sub's own <code>2c927d8a</code>); <code>jab status</code> still shows <code>...v view/bro.js</code>, uncommitted, no warning.</li>
+<li><code>post.js:733-741</code> synthesises <code>ulog.append(info.bePath, [{verb:&quot;put&quot;, uri:&lt;sub&gt;#&lt;newtip&gt;}])</code> — its own comment says &quot;postOne re-opens the wtlog, so it sees this just-appended bump row&quot;.</li>
+<li><code>postOne</code> (<code>post.js:873</code>) calls <code>decideM.decide(info, wtl, reader, narrow)</code>; <code>decide</code> reads <code>m.anyPd</code> from the classifier (<code>fold-decide.js:107</code>), NOT from <code>ctx._selective</code>.</li>
+<li><code>fold-decide.js:158</code>: <code>mod</code> (tracked + content-modified) → <code>if (anyPd) keep(...)</code> — the file's change is left in the wt, out of the commit.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A commit-all post with a dirty sub commits the parent's OWN dirty files too, in the SAME commit as the gitlink bump (POST.mkd's &quot;dirty subs bottom-up, the parent last&quot;).</li>
+<li>The global mode decided once by <a href="POST-026.html">POST-026</a> (<code>ctx._selective</code>) is the authority for <code>postOne</code>/<code>fold-decide</code>; no level re-derives it from a wtlog that the run itself has written to.</li>
+<li>Genuinely selective posts are unaffected: a real user <code>put</code> anywhere still commits exactly the staged set, sub bumps included.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Do NOT stop synthesising the bump row (the gitlink-add path in fold-decide reads it); the mode derivation is what must change, not the record.</li>
+<li>Thread the decided mode in, e.g. <code>decide(info, wtl, reader, narrow, selective)</code> with <code>anyPd</code> overridden when the caller passes one — keep the classifier's own <code>anyPd</code> for every other consumer (status, put, delete).</li>
+<li>Nested subs (<code>dog/abc</code>) must behave the same at every level — the mode is computed at the OUTERMOST level only.</li>
+<li>JS <code>///be/</code> only; no C twin for this one.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>ctx._selective</code> already exists and is already threaded through the whole fan-out — this is a plumbing fix, not a new mode.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./ .html"> </a> red repro first: a <code>be/test/post/</code> case — parent file dirty + mounted sub file dirty + bare <code>post -m</code>; assert BOTH land in the one parent commit. -<a href="./ .html"> </a> pass the decided mode from <code>postOne</code> into <code>decideM.decide</code>; override <code>anyPd</code> only when supplied. -<a href="./ .html"> </a> check the sibling consumers of <code>decide</code>/<code>anyPd</code> (status quad, put, delete) are untouched by the signature change. -<a href="./ .html"> </a> verify through the real UI: after the post, <code>jab status</code> shows NO leftover dirty parent file and <code>jab diff ?..</code> carries both changes.
+</p>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

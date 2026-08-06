@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-035: row-based conflict gate — posting is the resolution</title>
+<meta property="og:title" content="POST-035: row-based conflict gate — posting is the resolution">
+<meta property="og:description" content="Per /todo/DIS/DIS-080: with fence markers retired, post's POST-017 byte pre-scan (hasConflictMarker over tracked adds, post.js:884-895) is replaced by a row-based gate: refuse committing tracked paths that are live conflicts per the /todo/ULOG/ULOG-004 accessor (con rows since the last get/post), --force overrides as before. A successful post IS the resolution — the new post row becomes the barrier that expires the con rows; nothing is deleted.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/POST/POST-035.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>POST-035: row-based conflict gate — posting is the resolution</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<p>
+Per <a href="/todo/DIS/DIS-080.html">DIS-080</a>: with fence markers retired, post's POST-017 byte pre-scan (hasConflictMarker over tracked adds, post.js:884-895) is replaced by a row-based gate: refuse committing tracked paths that are live conflicts per the <a href="/todo/ULOG/ULOG-004.html">ULOG-004</a> accessor (<code>con</code> rows since the last get/post), <code>--force</code> overrides as before. A successful post IS the resolution — the new post row becomes the barrier that expires the con rows; nothing is deleted.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Today's gate is content-based and dies with markers; the refusal text should keep plain words (<a href="./[errors-in-plain-words.html">[errors-in-plain-words</a>]), naming the conflicted paths from the rows.</li>
+<li>Committing the wt bytes of a conflicted file commits the RGA live reading — that is a legitimate resolution when the user says so (<code>--force</code> or after reviewing the yellow diff and editing).</li>
+<li><code>patch</code> still exits non-zero on conflict, so unattended <code>patch &amp;&amp; post</code> never reaches this gate.</li>
+</ul>
+<h3>Goals</h3>
+<ol>
+<li>Pre-flight: tracked add whose path is in the live conflict set → refuse <code>conflict in tracked file &lt;path&gt; (--force overrides)</code>; all-or-nothing before any store write (POST-017 semantics kept).</li>
+<li>Post success expires the conflicts by barrier — verify accessor returns empty after; no row rewriting (<a href="./[ulog-edits-are-put-delete.html">[ulog-edits-are-put-delete</a>] untouched).</li>
+<li>Weave fold at commit consumes the same EXPECTED object as DIFF-016 — merged bytes + theirs merge parent unchanged (post.js:788-806).</li>
+</ol>
+<h3>Constraints</h3>
+<ul>
+<li>Which post arms count as the barrier (commit <code>#msg</code> yes; bare advance / <code>?br</code> / wire push?) — align with ULOG-004's barrier definition, one rule both sides.</li>
+<li><code>test/post/conflict</code> regolds from marker text to row text.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Gate = <code>new Set(wtl.conflicts())</code> ∩ the <code>add</code> decisions (post.js:882-891); the <code>add</code> filter is POST-017's, kept — a <code>keep</code>/<code>unlink</code> commits no wt bytes.</li>
+<li>Barrier NOT re-decided: ULOG-004's <code>conflicts()</code> owns it (get/post row with a full sha + non-wt-relative path); post just reads it.</li>
+<li>Wording <code>conflict in tracked file &lt;path&gt; (--force overrides)</code>, same <code>refuse()</code> 64-char ladder as before (<a href="./[errors-in-plain-words.html">[errors-in-plain-words</a>]).</li>
+<li><code>shared/conflict.js</code> require dropped from post.js — post no longer scans bytes at all; <code>readAddBytes</code> stays, fold-commit still uses it.</li>
+<li>DIS-080 §4 AMENDMENT lands here: <code>conflicts()</code> backward scan now keeps an <code>acked</code> set — a <code>put</code>/<code>delete &lt;path&gt;</code> row shadows OLDER con rows for that path, a NEWER con row re-registers. Barrier rule untouched.</li>
+<li>The ack is exact-path and path-bearing only: a label-only <code>put ?feat</code> acks nothing; a directory <code>put src/</code> does not cover its children (path-granular rows, DIS-080 constraint).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> swap byte scan → accessor in post pre-flight; wording</li>
+<li class="done"><input type="checkbox" checked disabled> barrier semantics test: post → conflicts list empty</li>
+<li class="done"><input type="checkbox" checked disabled> --force path test (commits RGA bytes, exits 0)</li>
+<li class="done"><input type="checkbox" checked disabled> DIS-080 §4 amendment: put/delete-after-con acks (wtlog.js + 5 unit legs + a post e2e leg)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>RESOLVED 2026-07-30: the patch-absorb 2-line wording regold applied (gritzko-approved in the merge plan); suite 321/321 at base <code>///be/#38f6e3ac</code>.</li>
+<li>Update incident 2026-07-30: the wt's first <code>get</code> ran its own PRE-GET-056b jsrc — the old <code>kind === &quot;f&quot;</code> gate clobbered the exec <code>test/post/conflict/run.sh</code> (third bite of that bug; every wt based before <code>///be/#5c0d5c21</code> bites once on its first update). Restored byte-exact from gritzko's <code>/tmp/POST-035</code> pre-get copy, cross-checked against the worker-transcript replay. <code>post.js</code>/<code>wtlog.js</code>/<code>wtlog_con.js</code>/<code>CMakeLists.txt</code> survived.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li><code>verbs/post/post.js</code> row-based pre-flight + <code>test/post/conflict/run.sh</code> rewritten: 5 legs (refuse / put-ack then plain post / --force / conflicts() empty after / marker bytes post fine).</li>
+<li><code>shared/wtlog.js</code> is NO LONGER a pure ULOG-004 import — <code>conflicts()</code> carries the §4 put/delete ack on top; <code>test/wtlog_con.js</code> grew legs J-N (put-after-con, delete-after-con, put-before-con, con→put→con, <code>put ?feat</code>). Its CMake registration line still rides along from ULOG-004.</li>
+<li>Suite 321/321 (2026-07-30, base <code>///be/#38f6e3ac</code> + <code>//test#c184c5eb</code>); staged: <code>shared/wtlog.js</code>, <code>verbs/post/post.js</code> (parent), <code>test/post/conflict/run.sh</code>, <code>test/post/patch-absorb/run.sh</code>, <code>test/wtlog_con.js</code> (test sub).</li>
+<li>Suggested commit: <code>POST-035: row-based conflict gate in post</code></li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

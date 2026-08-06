@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KEEP-006: cap a NNNNN.keeper log at 2 GiB — past that the log is unmappable, and the cap is unenforceable without also capping the fetch</title>
+<meta property="og:title" content="KEEP-006: cap a NNNNN.keeper log at 2 GiB — past that the log is unmappable, and the cap is unenforceable without also capping the fetch">
+<meta property="og:description" content="PackLog says &quot;a new log starts only past a size threshold&quot; but never bounds that threshold, so a single landed pack can make one log arbitrarily large. GET-044 T4 proved it: a linux.git clone streamed 6.45 GB and atomically landed a durable 6.0 GB 0000000001.keeper — bytes on disk that no reader can open. RULING 2026-07-27 (gritzko): cap at 2 GB, not at the engine's ceiling. The engine numbers, all measured this session on sparse files: JSC allocates a typed array up to 4 GiB inclusive, but only 2^32-1 of it is addressable (a2^32-1 reads undefined, JS's canonical not-an-index sentinel), and the JAB-007 Buf | 0 cursor wraps NEGATIVE at 2^31 exactly, so io.mmap yields an empty or garbled view from there up. 2^31-1 is the only bound that survives the whole path, and ingest.js already refuses at exactly that (MMAPCAP). jab/io.cpp JABCMAPMAX now enforces it in the mapper (this session). The sting in the tail: PackLog §Delta-dependency pins OFSDELTA bases inside one pack, so a received pack cannot be split across logs — meaning a 2 GB log cap is only achievable if no single fetched pack exceeds 2 GB. Scope: keeper log rotation + the fetch that feeds it. See PackLog, Keeper; method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/KEEP/KEEP-006.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>KEEP-006: cap a <code>NNNNN.keeper</code> log at 2 GiB — past that the log is unmappable, and the cap is unenforceable without also capping the fetch</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<p>
+<a href="../../wiki/PackLog.html">PackLog</a> says &quot;a new log starts only past a size threshold&quot; but never bounds that threshold, so a single landed pack can make one log arbitrarily large. <a href="../GET/GET-044.html">GET-044</a> T4 proved it: a <code>linux.git</code> clone streamed 6.45 GB and atomically landed a durable *<strong>6.0 GB</strong>* <code>0000000001.keeper</code> — bytes on disk that no reader can open. RULING 2026-07-27 (gritzko): *<strong>cap at 2 GB</strong><strong>, not at the engine's ceiling. The engine numbers, all measured this session on sparse files: JSC allocates a typed array up to 4 GiB inclusive, but only <code>2^32-1</code> of it is addressable (<code>a[2^32-1]</code> reads <code>undefined</code>, JS's canonical not-an-index sentinel), and the <a href="../JAB/JAB-007.html">JAB-007</a> Buf <code>| 0</code> cursor wraps NEGATIVE at <code>2^31</code> exactly, so <code>io.mmap</code> yields an empty or garbled view from there up. <code>2^31-1</code> is the only bound that survives the whole path, and <code>ingest.js</code> already refuses at exactly that (<code>MMAP_CAP</code>). <code>jab/io.cpp</code> <code>JABC_MAP_MAX</code> now enforces it in the mapper (this session). The sting in the tail: <a href="../../wiki/PackLog.html">PackLog</a> §Delta-dependency pins OFS_DELTA bases </strong>inside one pack*, so a received pack cannot be split across logs — meaning a 2 GB log cap is only achievable if no single fetched pack exceeds 2 GB. Scope: keeper log rotation + the fetch that feeds it. See <a href="../../wiki/PackLog.html">PackLog</a>, <a href="../../wiki/Keeper.html">Keeper</a>; method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>wiki/PackLog.mkd</code> §Many packs per log: &quot;a new log starts only past a size threshold&quot; — threshold unspecified, no upper bound, nothing refuses an oversized append.</li>
+<li><code>wiki/PackLog.mkd</code> §Delta-dependency: &quot;OFS_DELTA is pack-local: the base sits earlier in the same pack&quot; — splitting one pack across two logs breaks every back-reference that crosses the cut.</li>
+<li><code>be/shared/ingest.js</code> ships <code>MMAP_CAP = 2147483647</code> and refuses cleanly (<code>… landed OK but exceeds the jab 2^31-1 mmap cap</code>) — a guard on the <strong>reader</strong>, not on what gets written.</li>
+<li>Measured <code>io.mmap</code> (Buf-wrapped) behaviour: <code>2^31-1</code> → correct; <code>2^31</code> → <code>size -2147483648</code>, <code>data()</code> empty; <code>3 GB</code> → <code>size -1073741824</code>, garbled 2 GB view; <code>4 GiB</code> → <code>size 0</code>. Silent every time.</li>
+<li>Measured raw <code>io._mmap</code>: exact lengths through <code>2^32</code> inclusive; <code>2^32+1</code> → was SIGABRT (exit 134), now a catchable throw.</li>
+<li>Live artifact: the <code>linux.git</code> benchmark this session (2026-07-27) — <code>git clone</code> 1849 s / 6.3 GB <code>.git</code>; <code>jab get</code> died after pulling 6024 MB, so the 6.0 GB log from <a href="../GET/GET-044.html">GET-044</a> T4 is the only landed instance.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+No keeper log ever exceeds 2 GB (<code>2^31-1</code> bytes), and the writer refuses to create one instead of landing unreadable bytes.
+</p>
+<ul>
+<li>A hard <code>KEEP_LOG_MAX</code> (<code>2^31-1</code>) enforced at append time: an append that would cross it opens the next <code>NNNNN.keeper</code> instead.</li>
+<li>A pack too big to fit any log is refused *<strong>before</strong>* the network leg, with an error naming the size and the cap — not after a 28-minute download.</li>
+<li>The existing 6.0 GB log (and any like it) is diagnosable: a plain-words error saying which log is oversized, not a truncated read or a crash.</li>
+<li>Decide and record the fetch-side rule that makes the cap reachable (see Constraints) — a log cap alone cannot hold.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>OFS_DELTA stays pack-local (<a href="../../wiki/PackLog.html">PackLog</a> §Delta-dependency) — do NOT split a received pack at an arbitrary byte offset to fit a log. Either the whole pack fits, or the fetch must have been smaller.</li>
+<li>Landed logs are durable data: this ticket adds a bound for NEW appends and a diagnosis path for existing oversized logs. No rewriting, no migration, no repacking of what is already on disk.</li>
+<li>The cap is a chosen bound, not the engine's — do NOT &quot;recover&quot; headroom by raising it toward 4 GiB when <a href="../JAB/JAB-007.html">JAB-007</a> lands. Upstream will not move past 4 GiB either (the 2 GB→4 GB raise needed non-Int32 indices threaded through the DFG/FTL; Wasm's 32-bit memory anchors it there), so the headroom is one doubling and then a wall.</li>
+<li>Newer JSC buys nothing: webkitgtk 4.1 and 6.0 on this box are the SAME engine build (both 2.48.1-r2, libs 32 bytes apart), probed identical at every boundary. 6.0 also drops the <code>JavaScriptCore/</code> C API headers the binding is written against, so switching is a large port for zero gain.</li>
+<li>Independent of <a href="../JAB/JAB-007.html">JAB-007</a> and must not wait on it: even with correct cursors, a 6 GB log stays unreadable.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+RULING 2026-07-27 (gritzko): log splitting is fine on the beagle side — the indexes already support multiple files. That makes the incoming pack, not the log, the binding constraint: a received pack cannot be split at an arbitrary byte because <a href="../../wiki/PackLog.html">PackLog</a> §Delta-dependency pins OFS_DELTA bases inside one pack. Every crossing delta must be re-anchored by hash. So the question became <strong>how much does REF_DELTA inflate the pack</strong>, and it was measured rather than argued.
+</p>
+<p>
+*<strong>Measurements 2026-07-27</strong>* — <code>git verify-pack -v</code> over two real packs, base-reference bytes only (the zlib payload is byte-identical either way, so <code>added = 20 - ofslen(distance)</code> per converted edge; <code>ofslen</code> thresholds 128/16512/2113664/270549120 match git's offset encoding exactly). Verified every delta in the git.git pack is currently type 6 OFS_DELTA (315878/315878, type nibble read straight from the pack), so the baseline is real and nothing was already sha-coded.
+</p>
+<div>
+<p>
+git.git    300.9 MB pack   417,182 objs   315,878 deltas (75.7%)   2.76 B/delta option 1  all OFS                        870,855 B          baseline option 3  all REF                     +5,446,705 B          +1.73% of pack option 2  crossings REF @2GiB cap              0 B           0.00%  (fits one log)
+</p>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<p>
+@256MB   +382,209 B (7.6% of deltas)   +0.12%
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<p>
+linux.git  6.33 GB pack  11,690,992 objs  9,492,857 deltas (81.2%)  2.96 B/delta option 1  all OFS                     28,067,830 B          baseline option 3  all REF                   +161,789,310 B          +2.56% of pack option 2  crossings REF @2GiB cap    +24,089,888 B          +0.38%  (3 segs, 16.91% of deltas, 15.00 B/edge)
+</p>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<p>
+@1GiB   +27,389,232 B          +0.43%  (6 segs, 19.22%)
+</p>
+</div>
+<p>
+   @512MB   +29,961,837 B          +0.47%  (12 segs, 20.99%) @256MB   +32,195,316 B          +0.51%  (24 segs, 22.49%)
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<p>
+Three findings that decide it:
+</p>
+<ul>
+<li>*<strong>All-REF gets worse with scale, not better.</strong>* +1.73% at git.git, +2.56% at linux. Denser deltas and longer distances both push it up. Option 2 at the real 2 GiB cap is 6.7x cheaper at kernel scale (0.38% vs 2.56%).</li>
+<li>*<strong>The crossing curve is FLAT.</strong>* 16.91% of deltas cross at 3 segments, only 22.49% at 24 — because base distances are enormous (linux: mean 384 MB, max 5.16 GB, 20.6% of deltas need 5-byte varints). The first cuts catch nearly every long chain, so further splitting is close to free. Consequence: cut-point optimisation is NOT worth building. Cut wherever the cap falls.</li>
+<li>*<strong>Crossing edges cost a flat 15.00 B</strong>*, not the 17.24 B an average delta would — they are all long-range, so they were already paying 5-byte varints.</li>
+</ul>
+<p>
+Bytes were never the real argument against all-REF. The other two costs are:
+</p>
+<ul>
+<li>*<strong>Read path.</strong>* Chain hops to read every delta: git.git 2,894,063 (mean depth 9.16); linux 46,118,804 (mean depth 4.86, max 50). Under OFS each hop is <code>cur -= ofs_delta</code> — one subtraction inside the already-mapped log. Under REF each is a hashlet range query across every LSM run in the shard, newest-wins (<a href="./Indices.html">Indices</a> §Range queries), i.e. a random probe into a second file then a jump back. All-REF turns 46M subtractions into 46M lookups, permanently, in every repo. Option 2 leaves <del>44.5M of those as arithmetic and converts only the 1.6M crossing edges — </del>96.5% less new lookup load.</li>
+<li>*<strong>Log self-containment.</strong>* Today a log resolves standalone with no index at all, which is exactly what let <a href="./PACK-003.html">PACK-003</a> salvage-index two torn logs by rescanning them. All-REF inverts that: no index, no resolution, for anything. A damaged index stops being recoverable-from-the-log and becomes unresolvable data.</li>
+</ul>
+<p>
+DECISION: *<strong>option 2</strong>* — OFS within a pack/segment, REF only across boundaries. This is <a href="../../wiki/PackLog.html">PackLog</a> §Delta-dependency as already written, not a new design. The crossing set falls out of the scan pass ingest already runs, so the implementation cost is bounded.
+</p>
+<h3>Big incoming packs: stream-ingest, never stored</h3>
+<p>
+RULING 2026-07-27 (gritzko): *<strong>the received pack is never read back and never even stored.</strong>* It is consumed once, forward, straight from the wire into the log. This supersedes the whole line of thought that preceded it (windowed <code>io._mmap</code>, an <code>io._pread</code> primitive, git-style dependency-ordered resolution) — none of it is needed, and none should be built.
+</p>
+<p>
+Why it works: OFS_DELTA bases are backward-only (<a href="../../wiki/PackLog.html">PackLog</a> §Intra-pack object order, &quot;forward-reference free&quot;), so by the time a delta arrives on the wire its base has ALREADY been appended to our log. Every read-back therefore targets our own log, which is ≤2 GiB by the cap above and so maps with the plain whole-file <code>io.mmap</code> that exists today. The 6.33 GB pack is never seeked, never mapped, never written to disk. Resolving a chain is a walk inside a mapped log, exactly as it is today — no new access primitive, no traversal reorder.
+</p>
+<p>
+The one new structure is a *<strong>pack-offset → log-offset map</strong>*, live only for the duration of one ingest. It is needed because rewriting a base ref changes a record's size (OFS distance re-encoded, or OFS→REF at +15 B), so log offsets drift away from pack offsets as you go. Two shapes, both measured against linux.git (11,690,992 objects, 3,566,506 of them — 30.5% — actually cited as a base; you cannot exploit that, since a base is named by an object that arrives later):
+</p>
+<ul>
+<li>*<strong>Full map</strong><strong>, one entry per object: pack offset (33 bits for 6.33 GB) + log offset (31 bits, a log is ≤2 GiB) + log id, packing to ~11 B → </strong><strong>~128 MB</strong>* at kernel scale, negligible for a normal repo. Monotonic in both coordinates, so binary-searchable.</li>
+<li>*<strong>Drift table</strong><strong>, the compact form: store <code>log_offset - pack_offset</code> only where it CHANGES — at a crossing rewrite, and wherever accumulated drift pushes an OFS distance over a varint threshold. On the order of the 1,605,582 crossings → </strong><strong>~15 MB</strong>*. Same lookup, sparse.</li>
+</ul>
+<p>
+Start with the full map; compress to the drift table only if it bites.
+</p>
+<p>
+The ingest loop is then: inflate → resolve against the log → sha1 → index → append with the base ref rewritten (OFS if the base landed in this log, REF if in an earlier one — its sha is known, we just indexed it) → rotate at <code>KEEP_LOG_MAX</code>. Constant RSS, disk cost = the logs alone (no 6.33 GB tmp spike on top).
+</p>
+<p>
+Consequences to honour:
+</p>
+<ul>
+<li>*<strong>Records land before the trailer is verified.</strong>* That is NOT a new hazard: <a href="../../wiki/PackLog.html">PackLog</a> §Epoch recompaction already rules that dropping is a refs tombstone and dead objects linger until an out-of-band epoch. So a bad trailer = refs never published, records orphaned, collected at the next epoch. State that rule explicitly — it is what makes discarding the tmp file safe.</li>
+<li>*<strong>The 20-byte trailer lag still applies</strong>* — the incremental hasher must stay 20 bytes behind so the sha1 trailer is never fed to the pack parser as object data. Same mechanism <a href="../GET/GET-044.html">GET-044</a> built for <code>drainToFile</code>, now feeding the ingest instead of a file writer.</li>
+<li>*<strong>Crash mid-ingest is BETTER than with a tmp file</strong>*, not worse: the records already appended are durable, so a retry can <code>have</code>-negotiate from what landed rather than re-downloading 6 GB. Git's protocol has no pack-transfer resume, so the tmp file never bought resumability anyway.</li>
+<li><code>[GET-044]</code>'s <code>drainToFile</code> staging becomes unnecessary for the clone path; it is superseded here, not merely unused. Do not keep both shapes alive.</li>
+</ul>
+<p>
+Still first in line regardless: <code>curlRun</code> (<code>be/shared/wire.js:250</code>) buffers the entire https response in the JS heap, so it dies on any pack over the typed-array cap before ingest gets a chance to run. Streaming ingest cannot start until the bytes arrive AS a stream.
+</p>
+<h3>Where stream-ingest lives: libdog, as &quot;repack a git pack&quot;</h3>
+<p>
+RULING 2026-07-27 (gritzko): the ingest loop is C, in <a href="./libdog.html">libdog</a>. *<strong>libdog sees the job as &quot;repacking a git pack&quot; and knows nothing about curl, HTTP, or pkt-line framing</strong>* — opening the stream, stripping headers, and consuming the negotiation preamble is JS-level routing that hands libdog a bare pack byte stream (an fd) and a destination shard, and gets back counts and the new refs.
+</p>
+<p>
+The loop, per <a href="../../wiki/PackLog.html">PackLog</a> object order (forward-only, bases already behind us):
+</p>
+<ol>
+<li>parse the next pack record from the stream;</li>
+<li>append <code>pack_off -&gt; our_off</code> to the ingest-local map (our off is a wh64 carrying the log/file number, so the entry is wh128b);</li>
+<li>resolve the delta using that map plus the already-written pack log;</li>
+<li>hash it and repack it into the pack log;</li>
+<li>add the <code>hashlet -&gt; our_off</code> entry to the HIT index (needed to resolve REF entries);</li>
+<li>keep a running sha1 over the stream for the trailing checksum;</li>
+<li>on reaching <code>KEEP_LOG_MAX</code>, start a new pack log.</li>
+</ol>
+<p>
+Why C and not JS: it is per-object over ~11.7M objects for a linux-scale clone, and every step is already native — <code>dog/git/PACK.c</code> header/ofs decode, <code>PACKResolveOfs</code>, <code>PIDXScan</code> (which already emits <code>key=hashlet60|type4, val=offset</code> wh128 entries straight into a caller-owned region), and abc's HIT/LSM for the index. In JS it would be 11.7M+ JSC binding crossings per clone, every one of them wrapping a buffer view and so exposed to the <a href="../JAB/JAB-007.html">JAB-007</a> <code>| 0</code> cursor hazard. JS keeps what it already owns: URL classify, capability/want-have negotiation, refs, shard resolution, rotate policy.
+</p>
+<p>
+One correction to step 6, recorded because the instinct to drop it is reasonable and wrong: the running sha1 is *<strong>not</strong>* redundant with per-record hashing. Per-record hashes cover inflated object content only, not the framing bytes between records — and a stream cut that happens to land on a record boundary would otherwise parse as a clean, complete pack. The trailer is what distinguishes &quot;peer finished&quot; from &quot;connection died tidily&quot;. It costs one pass over bytes already in hand.
+</p>
+<h3>Prototype: <code>dogrepack</code>, verified on the 6.33 GB linux pack</h3>
+<p>
+Built 2026-07-27 in <code>work/KEEP-006</code> as <code>git/REPACK.cli.c</code> (+ one <code>add_executable</code> line) — a libdog CLI running the exact loop above, so the design is measured rather than argued. It consumes an fd, never stores or maps the source, and resolves every base out of our own logs via the pack-offset map.
+</p>
+<div>
+<p>
+corpus        objects       result beagle        7,652         7,652/7,652 shas == git, 6 logs @4 MB cap, 234 REF git.git       417,182       417,182/417,182 shas == git, 3 logs @128 MB cap, 57,609 REF linux.git     11,690,992    11,690,992/11,690,992 shas == git, 3 logs @2 GiB cap,
+</p>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<p>
+2,198,136 raw / 7,886,869 OFS / 1,605,989 REF, 12m22s
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<p>
+Two independent confirmations fell out of it:
+</p>
+<ul>
+<li>*<strong>The crossing estimate holds at full scale.</strong>* The analysis predicted 1,605,582 crossings at a 2 GiB cap from <code>verify-pack</code> data; the actual repack emitted *<strong>1,605,989</strong>* REF records — 0.025% apart. (git.git @128 MB: 57,855 predicted vs 57,609 actual, 0.4%; the gap is that predicted cuts fall on exact byte multiples while real log boundaries fall on record edges.) The +0.38%-of-pack figure for boundary re-anchoring stands.</li>
+<li>*<strong>Streaming changes nothing.</strong>* Piping the same 6.33 GB pack through stdin — no file, no mapping, one 1 GB buffer — produced all three logs *<strong>byte-identical</strong>* to the mapped run, at 12m31s vs 12m22s (~1.2% slower, i.e. free). That is the property that lets a socket substitute for a file.</li>
+</ul>
+<p>
+Three constraints the production ingest inherits, each found by hitting it:
+</p>
+<ul>
+<li>*<strong>zlib's <code>avail_in</code> is a 32-bit <code>uInt</code></strong>*, so <code>ZINFInflate</code> refuses any window over 4 GiB. Handing it &quot;everything buffered so far&quot; fails at the FIRST record of a 6.33 GB pack. The reader must present bounded windows — which the <code>u8b</code> DATA span does by construction, since DATA can never exceed the buffer.</li>
+<li>*<strong><code>ZINFInflate</code> could not distinguish TRUNCATED from CORRUPT</strong>* — a starved stream yields <code>Z_BUF_ERROR</code>, damaged bytes yield <code>Z_DATA_ERROR</code>, and both collapsed into <code>ZINFFAIL</code>; <code>PACKInflate</code> then collapsed every ZINF error into <code>PACKBADOBJ</code>. Without that distinction a streaming reader cannot tell &quot;refill and retry&quot; from &quot;give up&quot;, so the loop would have to guess a record size. Added <code>ZINFMORE</code> (<code>git/ZINF.h</code>/<code>ZINF.c</code>) plus the <code>PACKInflate</code> passthrough. Retry is safe because nothing is consumed until success and inflate has no side effects.</li>
+<li>*<strong>The open log must be file-backed.</strong>* As anonymous memory it OOM-killed at 99.3% of the linux run (1.6 GB dirty anon beside the ~935 MB map). Backed by its own file the pages are reclaimable page cache — which is what production wants anyway.</li>
+</ul>
+<p>
+Also settled by construction: the loop never needed <code>io._pread</code>, windowed <code>io._mmap</code>, or dependency-ordered resolution. Every one of the 9.49M deltas resolved through the map plus our own logs, including across closed-log boundaries. Record shape used: mean 541 bytes, max 1.6 MB compressed (git.git max 0.4 MB) — so a 1 GB buffer carries ~600x the worst record, and <code>u8bReMap</code> doubling is a safety net rather than a live path.
+</p>
+<p>
+Buffer plumbing needs NO new primitive: <code>abc/Bx.h</code> already has it. PAST | DATA | IDLE maps one-to-one onto consumed / unparsed / read-target, with <code>u8bShift</code> (Bx.h:415) as drain-shift, <code>u8bUsed</code> as the parser cursor, <code>u8bFed</code> after a read, <code>u8bMap</code> for the <code>MAP_NORESERVE</code> allocation and <code>u8bReMap</code> for the grow case.
+</p>
+<h3>Fetch-side rules (bounded fetch), still open</h3>
+<ul>
+<li>*<strong>(b) Bounded fetch via negotiation</strong>* — <code>deepen</code>-style rounds so no single pack nears the cap. Now an OPTIMISATION rather than a necessity: stream-ingest already handles an arbitrarily large pack. Still worth it for time-to-first-usable-state and for <code>filter=blob:none</code>. Yields thin packs whose bases are REF by construction — the same mechanism option 2 needs anyway.</li>
+<li>*<strong>(c) Refuse loudly</strong>* — no longer needed as a safety property, since nothing has to fit in a mapping any more.</li>
+</ul>
+<p>
+Both depend on REF_DELTA resolution, which is a RESTORE not a build — <code>dog/git/PACK.c:252</code> returns <code>PACKREF</code> as a deliberate backstop (&quot;Foreign REF packs go through UNPK&quot;), and <code>dog/git/PIDX.c:4</code> records that this leaner scanner DROPPED &quot;the REF_DELTA waiter&quot; the keeper had.
+</p>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> <code>KEEP_LOG_MAX = 2^31-1</code> at the append/rotate site; an append that would cross it starts the next log. Cut wherever the cap falls — the flat crossing curve makes cut-point optimisation not worth building.</li>
+<li><a href="./ .html"> </a> Stream https as a stream: <code>curlRun</code> buffers the whole body in the JS heap — port <a href="../GET/GET-044.html">GET-044</a>'s streaming to the curl path. Blocks everything else.</li>
+<li><a href="./v.html">v</a> Restore REF_DELTA resolution — <code>PACKResolve</code>/<code>PIDXScanRef</code> take a caller finder (sha → base pack + offset), so a rotated log's cross-log bases resolve; no waiter forest needed, bases always land earlier.</li>
+<li><a href="./ .html"> </a> Stream-ingest in <a href="./libdog.html">libdog</a> as &quot;repack a git pack&quot;: fd + destination shard in, counts + refs out; forward-only, never stored; pack-offset → log-offset map as wh128b (full map first, drift table if it bites). NO curl/HTTP/pkt-line knowledge below the JS routing layer.</li>
+<li><a href="./ .html"> </a> Re-anchor crossing deltas as REF_DELTA at the rotate boundary; base shas are already known from the on-the-fly indexing.</li>
+<li><a href="./ .html"> </a> Write the orphaned-records rule into <a href="../../wiki/PackLog.html">PackLog</a> explicitly (bad trailer = refs unpublished, records collected at the next epoch) — it is what makes not-storing safe.</li>
+<li><a href="./ .html"> </a> Do NOT build: <code>io._pread</code>, windowed <code>io._mmap</code>, dependency-ordered resolution. Superseded by stream-ingest; recorded so nobody re-derives them.</li>
+<li><a href="./ .html"> </a> Diagnosis for existing oversized logs (the 6.0 GB one): name the file and its size instead of truncating or throwing from the mapper.</li>
+<li><a href="./ .html"> </a> Sparse-file regression pinning the rotate boundary (cheap — no multi-GB fixture needed).</li>
+<li><a href="./ .html"> </a> Get the ruling on the fetch-side rule (a)/(b)/(c) and record it here before coding the fetch half.</li>
+<li><a href="./ .html"> </a> Verify end-to-end through a real <code>jab get</code>, not a unit probe.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<p>
+The https clone path has its own unrelated wall that will mask any fix here: <code>curlRun</code> (<code>be/shared/wire.js:250</code>) buffers the whole response in the JS heap and dies on <code>new Uint8Array(total)</code> for a &gt;4 GiB body (<code>RangeError: length too large</code>) — <a href="../GET/GET-044.html">GET-044</a>'s streaming <code>drainToFile</code> was only wired to the spawn/ssh transport. Needs its own ticket; until it lands, https can't reach the log-writing code at all.
+</p>
+<h2>Outcome</h2>
+<p>
+Filed 2026-07-27 from the <code>linux.git</code> clone benchmark; the read half of the rotation now works. UNCOMMITTED in the main tree per the no-post order.
+</p>
+<ul>
+<li><code>jab/io.cpp</code> <code>JABC_MAP_MAX = 2^31-1</code> refuses oversized mappings in plain words (was an uncatchable SIGABRT past 4 GiB, and a silent Buf truncation from 2^31 up); corrected <code>be/shared/wire.js</code> header comment. Suggested commit: <code>KEEP-006: refuse mappings over 2 GiB in plain words</code>.</li>
+<li>REF_DELTA resolution restored in <a href="./libdog.html">libdog</a>: <code>PACKResolve</code> + <code>PIDXScanRef</code> take a <code>pack_ref_find</code> (sha → base pack slice + offset) and resume the chase in whatever log answers; each hop carries its own pack. <code>PACKResolveOfs</code>/<code>PIDXScan</code> are the <code>find == NULL</code> wrappers, so the OFS-only <code>PACKREF</code> backstop is unchanged. <code>dogscan &lt;shard&gt;</code> reads a rotated shard back, its finder being just the entries the scan already emitted. Suggested commit: <code>KEEP-006: resolve REF_DELTA bases across pack logs</code>.</li>
+<li>Verified end to end, not by unit probe: git.git repacked at a 128 MB cap → 3 logs, *<strong>57,609</strong>* REF records, <code>dogscan</code> resolves 417,182/417,182 objects in 69 s and every sha matches <code>git verify-pack</code>; beagle-ext at a 1 MB cap → 5 logs, 279 REF, same set as the single-log shard and as git. Unit: <code>PACKRESOLVEtest</code> cross-log chain (3 logs, plus finderless → <code>PACKREF</code>, unknown base → <code>PACKREF</code>), <code>PIDXtest</code> scan_ref; suite 108/108.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PUT-014: be put '#~1' — soft rewind, set the wt base back, bytes untouched</title>
+<meta property="og:title" content="PUT-014: be put '#~1' — soft rewind, set the wt base back, bytes untouched">
+<meta property="og:description" content="RULING 2026-07-24: ulog edits with no wt effect are PUT/DELETE, never GET. be put '#~1' is the soft undo-commit (git reset --soft HEAD~1): move the wt base record N commits back, touch no file, move no ref.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PUT/PUT-014.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PUT-014: <code>be put '#~1'</code> — soft rewind, set the wt base back, bytes untouched</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+RULING 2026-07-24: ulog edits with no wt effect are PUT/DELETE, never GET. <code>be put '#~1'</code> is the soft undo-commit (git <code>reset --soft HEAD~1</code>): move the wt base record N commits back, touch no file, move no ref.
+</p>
+<ul>
+<li><a href="/todo/DIS/DIS-077.html">DIS-077</a> ruled <code>put #&lt;hex&gt;</code> sets the wt BASE via baseSet (<code>be/verbs/put/put.js:116</code> appends the get-row pin, no ref write).</li>
+<li>classifyPutArg (<code>be/verbs/put/put.js:687</code>) gates the frag on isHexish, so <code>#~1</code> refuses <code>RESOLVE: cannot resolve #~1</code> today.</li>
+<li><code>get #~1</code> already walks N first-parents (D3, <code>be/verbs/get/get.js:667</code>) but GET resets/weaves the wt — the record-only twin is missing.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+<code>be put '#~N'</code> appends the base row N first-parents back from cur.tip and nothing else — no wt bytes, no restamp, no ref motion.
+</p>
+<ul>
+<li>Attached: append <code>get ?&lt;track&gt;#&lt;anc&gt;</code>; detached: <code>get #&lt;anc&gt;</code> (the DIS-077 row shapes baseSet already writes).</li>
+<li>Refuse in plain words when the walk runs out of parents.</li>
+<li>Repro test first: post a commit, <code>put '#~1'</code>, files stay dirty-intact, <code>sha1:?</code> shows the parent, undone changes show as <code>mod</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Reuse get.js's D3 first-parent walk (hoist to shared, don't dup).</li>
+<li>Errors in normal words, never bare C codes (RULING 2026-07-16).</li>
+<li>No wtlog read-back of written ts; be.now stamps (RULING).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>#~N</code> is a relative pin resolved at entry (resolution-at-entry seed), then flows the existing DIS-077 <code>op:&quot;base&quot;</code> arm — no new verb surface.</li>
+<li>Branch tip stays put; rewinding an advanced ref remains <code>put ?br#&lt;sha&gt;</code>.</li>
+<li>Verb-scoping follow-up (PUT wt-only, reflog force → <code>post!</code>): <a href="/todo/POST/POST-033.html">POST-033</a>.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> hoist the first-parent walk (get.js D3) into shared/</li>
+<li><a href="./ .html"> </a> classifyPutArg: accept <code>#~N</code> frag → <code>op:&quot;base&quot;</code> with the ancestor</li>
+<li><a href="./ .html"> </a> repro test (commit, soft rewind, status/sha1 checks)</li>
+<li><a href="./ .html"> </a> PUT.mkd CLI list + Verbs.mkd cheat-sheet row (<code>git reset --soft</code>)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

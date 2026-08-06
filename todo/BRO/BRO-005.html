@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BRO-005</title>
+<title>BRO-005: the jab/JS pager has NO mouse navigation — add SGR mouse tracking + U-tag click-to-navigate (parity with C bro MAUS)</title>
+<meta property="og:title" content="BRO-005: the jab/JS pager has NO mouse navigation — add SGR mouse tracking + U-tag click-to-navigate (parity with C bro MAUS)">
+<meta property="og:description" content="The C Bro pager supports the mouse: SGR mouse tracking (bro/MAUS.{h,c} — MAUSEnable/MAUSDisable/MAUSParse), a left-click on a U-tagged token navigates to that token's URI, the wheel scrolls, and m toggles mouse on/off. The JS (jab) pager (be/view/bro.js, be/views/bro/{bro,pager}.js) renders the very same hunks — including the U click-target tags — but has NO mouse handling at all (no SGR mouse mode, no click/wheel/button parse; confirmed by grep 2026-06-26: only SGR colour code is present). So the links the hunks already carry are dead in jab. Goal: bring the jab pager to mouse-nav parity with C bro. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BRO/BRO-005.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,75 +16,44 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>BRO-005: the jab/JS pager has NO mouse navigation — add SGR mouse tracking + <code>U</code>-tag click-to-navigate (parity with C bro MAUS)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The C <a href="../../wiki/Bro.html">Bro</a> pager supports the mouse: SGR mouse tracking (<code>bro/MAUS.{h,c}</code> — <code>MAUSEnable</code>/<code>MAUSDisable</code>/<code>MAUSParse</code>), a left-click on a <code>U</code>-tagged token navigates to that token's URI, the wheel scrolls, and <code>m</code> toggles mouse on/off. The JS (jab) pager (<code>be/view/bro.js</code>, <code>be/views/bro/{bro,pager}.js</code>) renders the very same hunks — including the <code>U</code> click-target tags — but has NO mouse handling at all (no SGR mouse mode, no click/wheel/button parse; confirmed by grep 2026-06-26: only SGR <strong>colour</strong> code is present). So the links the hunks already carry are dead in jab. Goal: bring the jab pager to mouse-nav parity with C bro. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>C bro: <code>bro/MAUS.h</code>/<code>MAUS.c</code> drive SGR mouse tracking; the <code>U</code> tok32 tag is an<p>
-invisible click target — a left-click on the preceding token opens its URI (view-stack push). <code>m</code> toggles mouse; the wheel scrolls. Tests <code>bro/test/MAUS.c</code>, <code>bro/test/NAV.c</code>. Spec in <a href="../../wiki/Bro.html">Bro</a>.
-</p>
-</li>
-<li>jab pager: <code>be/view/bro.js</code> (the tag→SGR painter, which DOES handle the <code>U</code> tag for<p>
-colour) + <code>be/views/bro/pager.js</code> — renders <code>U</code> targets but never enables mouse mode nor parses mouse events. Zero mouse/SGR-mouse/click/wheel/button hits in the JS pager source.
-</p>
-</li>
-<li>The navigation targets ALREADY ride the hunk stream: each <code>U</code> tag carries the URI<p>
-the pager would open (<a href="../../wiki/Bro.html">Bro</a>: &quot;left-click … navigates to its URI&quot;). Only the input handling is missing — this is a pager-side gap, not a producer change.
-</p>
-</li>
+<li>C bro: <code>bro/MAUS.h</code>/<code>MAUS.c</code> drive SGR mouse tracking; the <code>U</code> tok32 tag is an invisible click target — a left-click on the preceding token opens its URI (view-stack push). <code>m</code> toggles mouse; the wheel scrolls. Tests <code>bro/test/MAUS.c</code>, <code>bro/test/NAV.c</code>. Spec in <a href="../../wiki/Bro.html">Bro</a>.</li>
+<li>jab pager: <code>be/view/bro.js</code> (the tag→SGR painter, which DOES handle the <code>U</code> tag for colour) + <code>be/views/bro/pager.js</code> — renders <code>U</code> targets but never enables mouse mode nor parses mouse events. Zero mouse/SGR-mouse/click/wheel/button hits in the JS pager source.</li>
+<li>The navigation targets ALREADY ride the hunk stream: each <code>U</code> tag carries the URI the pager would open (<a href="../../wiki/Bro.html">Bro</a>: &quot;left-click … navigates to its URI&quot;). Only the input handling is missing — this is a pager-side gap, not a producer change.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>The jab pager enables SGR mouse tracking on enter and restores the terminal on<p>
-exit/signal; it parses SGR mouse events.
-</p>
-</li>
-<li>A left-click on a <code>U</code>-tagged token opens/navigates to that token's URI (view-stack<p>
-push, like C bro); the wheel scrolls; <code>m</code> toggles mouse on/off.
-</p>
-</li>
+<li>The jab pager enables SGR mouse tracking on enter and restores the terminal on exit/signal; it parses SGR mouse events.</li>
+<li>A left-click on a <code>U</code>-tagged token opens/navigates to that token's URI (view-stack push, like C bro); the wheel scrolls; <code>m</code> toggles mouse on/off.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Mirror C bro's MAUS model (SGR 1006 tracking; enable/disable bracketing; parse<p>
-<code>ESC[&lt;b;x;y</code>M<code>/</code>m`<code>); reuse the existing </code>U`-tag click-target metadata in the hunk stream — NO new hunk format, producers unchanged.
-</p>
-</li>
+<li>Mirror C bro's MAUS model (SGR 1006 tracking; enable/disable bracketing; parse <code>ESC[&lt;b;x;y</code>M<code>/</code>m`<code>); reuse the existing </code>U`-tag click-target metadata in the hunk stream — NO new hunk format, producers unchanged.</li>
 <li>JS-side only (<code>be/view</code> + <code>be/views/bro</code>); restore terminal mode on every exit path.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>SGR mouse enable/restore ALREADY landed (JAB-030): <code>MOUSE_ON</code>/<code>MOUSE_OFF</code> (1000+1006)<p>
-bracket <code>Pager.run</code> (try/finally restores on every exit), and <code>_feed</code> splits SGR <code>ESC[&lt;…M/m</code> from keys. The GAP was the cell→<code>U</code>-URI lookup: <code>_mouse</code> ignored col and navigated the HUNK banner URI, not the clicked token's <code>U</code>-target.
-</p>
-</li>
-<li>Added <code>_screenToByte(row,col)</code> (JS twin of C <code>bro_screen_to_byte</code>: walks the display<p>
-row skipping <code>U</code>-hidden cells so col counts emitted codepoints) + <code>_uriAt(hunk,off)</code> (next-token-is-<code>U</code> → its hidden text bytes ARE the URI, TOK.h <code>tok32Val</code>). <code>_mouse</code> now: wheel (btn 64/65) scrolls ±3; left-press → <code>_uriAt</code> → <code>_runSpell</code> (push), else falls back to the row's hunk URI. <code>m</code> toggles <code>this.mouse</code> (writes the SGR bracket).
-</p>
-</li>
+<li>SGR mouse enable/restore ALREADY landed (JAB-030): <code>MOUSE_ON</code>/<code>MOUSE_OFF</code> (1000+1006) bracket <code>Pager.run</code> (try/finally restores on every exit), and <code>_feed</code> splits SGR <code>ESC[&lt;…M/m</code> from keys. The GAP was the cell→<code>U</code>-URI lookup: <code>_mouse</code> ignored col and navigated the HUNK banner URI, not the clicked token's <code>U</code>-target.</li>
+<li>Added <code>_screenToByte(row,col)</code> (JS twin of C <code>bro_screen_to_byte</code>: walks the display row skipping <code>U</code>-hidden cells so col counts emitted codepoints) + <code>_uriAt(hunk,off)</code> (next-token-is-<code>U</code> → its hidden text bytes ARE the URI, TOK.h <code>tok32Val</code>). <code>_mouse</code> now: wheel (btn 64/65) scrolls ±3; left-press → <code>_uriAt</code> → <code>_runSpell</code> (push), else falls back to the row's hunk URI. <code>m</code> toggles <code>this.mouse</code> (writes the SGR bracket).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Spec the C bro mouse behaviors (enable / parse / click-nav / wheel / <code>m</code>) as the<p>
- parity target (read <code>bro/MAUS.c</code>, <code>bro/test/MAUS.c</code>, <code>bro/test/NAV.c</code>, <code>BRO.c</code>).
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Enable + RESTORE SGR mouse mode on pager enter/exit — already landed (JAB-030,<p>
- <code>Pager.run</code> try/finally); left untouched. <code>m</code> now also writes the bracket live.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Map a left-click to the <code>U</code> click-target URI under the cursor → navigate (push):<p>
- <code>_screenToByte</code> + <code>_uriAt</code> in <code>be/views/bro/pager.js</code>.
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Spec the C bro mouse behaviors (enable / parse / click-nav / wheel / <code>m</code>) as the parity target (read <code>bro/MAUS.c</code>, <code>bro/test/MAUS.c</code>, <code>bro/test/NAV.c</code>, <code>BRO.c</code>).</li>
+<li class="done"><input type="checkbox" checked disabled> Enable + RESTORE SGR mouse mode on pager enter/exit — already landed (JAB-030, <code>Pager.run</code> try/finally); left untouched. <code>m</code> now also writes the bracket live.</li>
+<li class="done"><input type="checkbox" checked disabled> Map a left-click to the <code>U</code> click-target URI under the cursor → navigate (push): <code>_screenToByte</code> + <code>_uriAt</code> in <code>be/views/bro/pager.js</code>.</li>
 <li class="done"><input type="checkbox" checked disabled> Wheel scroll (btn 64/65, ±3 rows) + <code>m</code> toggle (<code>this.mouse</code>, gates <code>_mouse</code>).</li>
-<li class="done"><input type="checkbox" checked disabled> Test: scripted SGR-click + real-pty click both assert U-target nav; be/ suite green<p>
- (driver.js + pty.js); only pre-existing <code>be-js-bro-universal</code> xfail still red.
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Test: scripted SGR-click + real-pty click both assert U-target nav; be/ suite green (driver.js + pty.js); only pre-existing <code>be-js-bro-universal</code> xfail still red.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -89,40 +62,27 @@ row skipping <code>U</code>-hidden cells so col counts emitted codepoints) + <co
 <h2>Outcome</h2>
 <ul>
 <li>CONFIRMED LANDED (2026-07-07 audit, be log): <code>7bb581ac</code> (mouse-nav epic), <code>fc5d63fd</code> (BRO-005/006 consumer + view U-links), <code>579b251f</code> (header band), <code>4febec96</code> (whole single-U line clickable) + be/test <code>80906f7a</code>. The &quot;STOPPED before commit&quot; notes below are historical.</li>
-<li>(LANDED be <code>579b251f</code>) Fix: <code>be/views/bro/pager.js</code> — <code>_mouse</code> rewrite + new<p>
-<code>_screenToByte</code>/<code>_uriAt</code>/<code>_toggleMouse</code>, <code>this.mouse</code> field, <code>m</code> key (0x6d). The SGR enable/restore + <code>_feed</code> parse were already present (JAB-030); the new code is the cell→<code>U</code>-URI lookup that makes the carried links live.
-</p>
-<ul>
-<li><code>_mouse</code> (pager.js:346), <code>_screenToByte</code> (:372), <code>_uriAt</code> (:400),<p>
-<code>_toggleMouse</code> (:415), <code>m</code> key (:254), <code>this.mouse</code> (:89).
-</p>
-</li>
+<li>(LANDED be <code>579b251f</code>) Fix: <code>be/views/bro/pager.js</code> — <code>_mouse</code> rewrite + new <code>_screenToByte</code>/<code>_uriAt</code>/<code>_toggleMouse</code>, <code>this.mouse</code> field, <code>m</code> key (0x6d). The SGR enable/restore + <code>_feed</code> parse were already present (JAB-030); the new code is the cell→<code>U</code>-URI lookup that makes the carried links live.<ul>
+<li><code>_mouse</code> (pager.js:346), <code>_screenToByte</code> (:372), <code>_uriAt</code> (:400), <code>_toggleMouse</code> (:415), <code>m</code> key (:254), <code>this.mouse</code> (:89).</li>
 </ul>
 </li>
-<li>Verified: drove a real pty (<code>tty.openpty</code>), fed <code>ESC[&lt;0;2;2M</code> over a hunk whose body<p>
-row carries a hidden <code>U</code> target <code>cat:doc2.txt</code> → asserted <code>driveSpell</code> ran with that URI + a view-stack push (<code>pty-uclick-*</code>); <code>ESC[&lt;65;5;5M</code> wheel-down scrolls (<code>pty-wheel-down</code>). Headless <code>driver.js</code> asserts <code>_uriAt</code>, the U-click push/fallback, wheel ±, and <code>m</code> toggle (12 checks). Repro-first: confirmed the test fails (no <code>_uriAt</code>) before the fix.
-</p>
-</li>
-<li>be/ suite: 64/65 green; the lone red is the pre-existing <code>be-js-bro-universal</code> stale<p>
-WILL_FAIL xfail (test prints PASS, exit 0 — flipped by ctest; not my files, not a regression). STOPPED before commit per the gate.
-</p>
-</li>
-<li>(LANDED be <code>579b251f</code>) FOLLOW-UP: pager hunk-header had NO pale-yellow band (only<p>
-<code>[1m</code> bold) while core/emit.js + C bro draw every header with it. Fix: <code>be/views/bro/pager.js</code> <code>_banner</code> (:189) now opens <code>theme.bannerOpen()</code> (BANNER_SGR <code>48;5;230</code> bg), space-FILLS to <code>cols</code>, closes <code>theme.bannerClose()</code> (ESC[0m); imports the theme (:16). Plain (non-tty) path unchanged; mouse-nav (<code>_mouse</code>/<code>_uriAt</code>/<code>_screenToByte</code>/<code>m</code>) preserved.
-</p>
-</li>
-<li>Verified: pty drive asserts the header row carries <code>48;5;230</code> + space-fill to<p>
-width 40 + ESC[0m close, body row unbanded (<code>band-*</code> checks); RED before (no bg, no fill), GREEN after. Test <code>be/test/bro/pager/pty.js</code>; ctest <code>be-js-bro-pager</code> Passed. STOPPED before commit.
-</p>
-</li>
-<li>(LANDED be <code>4febec96</code> + be/test <code>80906f7a</code>) FOLLOW-UP: MULTI-ROW clickability — in <code>jab log:</code> only the<p>
-8-char sha (the one token before its <code>U</code>) navigated; a click on the row's date/summary/author or its soft-wrap tail returned null → the bulk of every commit row read as a dead link (&lt;50% of cells clickable). Producer is FINE (<code>jab log: --tlv</code>: each sha8 L-token is followed by its <code>U</code> commit:?&lt;sha&gt;); the bug was the CONSUMER <code>_uriAt</code>. Root cause: it only tested <code>toks[ti+1]==U</code>. Fix: <code>be/views/bro/pager.js</code> <code>_uriAt</code> (:414) keeps the token-precise check, then falls back to the line's lone U via new <code>_lineUri</code> (:432) — the WHOLE logical line (incl. wrap rows) is clickable iff the line has exactly ONE U (log/ls/commit/diff); cat's many-U-per-line word links stay token-precise.
-</p>
-</li>
-<li>Verified: new pty/headless test <code>be/test/bro/rowclick/</code> builds a 3-commit log,<p>
-clicks rows 1/2/3 at the sha AND non-sha columns + a wrap-tail — each resolves to its <code>commit:?&lt;sha&gt;</code>; RED before (<code>screenRow 2 col 9 … null</code>), GREEN after. Drove the real <code>jab log:</code> binary over a pty: sha/summary/author/tail all open the commit. <code>driver.js</code>+<code>pty.js</code> (BRO-005 mouse-nav + band) still green. be/ ctest: 73/74 (only the pre-existing <code>be-js-bro-universal</code> stale xfail red). STOPPED before commit.
-</p>
-</li>
+<li>Verified: drove a real pty (<code>tty.openpty</code>), fed <code>ESC[&lt;0;2;2M</code> over a hunk whose body row carries a hidden <code>U</code> target <code>cat:doc2.txt</code> → asserted <code>driveSpell</code> ran with that URI + a view-stack push (<code>pty-uclick-*</code>); <code>ESC[&lt;65;5;5M</code> wheel-down scrolls (<code>pty-wheel-down</code>). Headless <code>driver.js</code> asserts <code>_uriAt</code>, the U-click push/fallback, wheel ±, and <code>m</code> toggle (12 checks). Repro-first: confirmed the test fails (no <code>_uriAt</code>) before the fix.</li>
+<li>be/ suite: 64/65 green; the lone red is the pre-existing <code>be-js-bro-universal</code> stale WILL_FAIL xfail (test prints PASS, exit 0 — flipped by ctest; not my files, not a regression). STOPPED before commit per the gate.</li>
+<li>(LANDED be <code>579b251f</code>) FOLLOW-UP: pager hunk-header had NO pale-yellow band (only <code>[1m</code> bold) while core/emit.js + C bro draw every header with it. Fix: <code>be/views/bro/pager.js</code> <code>_banner</code> (:189) now opens <code>theme.bannerOpen()</code> (BANNER_SGR <code>48;5;230</code> bg), space-FILLS to <code>cols</code>, closes <code>theme.bannerClose()</code> (ESC[0m); imports the theme (:16). Plain (non-tty) path unchanged; mouse-nav (<code>_mouse</code>/<code>_uriAt</code>/<code>_screenToByte</code>/<code>m</code>) preserved.</li>
+<li>Verified: pty drive asserts the header row carries <code>48;5;230</code> + space-fill to width 40 + ESC[0m close, body row unbanded (<code>band-*</code> checks); RED before (no bg, no fill), GREEN after. Test <code>be/test/bro/pager/pty.js</code>; ctest <code>be-js-bro-pager</code> Passed. STOPPED before commit.</li>
+<li>(LANDED be <code>4febec96</code> + be/test <code>80906f7a</code>) FOLLOW-UP: MULTI-ROW clickability — in <code>jab log:</code> only the 8-char sha (the one token before its <code>U</code>) navigated; a click on the row's date/summary/author or its soft-wrap tail returned null → the bulk of every commit row read as a dead link (&lt;50% of cells clickable). Producer is FINE (<code>jab log: --tlv</code>: each sha8 L-token is followed by its <code>U</code> commit:?&lt;sha&gt;); the bug was the CONSUMER <code>_uriAt</code>. Root cause: it only tested <code>toks[ti+1]==U</code>. Fix: <code>be/views/bro/pager.js</code> <code>_uriAt</code> (:414) keeps the token-precise check, then falls back to the line's lone U via new <code>_lineUri</code> (:432) — the WHOLE logical line (incl. wrap rows) is clickable iff the line has exactly ONE U (log/ls/commit/diff); cat's many-U-per-line word links stay token-precise.</li>
+<li>Verified: new pty/headless test <code>be/test/bro/rowclick/</code> builds a 3-commit log, clicks rows 1/2/3 at the sha AND non-sha columns + a wrap-tail — each resolves to its <code>commit:?&lt;sha&gt;</code>; RED before (<code>screenRow 2 col 9 … null</code>), GREEN after. Drove the real <code>jab log:</code> binary over a pty: sha/summary/author/tail all open the commit. <code>driver.js</code>+<code>pty.js</code> (BRO-005 mouse-nav + band) still green. be/ ctest: 73/74 (only the pre-existing <code>be-js-bro-universal</code> stale xfail red). STOPPED before commit.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

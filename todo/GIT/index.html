@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>README</title>
+<title>GIT — pack-log format &amp; sync tickets</title>
+<meta property="og:title" content="GIT — pack-log format &amp; sync tickets">
+<meta property="og:description" content="The git-format storage floor: pack-log encoding, delta scheme, ingest normalization, and the upload/receive wire. Tickets here migrate the keeper pack log to a single-stream, OFS-only, offset-addressed store (one growing pack per shard, deltas reference earlier objects by offset only, REFDELTA quarantined at the ingest boundary). The native format core (writer, OFS resolver, OFS varint) lands in dog/git so keeper and the js/JABC binding share one implementation — no pack-log logic in either consumer. Plan-shaped, cleared via the Issues loop. Concept page: PackLog (rewritten by GIT-001).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GIT/README.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -17,12 +21,16 @@ The git-format storage floor: pack-log encoding, delta scheme, ingest normalizat
 </p>
 <h2>Active tickets</h2>
 <ul>
-<li><a href="GIT-001.html">GIT-001</a> — UMBRELLA: migrate to a single-stream OFS-only pack log; all impl children below now landed (GIT-006 dropped) — only the <a href="../../wiki/PackLog.html">PackLog</a> wiki reconcile remains.</li>
-<li><a href="GIT-011.html">GIT-011</a> — <code>ZINFInflate</code> wraps <code>next_out</code> on a full output slice instead of returning a NOROOM code, silently corrupting output + reporting 0; latent for pre-sized native callers, surfaced by <a href="../JS/JS-035.html">JS-035</a>'s grow-and-retry.</li>
+<li><a href="GIT-011.html">GIT-011</a> — <code>ZINFInflate</code> wraps <code>next_out</code> on a full output slice instead of returning a NOROOM code, silently corrupting output + reporting 0; NOT fully latent for pre-sized callers (a lying size header corrupts through <code>PACKInflate</code>), surfaced by <a href="../JS/JS-035.html">JS-035</a>'s grow-and-retry.</li>
+<li><a href="GIT-023.html">GIT-023</a> <a href="./LOW.html">LOW</a> — <code>PACKResolveOfs</code> sizes the delta-apply gauge <code>dst + half</code> for BOTH ping-pong targets; latent overflow when <code>deltalen &gt; 2*baselen</code>, and every delta-chain result is capped at <code>deltalen/2</code>. From the 24Jul26 dog/git review.</li>
+<li><a href="GIT-024.html">GIT-024</a> <a href="./MED.html">MED</a> — sha1dc is vendored but inert: <code>SetSafeHash(0)</code> plus every <code>SHA1DCFinal</code> return dropped, so collision detection costs cycles and protects nothing; needs a policy verdict (git-parity check-and-fail vs dropping sha1dc). From the 24Jul26 review.</li>
+<li><a href="GIT-025.html">GIT-025</a> <a href="./MED.html">MED</a> — <code>PACKRecordEnd</code> carves <code>obj.size</code> straight from the record's own untrusted varint (up to ~2^60): one corrupt record = OOM/DoS at every scan site; bound by the zlib max ratio before carving. From the 24Jul26 review.</li>
+<li><a href="GIT-026.html">GIT-026</a> <a href="./LOW.html">LOW</a> — dog/git house-cleaning sweep: 14 small correctness/style debts from the 24Jul26 review (CFG trailing-newline CFGBAD, ident-decimal i64 UB, unchecked <code>GITFeedRef</code> feeds, IGNO glob gaps, <code>sha1Drain</code> pointer arithmetic, …) as one TODO list.</li>
 <li><a href="GIT-012.html">GIT-012</a> — JS smart-fetch transports: core LANDED <code>4370d67e</code> (HTTPS via spawned curl on <code>pol</code>, ssh untouched, <code>test/wire/http-*</code>); open residue only — <code>git://</code> still misroutes to ssh (split it off or refuse) + the optional git:// daemon adapter.</li>
 <li><a href="GIT-015.html">GIT-015</a> — jab post ref-target resolution: fixes LANDED <code>234b0f54</code> (A absolute-marker strip, POSTREF empty-segment guard, B POSTNOREF refusal — all in <code>shared/relate.js</code>); open residue — an end-to-end repro test for the defect-B POSTNOREF refusal.</li>
 <li><a href="GIT-017.html">GIT-017</a> — remote-tracking refs must record the remote HOST + FULL ABSOLUTE branch (<code>?/project/branch</code>); <code>ingest.saveRemoteRef</code>/<code>clone</code>/<code>add</code> strip the query to <code>?</code>, so branches collapse onto the trunk key and a cached <code>head //origin?branch</code> can't resolve the tip. Split from <a href="GIT-016.html">GIT-016</a> T3.</li>
-<li><a href="GIT-020.html">GIT-020</a> <a href="./JS.html">JS</a> — JS keeper SERVE side: the upload-pack HALF landed <code>261680bf</code> (<code>shared/serve.js</code> <code>uploadPack</code> + the <code>jab upload-pack</code> raw-wire CLI entry + <code>test/serve/uploadpack</code>, jab-to-jab via KEEPER_BIN=jab); open — the <code>jab receive-pack</code> serve loop, the <a href="../TEST/TEST-003.html">TEST-003</a> get/be + get/cached test flips, and an ssh-remote jab spawn form (<code>classify()</code> still hardcodes <code>ssh host keeper …</code>).</li>
+<li><a href="GIT-020.html">GIT-020</a> <a href="./JS.html">JS</a> — JS keeper SERVE side: the upload-pack HALF landed <code>261680bf</code> (<code>shared/serve.js</code> <code>uploadPack</code> + the <code>jab upload-pack</code> raw-wire CLI entry + <code>test/serve/uploadpack</code>, jab-to-jab via KEEPER_BIN=jab); the receive-pack serve loop landed later under POST-028; the residue (ssh-remote jab spawn form + the <a href="../TEST/TEST-003.html">TEST-003</a> test flips) moved to <a href="GIT-022.html">GIT-022</a>.</li>
+<li><a href="GIT-022.html">GIT-022</a> <a href="./JS.html">JS</a> — ssh-remote jab serve: <code>classify()</code>'s ssh arm still hardcodes <code>ssh host keeper &lt;verb&gt;</code> for <code>be://host</code>, so ssh-remote be:// push/fetch is dead despite both serve halves existing in <code>serve.js</code>; spawn <code>jab</code> remotely, flip get/be + get/cached off the keeper SKIP, retire the native daemon. Enables <a href="../CI/CI-001.html">CI-001</a> push-into-a-VM.</li>
 </ul>
 <p>
 GIT-013/GIT-014 (the JS wire PUSH: shared <code>wire.push()</code> receive-pack client over ssh:+http:, FF-only <code>jab post</code> + force/set <code>jab put</code>, DIS-011 log-only, report-status parse) landed <code>cb3881f8</code>; <code>test/wire/push-*</code>, <code>put-force-*</code>, <code>put-dis011</code>.
@@ -49,5 +57,16 @@ GIT-007 (js/pack.hpp reduced to pure marshalling over dog/git <code>PACKu8sFeedO
 <ul>
 <li>GIT-0?? range booked for the one-stream migration (this topic).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

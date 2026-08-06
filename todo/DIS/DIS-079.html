@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-079: read verbs outside a worktree exit 0 in TOTAL silence; the ones that refuse spell a raw JS exception: WTNONE</title>
+<meta property="og:title" content="DIS-079: read verbs outside a worktree exit 0 in TOTAL silence; the ones that refuse spell a raw JS exception: WTNONE">
+<meta property="og:description" content="Run a read view from a directory with no .be anchor and ls, cat, grep and log print nothing at all — no stdout, no stderr, exit 0 — while status and diff refuse with JS exception: WTNONE: no .be worktree anchor from '&lt;dir&gt;'. Both halves are wrong: silence-plus-success is indistinguishable from &quot;the tree is empty&quot;, and a raw ok64 code behind a JS exception: prefix is not a user-facing error (RULING: errors in plain words, never a bare C code). Found 2026-07-22 diagnosing a CI red in test/bro/universal, which ran against a git checkout (no .be) and failed all 6 assertions opaquely. Method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-079.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-079: read verbs outside a worktree exit 0 in TOTAL silence; the ones that refuse spell a raw <code>JS exception: WTNONE</code></h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+Run a read view from a directory with no <code>.be</code> anchor and <code>ls</code>, <code>cat</code>, <code>grep</code> and <code>log</code> print nothing at all — no stdout, no stderr, exit 0 — while <code>status</code> and <code>diff</code> refuse with <code>JS exception: WTNONE: no .be worktree anchor from '&lt;dir&gt;'</code>. Both halves are wrong: silence-plus-success is indistinguishable from &quot;the tree is empty&quot;, and a raw ok64 code behind a <code>JS exception:</code> prefix is not a user-facing error (RULING: errors in plain words, never a bare C code). Found 2026-07-22 diagnosing a CI red in <code>test/bro/universal</code>, which ran against a git checkout (no <code>.be</code>) and failed all 6 assertions opaquely. Method <a href="/meta/work.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Measured in <code>ubuntu:24.04</code> with the <code>gritzko/jab</code> release <code>0.0.1</code>, in a copy of the <code>be</code> tree with its <code>.be</code> removed (the CI checkout shape):
+</p>
+<ul>
+<li><code>jab ls</code>, <code>jab cat core/loop.js</code>, <code>jab grep JSQUE</code>, <code>jab log</code> → rc=0, stdout 0 bytes, stderr 0 bytes — indistinguishable from an empty tree.</li>
+<li><code>jab status</code> and <code>jab diff</code> → rc=1, <code>JS exception: WTNONE: no .be worktree anchor from '/nowt'</code> — the right verdict, the wrong words.</li>
+<li>The same tree WITH its <code>.be</code>: <code>jab ls</code> → rc=0 and 288 bytes of rows, so the verbs themselves are healthy.</li>
+<li>Incident: <code>be-js-bro-universal</code> goes red on GitHub Actions with 6 FAILs (<code>pipe-*-has-output</code>, <code>tty-*-entered-pager</code>) and every <code>*-exit0</code> ok — the empty-and-successful shape, misread for months as a pager flake.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A read verb with no resolvable worktree refuses loudly and uniformly: non-zero exit, one plain-words line on stderr, no bare <code>WTNONE</code>, no <code>JS exception:</code> prefix.</li>
+<li><code>ls</code>/<code>cat</code>/<code>grep</code>/<code>log</code> stop exiting 0 — they take the same gate <code>status</code>/<code>diff</code> already reach.</li>
+<li>A genuinely EMPTY worktree stays distinct from a MISSING one: empty is still exit 0 with no rows.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The anchor lookup itself is not in question — it keeps going through <code>core/discover.js</code> + <code>core/resolve_hash.js</code> (<a href="/wiki/URI.html">URI</a>); this ticket is about what the caller does with a failed lookup.</li>
+<li>No new error code: <code>WTNONE</code> is the right condition; the defect is its PRESENTATION plus the call sites that never consult it.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Undecided: one gate in the shared view/loop entry versus per-verb guards. The single gate is preferable — the split behaviour above is exactly what per-verb guards produce.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./ .html"> </a> Repro test: each read verb from a <code>.be</code>-less dir → non-zero exit + a plain-words stderr line; the empty-worktree case still exits 0. -<a href="./ .html"> </a> Find where <code>status</code>/<code>diff</code> reach the WTNONE throw and why the <code>ls</code>/<code>cat</code>/<code>grep</code>/<code>log</code> paths return an empty stream instead. -<a href="./ .html"> </a> Route the refusal through the plain-words error path; drop the <code>JS exception:</code> prefix for an expected user error. -<a href="./ .html"> </a> Re-check <code>test/bro/universal</code> against the fix (its fixture-seeding repair is independent and lands separately).
+</p>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known; the repro is one <code>rm -rf .be</code> away in any clone.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Not started.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

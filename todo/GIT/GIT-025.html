@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIT-025: PACKRecordEnd carves obj.size straight off the wire — unbounded scratch</title>
+<meta property="og:title" content="GIT-025: PACKRecordEnd carves obj.size straight off the wire — unbounded scratch">
+<meta property="og:description" content="PACKRecordEnd (dog/git/PACK.c:184-202) measures a record's extent by inflating it into BASS scratch sized acarve(u8, sc, obj.size) — and obj.size is the record's own untrusted varint, up to ~2^60. One corrupt or hostile record demands an arbitrary carve: OOM/DoS at every scan site (PIDXScan per record, the js binding via GIT-007). Found in the 2026-07-24 dog/git review. Method: work.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GIT/GIT-025.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GIT-025: <code>PACKRecordEnd</code> carves <code>obj.size</code> straight off the wire — unbounded scratch</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
+<p>
+<code>PACKRecordEnd</code> (<code>dog/git/PACK.c:184-202</code>) measures a record's extent by inflating it into BASS scratch sized <code>a_carve(u8, sc, obj.size)</code> — and <code>obj.size</code> is the record's own untrusted varint, up to ~2^60.  One corrupt or hostile record demands an arbitrary carve: OOM/DoS at every scan site (<code>PIDXScan</code> per record, the js binding via <a href="GIT-007.html">GIT-007</a>).  Found in the 2026-07-24 dog/git review.  Method: <a href="../../meta/work.html">work</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>dog/git/PACK.c:197</code> — <code>a_carve(u8, sc, obj.size ? obj.size : 1)</code>; the varint decoder (<code>PACKDrainVarint</code>) happily yields huge sizes.</li>
+<li>zlib's max compression ratio is ~1032:1, so a genuine record's inflated size is bounded by <code>(packlen - offset) * 1032</code> — anything above that is corruption by construction, rejectable BEFORE carving.</li>
+<li>Interplay with <a href="GIT-011.html">GIT-011</a>: today's <code>ZINFInflate</code> output-wrap is what makes &quot;inflate into a too-small buffer&quot; survivable-but-corrupting; once GIT-011 lands a NOROOM error, a chunked measure loop (fixed small carve, count <code>total_out</code>) becomes the clean way to size-check.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A record declaring an absurd size returns PACKBADFMT (bounded error), never a giant carve.  Honest packs measure byte-identically.</li>
+<li>Repro-first: a crafted header declaring e.g. 2^40 bytes — today it attempts a 1TB carve; expect the bounded error instead.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>dog/git</code> libdog, ABC style; BASS carve rules (abc.mkd §BASS) — the carve stays in the op's own frame.</li>
+<li><code>PIDXScan</code> / keeper scan callers and their tests stay green.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Cheapest fix: <code>test(obj.size &lt;= (packlen - offset) * 1032ULL, PACKBADFMT)</code> before the carve (watch the multiply overflow — clamp first).  The chunked-measure rewrite can ride with <a href="GIT-011.html">GIT-011</a>.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro test in <code>dog/test/</code> (absurd declared size → bounded error).</li>
+<li class="open"><input type="checkbox" disabled> Land the pre-carve bound; ctest green.</li>
+<li class="open"><input type="checkbox" disabled> After <a href="GIT-011.html">GIT-011</a>: consider chunked measuring to drop the big carve entirely (also fixes lying-size records corrupting the measure).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known; the full chunked-measure path is blocked on <a href="GIT-011.html">GIT-011</a>.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

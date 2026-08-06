@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DOG-004</title>
+<title>DOG-004: dog/WEAVE emit + scope-bitset + large-file cap</title>
+<meta property="og:title" content="DOG-004: dog/WEAVE emit + scope-bitset + large-file cap">
+<meta property="og:description" content="Port the rendering surface onto dog/WEAVE (DOG-003): WEAVEEmitDiff (windowed), WEAVEEmitFull (whole-file), WEAVEEmitMerged (conflict framing), all over an index-bitset scope instead of WEAVEsetfn callbacks. Wire the 16 MiB cap + coarse large-file fallback here, folding DIFF-007. Output stays HUNK records via the existing renderers. Gates on DOG-003.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DOG/DOG-004.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,50 +16,34 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>DOG-004: <code>dog/WEAVE</code> emit + scope-bitset + large-file cap</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 Port the rendering surface onto <code>dog/WEAVE</code> (<a href="DOG-003.html">DOG-003</a>): <code>WEAVEEmitDiff</code> (windowed), <code>WEAVEEmitFull</code> (whole-file), <code>WEAVEEmitMerged</code> (conflict framing), all over an index-bitset scope instead of <code>WEAVEsetfn</code> callbacks. Wire the 16 MiB cap + coarse large-file fallback here, folding <a href="../DIFF/DIFF-007.html">DIFF-007</a>. Output stays HUNK records via the existing renderers. Gates on <a href="DOG-003.html">DOG-003</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Today emit takes <code>WEAVEsetfn in_from/in_to</code> callbacks + a per-call decode;<p>
-<code>WEAVEEmitFull</code> carves a fixed 65536-tok buffer that overflows (<a href="../DIFF/DIFF-007.html">DIFF-007</a>).
-</p>
-</li>
-<li>A scope is naturally a set of <code>commits[]</code> indices (a rev closure), so the<p>
-callbacks collapse to array-membership tests.
-</p>
-</li>
+<li>Today emit takes <code>WEAVEsetfn in_from/in_to</code> callbacks + a per-call decode; <code>WEAVEEmitFull</code> carves a fixed 65536-tok buffer that overflows (<a href="../DIFF/DIFF-007.html">DIFF-007</a>).</li>
+<li>A scope is naturally a set of <code>commits[]</code> indices (a rev closure), so the callbacks collapse to array-membership tests.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>Emit{Diff,Full,Merged}</code> take <code>u32cs from/to</code> (or group sets); same hunk<p>
-URIs / <code>navver</code> / <code>scheme</code> as today (<a href="../DIFF/DIFF-003.html">DIFF-003</a>/<a href="../DIFF/DIFF-004.html">DIFF-004</a> preserved).
-</p>
-</li>
-<li>Large-file path: when weave text &gt; 16 MiB, fall back to coarse blob-level<p>
-emit and REPORT it (a <code>capped</code> status row), never silently empty (<a href="../DIFF/DIFF-007.html">DIFF-007</a>).
-</p>
-</li>
+<li><code>Emit{Diff,Full,Merged}</code> take <code>u32cs from/to</code> (or group sets); same hunk URIs / <code>navver</code> / <code>scheme</code> as today (<a href="../DIFF/DIFF-003.html">DIFF-003</a>/<a href="../DIFF/DIFF-004.html">DIFF-004</a> preserved).</li>
+<li>Large-file path: when weave text &gt; 16 MiB, fall back to coarse blob-level emit and REPORT it (a <code>capped</code> status row), never silently empty (<a href="../DIFF/DIFF-007.html">DIFF-007</a>).</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Output hunks stay HUNK-renderable (<code>HUNKu8sFeedOut</code>); side bits rewritten<p>
-eq/in/rm at emit. Byte-parity with current diff/blame/merged where uncapped.
-</p>
-</li>
+<li>Output hunks stay HUNK-renderable (<code>HUNKu8sFeedOut</code>); side bits rewritten eq/in/rm at emit. Byte-parity with current diff/blame/merged where uncapped.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Reuse <code>weave_overlay_syntax</code> (re-tokenize hunk text for tags; the weave<p>
-stores none). Flush-before-overflow guards become cap-driven, not fixed.
-</p>
-</li>
-<li><code>WEAVEEmitMerged</code> keeps the byte-equality group collapse (foster/cherry<p>
-re-absorption is not a real conflict).
-</p>
-</li>
+<li>Reuse <code>weave_overlay_syntax</code> (re-tokenize hunk text for tags; the weave stores none). Flush-before-overflow guards become cap-driven, not fixed.</li>
+<li><code>WEAVEEmitMerged</code> keeps the byte-equality group collapse (foster/cherry re-absorption is not a real conflict).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -72,5 +60,16 @@ re-absorption is not a real conflict).
 <li>Landed <code>cba618d4</code> (libdog) / <code>760439f3</code> (beagle), 20Jun: &quot;dog/WEAVE emit over scope bitmaps + 16 MiB cap&quot;.</li>
 <li>Audit 2026-07-07: all three emitters + cap + <code>capped</code> status row + WEAVE02 tests verified in libdog HEAD <code>79612854</code>. Closed; the graf cut-over is <a href="./DOG-005.html">DOG-005</a>.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

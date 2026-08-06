@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>STATUS-002</title>
+<title>STATUS-002: be status ignores only the sub's own .gitignore — needs hierarchical (cwd→$HOME) compounding</title>
+<meta property="og:title" content="STATUS-002: be status ignores only the sub's own .gitignore — needs hierarchical (cwd→$HOME) compounding">
+<meta property="og:description" content="be status:&lt;sub&gt;/ floods with unk for paths the repo-root .gitignore should exclude (build-/, .o, CMakeFiles/, …): the relayed sub-scan IGNOLoads only the SUBMODULE's own .gitignore, which abc lacks, so the parent's patterns never reach the sub's paths. Bare be collapses a sub to one summary row (no flood) — that's the &quot;intermittent&quot;. Fix: hierarchical .gitignore resolution — load every .gitignore from the classified path's directory UP to $HOME (or / if outside $HOME) and COMPOUND them, crossing submodule boundaries, the way nested git ignores stack. NO hardcoded directory names. See Sniff.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/STATUS/STATUS-002.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,108 +16,67 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>STATUS-002: <code>be status</code> ignores only the sub's own <code>.gitignore</code> — needs hierarchical (cwd→$HOME) compounding</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>be status:&lt;sub&gt;/</code> floods with <code>unk</code> for paths the repo-root <code>.gitignore</code> should exclude (<code>build-*/</code>, <code>*.o</code>, <code>CMakeFiles/</code>, …): the relayed sub-scan <code>IGNOLoad</code>s only the SUBMODULE's own <code>.gitignore</code>, which <code>abc</code> lacks, so the parent's patterns never reach the sub's paths. Bare <code>be</code> collapses a sub to one summary row (no flood) — that's the &quot;intermittent&quot;. Fix: hierarchical <code>.gitignore</code> resolution — load every <code>.gitignore</code> from the classified path's directory UP to <code>$HOME</code> (or <code>/</code> if outside <code>$HOME</code>) and COMPOUND them, crossing submodule boundaries, the way nested git ignores stack. NO hardcoded directory names. See <a href="../../wiki/Sniff.html">Sniff</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Repro (deterministic; same on PATH <code>be</code> and a fresh build — NOT skew): build<p>
-the <code>abc</code> sub (makes <code>abc/build-debug/{CMakeCache.txt,*.o,…}</code>), then <code>be status:abc/</code> → ~15 <code>unk abc/build-debug/...</code> rows.
-</p>
-</li>
-<li><code>be status:&lt;sub&gt;/</code> relays into the sub's worktree; its <code>SNIFFOpen</code>/<code>IGNOLoad</code><p>
-reads only the SUB's own <code>.gitignore</code> (absent for <code>abc</code>), so the repo-root <code>.gitignore</code> never governs the sub's paths.
-</p>
-</li>
+<li>Repro (deterministic; same on PATH <code>be</code> and a fresh build — NOT skew): build the <code>abc</code> sub (makes <code>abc/build-debug/{CMakeCache.txt,*.o,…}</code>), then <code>be status:abc/</code> → ~15 <code>unk abc/build-debug/...</code> rows.</li>
+<li><code>be status:&lt;sub&gt;/</code> relays into the sub's worktree; its <code>SNIFFOpen</code>/<code>IGNOLoad</code> reads only the SUB's own <code>.gitignore</code> (absent for <code>abc</code>), so the repo-root <code>.gitignore</code> never governs the sub's paths.</li>
 <li>Bare <code>be</code> collapses the sub to one summary row → no flood (the &quot;intermittent&quot;).</li>
-<li>POST-020 (<code>8c7f5f3a</code>) REFUTED: <code>sniff/SNIFF.c</code>/<code>CLASS.c</code>/<code>dog/git/IGNO.c</code>/<p>
-<code>ULOG.c</code> are byte-identical to parent <code>d8fec51a</code>; the bug is pre-existing / structural (since submodule projector recursion), not a regression.
-</p>
-</li>
-<li>The repo-root <code>.gitignore</code> already lists every flooded pattern — it just<p>
-isn't consulted from inside the sub.
-</p>
-</li>
+<li>POST-020 (<code>8c7f5f3a</code>) REFUTED: <code>sniff/SNIFF.c</code>/<code>CLASS.c</code>/<code>dog/git/IGNO.c</code>/ <code>ULOG.c</code> are byte-identical to parent <code>d8fec51a</code>; the bug is pre-existing / structural (since submodule projector recursion), not a regression.</li>
+<li>The repo-root <code>.gitignore</code> already lists every flooded pattern — it just isn't consulted from inside the sub.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Hierarchical <code>.gitignore</code>: classifying a path loads every <code>.gitignore</code> from<p>
-its directory up to <code>$HOME</code> (or <code>/</code> if not under <code>$HOME</code>) and COMPOUNDS them (git precedence: nearer/deeper rules add or override; <code>!</code> negation honored).
-</p>
-</li>
-<li>The chain CROSSES submodule boundaries, so a parent repo's <code>.gitignore</code><p>
-governs nested sub paths — this is what fixes the <code>abc/build-debug</code> flood.
-</p>
-</li>
-<li>No hardcoded dir names; <code>build</code>/<code>Corpus</code>/etc. are excluded ONLY because the<p>
-real <code>.gitignore</code>s in the chain list them.
-</p>
-</li>
+<li>Hierarchical <code>.gitignore</code>: classifying a path loads every <code>.gitignore</code> from its directory up to <code>$HOME</code> (or <code>/</code> if not under <code>$HOME</code>) and COMPOUNDS them (git precedence: nearer/deeper rules add or override; <code>!</code> negation honored).</li>
+<li>The chain CROSSES submodule boundaries, so a parent repo's <code>.gitignore</code> governs nested sub paths — this is what fixes the <code>abc/build-debug</code> flood.</li>
+<li>No hardcoded dir names; <code>build</code>/<code>Corpus</code>/etc. are excluded ONLY because the real <code>.gitignore</code>s in the chain list them.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>ROLL BACK the prior stop-gap (unconditional <code>build*/</code>/<code>Corpus/</code> ignore in<p>
-<code>IGNOMatch</code>): <code>Corpus</code> is not special — restore pattern-only matching.
-</p>
-</li>
-<li>Honor git pattern semantics (anchoring, dir-only trailing <code>/</code>, <code>!</code> negation,<p>
-precedence) across the compounded chain.
-</p>
-</li>
-<li>Terminate the walk at <code>$HOME</code> (or <code>/</code>); cache the chain per directory so the<p>
-status walk doesn't reload <code>.gitignore</code>s for every leaf.
-</p>
-</li>
+<li>ROLL BACK the prior stop-gap (unconditional <code>build*/</code>/<code>Corpus/</code> ignore in <code>IGNOMatch</code>): <code>Corpus</code> is not special — restore pattern-only matching.</li>
+<li>Honor git pattern semantics (anchoring, dir-only trailing <code>/</code>, <code>!</code> negation, precedence) across the compounded chain.</li>
+<li>Terminate the walk at <code>$HOME</code> (or <code>/</code>); cache the chain per directory so the status walk doesn't reload <code>.gitignore</code>s for every leaf.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>REJECTED (the prior worker's landed-in-tree fix, to be rolled back):<p>
-<code>igno_is_build</code>/<code>Corpus</code> special-case in <code>IGNOMatch</code> — a hardcoded dir blacklist, not ignore resolution.
-</p>
-</li>
-<li>CHOSEN: an <code>.gitignore</code> STACK loaded leaf-dir → <code>$HOME</code>/<code>/</code>; <code>IGNOMatch</code><p>
-consults it nearest-first with git precedence; built once per directory (cached), not per leaf.  Localize in <code>dog/git/IGNO</code> + the <code>sniff/SNIFF</code> open/scan that drives it (incl. the <code>be status:&lt;sub&gt;/</code> relay).
-</p>
-</li>
+<li>REJECTED (the prior worker's landed-in-tree fix, to be rolled back): <code>igno_is_build</code>/<code>Corpus</code> special-case in <code>IGNOMatch</code> — a hardcoded dir blacklist, not ignore resolution.</li>
+<li>CHOSEN: an <code>.gitignore</code> STACK loaded leaf-dir → <code>$HOME</code>/<code>/</code>; <code>IGNOMatch</code> consults it nearest-first with git precedence; built once per directory (cached), not per leaf.  Localize in <code>dog/git/IGNO</code> + the <code>sniff/SNIFF</code> open/scan that drives it (incl. the <code>be status:&lt;sub&gt;/</code> relay).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Roll back the prior fix: no <code>igno_is_build*</code>/<code>Corpus</code> anywhere in<p>
-  <code>dog/git/IGNO.c</code> or <code>dog/test/IGNO.c</code> (audit-verified); <code>IGNOMatch</code> pattern-only.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Implement the chain: <code>IGNOLoad</code> walks the anchor dir up to <code>$HOME</code>/<code>/</code><p>
-  (IGNO.c:239-276), stacks every <code>.gitignore</code>, git precedence incl. <code>!</code>   (nearest-first consult, IGNO.c:332+), built once per load — dog <code>623b5a9e</code>.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Wire into the status walk: <code>sniff/SNIFF.c:303 IGNOLoad(&amp;s-&gt;ignores, wt_for_ig)</code><p>
-  — the upward chain crosses sub boundaries, so a sub scan inherits parent rules.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Repro-first test: <code>dog/test/IGNO.c</code> STATUS-002 chain property cases<p>
-  (igno_chain_case: parent-only pattern + <code>!</code> negation/precedence). ctest green.
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Roll back the prior fix: no <code>igno_is_build*</code>/<code>Corpus</code> anywhere in <code>dog/git/IGNO.c</code> or <code>dog/test/IGNO.c</code> (audit-verified); <code>IGNOMatch</code> pattern-only.</li>
+<li class="done"><input type="checkbox" checked disabled> Implement the chain: <code>IGNOLoad</code> walks the anchor dir up to <code>$HOME</code>/<code>/</code> (IGNO.c:239-276), stacks every <code>.gitignore</code>, git precedence incl. <code>!</code> (nearest-first consult, IGNO.c:332+), built once per load — dog <code>623b5a9e</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> Wire into the status walk: <code>sniff/SNIFF.c:303 IGNOLoad(&amp;s-&gt;ignores, wt_for_ig)</code> — the upward chain crosses sub boundaries, so a sub scan inherits parent rules.</li>
+<li class="done"><input type="checkbox" checked disabled> Repro-first test: <code>dog/test/IGNO.c</code> STATUS-002 chain property cases (igno_chain_case: parent-only pattern + <code>!</code> negation/precedence). ctest green.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Prior worker flagged the STATUS-002 worktree <code>/</code> at 100% disk (built via a<p>
-tmpfs symlink).  Watch disk on the rerun.
-</p>
-</li>
+<li>Prior worker flagged the STATUS-002 worktree <code>/</code> at 100% disk (built via a tmpfs symlink).  Watch disk on the rerun.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED dog <code>623b5a9e</code> / beagle pin <code>7d60c8ae</code> &quot;STATUS-002 hierarchical<p>
-.gitignore across submodules&quot;: the chosen <code>.gitignore</code> STACK (leaf dir → <code>$HOME</code>/<code>/</code>, git precedence, <code>!</code> negation) in <code>dog/git/IGNO.c</code>, consumed via <code>sniff/SNIFF.c IGNOLoad</code>; the build/Corpus stop-gap is gone (rolled back).
-</p>
-</li>
-<li>Audit 2026-07-07: code + tests verified in-tree (<code>dog/test/IGNO.c</code> chain<p>
-cases); no hardcoded dir names remain. CLOSED.
-</p>
-</li>
+<li>LANDED dog <code>623b5a9e</code> / beagle pin <code>7d60c8ae</code> &quot;STATUS-002 hierarchical .gitignore across submodules&quot;: the chosen <code>.gitignore</code> STACK (leaf dir → <code>$HOME</code>/<code>/</code>, git precedence, <code>!</code> negation) in <code>dog/git/IGNO.c</code>, consumed via <code>sniff/SNIFF.c IGNOLoad</code>; the build/Corpus stop-gap is gone (rolled back).</li>
+<li>Audit 2026-07-07: code + tests verified in-tree (<code>dog/test/IGNO.c</code> chain cases); no hardcoded dir names remain. CLOSED.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

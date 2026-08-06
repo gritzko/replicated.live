@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORK-018: gitlink pins via per-path descent — a shared utility, not a whole-tree walk</title>
+<meta property="og:title" content="WORK-018: gitlink pins via per-path descent — a shared utility, not a whole-tree walk">
+<meta property="og:description" content="work.js nodePins answers &quot;what sha does this tree pin its mounts at&quot; by readTreeRecursive over the node's ENTIRE base tree — every tree object of the project inflated to find a handful of gitlink leaves whose paths are already known from .gitmodules. Make pin lookup a shared utility that descends each known path only.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/WORK/WORK-018.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WORK-018: gitlink pins via per-path descent — a shared utility, not a whole-tree walk</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+<code>work.js</code> nodePins answers &quot;what sha does this tree pin its mounts at&quot; by <code>readTreeRecursive</code> over the node's ENTIRE base tree — every tree object of the project inflated to find a handful of gitlink leaves whose paths are already known from <code>.gitmodules</code>. Make pin lookup a shared utility that descends each known path only.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Profiled <code>jab work</code> 2026-07-24: nodePins contributes a full-tree object walk per node that holds pins (the root + every mounted sub with children).
+</p>
+<ul>
+<li><code>views/work/work.js</code> nodePins: <code>k.readTreeRecursive(tree, cb)</code> collects <code>kind === &quot;s&quot;</code> leaves — O(all tree objects) getObject+inflate per node, per run.</li>
+<li>The consumers only ever ask for pins at <code>gitmodules.paths(dir)</code> entries (treeRows mount ahbeh, resolveTrack pin-form tracks) — a known, short path list.</li>
+<li><code>store.js</code> reader already has the primitive: <code>descendPath(rootTreeSha, segments)</code> resolves one path in O(depth) tree reads.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+A shared fn: (keeper, commitSha, paths[]) → { path: gitlinkSha }, descending each path; work.js nodePins becomes a thin memo over it.
+</p>
+<ul>
+<li>Cost drops O(tree objects) → O(mounts × depth) per node; unpinned/missing paths simply absent from the map (current nodePins semantics).</li>
+<li>A path whose leaf is not a gitlink (mode != 160000) is absent from the map — same as today's <code>kind === &quot;s&quot;</code> filter.</li>
+<li>Utility lives in shared/ (gitmodules.js or a store.js reader method — implementer's pick), so status/subs stop hand-rolling the same lookup if they need it.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Resolution stays on store.js descendPath — no new tree parser, no path string surgery beyond '/'-segment split.</li>
+<li>Keeper opened by the caller (borrowed), the shared/ resource norm.</li>
+<li>Behavior parity: work view renders byte-identical rows (the existing WORK tests are the harness).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> repro/parity test: pins via descent == pins via readTreeRecursive on the live journal root.</li>
+<li><a href="./ .html"> </a> the shared utility fn + work.js nodePins on top.</li>
+<li><a href="./ .html"> </a> strace before/after: tree-object reads per <code>jab work</code> drop to O(mounts × depth).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>GRAF-002 p3 (tree-child edges) would make this seek-served later; the utility's signature should not preclude an index-first impl underneath.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

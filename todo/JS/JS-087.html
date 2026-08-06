@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-087</title>
+<title>JS-087: core/ and shared/ depend UPWARD on view/ (relocate shQuote, emit)</title>
+<meta property="og:title" content="JS-087: core/ and shared/ depend UPWARD on view/ (relocate shQuote, emit)">
+<meta property="og:description" content="The dispatch loop and the git wire client import the rendering layer — an upward dependency that makes view/ un-droppable from a headless or server build and couples the transport to the UI. Worst: wire.js, a git transport client, pulls the POSIX-quoting primitive shQuote from view/render.js. emit.js (the output sink in core/) requires view/render.js + view/theme.js at module top. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-087.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,69 +15,44 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-087 <a href="./MED.html">MED</a>: <code>core/</code> and <code>shared/</code> depend UPWARD on <code>view/</code> (relocate shQuote, emit)</h1>
+<h1>JS-087: <code>core/</code> and <code>shared/</code> depend UPWARD on <code>view/</code> (relocate shQuote, emit)</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
 <p>
 The dispatch loop and the git wire client import the rendering layer — an upward dependency that makes <code>view/</code> un-droppable from a headless or server build and couples the transport to the UI.  Worst: wire.js, a git transport client, pulls the POSIX-quoting primitive <code>shQuote</code> from <code>view/render.js</code>.  emit.js (the output sink in core/) requires view/render.js + view/theme.js at module top.  Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>wire.js:22 <code>const shq = require(&quot;../view/render.js&quot;).shQuote;</code><p>
-— a transport module reaching into the renderer for a shell quoter.
-</p>
-</li>
-<li>view/render.js:32 <code>function shQuote(s){…}</code> — pure POSIX single-<p>
-quote, zero render dependency; exported at render.js:35.
-</p>
-</li>
-<li>emit.js:14-15 require <code>view/render.js</code> + <code>view/theme.js</code> at top<p>
-— core/ depending on view/ for the columniser/theme.
-</p>
-</li>
-<li>loop.js:23 <code>require(_here+&quot;/view/bro.js&quot;)</code> — the dispatch loop<p>
-reaches into view/ for the edge renderHunkLog.
-</p>
-</li>
+<li>wire.js:22 <code>const shq = require(&quot;../view/render.js&quot;).shQuote;</code> — a transport module reaching into the renderer for a shell quoter.</li>
+<li>view/render.js:32 <code>function shQuote(s){…}</code> — pure POSIX single- quote, zero render dependency; exported at render.js:35.</li>
+<li>emit.js:14-15 require <code>view/render.js</code> + <code>view/theme.js</code> at top — core/ depending on view/ for the columniser/theme.</li>
+<li>loop.js:23 <code>require(_here+&quot;/view/bro.js&quot;)</code> — the dispatch loop reaches into view/ for the edge renderHunkLog.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Move <code>shQuote</code> to <code>shared/util/shell.js</code>; wire.js + render.js +<p>
-status.js consume it from there (no view/ import in wire.js).
-</p>
-</li>
-<li>Relocate emit.js under view/ (the sink IS a render concern), or<p>
-have core depend only on the injected ctx.out/ctx.sink seam.
-</p>
-</li>
+<li>Move <code>shQuote</code> to <code>shared/util/shell.js</code>; wire.js + render.js + status.js consume it from there (no view/ import in wire.js).</li>
+<li>Relocate emit.js under view/ (the sink IS a render concern), or have core depend only on the injected ctx.out/ctx.sink seam.</li>
 <li>After: <code>shared/</code> and the transport import NOTHING from view/.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Byte-identical banners + wire argv: render.js re-exporting the<p>
-moved shQuote keeps existing render call sites unchanged.
-</p>
-</li>
+<li>Byte-identical banners + wire argv: render.js re-exporting the moved shQuote keeps existing render call sites unchanged.</li>
 <li>No new bindings; pure JS move (libabc only for shell.js).</li>
 <li>Parity: SUT=loop hunk render path stays byte-for-byte.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li><code>shared/util/shell.js::shQuote</code> is the canonical home (a sibling<p>
-of util/path.js + util/sha.js, JSQUE-016 layering); render.js re-exports for back-compat.
-</p>
-</li>
-<li>loop.js's view/bro.js edge is the legit core→view seam IF it is<p>
-the ONLY one; the goal is to make it the single arrow, not many.
-</p>
-</li>
+<li><code>shared/util/shell.js::shQuote</code> is the canonical home (a sibling of util/path.js + util/sha.js, JSQUE-016 layering); render.js re-exports for back-compat.</li>
+<li>loop.js's view/bro.js edge is the legit core→view seam IF it is the ONLY one; the goal is to make it the single arrow, not many.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: assert wire.js argv quoting + a banner with a<p>
- quoted path render byte-identical before/after the move.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: assert wire.js argv quoting + a banner with a quoted path render byte-identical before/after the move.</li>
 <li class="open"><input type="checkbox" disabled> Add shared/util/shell.js; repoint wire.js:22, render.js, status.</li>
 <li class="open"><input type="checkbox" disabled> Relocate emit.js under view/ (or inject sink via ctx.out only).</li>
 </ul>
@@ -82,14 +61,23 @@ the ONLY one; the goal is to make it the single arrow, not many.
 <li class="blocked"><input type="checkbox" disabled> emit relocation ripples loop.js's sink wiring — keep the seam thin.</li>
 </ul>
 <ul>
-<li>2026-07-07 audit: STILL OPEN — <code>shared/wire.js:22</code> still <code>require(&quot;../view/render.js&quot;).shQuote</code>;<p>
-<code>core/emit.js:14-15</code> still require <code>view/render.js</code>+<code>view/theme.js</code>; no <code>shared/util/shell.js</code> exists (<code>shared/util/</code> holds only ignore/path/sha).
-</p>
-</li>
+<li>2026-07-07 audit: STILL OPEN — <code>shared/wire.js:22</code> still <code>require(&quot;../view/render.js&quot;).shQuote</code>; <code>core/emit.js:14-15</code> still require <code>view/render.js</code>+<code>view/theme.js</code>; no <code>shared/util/shell.js</code> exists (<code>shared/util/</code> holds only ignore/path/sha).</li>
+<li>2026-07-10 revision: still OPEN — wire.js:22 <code>require(&quot;../view/render.js&quot;).shQuote</code>; emit.js:14-15 require view/render.js+view/theme.js; shared/util/ = ignore/path/sha only, no shell.js</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>(pending)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

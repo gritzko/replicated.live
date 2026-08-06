@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIT-029: git plumbing verbs — cat-file/ls-tree/rev-parse/ls-files/merge-base with git-parity output</title>
+<meta property="og:title" content="GIT-029: git plumbing verbs — cat-file/ls-tree/rev-parse/ls-files/merge-base with git-parity output">
+<meta property="og:description" content="The tooling layer of the git compat story: the plumbing subset that editors, CI, and scripts actually shell out to. These are raw store reads — they must NOT round-trip through be verbs; they map straight onto the store reader / dog-core primitives jab already binds. Output byte-parity with real git for the common invocations is the whole point: a tool that parses git ls-tree output must parse ours. Lives in the same compat repo as the GIT-028 porcelain shims.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GIT/GIT-029.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GIT-029: git plumbing verbs — cat-file/ls-tree/rev-parse/ls-files/merge-base with git-parity output</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+The tooling layer of the git compat story: the plumbing subset that editors, CI, and scripts actually shell out to. These are raw store reads — they must NOT round-trip through be verbs; they map straight onto the store reader / dog-core primitives jab already binds. Output byte-parity with real git for the common invocations is the whole point: a tool that parses <code>git ls-tree</code> output must parse ours. Lives in the same compat repo as the <a href="GIT-028.html">GIT-028</a> porcelain shims.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Store access exists: <code>shared/store.js</code> open/reader, the serve-side closure walk, tree reads via <code>core/discover.treeAt</code> — plumbing is a thin formatting pass over these.</li>
+<li>Reference C for pack/tree walking is <code>///jab/dog/</code>; jab-side plumbing stays JS over the same store, no new native binding.</li>
+<li>All name/hashlet → sha resolution goes through <code>core/resolve_hash.js</code> — the mandated single path; a hashlet is any 6..40 hex prefix.</li>
+<li>Consumers to satisfy first: editor gutters/plugins and CI scripts — <code>rev-parse</code> + <code>cat-file</code> + <code>ls-files</code> cover most of what they spawn.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Read-only plumbing verbs over a <code>.be</code> store: <code>cat-file</code> (-t/-s/-p and the bare blob form), <code>ls-tree</code>, <code>rev-parse</code> (ref or hashlet → sha), <code>ls-files</code>, <code>merge-base</code>, <code>hash-object</code> (hash only, no <code>-w</code>).</li>
+<li>Output parity: for the supported invocations, stdout is byte-equal to real git on the same repo content — proven by a diff harness in tests.</li>
+<li>Errors in plain words when a rev does not resolve or a path is not tracked, on stderr, exit codes matching git's 0/1/128 convention.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Read-only surface: no verb here writes the store (<code>hash-object -w</code> is excluded; writing belongs to the be verbs).</li>
+<li>Resolution reuses <code>resolve_hash.js</code> — NO parallel ref/hashlet parsing.</li>
+<li>Formatting only: any missing store capability (say, a walk order) is filed against the core, not hacked into the plumbing verb.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>One <code>jsrc/verbs/&lt;name&gt;/</code> per command in the compat repo, sharing one small formatter module for the git output shapes (mode, type, sha, QUOTED paths per git's c-style quoting).</li>
+<li>Parity harness: a fixture repo readable by BOTH git and jab; each test runs the same invocation twice and diffs stdout byte-for-byte.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> 1. <code>rev-parse</code>: ref name or hashlet → full sha via resolve_hash; the highest-frequency spawn, do it first.</li>
+<li class="open"><input type="checkbox" disabled> 2. <code>cat-file -t/-s/-p</code> + bare blob dump.</li>
+<li class="open"><input type="checkbox" disabled> 3. <code>ls-tree</code> (tree lines, <code>-r</code> recurse), incl. c-style path quoting.</li>
+<li class="open"><input type="checkbox" disabled> 4. <code>ls-files</code> over the current worktree's tracked set.</li>
+<li class="open"><input type="checkbox" disabled> 5. <code>merge-base</code> over the commit DAG (<code>shared/dag.js</code>).</li>
+<li class="open"><input type="checkbox" disabled> 6. <code>hash-object</code> (pure hash, stdin + path forms), no <code>-w</code>.</li>
+<li class="open"><input type="checkbox" disabled> 7. Parity harness in test/: byte-diff vs real git per invocation.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>git's c-style path quoting and mode strings are fiddly parity traps — the harness must include a path with spaces/UTF-8 from day one.</li>
+<li><code>ls-files</code> semantics depend on the staged-set reading (<code>stage.js</code>); divergence there surfaces here first and is its OWN ticket.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Open. Filed 2026-07-29 from the git-compat-layer design discussion, option 2 of 3 (shim <a href="GIT-028.html">GIT-028</a> / plumbing / wire <a href="GIT-027.html">GIT-027</a>).</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

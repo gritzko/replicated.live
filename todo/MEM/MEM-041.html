@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-041</title>
+<title>MEM-041: sniff — error-path resource leaks in PATCH blob-write and POST commit</title>
+<meta property="og:title" content="MEM-041: sniff — error-path resource leaks in PATCH blob-write and POST commit">
+<meta property="og:description" content="Two sniff error paths leak a resource because a bare call() sits between an acquisition and its release. writeblob (PATCH.c:229) FILECreate's an fd then call(FILEFeedAll, fd, data) — a write failure early-returns and leaks the open fd. POSTCommit (POST.c:2651, the core be post commit-emission) KEEPPackOpen's a keeper pack (fd + mmaps + heap) then a bare call(postfeedemptytree, ...) early-returns on KEEPPackFeed failure, leaking the whole pack. Both are reachable on a real I/O / pack error, missed by the happy-path suite. From the MEM sweep.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-041.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>MEM-041: sniff — error-path resource leaks in PATCH blob-write and POST commit</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 Two sniff error paths leak a resource because a bare call() sits between an acquisition and its release. write_blob (PATCH.c:229) FILECreate's an fd then <code>call(FILEFeedAll, fd, data)</code> — a write failure early-returns and leaks the open fd. POSTCommit (POST.c:2651, the core be post commit-emission) KEEPPackOpen's a keeper pack (fd + mmaps + heap) then a bare <code>call(post_feed_empty_tree, ...)</code> early-returns on KEEPPackFeed failure, leaking the whole pack. Both are reachable on a real I/O / pack error, missed by the happy-path suite. From the <a href="MEM.html">MEM</a> sweep.
 </p>
@@ -30,11 +39,22 @@ None; sniff-internal. Use the close-before-return idiom already standard in this
 <h2>WIP</h2>
 <h3>TODOs</h3>
 <p>
- -<a href="./v.html">v</a> write_blob: captures the FILEFeedAll result, FILECloses the fd unconditionally, then propagates — sniff/PATCH.c:212-220 (<code>a338e631</code>).  -<a href="./v.html">v</a> POSTCommit: KEEPPackCloses the pack on the post_feed_empty_tree error path — sniff/POST.c:2813-2822 (<code>a338e631</code>).  -<a href="./x.html">x</a> Repro: no dedicated fault-injection test landed with <code>a338e631</code>; fix verified by code inspection 2026-07-07 (both sites carry MEM-041 comments).
+ -<a href="./v.html">v</a> write_blob: captures the FILEFeedAll result, FILECloses the fd unconditionally, then propagates — sniff/PATCH.c:212-220 (<code>a338e631</code>). -<a href="./v.html">v</a> POSTCommit: KEEPPackCloses the pack on the post_feed_empty_tree error path — sniff/POST.c:2813-2822 (<code>a338e631</code>). -<a href="./x.html">x</a> Repro: no dedicated fault-injection test landed with <code>a338e631</code>; fix verified by code inspection 2026-07-07 (both sites carry MEM-041 comments).
 </p>
 <h2>Outcome</h2>
 <ul>
 <li><code>a338e631</code> sniff: write_blob close-before-return (PATCH.c:214-220); POSTCommit KEEPPackClose on the empty-tree feed failure (POST.c:2814-2822) — the MEM-026 capture-result/close/check idiom at both sites.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

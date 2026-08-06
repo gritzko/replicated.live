@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-078: track/base are fundamentals — ONE shared wtlog routine for each, all hand-rolled last-get / last-get-post scans unified</title>
+<meta property="og:title" content="DIS-078: track/base are fundamentals — ONE shared wtlog routine for each, all hand-rolled last-get / last-get-post scans unified">
+<meta property="og:description" content="Ordered by gritzko 2026-07-19. Two facts define a worktree: its TRACK (the recentmost get row's tracked ref, DIS-074/worktree.mkd) and its BASE (the recentmost get/post row's sha). shared/wtlog.js holds partial truth (attachedBranch(), curTip()), yet callers still hand-roll the same reverse row scans — post.js trackRow() mirrors attachedBranch because attachedBranch HIDES the row's authority. Give wtlog one track() and one base() returning the full fact (row incl. authority/uri/branch/sha/ts), and route every case through them; no last-get/last-get-post row scan may live outside shared/wtlog.js.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-078.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-078: track/base are fundamentals — ONE shared wtlog routine for each, all hand-rolled last-get / last-get-post scans unified</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<p>
+Ordered by gritzko 2026-07-19. Two facts define a worktree: its TRACK (the recentmost <code>get</code> row's tracked ref, DIS-074/worktree.mkd) and its BASE (the recentmost <code>get</code>/<code>post</code> row's sha). shared/wtlog.js holds partial truth (<code>attachedBranch()</code>, <code>curTip()</code>), yet callers still hand-roll the same reverse row scans — post.js <code>trackRow()</code> mirrors attachedBranch because attachedBranch HIDES the row's authority. Give wtlog one <code>track()</code> and one <code>base()</code> returning the full fact (row incl. authority/uri/branch/sha/ts), and route every case through them; no last-get/last-get-post row scan may live outside shared/wtlog.js.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>shared/wtlog.js today: <code>attachedBranch()</code> (:161, DIS-057 — &quot;the SINGLE source of truth&quot; for attach, but drops the row/authority), <code>curTip()</code> (latest get/post sha-tip), <code>baselineTip()</code>, <code>refOf()</code> (:47, the one row→ref codec).</li>
+<li>verbs/post/post.js:419 <code>trackRow()</code> — a hand-rolled reverse scan, its own comment admitting &quot;the row selection mirrors wtlog.attachedBranch, which hides the row's authority&quot;.</li>
+<li>views/work/work.js resolveTrack (fresh <a href="/todo/WORK/WORK-007.html">WORK-007</a> post <code>82ef082f</code>) is the newest track consumer; core/resolve_hash.js:257 takes base via <code>curTip()</code> (the good pattern).</li>
+<li>Tail-ts scans (verbs/patch/patch.js:436, post.js:995) and get/head intakes each finger wtl.rows directly to varying degrees.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>wtlog.track()</code> → the recentmost <code>get</code> row as a full fact: { row, uri, authority, branch, sha, ts, detached } — attachedBranch()'s verdict WITH the row; <code>attachedBranch()</code> becomes a thin wrapper or absorbs it.</li>
+<li><code>wtlog.base()</code> → the recentmost <code>get</code>/<code>post</code> row's sha + ts (curTip's fact, row included) — the ONE base extractor.</li>
+<li>Migrate ALL callers: post.js <code>trackRow</code> deleted in favor of <code>track()</code>; work.js resolveTrack, get/head/patch/put row scans, any view fingering <code>wtl.rows</code> for track/base — routed through the pair.</li>
+<li>Gate: <code>grep -rn 'rows\[' verbs views core</code> shows no remaining last-get/last-get-post selection outside shared/wtlog.js.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Behavior-preserving refactor: no verb/view output change; the full test suite stays at baseline — no test edits beyond NEW units for track()/base().</li>
+<li>Row→ref decoding stays in <code>refOf()</code>; no second codec, no regex/string surgery on URIs; hash resolution stays in core/resolve_hash.js.</li>
+<li>The store refs log scans (shared/store.js resolveRef/eachTip) are a DIFFERENT substrate — out of scope here; note overlaps, don't touch.</li>
+<li>Overlaps the unlanded WORK-003 wt in post.js/work.js — build on //WORK/ tip <code>82ef082f</code>, expect a weave.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>track()</code> → { row, uri, authority, branch, sha, ts, detached, uriTrack } (empty fact when no ref-bearing get row); <code>base()</code> → { row, branch, sha, ts, query, rawQuery, br }; <code>attachedBranch()</code> a thin decode over track(), <code>curTip</code> = base()'s alias, <code>baselineTip</code> the same selection widened to patch rows.</li>
+<li><code>attachedBranch().base</code> (STATUS-009 fragment-only baseSha) is a DISTINCT concept from base().sha — differs on legacy <code>&amp;</code>-chain rows (unit leg E pins it); kept as attachedBranch's internal, not folded.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> unit red: track()/base() facts pinned on a fixture wtlog — six legs incl. detached, remote-authority, legacy <code>&amp;</code>-chain, pins-nothing anchor (test/wtlog_track.js, be-js-unit-wtlog_track).</li>
+<li class="done"><input type="checkbox" checked disabled> implement track()/base() in shared/wtlog.js beside refOf; the three prior selection loops (tip/attachedBranch/trackRow) collapse to one per fact.</li>
+<li class="done"><input type="checkbox" checked disabled> migrate: post.js trackRow DELETED, advanceTrack reads track().authority — the only hand-rolled scan; get/head/patch/put/work.js already rode the reader (ticket overstated the surface).</li>
+<li class="done"><input type="checkbox" checked disabled> sweep: grep gate clean — remaining <code>rows[</code> uses are tail-ts stamp bumps (patch.js:436, post.js:984) and set-membership (put.js:378), judged non-track/base.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Staged (put only, NOT posted) in //DIS-078 on base //WORK/#82ef082f: shared/wtlog.js, verbs/post/post.js; test sub: test/wtlog_track.js + CMakeLists.txt registration.</li>
+<li>Worker suite at baseline (pre-existing reds only: unit-submount env, work/getctx pty, put/wire-refguard). Orchestrator re-ran 2026-07-19: wtlog_track OK, post/adv-named-attip PASS, post/bare-advance PASS, work/view suite PASS.</li>
+<li>Suggested commit: <code>DIS-078: unify wtlog track()/base(), drop post.js trackRow</code></li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

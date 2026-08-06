@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CODE-020</title>
+<title>CODE-020: be/ JS duplication — extract shared primitives</title>
+<meta property="og:title" content="CODE-020: be/ JS duplication — extract shared primitives">
+<meta property="og:description" content="An 8-agent quality review of be/ (JS jab; 61 files, ~15kloc; 2026-07-03) found pervasive duplication: ~a dozen low-level primitives re-implemented per file, several with SILENT divergence (hex-length gates in hashlet resolution, three isMeta rule-sets) — a latent-bug surface, not mere untidiness. Tracks behavior-preserving extraction into be/shared/ (and be/view/) via the work loop, one worktree per group, repro-first where reconciling a divergent copy could shift behavior. JS-only; C twin CODE-017/CODE-010, modularity JS-090.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-020.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,8 +16,13 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>CODE-020: be/ JS duplication — extract shared primitives</h1>
+<div>
 <p>
-An 8-agent quality review of be/ (JS jab; 61 files, ~15kloc; 2026-07-03) found pervasive duplication: ~a dozen low-level primitives re-implemented per file, several with SILENT divergence (hex-length gates in hashlet resolution, three <code>isMeta</code> rule-sets) — a latent-bug surface, not mere untidiness. Tracks behavior-preserving extraction into <code>be/shared/</code> (and <code>be/view/</code>) via the <a href="../../meta/work.html">work</a> loop, one worktree per group, repro-first where reconciling a divergent copy could shift behavior. JS-only; C twin <a href="CODE-017.html">CODE-017</a>/<a href="CODE-010.html">CODE-010</a>, modularity <a href="../JS/JS-090.html">JS-090</a>.
+Now: OPEN Rep: ///be/
+</p>
+</div>
+<p>
+An 8-agent quality review of be/ (JS jab; 61 files, <del>15kloc; 2026-07-03) found pervasive duplication: </del>a dozen low-level primitives re-implemented per file, several with SILENT divergence (hex-length gates in hashlet resolution, three <code>isMeta</code> rule-sets) — a latent-bug surface, not mere untidiness. Tracks behavior-preserving extraction into <code>be/shared/</code> (and <code>be/view/</code>) via the <a href="../../meta/work.html">work</a> loop, one worktree per group, repro-first where reconciling a divergent copy could shift behavior. JS-only; C twin <a href="CODE-017.html">CODE-017</a>/<a href="CODE-010.html">CODE-010</a>, modularity <a href="../JS/JS-090.html">JS-090</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -59,6 +68,10 @@ An 8-agent quality review of be/ (JS jab; 61 files, ~15kloc; 2026-07-03) found p
 <li><a href="./v.html">v</a> wire.js internal triples — LANDED <code>69e56b20</code> (&quot;CODE-020 wire dedup&quot;): <code>drainAdvert</code> (shared/wire.js:226), <code>pkt.decodeAt</code> reuse (:211), <code>curlPost</code> (:195); verified in-tree.</li>
 <li><a href="./ .html"> </a> ingest.js refs-ULOG write helper (83/108/134) + origin-normalize; share ron60 pack/unpack+epoch (ulog.js:70/85, post.js:83, dag.js).</li>
 <li><a href="./ .html"> </a> weave-merge + conflict-fence render: one helper for get.js:812 vs patch.js:278 (two whole algorithms) — behavior-sensitive, repro-gated.</li>
+<li><a href="./ .html"> </a> 2026-07-24 re-sweep: <code>warn()</code> stderr shim is a verbatim twin at graf.js:32 &amp; idxmaint.js:30 — one <code>shared/util/warn.js warnFor(prefix)</code> (keep get.js:139 fd-2 variant separate).</li>
+<li><a href="./ .html"> </a> 2026-07-24 re-sweep: URI COMPOSE by concat → <code>URI.make</code> at status.js:411 (regex-strip+re-attach <code>#pin</code> on a live URI), status.js:351, work.js:531 (<code>&quot;//&quot;+d.key</code>, cf. discover.navCwd), put.js:336 (<code>?branch#hashlet</code>, see <a href="./CODE-022.html">CODE-022</a>).</li>
+<li><a href="./ .html"> </a> 2026-07-24 re-sweep: path group — spell.js:16 <code>joinPath</code> reimplements <code>resolveInTree</code> but SILENTLY CLAMPS instead of throwing NAVESCAPE (behavior divergence, repro-gated); fold extOf/basename-by-hand weave.js:74 diff.js:66 view/bro.js:801 get.js:1301 spot/ext.js:46; noSlash twin ls.js:108/list.js:80.</li>
+<li><a href="./ .html"> </a> 2026-07-24 re-sweep: concatBytes additional inline copies view/bro.js:258/512/729/792 + log.js:464/554 (12 sites total) — one home kills all.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
@@ -73,5 +86,16 @@ An 8-agent quality review of be/ (JS jab; 61 files, ~15kloc; 2026-07-03) found p
 <li>Still open, re-verified in-tree: resolveHashlet copies persist (commit.js:129 vs log.js:121, differing gates); isMeta still 3-way divergent (classify.js:435, stage.js:51, util/ignore.js:143); no shared/resolve.js, shared/uriarg.js, view/hunkbuild.js, shared/util/fs.js; view/theme.js still lacks the tok32 codec.</li>
 <li>Note: the JAB-003/JAB-004 reworks (hunk-output conversion <code>aa61c49c</code>/<code>1e564190</code>, plain-args verbs <code>11e4dddc</code>) retired several listed copies as a side effect — re-scan fold-site line numbers before starting a group.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

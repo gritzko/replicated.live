@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORK-011: work view ahbeh must use the graf index, not the raw keeper DAG walk</title>
+<meta property="og:title" content="WORK-011: work view ahbeh must use the graf index, not the raw keeper DAG walk">
+<meta property="og:description" content="The work view computes every row's ahead/behind by set-differencing two full ancestor closures walked straight off the keeper, while shared/graf.js (GRAF-001) exists precisely to serve per-shard cached ahead/behind counts — and is wired into nothing but tests. Switch the view's ahbeh path to graf.open(shard).aheadBehind(...), keeping the keeper walk at most as a fallback. Investigated 2026-07-19 (Opus agent, be tip).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/WORK/WORK-011.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WORK-011: work view ahbeh must use the graf index, not the raw keeper DAG walk</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+The work view computes every row's ahead/behind by set-differencing two full ancestor closures walked straight off the keeper, while <code>shared/graf.js</code> (GRAF-001) exists precisely to serve per-shard cached ahead/behind counts — and is wired into nothing but tests. Switch the view's ahbeh path to <code>graf.open(shard).aheadBehind(...)</code>, keeping the keeper walk at most as a fallback. Investigated 2026-07-19 (Opus agent, be tip).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Counts today: <code>registry().counts(repo, cur, tip)</code> (views/work/work.js:139-148) set-differences two <code>ancestorsOf</code> closures; row emit sites work.js:240,250,256,260,511,531.</li>
+<li>The closure walk: work.js:117-124 → <code>dag.ancestors</code> (shared/dag.js:99) → <code>ancestorNodes</code> → <code>keeper.commitParents</code> (shared/dag.js:53), BFS capped at <code>WALK_CAP = 1&lt;&lt;16</code>; <code>dag.aheadBehind</code> (shared/dag.js:227) walks the same way and is not even called.</li>
+<li>Mitigation is memo-only: keeper opened once per (store,project) <code>shardKey</code>, closures cached per <code>shardKey#sha</code> (work.js:101-150) — still O(history) per distinct tip.</li>
+<li><code>shared/graf.js</code> — GRAF-001: per-shard cached ahead/behind COUNTS over wh128 runs, <code>open(shard).aheadBehind(...)</code>, lazy <code>*.graf.idx</code> — required by nothing outside be/test/.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>The work view's per-row ahbeh comes from the graf index: <code>registry()</code> opens graf once per shard and <code>counts()</code> delegates to <code>graf.aheadBehind</code>.</li>
+<li>Big-fleet render cost drops from per-tip full-closure walks to indexed lookups; ~65 wts sharing a few shards (<a href="/todo/WORK/WORK-001.html">WORK-001</a> survey) is the target load.</li>
+<li>Rendered numbers are unchanged — same counts as the closure diff on the same repo state.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Behavior-only swap under <code>counts()</code>: the <a href="/todo/WORK/WORK-004.html">WORK-004</a> <code>[+N]</code>/<code>[-N]</code> button rendering and the view test layout stay untouched.</li>
+<li>Decide the miss path: absent/stale <code>*.graf.idx</code> either falls back to the dag walk or triggers graf's own build — follow GRAF-001's contract, don't invent one.</li>
+<li>Overlaps the unlanded WORK-001/003/004 work.js cuts; build on be tip, expect a weave.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>idx-miss = graf's own contract: aheadBehind walks + caches on a miss; keeper closure diff kept only on a graf.open/aheadBehind throw.</li>
+<li>registry() memos graf per shardKey beside keeper; counts() delegates graf.aheadBehind — numbers == the closure set-diff.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> red: test/graf/parity — graf-backed counts() == closure diff; delegation leg RED (20 keeper reads) then GREEN (0 reads, index hit).</li>
+<li class="done"><input type="checkbox" checked disabled> wire graf into registry() (grafFor, per-shard); counts() delegates; miss = graf's own walk, keeper diff only on a graf throw.</li>
+<li class="open"><input type="checkbox" disabled> fleet check SKIPPED (runs main-tree code) — an orchestrator/user step on the ~65-wt forest; view + graf tests green in-tree.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>test/work/getctx is a PRE-EXISTING red: it waits for the WORK-004-retired <a href="./get.html">get</a> button; orthogonal to WORK-011, not my regression.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>work view ahbeh now graf-indexed: registry() opens graf once per shard, counts() delegates graf.aheadBehind; keeper walk = fallback.</li>
+<li>Evidence: test/graf/parity RED (20 keeper reads) -&gt; GREEN (0, index hit), numbers == closure diff; graf/cache + work/view stay green.</li>
+<li>Files: views/work/work.js, test/graf/parity/{index.js,run.sh}.</li>
+<li>Suggested commit: WORK-011: work view ahbeh via graf index, not DAG walk</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

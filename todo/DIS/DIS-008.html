@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DIS-008</title>
+<title>DIS-008: GET #~N commit-ancestor rewind unimplemented</title>
+<meta property="og:title" content="DIS-008: GET #~N commit-ancestor rewind unimplemented">
+<meta property="og:description" content="GET documents be get '#~1' as &quot;rewinds cur's ref by one commit and resets the wt, staying attached to cur&quot;, but no ~N ancestor operator exists in fragment handling — the ~1 is resolved as an ordinary ref/hex and fails. The goal is the documented relative-ancestor rewind. See GET, URI.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-008.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,38 +16,28 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>DIS-008: GET <code>#~N</code> commit-ancestor rewind unimplemented</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <a href="../../wiki/GET.html">GET</a> documents <code>be get '#~1'</code> as &quot;rewinds cur's ref by one commit and resets the wt, staying attached to cur&quot;, but no <code>~N</code> ancestor operator exists in fragment handling — the <code>~1</code> is resolved as an ordinary ref/hex and fails. The goal is the documented relative-ancestor rewind. See <a href="../../wiki/GET.html">GET</a>, <a href="../../wiki/URI.html">URI</a>.
 </p>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li><code>~N</code> is verb payload INSIDE the <code>#fragment</code> (free-form per <a href="../../wiki/URI.html">URI</a>), not<p>
-URI structure — parsed by a tiny <code>DOGFragRewind</code> predicate (typed <code>u64decdrain</code>, no hand-rolled scanner), NOT the URI grammar.
-</p>
-</li>
-<li>Walk-back reuses the keeper first-parent body-parse pattern<p>
-(<code>GITu8sDrainCommit</code> + <code>GIT_FIELD_PARENT</code>) as a new <code>KEEPResolveAncestor</code> in keeper/RESOLVE.c — works on unindexed history (no DAG needed).
-</p>
-</li>
-<li>Stay attached by feeding GETCheckout source <code>?&lt;cur_branch&gt;</code> (empty =&gt;<p>
-trunk <code>?</code>): GETCheckout already derives both the recorded row shape AND the REFS tip advance from source, so the ref rewinds in place.
-</p>
-</li>
-<li>Past-root → <code>KEEPResolveAncestor</code> returns RESLVNONE → GET refuses<p>
-CLEANLY before any wt mutation (the wt is left untouched).
-</p>
-</li>
+<li><code>~N</code> is verb payload INSIDE the <code>#fragment</code> (free-form per <a href="../../wiki/URI.html">URI</a>), not URI structure — parsed by a tiny <code>DOGFragRewind</code> predicate (typed <code>u64decdrain</code>, no hand-rolled scanner), NOT the URI grammar.</li>
+<li>Walk-back reuses the keeper first-parent body-parse pattern (<code>GITu8sDrainCommit</code> + <code>GIT_FIELD_PARENT</code>) as a new <code>KEEPResolveAncestor</code> in keeper/RESOLVE.c — works on unindexed history (no DAG needed).</li>
+<li>Stay attached by feeding GETCheckout source <code>?&lt;cur_branch&gt;</code> (empty =&gt; trunk <code>?</code>): GETCheckout already derives both the recorded row shape AND the REFS tip advance from source, so the ref rewinds in place.</li>
+<li>Past-root → <code>KEEPResolveAncestor</code> returns RESLVNONE → GET refuses CLEANLY before any wt mutation (the wt is left untouched).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
 <li class="done"><input type="checkbox" checked disabled> Parse <code>#~N</code> (default N=1) on the GET fragment path; reject <code>~0</code>/junk.</li>
 <li class="done"><input type="checkbox" checked disabled> Walk cur's first-parent chain back N commits to the target sha.</li>
 <li class="done"><input type="checkbox" checked disabled> Reset the wt and rewind cur's ref staying attached.</li>
-<li class="done"><input type="checkbox" checked disabled> Table cases: <code>#~1</code> parent, <code>#~2</code> two back, <code>?#~1</code> spelling, <code>#~N</code><p>
- past root refuses (test/get/65 + DOGtest FragRewind table).
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Table cases: <code>#~1</code> parent, <code>#~2</code> two back, <code>?#~1</code> spelling, <code>#~N</code> past root refuses (test/get/65 + DOGtest FragRewind table).</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <p>
@@ -54,18 +48,20 @@ None — the first-parent walk-back is now exposed via KEEPResolveAncestor.
 LANDED (audited 2026-07-07): <code>25851a5a</code> (beagle) + <code>dd0a8f4b</code> (dog) &quot;DIS-008 be get #~N ancestor rewind&quot;, 26Jun.
 </p>
 <ul>
-<li>Root cause: <code>~N</code> was never recognised — <code>#~1</code> fell through to the bare<p>
-resume (silently re-checked-out cur tip, no rewind); <code>?#~1</code> hit GET's &quot;not a valid commit ref&quot; refusal. No first-parent walk was wired in.
-</p>
-</li>
-<li>Fix: dog/DOG.c:486 <code>DOGFragRewind</code> (+ dog/DOG.h decl);<p>
-keeper/RESOLVE.c:301 <code>KEEPResolveAncestor</code> (+ RESOLVE.h decl); sniff/GET.c:2076 <code>SNIFFGetURI</code> rewind arm (detect → resolve → attached GETCheckout).
-</p>
-</li>
-<li>Tests: test/get/65-rewind-ancestor (auto-globbed) — <code>#~1</code>/<code>#~2</code>/<code>?#~1</code><p>
-rewind + attached-post, past-root refuses cleanly; dog/test/DOG.c <code>DOGTestFragRewind</code> table. Full ctest 377/377 green.
-</p>
-</li>
+<li>Root cause: <code>~N</code> was never recognised — <code>#~1</code> fell through to the bare resume (silently re-checked-out cur tip, no rewind); <code>?#~1</code> hit GET's &quot;not a valid commit ref&quot; refusal. No first-parent walk was wired in.</li>
+<li>Fix: dog/DOG.c:486 <code>DOGFragRewind</code> (+ dog/DOG.h decl); keeper/RESOLVE.c:301 <code>KEEPResolveAncestor</code> (+ RESOLVE.h decl); sniff/GET.c:2076 <code>SNIFFGetURI</code> rewind arm (detect → resolve → attached GETCheckout).</li>
+<li>Tests: test/get/65-rewind-ancestor (auto-globbed) — <code>#~1</code>/<code>#~2</code>/<code>?#~1</code> rewind + attached-post, past-root refuses cleanly; dog/test/DOG.c <code>DOGTestFragRewind</code> table. Full ctest 377/377 green.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

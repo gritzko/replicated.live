@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-039</title>
+<title>JS-039: bin/lib/pkt.js + wire.js — git fetch conversation</title>
+<meta property="og:title" content="JS-039: bin/lib/pkt.js + wire.js — git fetch conversation">
+<meta property="og:description" content="The pure-JS git-wire CLIENT (fetch direction): pkt-line framing + transport spawn + refs-advert parse + want/have/done negotiate + side-band-64k demux, yielding the received packfile bytes. Mirrors keeper/WIRECLI.c (unlinkable). Part of JS-038.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-039.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,51 +15,38 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-039 <a href="">MED</a>: <code>bin/lib/pkt.js</code> + <code>wire.js</code> — git fetch conversation</h1>
+<h1>JS-039: <code>bin/lib/pkt.js</code> + <code>wire.js</code> — git fetch conversation</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The pure-JS git-wire CLIENT (fetch direction): pkt-line framing + transport spawn + refs-advert parse + want/have/done negotiate + side-band-64k demux, yielding the received packfile bytes. Mirrors <code>keeper/WIRECLI.c</code> (unlinkable). Part of <a href="JS-038.html">JS-038</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>be get</code> over the wire spawns a peer (<code>ssh host keeper upload-pack</code>,<p>
-<code>file://</code> local exec, <code>be://</code>/<code>git://</code> TCP) and runs the v0/v1 upload-pack convo. JABC already has the transport: <code>io.spawn → {pid,stdin,stdout}</code> + <code>io.reap</code>; <code>net.connect</code> + <code>pol</code> for TCP. The convo logic is pure JS.
-</p>
-</li>
+<li><code>be get</code> over the wire spawns a peer (<code>ssh host keeper upload-pack</code>, <code>file://</code> local exec, <code>be://</code>/<code>git://</code> TCP) and runs the v0/v1 upload-pack convo. JABC already has the transport: <code>io.spawn → {pid,stdin,stdout}</code> + <code>io.reap</code>; <code>net.connect</code> + <code>pol</code> for TCP. The convo logic is pure JS.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>pkt.js</code>: drain/feed/flush pkt-lines (<code>4-hex len + payload</code>); pure JS over<p>
-<code>hex</code> (no native leaf — trivial, like status.js text parsing).
-</p>
-</li>
-<li><code>wire.js</code>: <code>fetch(remoteUri, wantRef?) -&gt; {pack:Uint8Array, refs:[...]}</code> —<p>
-spawn, drain advert (sha SP refname <a href="">\0caps</a>), send <code>want</code>/<code>have</code>/<code>done</code>, NAK, demux side-band band1 pack / band2,3 → stderr.
-</p>
-</li>
+<li><code>pkt.js</code>: drain/feed/flush pkt-lines (<code>4-hex len + payload</code>); pure JS over <code>hex</code> (no native leaf — trivial, like status.js text parsing).</li>
+<li><code>wire.js</code>: <code>fetch(remoteUri, wantRef?) -&gt; {pack:Uint8Array, refs:[...]}</code> — spawn, drain advert (sha SP refname <a href="./0caps.html">0caps</a>), send <code>want</code>/<code>have</code>/<code>done</code>, NAK, demux side-band band1 pack / band2,3 → stderr.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>libdog+<code>abc</code> ONLY. Transport classify like <code>WIRECLI.c::wcli_spawn</code><p>
-(file/ssh/be/git). No ingest here (→ <a href="JS-040.html">JS-040</a>); return raw pack bytes.
-</p>
-</li>
+<li>libdog+<code>abc</code> ONLY. Transport classify like <code>WIRECLI.c::wcli_spawn</code> (file/ssh/be/git). No ingest here (→ <a href="JS-040.html">JS-040</a>); return raw pack bytes.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Bidirectional via <code>io.spawn</code> (ssh/exec) or <code>net.connect</code> (be/git TCP); avoid<p>
-write/read deadlock with <code>pol</code> non-blocking interleave (WIRECLI poll loop).
-</p>
-</li>
+<li>Bidirectional via <code>io.spawn</code> (ssh/exec) or <code>net.connect</code> (be/git TCP); avoid write/read deadlock with <code>pol</code> non-blocking interleave (WIRECLI poll loop).</li>
 <li><code>WIREClassify</code>-equivalent line tokenizer in JS (want/have/advert/ack lines).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/get/wire.js</code> (helpers <code>test/js/lib/</code>): against a local<p>
-  <code>keeper upload-pack</code> (file://) + a real git <code>file://x.git</code>, fetch trunk →   assert advert parsed, pack header (<code>PACK</code>,count) parses via <code>git.pack</code>.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/get/wire.js</code> (helpers <code>test/js/lib/</code>): against a local <code>keeper upload-pack</code> (file://) + a real git <code>file://x.git</code>, fetch trunk → assert advert parsed, pack header (<code>PACK</code>,count) parses via <code>git.pack</code>.</li>
 <li class="open"><input type="checkbox" disabled> Implement <code>bin/lib/pkt.js</code> + <code>bin/lib/wire.js</code>; smoke ssh + be transports.</li>
 </ul>
 <h3>Blockers</h3>
@@ -66,5 +57,16 @@ write/read deadlock with <code>pol</code> non-blocking interleave (WIRECLI poll 
 <ul>
 <li>(pending)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

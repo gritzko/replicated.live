@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-053</title>
+<title>JS-053: bin/bro.js — the syntax-highlighting pager as JS (+ a tty leaf)</title>
+<meta property="og:title" content="JS-053: bin/bro.js — the syntax-highlighting pager as JS (+ a tty leaf)">
+<meta property="og:description" content="Mirror bro (the dog toolchain's TUI pager/renderer) as bin/bro.js on jabc, the JS-027/JS-038 way. A SELF-CONTAINED viewer: URI args → io.mmap+tok.parse in JS → hunks → paint. NO stdin TLV pipe and NO forking C producers — bro.js RUNS JS commands for its content (view / search / open) in-process; that is the point. The native gap is tiny — a terminal-control leaf (raw-mode + winsize); the bulk is a pure-JS port of bro/BRO.c (renderer + colour-diff + TUI). Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-053.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,104 +15,66 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-053 <a href="">MED</a>: <code>bin/bro.js</code> — the syntax-highlighting pager as JS (+ a tty leaf)</h1>
+<h1>JS-053: <code>bin/bro.js</code> — the syntax-highlighting pager as JS (+ a tty leaf)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 Mirror <code>bro</code> (the dog toolchain's TUI pager/renderer) as <code>bin/bro.js</code> on jabc, the <a href="JS-027.html">JS-027</a>/<a href="JS-038.html">JS-038</a> way. A SELF-CONTAINED viewer: URI args → <code>io.mmap</code>+<code>tok.parse</code> in JS → hunks → paint. NO stdin TLV pipe and NO forking C producers — bro.js RUNS JS commands for its content (view / search / open) in-process; that is the point. The native gap is tiny — a terminal-control leaf (raw-mode + winsize); the bulk is a pure-JS port of <code>bro/BRO.c</code> (renderer + colour-diff + TUI). Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>bro</code> (bro/INDEX.md, README.md): indexes <code>hunk</code> TLV records into rows, paints<p>
-cells from tok32 tags + a THEME, and classifies diff lines (<code>bro_classify</code>: EQ/PURE_IN/PURE_RM/MOD_INLINE/MOD_SPLIT, the 25% inline-vs-split rule). TUI in BRO.c: raw-mode loop, 32-deep view stack, search, <code>:</code>/<code>#</code> GURI prompt, status bar.
-</p>
-</li>
-<li>bro reaches libc ONLY for terminal control: <code>tcgetattr</code>/<code>tcsetattr</code> raw mode<p>
-(BRO.c:320/341), <code>ioctl(TIOCGWINSZ)</code> size (:353), <code>sigaction(SIGWINCH)</code> (:3050), <code>open(/dev/tty)</code>. <code>abc/TTY.h</code> is escape-FORMATTING only, not control.
-</p>
-</li>
-<li>Already bound: tok32 highlight (<a href="JS-023.html">JS-023</a>), the HUNK TLV cursor, <code>uri</code>,<p>
-<code>io.mmap</code>/<code>readdir</code>/<code>spawn</code>/<code>read</code>/<code>write</code>, the <code>pol</code> loop, <code>ansi</code>. THEME (tag→SGR) and the SGR-1006 mouse decode become pure-JS tables/decoders.
-</p>
-</li>
+<li><code>bro</code> (bro/INDEX.md, README.md): indexes <code>hunk</code> TLV records into rows, paints cells from tok32 tags + a THEME, and classifies diff lines (<code>bro_classify</code>: EQ/PURE_IN/PURE_RM/MOD_INLINE/MOD_SPLIT, the 25% inline-vs-split rule). TUI in BRO.c: raw-mode loop, 32-deep view stack, search, <code>:</code>/<code>#</code> GURI prompt, status bar.</li>
+<li>bro reaches libc ONLY for terminal control: <code>tcgetattr</code>/<code>tcsetattr</code> raw mode (BRO.c:320/341), <code>ioctl(TIOCGWINSZ)</code> size (:353), <code>sigaction(SIGWINCH)</code> (:3050), <code>open(/dev/tty)</code>. <code>abc/TTY.h</code> is escape-FORMATTING only, not control.</li>
+<li>Already bound: tok32 highlight (<a href="JS-023.html">JS-023</a>), the HUNK TLV cursor, <code>uri</code>, <code>io.mmap</code>/<code>readdir</code>/<code>spawn</code>/<code>read</code>/<code>write</code>, the <code>pol</code> loop, <code>ansi</code>. THEME (tag→SGR) and the SGR-1006 mouse decode become pure-JS tables/decoders.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Native: an <code>abc/TTY</code> (or <code>abc/FILE</code>) raw-mode + winsize wrapper (libabc, the<p>
-<a href="JS-047.html">JS-047</a> leaf pattern) → bind <code>tty.raw</code>/<code>tty.cook</code>/<code>tty.size</code> (+ <code>/dev/tty</code> open). Optional: bind <code>abc/ANSI</code> <code>ANSIu8sDrainCSI</code> for key/mouse-escape decode.
-</p>
-</li>
-<li><code>bin/bro.js</code> + <code>bin/lib/*</code>: the pager — event loop + keymap, row index + cell<p>
-painter, the colour-diff classifier, codepoint soft-wrap, the 32-deep view stack (scroll preserved), the live status bar, the <code>:</code>/<code>#</code> prompt, in-view search.
-</p>
-</li>
-<li>Content built in JS: a URI arg → <code>io.mmap</code>+<code>tok.parse</code> → one HUNK; a dir →<p>
-<code>io.readdir</code> → one <code>'F'</code> hunk per entry. Hunks live in JS; no external feed.
-</p>
-</li>
+<li>Native: an <code>abc/TTY</code> (or <code>abc/FILE</code>) raw-mode + winsize wrapper (libabc, the <a href="JS-047.html">JS-047</a> leaf pattern) → bind <code>tty.raw</code>/<code>tty.cook</code>/<code>tty.size</code> (+ <code>/dev/tty</code> open). Optional: bind <code>abc/ANSI</code> <code>ANSIu8sDrainCSI</code> for key/mouse-escape decode.</li>
+<li><code>bin/bro.js</code> + <code>bin/lib/*</code>: the pager — event loop + keymap, row index + cell painter, the colour-diff classifier, codepoint soft-wrap, the 32-deep view stack (scroll preserved), the live status bar, the <code>:</code>/<code>#</code> prompt, in-view search.</li>
+<li>Content built in JS: a URI arg → <code>io.mmap</code>+<code>tok.parse</code> → one HUNK; a dir → <code>io.readdir</code> → one <code>'F'</code> hunk per entry. Hunks live in JS; no external feed.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>libabc+libdog ONLY. NO stdin TLV ingestion and NO forking C producers<p>
-(spot/graf): bro.js obtains content by running JS commands in-process — the whole point. Cross-file <code>:</code> spot search needs a JS spot (absent) → deferred.
-</p>
-</li>
-<li>Terminal restore is a HARD safety: cook-on-exit on EVERY path — a <code>try/finally</code><p>
-around the loop AND an uncaught-throw hook in <code>main.cpp</code> (JABCRun routes the throw) — or a crash wedges the user's shell in raw mode.
-</p>
-</li>
+<li>libabc+libdog ONLY. NO stdin TLV ingestion and NO forking C producers (spot/graf): bro.js obtains content by running JS commands in-process — the whole point. Cross-file <code>:</code> spot search needs a JS spot (absent) → deferred.</li>
+<li>Terminal restore is a HARD safety: cook-on-exit on EVERY path — a <code>try/finally</code> around the loop AND an uncaught-throw hook in <code>main.cpp</code> (JABCRun routes the throw) — or a crash wedges the user's shell in raw mode.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Skip SIGWINCH: re-query <code>tty.size</code> on each ~100ms input tick (VTIME-style) and<p>
-re-render on change — no signal binding needed (the lone optional native bit).
-</p>
-</li>
-<li>Painter stays viewport-only + incremental (bro paints only visible rows) so a<p>
-per-keystroke re-render is cheap over big hunk sets.
-</p>
-</li>
-<li>THEME is a pure-JS tag→SGR table (the README set D/G/L/H/R/P/S/N/C/F/U); the<p>
-SGR is emitted via <code>ansi.cpp</code> or a bound <code>abc/ANSI</code> delta.
-</p>
-</li>
+<li>Skip SIGWINCH: re-query <code>tty.size</code> on each ~100ms input tick (VTIME-style) and re-render on change — no signal binding needed (the lone optional native bit).</li>
+<li>Painter stays viewport-only + incremental (bro paints only visible rows) so a per-keystroke re-render is cheap over big hunk sets.</li>
+<li>THEME is a pure-JS tag→SGR table (the README set D/G/L/H/R/P/S/N/C/F/U); the SGR is emitted via <code>ansi.cpp</code> or a bound <code>abc/ANSI</code> delta.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> tty leaf LANDED: <code>ANSIRaw</code>/<code>ANSICook</code>/<code>ANSITtySize</code> in <code>abc/ANSI.c/.h</code> (DRY'd<p>
-  onto <code>ANSIBgColor</code>'s shared <code>ansi_tty_raw</code> helper) + <code>js/tty.cpp</code> <code>tty.raw/   cook/size</code> (stateless, rule #4) + pty <code>JABCtty</code> test. libabc <code>40cf6df6</code>,   beagle <code>dc96aaaf</code>. Terminal control belongs in ANSI, not FILE.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> <code>bin/bro.js</code> + <code>bin/lib/bro.js</code> plain file/dir viewer DONE (<code>~/todo/JS-053</code>,<p>
-  not landed): URI→<code>io.mmap</code>+<code>tok.parse</code>→hunk, dir→<code>io.readdir</code> <code>'F'</code> rows, a   tag→SGR painter + soft-wrap + status-bar scaffold (for TODO#3); the <code>BROPlain</code>   sink byte-matches <code>bro --plain</code> (<code>.c</code>/<code>.js</code>, <code>#line</code>/<code>#symbol</code>, dir, multi).   <code>be-js-bro-view</code> + 47/47 green; js-only. Delta: a miss exits 1 not 206 (JS-026).
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> TUI: raw-mode loop + keymap (j/k/d/u/f/b/g/G/]/[/(/)/n/N/h/q/.), view stack,<p>
-  the <code>:</code>/<code>#</code> GURI prompt (open / goto-line / in-view search), mouse (optional).
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> tty leaf LANDED: <code>ANSIRaw</code>/<code>ANSICook</code>/<code>ANSITtySize</code> in <code>abc/ANSI.c/.h</code> (DRY'd onto <code>ANSIBgColor</code>'s shared <code>ansi_tty_raw</code> helper) + <code>js/tty.cpp</code> <code>tty.raw/ cook/size</code> (stateless, rule #4) + pty <code>JABCtty</code> test. libabc <code>40cf6df6</code>, beagle <code>dc96aaaf</code>. Terminal control belongs in ANSI, not FILE.</li>
+<li class="done"><input type="checkbox" checked disabled> <code>bin/bro.js</code> + <code>bin/lib/bro.js</code> plain file/dir viewer DONE (<code>~/todo/JS-053</code>, not landed): URI→<code>io.mmap</code>+<code>tok.parse</code>→hunk, dir→<code>io.readdir</code> <code>'F'</code> rows, a tag→SGR painter + soft-wrap + status-bar scaffold (for TODO#3); the <code>BROPlain</code> sink byte-matches <code>bro --plain</code> (<code>.c</code>/<code>.js</code>, <code>#line</code>/<code>#symbol</code>, dir, multi). <code>be-js-bro-view</code> + 47/47 green; js-only. Delta: a miss exits 1 not 206 (JS-026).</li>
+<li class="open"><input type="checkbox" disabled> TUI: raw-mode loop + keymap (j/k/d/u/f/b/g/G/]/[/(/)/n/N/h/q/.), view stack, the <code>:</code>/<code>#</code> GURI prompt (open / goto-line / in-view search), mouse (optional).</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Cross-file search (<code>:#TODO.c</code> spot grep/regex/snippet) needs a JS <code>spot</code> —<p>
-  absent; v1 stubs/defers it (do NOT fork the C spot — against the premise).
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Raw-mode-on-crash wedges the terminal: the cook-on-exit hook in <code>main.cpp</code><p>
-  is mandatory BEFORE any interactive TODO lands.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Cross-file search (<code>:#TODO.c</code> spot grep/regex/snippet) needs a JS <code>spot</code> — absent; v1 stubs/defers it (do NOT fork the C spot — against the premise).</li>
+<li class="open"><input type="checkbox" disabled> Raw-mode-on-crash wedges the terminal: the cook-on-exit hook in <code>main.cpp</code> is mandatory BEFORE any interactive TODO lands.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>TODO#1 (tty leaf) LANDED via two-shard post — libabc <code>40cf6df6</code><p>
-(<code>ANSIRaw</code>/<code>Cook</code>/<code>TtySize</code> in abc/ANSI, DRY'd with <code>ANSIBgColor</code>), beagle <code>dc96aaaf</code> (<code>tty.*</code> leaf + abc pin); <code>JABCtty</code> green, graf-indexed both shards.
-</p>
-</li>
-<li>Viewer (TODO#2) DONE + green in <code>~/todo/JS-053</code>, ready to land (js-only,<p>
-single-shard); the interactive raw-mode TUI (TODO#3) still open.
-</p>
-</li>
+<li>TODO#1 (tty leaf) LANDED via two-shard post — libabc <code>40cf6df6</code> (<code>ANSIRaw</code>/<code>Cook</code>/<code>TtySize</code> in abc/ANSI, DRY'd with <code>ANSIBgColor</code>), beagle <code>dc96aaaf</code> (<code>tty.*</code> leaf + abc pin); <code>JABCtty</code> green, graf-indexed both shards.</li>
+<li>Viewer (TODO#2) DONE + green in <code>~/todo/JS-053</code>, ready to land (js-only, single-shard); the interactive raw-mode TUI (TODO#3) still open.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ABC-011</title>
+<title>ABC-011: HTTP serializer emits zero headers, always</title>
+<meta property="og:title" content="ABC-011: HTTP serializer emits zero headers, always">
+<meta property="og:description" content="HTTPutf8Feed builds its header slice from the same pointer twice — {http-&gt;headers0, http-&gt;headers} where headers is u8cssp, and a0 == a in C — so the header loop is dead code and every serialized message loses all headers (no Host, no Content-Length). Verified empirically by the 2026-07-07 reviewer: a parsed 2-header request re-serialized as &quot;GET / HTTP/1.1\r\n\r\n&quot;. No test covers the Feed direction.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/ABC/ABC-011.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,68 +15,64 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>ABC-011: <a href="./HIGH.html">HIGH</a> HTTP serializer emits zero headers, always</h1>
+<h1>ABC-011: HTTP serializer emits zero headers, always</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
 <p>
 <code>HTTPutf8Feed</code> builds its header slice from the same pointer twice — <code>{http-&gt;headers[0], *http-&gt;headers}</code> where <code>headers</code> is <code>u8cssp</code>, and <code>a[0] == *a</code> in C — so the header loop is dead code and every serialized message loses all headers (no Host, no Content-Length). Verified empirically by the 2026-07-07 reviewer: a parsed 2-header request re-serialized as &quot;GET / HTTP/1.1rnrn&quot;. No test covers the Feed direction.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>HTTP.c:76-77</code> — <code>u8css hdrs = {http-&gt;headers[0], *http-&gt;headers};</code><p>
-yields <code>{p, p}</code>, <code>$len == 0</code>, loop never entered. Intended: <code>{http-&gt;headers[0], http-&gt;headers[1]}</code>.
-</p>
-</li>
-<li><code>HTTP.lex:41</code> — <code>ReasonPhrase = text</code> requires ≥1 char; RFC 7230 allows<p>
-an empty reason-phrase (&quot;HTTP/1.1 200 rn&quot;, common from proxies) → HTTPBAD on legal responses.
-</p>
-</li>
-<li><code>HTTP.c:93</code> <code>HTTPfind(u8cs *value, u8cs key, ...)</code> — immutable needle<p>
-typed as consumable <code>u8cs</code>, should be <code>u8csc</code> (abc.mkd: consumption is signalled by type).
-</p>
-</li>
-<li><code>HTTP.c:86</code> — <code>hdrs[0] += 2;</code> raw slice-pointer arithmetic; use the<p>
-typed movers. <code>HTTPutf8Drain</code> (HTTP.c:39) is named Drain but never advances the caller's slice — naming/contract drift.
-</p>
-</li>
+<li><code>HTTP.c:76-77</code> — <code>u8css hdrs = {http-&gt;headers[0], *http-&gt;headers};</code> yields <code>{p, p}</code>, <code>$len == 0</code>, loop never entered. Intended: <code>{http-&gt;headers[0], http-&gt;headers[1]}</code>.</li>
+<li><code>HTTP.lex:41</code> — <code>ReasonPhrase = text</code> requires ≥1 char; RFC 7230 allows an empty reason-phrase (&quot;HTTP/1.1 200 rn&quot;, common from proxies) → HTTPBAD on legal responses.</li>
+<li><code>HTTP.c:93</code> <code>HTTPfind(u8cs *value, u8cs key, ...)</code> — immutable needle typed as consumable <code>u8cs</code>, should be <code>u8csc</code> (abc.mkd: consumption is signalled by type).</li>
+<li><code>HTTP.c:86</code> — <code>hdrs[0] += 2;</code> raw slice-pointer arithmetic; use the typed movers. <code>HTTPutf8Drain</code> (HTTP.c:39) is named Drain but never advances the caller's slice — naming/contract drift.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Repro FIRST: parse→serialize round-trip test asserting headers survive;<p>
-an empty-reason response parse.
-</p>
-</li>
-<li>Fix the slice construction, relax the grammar (regen from HTTP.lex —<p>
-mind the LEX template drift, <a href="ABC-017.html">ABC-017</a>), tighten the signatures.
-</p>
-</li>
+<li>Repro FIRST: parse→serialize round-trip test asserting headers survive; an empty-reason response parse.</li>
+<li>Fix the slice construction, relax the grammar (regen from HTTP.lex — mind the LEX template drift, <a href="ABC-017.html">ABC-017</a>), tighten the signatures.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Grammar change means regenerating HTTP.rl.c — the current LEX.c<p>
-template emits <code>fbreak</code> where the committed generated file has <code>goto _out</code> (<a href="ABC-017.html">ABC-017</a>); regen must not silently change semantics.
-</p>
-</li>
+<li>Grammar change means regenerating HTTP.rl.c — the current LEX.c template emits <code>fbreak</code> where the committed generated file has <code>goto _out</code> (<a href="ABC-017.html">ABC-017</a>); regen must not silently change semantics.</li>
 <li>Review-gated abc/.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open)</li>
+<li>Regen WITHOUT waiting on <a href="ABC-017.html">ABC-017</a>: the fixed grammar's regen diff vs committed HTTP.c.rl is ONLY the known drift (16x fbreak vs goto <em>out + 2 include paths) + the one HTTPtext? line, so that line was ported by hand keeping the committed goto </em>out form; LEX template untouched (stays ABC-017's).</li>
+<li>HTTPutf8Drain kept, now honors the Drain contract (mirrors the lexer's consumption back via u8csMv on OK).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> round-trip repro (parse 2 headers → Feed → assert bytes)</li>
-<li class="open"><input type="checkbox" disabled> fix hdrs slice; typed border movers</li>
-<li class="open"><input type="checkbox" disabled> empty ReasonPhrase in HTTP.lex + regen</li>
-<li class="open"><input type="checkbox" disabled> HTTPfind/HTTPutf8Drain signature+naming pass</li>
+<li class="done"><input type="checkbox" checked disabled> round-trip repro (HTTPtest4) + empty-reason repro (HTTPtest5), both red pre-fix</li>
+<li class="done"><input type="checkbox" checked disabled> fix hdrs slice (a_dup, HTTP.c:79); u8cssUsed mover (:89)</li>
+<li class="done"><input type="checkbox" checked disabled> empty ReasonPhrase in HTTP.lex:41 + hand-ported regen</li>
+<li class="done"><input type="checkbox" checked disabled> HTTPfind needle u8csc; HTTPutf8Drain advances caller slice</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Regen entangled with the LEX template drift (<a href="ABC-017.html">ABC-017</a>).</li>
+<li>HTTPtest is WITH_INET-gated — invisible to the default 46-test run until <a href="ABC-017.html">ABC-017</a> lands the lane; verified with -DWITH_INET=ON.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(open)</li>
+<li>Landed in work/ABC-011, NOT merged: <code>?3b156ca0</code> &quot;ABC-011: HTTP serializer emits headers; empty reason ok&quot;. Suite 52/52 with WITH_INET=ON (baseline 46/46 + HTTPtest red once enabled); orchestrator re-verified suite + fixes.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

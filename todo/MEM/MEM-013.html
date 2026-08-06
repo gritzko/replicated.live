@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-013</title>
+<title>MEM-013: POLLoop mutates a stale poller slot after re-entrant callback (abc/POL.c)</title>
+<meta property="og:title" content="MEM-013: POLLoop mutates a stale poller slot after re-entrant callback (abc/POL.c)">
+<meta property="og:description" content="POLLoop captures idx = POLFind(fd) and at = data + idx from the pre-callback heap, runs at-&gt;callback(...), then tests/clears/ejects via the now-stale at/idx — but the callback may call POLTrackEvents/POLIgnoreEvents/POLAddTime, which sUp/sDown-swap or eject heap elements, so the post-callback code operates on whichever poller now occupies that slot (possibly past the shrunk $len). Because POLQUEUE is fixed-cap it stays in-allocation (no UAF), but it reads/writes the wrong poller and can double-eject. The goal is to re-resolve by fd after the callback.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-013.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>MEM-013: POLLoop mutates a stale poller slot after re-entrant callback (abc/POL.c)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>POLLoop</code> captures <code>idx = POLFind(fd)</code> and <code>at = *data + idx</code> from the pre-callback heap, runs <code>at-&gt;callback(...)</code>, then tests/clears/ejects via the now-stale <code>at</code>/<code>idx</code> — but the callback may call <code>POLTrackEvents</code>/<code>POLIgnoreEvents</code>/<code>POLAddTime</code>, which <code>sUp</code>/<code>sDown</code>-swap or eject heap elements, so the post-callback code operates on whichever poller now occupies that slot (possibly past the shrunk <code>$len</code>). Because <code>POL_QUEUE</code> is fixed-cap it stays in-allocation (no UAF), but it reads/writes the wrong poller and can double-eject. The goal is to re-resolve by fd after the callback.
 </p>
@@ -36,5 +45,16 @@ Re-fetch after the callback.
 <li>Repro first: a callback that ignores/tracks another fd during <code>POLLoop</code>; assert the intended fd's removal/clear is applied to the right slot.</li>
 <li>Re-run <code>POLFind(fd)</code> and re-validate <code>idx &lt; $len(data)</code> before mutating/ejecting, or snapshot the fd set and apply removals after the callback pass.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

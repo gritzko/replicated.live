@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SUBS-044</title>
+<title>SUBS-044: bare jab put/delete skip submodules — sub-interior mod/mis unstaged</title>
+<meta property="og:title" content="SUBS-044: bare jab put/delete skip submodules — sub-interior mod/mis unstaged">
+<meta property="og:description" content="Bare jab put (no path arg) stages every top-level mod file and bare jab delete sweeps every top-level mis (missing) file, but BOTH stop at a gitlink: bareStage's baseline-tree walk returns at leaf.kind===&quot;s&quot; (&quot;gitlink: nothing to put&quot;, be/verbs/put/put.js) and delsweepmissing does if (leaf.kind===&quot;s&quot;) return // gitlink subtree, skip (be/verbs/delete/delete.js:78). So a mod file inside a MOUNTED submodule is left unstaged by bare jab put, and a mis file inside a sub is never swept by bare jab delete — diverging from native be, which recurses pre-order (Submodules §Recursion: &quot;staging a submodule file delegates that to the submodule, then stages that submodule&quot;). sub's own bare put/delete over its mod/mis, then bump the sub gitlink in the parent. Parent DIS-058; sibling SUBS-039 (the scoped &lt;sub&gt;/&lt;path&gt; case). Method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/SUBS/SUBS-044.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>SUBS-044: bare jab put/delete skip submodules — sub-interior mod/mis unstaged</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 Bare <code>jab put</code> (no path arg) stages every top-level <code>mod</code> file and bare <code>jab delete</code> sweeps every top-level <code>mis</code> (missing) file, but BOTH stop at a gitlink: <code>bareStage</code>'s baseline-tree walk returns at <code>leaf.kind===&quot;s&quot;</code> (&quot;gitlink: nothing to put&quot;, <code>be/verbs/put/put.js</code>) and <code>del_sweep_missing</code> does <code>if (leaf.kind===&quot;s&quot;) return // gitlink subtree, skip</code> (<code>be/verbs/delete/delete.js:78</code>). So a <code>mod</code> file inside a MOUNTED submodule is left unstaged by bare <code>jab put</code>, and a <code>mis</code> file inside a sub is never swept by bare <code>jab delete</code> — diverging from native <code>be</code>, which recurses pre-order (<a href="../../wiki/Submodules.html">Submodules</a> §Recursion: &quot;staging a submodule file delegates that to the submodule, then stages that submodule&quot;). Fix: at a mounted gitlink, descend via the <code>core/recurse.js</code> mount walk, run the sub's own bare put/delete over its <code>mod</code>/<code>mis</code>, then bump the sub gitlink in the parent. Parent <a href="../DIS/DIS-058.html">DIS-058</a>; sibling <a href="SUBS-039.html">SUBS-039</a> (the scoped <code>&lt;sub&gt;/&lt;path&gt;</code> case). Method <a href="../../rule/Issues.html">Issues</a>.
 </p>
@@ -56,14 +65,19 @@ Bare <code>jab put</code> (no path arg) stages every top-level <code>mod</code> 
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED <code>a715b0d3</code> (&quot;SUBS-044: put,delete submodule handling&quot;, be trunk 01Jul):<p>
-bare put/delete recurse mounted subs pre-order via <code>core/recurse.js</code>, sub rows prefixed, gitlink bumped; tests <code>sub/{bareput,baredel}</code> + <code>-nested</code> variants.
-</p>
-</li>
-<li>Green jab-only per <code>d80bdb5c</code>.  CLOSED (audit 2026-07-07).  The scoped<p>
-<code>&lt;sub&gt;/&lt;path&gt;</code> DELETE arm remains with <a href="SUBS-039.html">SUBS-039</a>.
-</p>
-</li>
+<li>LANDED <code>a715b0d3</code> (&quot;SUBS-044: put,delete submodule handling&quot;, be trunk 01Jul): bare put/delete recurse mounted subs pre-order via <code>core/recurse.js</code>, sub rows prefixed, gitlink bumped; tests <code>sub/{bareput,baredel}</code> + <code>-nested</code> variants.</li>
+<li>Green jab-only per <code>d80bdb5c</code>.  CLOSED (audit 2026-07-07).  The scoped <code>&lt;sub&gt;/&lt;path&gt;</code> DELETE arm remains with <a href="SUBS-039.html">SUBS-039</a>.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

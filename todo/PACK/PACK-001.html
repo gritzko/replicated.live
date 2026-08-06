@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PACK-001</title>
+<title>PACK-001: PIDXScan fromoff — index a pack from a byte offset (tail scan)</title>
+<meta property="og:title" content="PACK-001: PIDXScan fromoff — index a pack from a byte offset (tail scan)">
+<meta property="og:description" content="The pack index-emitter PIDXScan (dog/git/PIDX.c) only scans a whole pack from the 12-byte header, bounded by the header's object count; there is no way to index just the un-covered TAIL of a pack. Add a fromoff parameter so a caller can emit entries for fromoff, EOF) only — the &quot;index the difference&quot; primitive [JS-099's open-time reindex needs. Safe because the store is offset-only (PackLog, OFS-ALWAYS): a tail object's OFS base is always earlier in the SAME pack and resolves from the whole-pack slice we pass. Patch drafted. Method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PACK/PACK-001.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,63 +16,38 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>PACK-001: <code>PIDXScan</code> <code>from_off</code> — index a pack from a byte offset (tail scan)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The pack index-emitter <code>PIDXScan</code> (dog/git/PIDX.c) only scans a whole pack from the 12-byte header, bounded by the header's object count; there is no way to index just the un-covered TAIL of a pack. Add a <code>from_off</code> parameter so a caller can emit entries for <code>[from_off, EOF)</code> only — the &quot;index the difference&quot; primitive <a href="../JS/JS-099.html">JS-099</a>'s open-time reindex needs. Safe because the store is offset-only (<a href="../../wiki/PackLog.html">PackLog</a>, OFS-ALWAYS): a tail object's OFS base is always earlier in the SAME pack and resolves from the whole-pack slice we pass. Patch drafted. Method <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><a href="../JS/JS-099.html">JS-099</a>: the keeper index goes stale when a pack lands with no covering<p>
-<code>.keeper.idx</code> run; the fix reindexes &quot;the difference&quot; on open. Detecting it reads the PACK bookmark's <code>byte_len</code>; indexing it needs a scan from that boundary (<code>pack_offset + byte_len</code>, a known object boundary).
-</p>
-</li>
-<li><code>PIDXScan(u8cs pack, Bwh128 out, u8s base, u8s delta)</code> walks <code>[12, EOF)</code><p>
-bounded by <code>hdr.count</code>; the JS <code>pk.scan</code> (js/pack.hpp <code>_pack_scan</code>) is whole-pack only. Neither can start mid-pack.
-</p>
-</li>
-<li>Offset-only (<a href="../../wiki/PackLog.html">PackLog</a>): a tail OFS_DELTA base is earlier in the same pack,<p>
-so <code>PACKResolveOfs(pack, off, …)</code> on the whole slice resolves it — a tail scan is correct. REF_DELTA never appears in a native log.
-</p>
-</li>
+<li><a href="../JS/JS-099.html">JS-099</a>: the keeper index goes stale when a pack lands with no covering <code>.keeper.idx</code> run; the fix reindexes &quot;the difference&quot; on open. Detecting it reads the PACK bookmark's <code>byte_len</code>; indexing it needs a scan from that boundary (<code>pack_offset + byte_len</code>, a known object boundary).</li>
+<li><code>PIDXScan(u8cs pack, Bwh128 out, u8s base, u8s delta)</code> walks <code>[12, EOF)</code> bounded by <code>hdr.count</code>; the JS <code>pk.scan</code> (js/pack.hpp <code>_pack_scan</code>) is whole-pack only. Neither can start mid-pack.</li>
+<li>Offset-only (<a href="../../wiki/PackLog.html">PackLog</a>): a tail OFS_DELTA base is earlier in the same pack, so <code>PACKResolveOfs(pack, off, …)</code> on the whole slice resolves it — a tail scan is correct. REF_DELTA never appears in a native log.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>PIDXScan(u8cs pack, u64 from_off, Bwh128 out, u8s base, u8s delta)</code>:<p>
-<code>from_off==0</code> = today's whole-pack scan (count-bounded, unchanged); <code>from_off&gt;0</code> = tail scan <code>[from_off, EOF)</code>, driven by offset not count.
-</p>
-</li>
-<li>Binding: <code>_pack_scan(buf, dataLen, out, base, delta, fromOff=0)</code> +<p>
-<code>pk.scan(out, fromOff)</code> wrapper (js/pack.hpp).
-</p>
-</li>
-<li>Emitted entries carry ABSOLUTE offsets; a tail OFS object shas correctly<p>
-against a pre-<code>from_off</code> base.
-</p>
-</li>
+<li><code>PIDXScan(u8cs pack, u64 from_off, Bwh128 out, u8s base, u8s delta)</code>: <code>from_off==0</code> = today's whole-pack scan (count-bounded, unchanged); <code>from_off&gt;0</code> = tail scan <code>[from_off, EOF)</code>, driven by offset not count.</li>
+<li>Binding: <code>_pack_scan(buf, dataLen, out, base, delta, fromOff=0)</code> + <code>pk.scan(out, fromOff)</code> wrapper (js/pack.hpp).</li>
+<li>Emitted entries carry ABSOLUTE offsets; a tail OFS object shas correctly against a pre-<code>from_off</code> base.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li><code>dog/git</code> + the JABC binding only. Whole-pack (<code>from_off==0</code>) behavior stays<p>
-byte-identical, INCLUDING the <code>hdr.count</code> truncation guard.
-</p>
-</li>
-<li>Offset-only: NO REF_DELTA handling added — a REF_DELTA still returns<p>
-<code>PIDXFAIL</code> (the OFS-only backstop). Deltas are <a href="PACK-002.html">PACK-002</a>, offset-only there too.
-</p>
-</li>
+<li><code>dog/git</code> + the JABC binding only. Whole-pack (<code>from_off==0</code>) behavior stays byte-identical, INCLUDING the <code>hdr.count</code> truncation guard.</li>
+<li>Offset-only: NO REF_DELTA handling added — a REF_DELTA still returns <code>PIDXFAIL</code> (the OFS-only backstop). Deltas are <a href="PACK-002.html">PACK-002</a>, offset-only there too.</li>
 <li>Repro-first (CLAUDE.md §17); table tests in <code>dog/test/PIDX.c</code> + JABC packidx.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Factor the per-record resolve/sha/emit/advance into a static <code>pidx_emit_at</code><p>
-helper; the full path stays a <code>for i&lt;hdr.count</code> loop (keeps the truncation guard), the tail path is <code>while (off &lt; packlen)</code> from <code>from_off</code>.
-</p>
-</li>
-<li><code>from_off</code> is a caller-supplied object boundary (a bookmark's<p>
-<code>pack_offset+byte_len</code>); <code>PIDXScan</code> does not validate it lands on a boundary — GIGO, same contract as raw offsets elsewhere.
-</p>
-</li>
+<li>Factor the per-record resolve/sha/emit/advance into a static <code>pidx_emit_at</code> helper; the full path stays a <code>for i&lt;hdr.count</code> loop (keeps the truncation guard), the tail path is <code>while (off &lt; packlen)</code> from <code>from_off</code>.</li>
+<li><code>from_off</code> is a caller-supplied object boundary (a bookmark's <code>pack_offset+byte_len</code>); <code>PIDXScan</code> does not validate it lands on a boundary — GIGO, same contract as raw offsets elsewhere.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -80,19 +59,24 @@ helper; the full path stays a <code>for i&lt;hdr.count</code> loop (keeps the tr
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>None. Enables <a href="../JS/JS-099.html">JS-099</a>'s incremental reindex and <a href="PACK-002.html">PACK-002</a>'s appended-pack<p>
-tail indexing.
-</p>
-</li>
-<li>Audit 07Jul26: the C core + tail test are IN; the JS-facing half (binding<p>
-<code>fromOff</code> + its test) is the open remainder — <a href="../JS/JS-099.html">JS-099</a>'s reindex-on-open cannot start mid-pack from JS yet.
-</p>
-</li>
+<li>None. Enables <a href="../JS/JS-099.html">JS-099</a>'s incremental reindex and <a href="PACK-002.html">PACK-002</a>'s appended-pack tail indexing.</li>
+<li>Audit 07Jul26: the C core + tail test are IN; the JS-facing half (binding <code>fromOff</code> + its test) is the open remainder — <a href="../JS/JS-099.html">JS-099</a>'s reindex-on-open cannot start mid-pack from JS yet.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>C core landed <code>8df1e213</code> (dog <code>PIDX.c/.h</code> <code>from_off</code> + <code>tail_scan</code> test) / <code>b141ab81</code> (beagle) / jab <code>9421ca8</code> (&quot;make js append to pack logs&quot; — append path; scan binding untouched).</li>
 <li>Remaining: expose <code>fromOff</code> through <code>_pack_scan</code>/<code>pk.scan</code> + a JABC packidx from-offset case (see TODOs).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

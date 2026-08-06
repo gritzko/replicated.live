@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORK-013: work view tree-row clicks are relative U words — from a non-root context they NAVNONE or show the wrong tree</title>
+<meta property="og:title" content="WORK-013: work view tree-row clicks are relative U words — from a non-root context they NAVNONE or show the wrong tree">
+<meta property="og:description" content="Reported by gritzko 2026-07-19, live: jab work run from //WORK — clicking the main tree's abc mount row (jab/dog/abc) drives //WORK: status jab/dog/abc → NAVNONE; clicking the root row drives a bare status → shows //WORK's status, not the main tree's. The rows bake context-RELATIVE U word spells at render time; under any pager context but the project root they resolve against the wrong tree. Must catch up to the /todo/BE/BE-054 O ruling: verb clicks are O spells, U is reserved for real addresses, and tree rows carry FULL ///path/ addresses.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/WORK/WORK-013.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WORK-013: work view tree-row clicks are relative U words — from a non-root context they NAVNONE or show the wrong tree</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<p>
+Reported by gritzko 2026-07-19, live: <code>jab work</code> run from //WORK — clicking the main tree's <code>abc</code> mount row (jab/dog/abc) drives <code>//WORK: status jab/dog/abc</code> → NAVNONE; clicking the root row drives a bare <code>status</code> → shows //WORK's status, not the main tree's. The rows bake context-RELATIVE U word spells at render time; under any pager context but the project root they resolve against the wrong tree. Must catch up to the <a href="/todo/BE/BE-054.html">BE-054</a> O ruling: verb clicks are O spells, U is reserved for real addresses, and tree rows carry FULL <code>///path/</code> addresses.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Mint sites, views/work/work.js <code>treeRows</code>: root row <code>nav: navlib.navLink(&quot;status&quot;, &quot;&quot;)</code> (:646) → bare <code>status</code>; mount rows <code>nav: navlib.navLink(&quot;status&quot;, c.relpath)</code> (:666) → <code>status jab/dog/abc</code> — relative, no authority when the render-time nav authority is empty (shared/nav.js:48-55 composes off <code>authority()</code>, not the row's own tree).</li>
+<li>wt rows are half-converted: buttons mint O (SPELL.mintOspell, work.js:491-567) but the row-key/<a href="./±.html">±</a> clicks still bake U words <code>status //KEY</code> / <code>diff //KEY</code> (work.js:530,544) — authority-full so they resolve, yet still U verb-words the <a href="/todo/BE/BE-054.html">BE-054</a> ruling reserves for real addresses.</li>
+<li><a href="/todo/BE/BE-053.html">BE-053</a> (landed c2768ce7) keeps the pager context on a word-spell arg click — so the bar stays put, but the VERB still resolves the relative arg against the pager context: <code>//WORK</code> has no jab/dog/abc → NAVNONE in plain words; root's bare <code>status</code> = status of the current context.</li>
+<li>Rulings in force: <a href="/todo/BRO/BRO-025.html">BRO-025</a> three-part O (context · verb · args); use URIs to name trees (<code>///sub/</code>, <code>//WT</code>); resolution via core/resolve_hash.js only.</li>
+<li>Live refinement (gritzko 2026-07-19, rechecked from //WORK-013 — launch-independent): the abc click lands on <code>//&lt;LAUNCHWT&gt;/jab/dog/abc/: status</code>, bar RED, view = the launch wt's status — navLink BAKES the render-time <code>authority()</code> onto the mount's relpath (nav.js:48-55), minting a real-looking WRONG-tree address the pager then legitimately navigates to. Not a BE-053 regression — the weld is in the mint, not the pager.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Tree-node rows mint context-independent O spells: root → <code>status ///</code>, a mount → <code>status ///jab/dog/abc/</code> (or the O context slot carrying the tree, per the BRO-025 wire form) — a click works identically from ANY pager context.</li>
+<li>wt-row key and <a href="./±.html">±</a> clicks convert U verb-words → O spells (<code>status //KEY</code>, <code>diff //KEY</code> as O), finishing the BE-054 catch-up in work.js; after the sweep the work view emits no verb-word U tokens.</li>
+<li>Red-first pty repro: <code>jab work</code> launched from a NON-root worktree cwd, click a mount row → the mount's status renders (no NAVNONE, no wrong-tree status), pager context unchanged.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Mint via SPELL.mintOspell only, addresses via the standard composers — no hand-built URI strings; do not touch views/bro/pager.js.</li>
+<li>U tokens that ARE real addresses stay U; the fade <code>#rrggbb</code> O and button Os stay as-is.</li>
+<li>test/work/view and test/work/getctx pin current row bytes — amending their pins to the O form is AUTHORIZED; no other test edits.</li>
+<li>Overlaps <a href="/todo/WORK/WORK-014.html">WORK-014</a> (mount ahbeh vs branch tip, same treeRows region) — coordinate, separate commits; build on //WORK/ tip, expect weaves.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>gritzko O-context ruling (2026-07-19): O = context·verb·args; context EMPTY=leave, ABSOLUTE(<code>/…</code>)=REPLACE, RELATIVE=combine; ARGS go to the verb VERBATIM (pager never welds/reduces them).</li>
+<li>Tree rows: ABSOLUTE context <code>///&lt;relpath&gt;</code>, verb <code>status</code>, NO arg (nodeCtx) — root <code>///: status</code>, mount <code>///vend/ext/: status</code>.</li>
+<li>wt rows: context-less O, arg VERBATIM — <code>status //KEY</code>, <code>diff //KEY</code> (U verb-word → O tag; //KEY is a full address).</li>
+<li>prefixSpans nav span is TAG_O but PAGER-ONLY: the nav O is minted only on the btns path (wtSpans + emitRows repo row gated on btns, mirroring fadeHex/BE-054) — an O in a PLAIN hunk trips bro.js's why-plain cursor and drops the <code>work</code> banner; plain stays byte- identical to the golden.  navlib(navLink) require dropped — no verb-word U left in work.js.</li>
+<li>GAP (bro-side, NOT fixed per order): parseOspell strips a bare <code>///</code> context to &quot;&quot; (&quot;here&quot;), so the ROOT click drives status in the EMPTY context (statuses the pager cwd, not the root); mounts (<code>///rel</code>) survive + render the right tree.  Also the ruling's case (2) &quot;absolute REPLACES&quot; is not honoured by the current _runSpell (renders in-context, ctx unmoved) — separate bro-side inspection owns closing both.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> red pty (scratchpad repro.py) from non-root PIN-1: mount click renders nothing, root click shows the launch-wt status — pinned</li>
+<li class="done"><input type="checkbox" checked disabled> tree rows mint <code>///</code>-abs-context O; wt key/<a href="./±.html">±</a> U→O; check.js + getctx pins flipped to O (check.js flips RED on a base --tlv)</li>
+<li class="done"><input type="checkbox" checked disabled> green: FULL test/work/view/run.sh PASS (plain banner intact, goldens match, check.js 303 OK); mount renders the right tree from any cwd (repro.py); todo/view + graf/parity PASS</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>CORRECTION: my earlier &quot;test/work/view pre-existing env red&quot; claim was FALSE — the lost <code>work</code> banner was MY regression from an unconditional TAG_O nav in the PLAIN hunk (I mis-checked base against a jab-cat-corrupted file, never a pristine clone).  Fixed by btns-gating the nav O (BE-054's recorded mode); run.sh PASSes.</li>
+<li>test/work/getctx run.sh stays RED at base for ONE known reason: getctx.py:89 waits on the RETIRED <code>[get]</code> button (WORK-004) so no frame paints — a separate //WORK-010 staged fix re-pins it; NOT touched here, NOT a WORK-013 regression.</li>
+<li>ROOT <code>///</code> collapse + absolute-not-replacing are bro-side (above).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Staged (put, NOT posted): views/work/work.js, test/work/view/check.js.  clickpty.py reverted to baseline (TRK-5 launch anchors to root — the bug does not repro there, so no clean flip; repro.py from PIN-1 is the real-UI flip).</li>
+<li>Suggested commit: <code>WORK-013: tree/wt row clicks mint context O spells</code></li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

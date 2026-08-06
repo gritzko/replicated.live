@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-075</title>
+<title>JS-075: be get fan-out row URIs break on tree names with ?/# → wrong-path unlink</title>
+<meta property="og:title" content="JS-075: be get fan-out row URIs break on tree names with ?/# → wrong-path unlink">
+<meta property="og:description" content="The GET fan-out builds per-path effect rows by raw string concat — rel + &quot;?&quot; + ne.sha + &quot;#&quot; + oldSha (get.js:290-308) — then the leaf re-parses each with new URI(uri) (get.js:319-323), reading rel=u.path, newSha=u.query, oldSha=u.fragment. A tracked filename containing ? truncates rel and corrupts newSha (wrong file written/skipped). A name containing # makes newSha empty, so the leaf takes the delete branch and io.unlink(join(wt,rel)) (get.js:324,327-328) — a destructive wrong-path delete. Effects stay inside the worktree (correctness/integrity, not traversal). Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-075.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,88 +15,65 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-075 <a href="">HIGH</a>: <code>be get</code> fan-out row URIs break on tree names with <code>?</code>/<code>#</code> → wrong-path unlink</h1>
+<h1>JS-075: <code>be get</code> fan-out row URIs break on tree names with <code>?</code>/<code>#</code> → wrong-path unlink</h1>
+<div>
 <p>
-The <a href="">GET</a> fan-out builds per-path effect rows by raw string concat — <code>rel + &quot;?&quot; + ne.sha + &quot;#&quot; + oldSha</code> (<code>get.js:290-308</code>) — then the leaf re-parses each with <code>new URI(uri)</code> (<code>get.js:319-323</code>), reading <code>rel=u.path</code>, <code>newSha=u.query</code>, <code>oldSha=u.fragment</code>.  A tracked filename containing <code>?</code> truncates <code>rel</code> and corrupts <code>newSha</code> (wrong file written/skipped).  A name containing <code>#</code> makes <code>newSha</code> empty, so the leaf takes the delete branch and <code>io.unlink(join(wt,rel))</code> (<code>get.js:324,327-328</code>) — a destructive wrong-path delete.  Effects stay inside the worktree (correctness/integrity, not traversal).  Method: <a href="../../meta/work.html">Issues</a>.
+Now: DONE
+</p>
+</div>
+<p>
+The <a href="./GET.html">GET</a> fan-out builds per-path effect rows by raw string concat — <code>rel + &quot;?&quot; + ne.sha + &quot;#&quot; + oldSha</code> (<code>get.js:290-308</code>) — then the leaf re-parses each with <code>new URI(uri)</code> (<code>get.js:319-323</code>), reading <code>rel=u.path</code>, <code>newSha=u.query</code>, <code>oldSha=u.fragment</code>.  A tracked filename containing <code>?</code> truncates <code>rel</code> and corrupts <code>newSha</code> (wrong file written/skipped).  A name containing <code>#</code> makes <code>newSha</code> empty, so the leaf takes the delete branch and <code>io.unlink(join(wt,rel))</code> (<code>get.js:324,327-328</code>) — a destructive wrong-path delete.  Effects stay inside the worktree (correctness/integrity, not traversal).  Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>get.js:290-291,298-299</code>: rows are <code>rel + &quot;?&quot; + ne.sha + &quot;#&quot; + …</code> raw<p>
-concat — <code>rel</code> (the file name) is unescaped.
-</p>
-</li>
-<li><code>get.js:307-308</code>: the removed-entry row is <code>rel + &quot;?#&quot; + oe.sha</code> — same<p>
-unescaped concat for the delete case.
-</p>
-</li>
-<li><code>get.js:319-323</code> <code>leaf</code>: `const u = new URI(uri); rel=u.path;<p>
-newSha=u.query; oldSha=u.fragment<code> — URI splits on the FIRST </code>?<code>/</code>#`.
-</p>
-</li>
-<li><code>get.js:324,327-328</code>: <code>full = join(g.wt, rel)</code>; `if (!newSha) {<p>
-io.unlink(full); … }<code> — an empty </code>newSha<code> (from a </code>#<code> in the name) DELETES the path the truncated </code>rel` resolves to.
-</p>
-</li>
-<li>A name like <code>a#b</code> → <code>newSha=&quot;&quot;</code> → leaf deletes <code>join(wt,&quot;a&quot;)</code>; <code>a?b</code><p>
-→ <code>rel=&quot;a&quot;</code>, <code>newSha=&quot;b…&quot;</code> (corrupt) → wrong file written/skipped.
-</p>
-</li>
+<li><code>get.js:290-291,298-299</code>: rows are <code>rel + &quot;?&quot; + ne.sha + &quot;#&quot; + …</code> raw concat — <code>rel</code> (the file name) is unescaped.</li>
+<li><code>get.js:307-308</code>: the removed-entry row is <code>rel + &quot;?#&quot; + oe.sha</code> — same unescaped concat for the delete case.</li>
+<li><code>get.js:319-323</code> <code>leaf</code>: <code>const u = new URI(uri); rel=u.path; newSha=u.query; oldSha=u.fragment</code> — URI splits on the FIRST <code>?</code>/<code>#</code>.</li>
+<li><code>get.js:324,327-328</code>: <code>full = join(g.wt, rel)</code>; <code>if (!newSha) { io.unlink(full); … }</code> — an empty <code>newSha</code> (from a <code>#</code> in the name) DELETES the path the truncated <code>rel</code> resolves to.</li>
+<li>A name like <code>a#b</code> → <code>newSha=&quot;&quot;</code> → leaf deletes <code>join(wt,&quot;a&quot;)</code>; <code>a?b</code> → <code>rel=&quot;a&quot;</code>, <code>newSha=&quot;b…&quot;</code> (corrupt) → wrong file written/skipped.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>A tracked file named <code>a#b</code> or <code>a?b</code> round-trips through the get fan-out<p>
-and leaf with the correct new bytes and NO spurious deletion.
-</p>
-</li>
-<li>The delete branch fires only for a genuinely removed path, never from a<p>
-<code>#</code>/<code>?</code> in a live name.
-</p>
-</li>
+<li>A tracked file named <code>a#b</code> or <code>a?b</code> round-trips through the get fan-out and leaf with the correct new bytes and NO spurious deletion.</li>
+<li>The delete branch fires only for a genuinely removed path, never from a <code>#</code>/<code>?</code> in a live name.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Match the C URI grammar (the path component is percent-encoded there);<p>
-encode the path on row build, decode symmetrically in <code>leaf</code>.
-</p>
-</li>
-<li>Or pass <code>rel</code>/<code>sha</code> as separate structured row fields (avoid the<p>
-parse round-trip entirely) — keep the row verb <code>get</code> and the queue shape.
-</p>
-</li>
+<li>Match the C URI grammar (the path component is percent-encoded there); encode the path on row build, decode symmetrically in <code>leaf</code>.</li>
+<li>Or pass <code>rel</code>/<code>sha</code> as separate structured row fields (avoid the parse round-trip entirely) — keep the row verb <code>get</code> and the queue shape.</li>
 <li>Scope to get.js fan-out + leaf; no change to tree-map building.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Percent-encode <code>rel</code> in every emitted row (<code>:290,298,301,306,308</code>) and<p>
-decode <code>u.path</code> in <code>leaf</code>, OR carry <code>{rel,newSha,oldSha}</code> structurally.
-</p>
-</li>
-<li>Guard the delete branch on &quot;old path existed AND no new sha&quot;, not on a<p>
-string-parse artifact.
-</p>
-</li>
+<li>Percent-encode <code>rel</code> in every emitted row (<code>:290,298,301,306,308</code>) and decode <code>u.path</code> in <code>leaf</code>, OR carry <code>{rel,newSha,oldSha}</code> structurally.</li>
+<li>Guard the delete branch on &quot;old path existed AND no new sha&quot;, not on a string-parse artifact.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/get/*</code>: track a file named <code>a#b</code> (and <code>a?b</code>),<p>
- re-get, assert correct bytes and that the file is NOT unlinked.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/get/*</code>: track a file named <code>a#b</code> (and <code>a?b</code>), re-get, assert correct bytes and that the file is NOT unlinked.</li>
 <li class="open"><input type="checkbox" disabled> Encode/decode the path component (or structuralize the row fields).</li>
 <li class="open"><input type="checkbox" disabled> Re-run the get parity suite (ordinary names unaffected, byte-equal).</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>Confirm <code>URI</code>/<code>new URI</code> percent-decoding matches the C decode so an<p>
-encoded name re-materializes byte-identically on disk.
-</p>
-</li>
+<li>Confirm <code>URI</code>/<code>new URI</code> percent-decoding matches the C decode so an encoded name re-materializes byte-identically on disk.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>(pending)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

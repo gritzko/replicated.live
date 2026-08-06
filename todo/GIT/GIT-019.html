@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GIT-019</title>
+<title>GIT-019: reuse ONE receive-pack session for push — advert+verdict+pack, no hangup/reconnect</title>
+<meta property="og:title" content="GIT-019: reuse ONE receive-pack session for push — advert+verdict+pack, no hangup/reconnect">
+<meta property="og:description" content="A jab post //host push opens the remote's git-receive-pack TWICE: first in relate.relate→wire.advertRefs, only to read the old tip for the FF gate, and closed with a BARE io.close (no flush) so git-receive-pack dies fatal: the remote end hung up unexpectedly on EVERY push, even a successful one; then AGAIN in wire.push, which RE-drains the identical advert before sending the pack. One push, two connections, one gratuitous scary line. Reuse ONE session: advertise once, keep the child alive, run the LOCAL FF verdict + build the pack from that advert's haves, send updates+pack on the SAME fds; on the advert-only / non-FF refusal path send a flush-pkt (0000) before close so receive-pack exits clean. Respect GIT-016's graph-only relate spine — make its advert INJECTABLE, do not fuse wire transfer into the verdict. JS only (be/, via jab). Method: work; siblings GIT-013/GIT-016; cuts BE-006 stacked-error noise.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GIT/GIT-019.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>GIT-019 <a href="./JS.html">JS</a>: reuse ONE receive-pack session for push — advert+verdict+pack, no hangup/reconnect</h1>
+<h1>GIT-019: reuse ONE receive-pack session for push — advert+verdict+pack, no hangup/reconnect</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 A <code>jab post //host</code> push opens the remote's <code>git-receive-pack</code> TWICE: first in <code>relate.relate</code>→<code>wire.advertRefs</code>, only to read the old tip for the FF gate, and closed with a BARE <code>io.close</code> (no flush) so git-receive-pack dies <code>fatal: the remote end hung up unexpectedly</code> on EVERY push, even a successful one; then AGAIN in <code>wire.push</code>, which RE-drains the identical advert before sending the pack. One push, two connections, one gratuitous scary line. Reuse ONE session: advertise once, keep the child alive, run the LOCAL FF verdict + build the pack from that advert's haves, send updates+pack on the SAME fds; on the advert-only / non-FF refusal path send a flush-pkt (<code>0000</code>) before close so receive-pack exits clean. Respect GIT-016's graph-only <code>relate</code> spine — make its advert INJECTABLE, do not fuse wire transfer into the verdict. JS only (<code>be/</code>, via <code>jab</code>). Method: <a href="../../meta/work.html">work</a>; siblings <a href="GIT-013.html">GIT-013</a>/<a href="GIT-016.html">GIT-016</a>; cuts <a href="../BE/BE-006.html">BE-006</a> stacked-error noise.
 </p>
@@ -55,7 +64,7 @@ A <code>jab post //host</code> push opens the remote's <code>git-receive-pack</c
 <li class="done"><input type="checkbox" checked disabled> T1 — repro test: ONE receive-pack spawn per FF push, NO <code>remote end hung up</code> on stderr (counting ssh shim). — <code>test/wire/push-1conn</code>.</li>
 <li class="done"><input type="checkbox" checked disabled> T2 — <code>advertRefs</code> flush-close before <code>io.close(wfd)</code> so an advert-only session exits clean (pull verbs incl.). — landed <code>3610b643</code> (<code>wire.js</code> ~566).</li>
 <li class="done"><input type="checkbox" checked disabled> T3 — <code>wire.js</code> open-once push session (advert drained once, send on the same fds), drain+body helpers shared with <code>advertRefs</code>/<code>push</code>. — landed <code>3610b643</code> (<code>wire.js</code> §GIT-019 ~574).</li>
-<li class="done"><input type="checkbox" checked disabled> T4 — <code>relate</code> advert-injectable (<code>adv</code> param, relate.js ~42); <code>pushRemote</code> advertises once, verdict off that advert, send or flush-close+refuse on the same session (<code>post.js</code> ~301). — landed <code>3610b643</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> T4 — <code>relate</code> advert-injectable (<code>adv</code> param, relate.js <del>42); <code>pushRemote</code> advertises once, verdict off that advert, send or flush-close+refuse on the same session (<code>post.js</code> </del>301). — landed <code>3610b643</code>.</li>
 <li class="done"><input type="checkbox" checked disabled> T5 — regression: <code>push-ssh</code> FF, <code>push-nonff</code> honest refusal, put force twin, head/get advert; wire + post buckets. — green at land.</li>
 </ul>
 <h3>Blockers and bummers</h3>
@@ -70,5 +79,16 @@ A <code>jab post //host</code> push opens the remote's <code>git-receive-pack</c
 <li>Landed <code>3610b643</code> (&quot;reuse the same git connection for all phases&quot;, be/ trunk): one receive-pack session per ssh/local push (advert once → relate verdict → send on the same fds), <code>advertRefs</code> flush-closes so advert-only sessions exit clean (no <code>remote end hung up</code> on push gates or pull verbs), <code>relate</code> advert injectable. Test <code>test/wire/push-1conn</code>.</li>
 <li>http push kept stateless by design (GET advert + POST body — no fake session over curl).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

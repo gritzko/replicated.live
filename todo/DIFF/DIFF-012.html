@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DIFF-012</title>
+<title>DIFF-012: jab diff (no args) shows NOTHING — source the dirty file list from the classifier</title>
+<meta property="og:title" content="DIFF-012: jab diff (no args) shows NOTHING — source the dirty file list from the classifier">
+<meta property="og:description" content="jab diff with no path arg prints nothing even when the worktree has uncommitted changes, while native be diff prints the full working-tree-vs-baseline diff. The no-arg (whole-wt) form is the broken one: jab diff &lt;path&gt; emits fine. be status correctly reports the dirty file, so the classifier sees the change; only the no-arg diff: render fails to enumerate it. The fix is to drive the no-arg file list from the CLASSIFIER (classify.js, the same authority status and bare put use), then diff each dirty tracked file vs its baseline. be/ JS diff: view (reported by user, 2026-06-30; live repro in ~/todo/GET-037). Spec Verbs / Projector; method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIFF/DIFF-012.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,72 +15,41 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>DIFF-012 <a href="./MED.html">MED</a>: jab diff (no args) shows NOTHING — source the dirty file list from the classifier</h1>
+<h1>DIFF-012: jab diff (no args) shows NOTHING — source the dirty file list from the classifier</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>jab diff</code> with no path arg prints nothing even when the worktree has uncommitted changes, while native <code>be diff</code> prints the full working-tree-vs-baseline diff. The no-arg (whole-wt) form is the broken one: <code>jab diff &lt;path&gt;</code> emits fine. <code>be status</code> correctly reports the dirty file, so the classifier sees the change; only the no-arg <code>diff:</code> render fails to enumerate it. The fix is to drive the no-arg file list from the CLASSIFIER (<code>classify.js</code>, the same authority <code>status</code> and bare <code>put</code> use), then diff each dirty tracked file vs its baseline. <code>be/</code> JS <code>diff:</code> view (reported by user, 2026-06-30; live repro in <code>~/todo/GET-037</code>). Spec <a href="../../wiki/Verbs.html">Verbs</a> / <a href="../../wiki/Projector.html">Projector</a>; method <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Repro (in <code>~/todo/GET-037</code>, a worktree carrying <code>mod verbs/get/get.js</code>):<p>
-<code>be diff</code> (native) prints the 85-line wt-vs-baseline diff; <code>jab diff</code> prints NOTHING (empty, exit 0).
-</p>
-</li>
-<li>Both <code>jab diff</code> (bareword) AND <code>jab ~/todo/GET-037/main.js diff</code> (the worktree's<p>
-own entry) are empty → NOT a stale-locator (<a href="../GET/GET-036.html">GET-036</a>); a real <code>diff:</code> view bug.
-</p>
-</li>
-<li><code>jab diff &lt;path&gt;</code> (named) emits — it is NOT broken. (Its WHOLE-FILE output —<p>
-<code>jab</code> 933 lines vs native 932 for a 924-line file — is the single-file full-file mode shared by BOTH binaries, tracked separately in <a href="DIFF-005/README.html">DIFF-005</a>; NOT a jab bug.)
-</p>
-</li>
-<li><code>be status</code> reports <code>mod verbs/get/get.js</code>, so the change IS classified — only the<p>
-no-arg diff fails to enumerate the dirty set.
-</p>
-</li>
-<li>Candidate cause: <code>views/diff/diff.js</code> (the <code>diff:</code> handler, JS-071) RE-PARSES its<p>
-spec off <code>ctx.args[0]</code>; <code>diff</code> is NOT in <code>core/resolve.js</code> VIEW_REPARSE, and a no-arg <code>jab diff</code> seeds a synthetic <code>.</code> row with EMPTY <code>ctx.args</code>, so the no-range wt-vs-baseline whole-wt branch (diff.js ~358-408) never enumerates the dirty files.
-</p>
-</li>
+<li>Repro (in <code>~/todo/GET-037</code>, a worktree carrying <code>mod verbs/get/get.js</code>): <code>be diff</code> (native) prints the 85-line wt-vs-baseline diff; <code>jab diff</code> prints NOTHING (empty, exit 0).</li>
+<li>Both <code>jab diff</code> (bareword) AND <code>jab ~/todo/GET-037/main.js diff</code> (the worktree's own entry) are empty → NOT a stale-locator (<a href="../GET/GET-036.html">GET-036</a>); a real <code>diff:</code> view bug.</li>
+<li><code>jab diff &lt;path&gt;</code> (named) emits — it is NOT broken. (Its WHOLE-FILE output — <code>jab</code> 933 lines vs native 932 for a 924-line file — is the single-file full-file mode shared by BOTH binaries, tracked separately in <a href="DIFF-005/README.html">DIFF-005</a>; NOT a jab bug.)</li>
+<li><code>be status</code> reports <code>mod verbs/get/get.js</code>, so the change IS classified — only the no-arg diff fails to enumerate the dirty set.</li>
+<li>Candidate cause: <code>views/diff/diff.js</code> (the <code>diff:</code> handler, JS-071) RE-PARSES its spec off <code>ctx.args[0]</code>; <code>diff</code> is NOT in <code>core/resolve.js</code> VIEW_REPARSE, and a no-arg <code>jab diff</code> seeds a synthetic <code>.</code> row with EMPTY <code>ctx.args</code>, so the no-range wt-vs-baseline whole-wt branch (diff.js ~358-408) never enumerates the dirty files.</li>
 <li>Native <code>be diff</code> (no args) shows the wt-vs-baseline diff — the JS port diverges.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>jab diff</code> (no args) prints the working-tree-vs-baseline diff of every dirty tracked<p>
-file, matching native <code>be diff</code>.
-</p>
-</li>
-<li>The dirty file list comes from the CLASSIFIER (<code>classify.js</code>), not a bespoke walk —<p>
-one source of truth for &quot;what changed&quot;, shared with <code>status</code> and bare <code>put</code>.
-</p>
-</li>
+<li><code>jab diff</code> (no args) prints the working-tree-vs-baseline diff of every dirty tracked file, matching native <code>be diff</code>.</li>
+<li>The dirty file list comes from the CLASSIFIER (<code>classify.js</code>), not a bespoke walk — one source of truth for &quot;what changed&quot;, shared with <code>status</code> and bare <code>put</code>.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li><code>be/</code> JS only. REUSE <code>classify.js</code> for the dirty set + the existing per-file diff<p>
-path in <code>diff.js</code>; do not re-roll a separate wt walk. Keep the friendly throws.
-</p>
-</li>
-<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): a dirty wt where <code>be diff</code> shows changes but <code>jab diff</code><p>
-shows nothing (self-contained; <code>~/todo/GET-037</code> is a live example).
-</p>
-</li>
-<li>Do NOT regress the working forms: <code>diff:&lt;path&gt;</code>, <code>diff:?branch</code>, <code>diff:?a..b</code> range,<p>
-and the sub-aware forms. The single-file whole-file behaviour is <a href="DIFF-005/README.html">DIFF-005</a>'s call, out of scope here.
-</p>
-</li>
+<li><code>be/</code> JS only. REUSE <code>classify.js</code> for the dirty set + the existing per-file diff path in <code>diff.js</code>; do not re-roll a separate wt walk. Keep the friendly throws.</li>
+<li>Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): a dirty wt where <code>be diff</code> shows changes but <code>jab diff</code> shows nothing (self-contained; <code>~/todo/GET-037</code> is a live example).</li>
+<li>Do NOT regress the working forms: <code>diff:&lt;path&gt;</code>, <code>diff:?branch</code>, <code>diff:?a..b</code> range, and the sub-aware forms. The single-file whole-file behaviour is <a href="DIFF-005/README.html">DIFF-005</a>'s call, out of scope here.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>No-arg <code>jab diff</code> enumerates the dirty set via the classifier (<code>classify.js</code> — the<p>
-<code>mod</code>/<code>new</code>/<code>del</code>/<code>mov</code> buckets), then renders each path through the existing per-file wt-vs-baseline diff. Same classifier authority <code>status</code> and bare <code>put</code> use.
-</p>
-</li>
-<li>Wire the seed so the no-arg form reaches that branch: add <code>diff</code> to<p>
-<code>core/resolve.js</code> VIEW_REPARSE, OR default the handler to the wt-vs-base spec when <code>ctx.args</code> is empty (the <code>.</code> placeholder row) — match how log/commit/tree reparse.
-</p>
-</li>
+<li>No-arg <code>jab diff</code> enumerates the dirty set via the classifier (<code>classify.js</code> — the <code>mod</code>/<code>new</code>/<code>del</code>/<code>mov</code> buckets), then renders each path through the existing per-file wt-vs-baseline diff. Same classifier authority <code>status</code> and bare <code>put</code> use.</li>
+<li>Wire the seed so the no-arg form reaches that branch: add <code>diff</code> to <code>core/resolve.js</code> VIEW_REPARSE, OR default the handler to the wt-vs-base spec when <code>ctx.args</code> is empty (the <code>.</code> placeholder row) — match how log/commit/tree reparse.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -87,19 +60,24 @@ and the sub-aware forms. The single-file whole-file behaviour is <a href="DIFF-0
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>The single-file whole-file output is <a href="DIFF-005/README.html">DIFF-005</a> (open, awaiting a UX ruling), not<p>
-part of this ticket — keep DIFF-012 to the no-arg enumeration.
-</p>
-</li>
+<li>The single-file whole-file output is <a href="DIFF-005/README.html">DIFF-005</a> (open, awaiting a UX ruling), not part of this ticket — keep DIFF-012 to the no-arg enumeration.</li>
 <li>Choose the seed mechanism consistently with the other re-parse views.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED <code>9c525377</code> (&quot;DIFF-012: diff bare&quot;) — no-arg <code>jab diff</code> renders the<p>
-classifier's dirty set vs baseline: <code>diff()</code> defaults to the whole-wt spec (diff.js:574-580), <code>diffWtTree</code> enumerates via <code>classify.classify()</code> (diff.js:250-265); a DIR path scopes the same walk (diff.js:543-546).
-</p>
-</li>
+<li>LANDED <code>9c525377</code> (&quot;DIFF-012: diff bare&quot;) — no-arg <code>jab diff</code> renders the classifier's dirty set vs baseline: <code>diff()</code> defaults to the whole-wt spec (diff.js:574-580), <code>diffWtTree</code> enumerates via <code>classify.classify()</code> (diff.js:250-265); a DIR path scopes the same walk (diff.js:543-546).</li>
 <li>Verified in-tree 2026-07-07 (ticket audit): code present, be/ wt clean.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-025: status/quad ahead-behind should read the graf.idx count cache</title>
+<meta property="og:title" content="CODE-025: status/quad ahead-behind should read the graf.idx count cache">
+<meta property="og:description" content="Deps: none — the accelerating index EXISTS in be/ today. shared/graf.js (GRAF-001) maintains a persistent lazy ahead/behind COUNT cache over .graf.idx, and views/work/work.js already consumes it (grafFor); status/ quad bypass it and recompute from scratch. Perf, not dedup. See graf.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-025.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>CODE-025: status/quad ahead-behind should read the graf.idx count cache</h1>
+<div>
+<p>
+Now: OPEN Sev: LOW
+</p>
+</div>
+<p>
+Deps: none — the accelerating index EXISTS in be/ today. shared/graf.js (GRAF-001) maintains a persistent lazy ahead/behind COUNT cache over <code>*.graf.idx</code>, and views/work/work.js already consumes it (<code>grafFor</code>); status/ quad bypass it and recompute from scratch. Perf, not dedup. See <a href="../../be/shared/graf.js">graf</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>quad.js:224 calls <code>dag.aheadBehind(k, base, track)</code>, which builds the COMPLETE ancestor-node map of BOTH sides (dag.js:76-96) — O(history) parent-BFS + <code>parseCommit</code> per node — on EVERY status (the default view).</li>
+<li>work.js:130-155 opens the shard's graf ahbeh cache ONCE per shard and reads counts index-first; status/quad never touch it, so the same divergence is recomputed by full walk each time.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Short-circuit the divergence VERDICT (eq / ahead==0 / behind==0) via the graf.open count cache; keep the full walk only where row DETAIL is needed.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Behavior-identical counts; the graf cache SATURATES at 0xFFFFF (&quot;at least&quot;) — treat a saturated count as &quot;many&quot;, never as an exact tally. be/ JS only.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Reuse work.js's <code>grafFor(repo)</code> shape (open once per shard, null on no keeper / graf.open throw) rather than a second opener.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> wire quad/status <code>quadOf</code> to <code>graf.open(shardDir).aheadBehind</code> counts</li>
+<li><a href="./ .html"> </a> use counts for the divergence verdict; fall back to <code>dag.aheadBehind</code> only when the row list is actually rendered</li>
+<li><a href="./ .html"> </a> measure status latency before/after on a deep-history shard</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Full ahead/behind ROW lists still need a walk today; the commitindex (GRAF-002, tracked in <a href="CODE-026.html">CODE-026</a>) would accelerate that remaining case.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Not started. Suggested commit: <code>CODE-025: status ahead-behind via graf.idx count cache</code>.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

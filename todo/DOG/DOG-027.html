@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOG-027 DONE: Pup becomes the LSM — memtable in libdog, jab binds only, idxmaint retires</title>
+<meta property="og:title" content="DOG-027 DONE: Pup becomes the LSM — memtable in libdog, jab binds only, idxmaint retires">
+<meta property="og:description" content="The run-stack machinery exists four times: HIT merges (abc), DOGPup does fs housekeeping (dog), idxmaint.js drives a ladder in JS, and abc.index's JS body in jab/cont.cpp re-implements scan, mmap, naming, sort and a min-heap of its own. Collapse it: Pup absorbs the memtable and becomes the LSM, HIT keeps the merge, jab does marshalling only, and the ladder policy becomes C defines. Rulings 2026-08-02 (gritzko): memtable goes to the pup layer; jab must only do the bindings; policy is C defines — 64 files max, 1/8 ladder; idxmaint likely retires wholesale.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DOG/DOG-027.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG-027 <a href="./DONE.html">DONE</a>: Pup becomes the LSM — memtable in libdog, jab binds only, idxmaint retires</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<p>
+The run-stack machinery exists four times: <code>HIT*</code> merges (abc), <code>DOGPup*</code> does fs housekeeping (dog), <code>idxmaint.js</code> drives a ladder in JS, and <code>abc.index</code>'s JS body in <code>jab/cont.cpp</code> re-implements scan, mmap, naming, sort and a min-heap of its own. Collapse it: Pup absorbs the memtable and becomes the LSM, <code>HIT*</code> keeps the merge, jab does marshalling only, and the ladder policy becomes C defines. Rulings 2026-08-02 (gritzko): memtable goes to the pup layer; jab must only do the bindings; policy is C defines — 64 files max, 1/8 ladder; idxmaint likely retires wholesale.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Puppies already ARE runs: <code>&lt;10-RON64 seqno&gt;&lt;ext&gt;</code> files of fixed-size sorted records, one stack per dog under <code>.be/</code>, covering keeper's pack indexes, graf's DAG runs and spot's postings (<a href="../../jab/dog/DOG.h">jab/dog/DOG.h</a> :611-632).</li>
+<li>Pup deliberately stops at fs level — &quot;the typed merge during compaction stays caller-side (HIT*Compact); this API only does fs-level housekeeping&quot; (DOG.h:625).</li>
+<li>The overlap: the run-stack fs layer exists THREE times (Pup, idxmaint, cont.cpp), seqno allocation three times in TWO formats, and the 1/8 ladder twice (<code>HIT*Compact</code> implements it, <code>isCompact</code> re-derives it from <code>io.stat</code>).</li>
+<li><code>cont.cpp:654</code> names runs <code>String(seq).padStart(8,&quot;0&quot;)</code> — off the store convention (<code>DOG_PUP_SEQNO_W</code> is 10 RON64 chars) and sorting BEFORE ron60 names, so a freshly compacted run reads as the oldest and newest-wins inverts.</li>
+<li><code>idx.compact()</code> hands the whole stack to a leaf that throws above 64 runs (index.hpp:88,145), so it cannot repair the very shard it exists for; idxmaint works around that with a youngest-64 window.</li>
+<li><code>abc.index.compact()</code> has NO production caller: three sites, all <code>jab/test/index.js</code>; the only on-disk <code>.flush()</code> in <code>be/</code> is a test fixture (be/test/store.js:137).</li>
+<li><code>shared/graf.js</code> compacts <code>*.graf.idx</code> runs the native C keeper wrote — one shared code path removes that class of hazard entirely.</li>
+<li>abc carries TWO heap-merge twins: <code>HIT</code> is live (instantiated in jab/hit.hpp, bound as the <code>_seekrange_</code>/<code>_compact_</code> leaves, reused by BOXx.h) and <code>MSET</code> has no production caller yet is still built/tested/fuzzed (open <a href="../ABC/ABC-022.html">/todo/ABC/ABC-022</a>).</li>
+<li><code>LSM.h</code>/<code>LSM.c</code> is NOT a third twin and stays: it is a byte-stream merger over <code>u8xs</code>/<code>u8ys</code> slicer callbacks with live callers — <code>abc/FILE.c:1268</code> (<code>FILEScanSorted</code> → <code>LSMSort</code>) and <code>dog/ULOG.c:16,1065,1080</code> (<code>LSM_MAX_INPUTS</code>, documented at ULOG.h:306,328).</li>
+<li>The ladder therefore exists THREE times: <code>MSETIsCompact</code>/<code>Compact</code>, <code>HITIsCompact</code>/<code>Compact</code>, and <code>idxmaint.isCompact</code>/<code>compactStep</code> (plus cont.cpp's JS compact driving the same leaf).</li>
+<li><code>HITx.h:329</code> carries the verdict verbatim — &quot;ABC-015: near-duplicate of MSETIsCompact/Compact (different NOROOM codes); unifying the LSM-ladder logic into one home is a follow-up&quot; — so HIT's ladder was copied from MSET's in the 2026-07-07 review and unification was deferred, not done.</li>
+<li>The equal-key group primitive (<code>MSETTopZ</code>/<code>MSETAdvZ</code>, with the ABC-015 caller-supplied <code>z</code>) sits on the DEAD side; <code>HITTops</code>/<code>HITAdvanceTops</code> (HITx.h:83-119) is its live twin.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Pup owns the LSM; jab owns nothing but the crossing; the policy numbers live in C.
+</p>
+<ul>
+<li>Pup gains the memtable: put, sort, flush into a fresh pup, thin-tail, close — the whole write path beside its existing scan/mmap/create/close.</li>
+<li>Ladder and caps as C defines (64 files max, 1/8 size-tiered), driving <code>HIT*Compact</code>; above the cap the leaf simply THROWS (ruling 2026-08-02) — no windowing, no repair cascade.</li>
+<li>A stack past 64 runs is damaged or foreign, not a state a ladder-enforcing writer can reach; the cure is to drop the runs and re-derive, exactly as for an unmarked run.</li>
+<li>One naming scheme: the 10-char RON64 pup_key from a monotonic allocator (<code>keep_next_pup_key</code> shape), never stat-and-bump.</li>
+<li><code>abc.index(lane, {dir, ext})</code> reduced to a handle: no runs array, no <code>_seq</code>, no naming, no <code>mem.sort()</code>, no JS min-heap cursor (cont.cpp:807-861 is a hand-rolled twin of what <code>HIT*</code> IS).</li>
+<li><code>shared/idxmaint.js</code> retires; its only non-duplicated part is keeper's <code>0xF</code> PACK coverage probe and tail rebuild.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>This INVERTS rule #4 for the subsystem: state moves to C and JS holds a handle, where API.md today says all state is JS and native leaves marshal only — say so explicitly or every binding author re-derives the JS machinery.</li>
+<li>No on-disk format change: runs stay raw fixed-size element arrays; only the NAMES of new runs change.  Legacy 8-wide <code>padStart</code> runs are DELETED on open and the family recomputes (ruling 2026-08-02) — no dual-width name parsing.</li>
+<li>Callers keep the <code>abc.index(lane, {dir, ext})</code> surface — <code>store.js</code>, <code>graf.js</code> and TODO-003's <code>metaidx.js</code> must not notice the move.</li>
+<li>Lane stays a per-family property, never a global switch; the <code>meta.idx</code> family of <a href="../TODO/TODO-003.html">/todo/TODO/TODO-003</a> joins as a pup stack like the rest.</li>
+<li><code>store.js:222</code> sits under EVERY read verb: a read-only or EROFS store must still open, so the best-effort posture survives the retirement of the module that holds it today.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>64 is a backstop, the ladder is the policy: a strict 1/8 stack never approaches 64 runs, and C already throws above it — the JS side stops having an opinion instead of inventing a stricter one.</li>
+<li><code>OPEN_CAP = 32</code> dies: it compensated for the ladder not being maintained on write, which stops being possible once one layer owns both.</li>
+<li>Layer split after the collapse: <code>HIT*</code> = merge, Pup = fs + memtable + ladder, jab = marshalling, be = which shard and which family. No third implementation anywhere.</li>
+<li>Memtable shape (ruling 2026-08-02): ONE 4 KB buffer, PAST holds the sorted part, DATA the appended tail; on each query or op, sort DATA alone when it is under 512 bytes (two sorted slices) else sort both and collapse DATA into PAST (one sorted slice).</li>
+<li>Puts just APPEND — duplicate keys are the merge's and the read's problem, since both see multiple slices; the PAST+DATA collapse should dedup.</li>
+<li>DATA is sorted with INSERTION sort — <code>QSORT*InSort()</code>, made public for this (ruling 2026-08-02): 32 rows max costs &lt;=496 compares over 8 hot cache lines, beats the introsort path at that size, and is STABLE, so equal keys keep arrival order.</li>
+<li>Dedup keeps the LAST of an equal run (ruling 2026-08-02): after a stable sort a duplicate group reads oldest-&gt;newest, so keep-last IS arrival-newest.  <code>sDedup</code> keeps the FIRST today and must change.</li>
+<li><code>sSort</code> must NOT be used for DATA: it is an introsort, stable only below <code>QS_ISORT_THRESH</code> 24 (QSORTx.h:22-58, <code>QSCore</code> partitions above that), and a 512-byte DATA window is 32 rows — just past the cutoff.</li>
+<li>With DATA deduped, the collapse is a uniform merge: ties between PAST and DATA go to DATA, the younger side — the same younger-wins rule HIT applies across runs.</li>
+<li>The memtable enters a query as one or two more HIT runs, never a special-cased path.</li>
+<li>512 bytes is a C define beside the 64-file cap and the 1/8 ladder.</li>
+<li>Buffer full =&gt; flush: mmap a tmp file, trim, remap, add it as a pup with a timestamp key; the rename is atomic, so a torn flush leaves a dot-file and nothing else.</li>
+<li>Unflushed puts die with the process and that is fine — every index is re-derivable (keeper.idx from packs, meta.idx from files); flush timing is performance, not correctness.</li>
+<li>Crash safety is a PUP concern (ruling 2026-08-02), not a caller's: no consumer hand-rolls tmp/rename/unlink ordering, and <code>ingest.js</code>-style direct writers stop existing by construction.</li>
+<li>Every run carries a MARKER entry (ruling 2026-08-02): a run without its marker is incomplete, so its family drops it and re-derives — the rebuildability of every index is what buys this.</li>
+<li>Flush protocol (ruling 2026-08-02): the caller finishes indexing, writes the marker, then tells Pup to COMMIT — which force-flushes the remaining incomplete page, trims and renames.  The marker lands on that same tail page, so its presence after a commit is exactly the evidence the page went out.</li>
+<li>ALL marker handling is caller-side (ruling 2026-08-02): Pup does fs housekeeping and does not know what is being indexed, so each index family writes its own marker entry in its own entry vocabulary and checks it on open.</li>
+<li>Pup's side of the contract is only <code>commit</code> — force-flush the incomplete tail page, trim, rename — plus the fd/mmap lifecycle; deciding a run is incomplete and dropping it is the family's call.</li>
+<li>The memtable is a dict entry like any pup, keyed ALL-ONES (ruling 2026-08-02): it sorts last, which is its true age (youngest), and it leaves 0 alone as <code>DOGPupSeqno</code>'s not-found answer.</li>
+<li>The memtable's file stays dot-named until <code>commit</code> renames it into <code>&lt;10-RON64&gt;&lt;ext&gt;</code>, so a crashed memtable can never be re-scanned by <code>DOGPupOpenAll</code> as an oldest run of unsorted bytes; the missing marker is the second line of defence.</li>
+<li>Dict invariant: every entry below the reserved key is an immutable, marked, sorted run, and at most one entry above it is the live memtable.</li>
+<li>Keyed-winner resolution (ruling 2026-08-02): <code>X(HIT,Step)</code> and the heap ops go INTERNAL and take <code>X(,csps)</code> — a slice of POINTERS to slices.  The <code>X(,cs)</code> entries sit in a contiguous on-stack array built oldest-first and never move; the heap permutes only the <code>csp</code> pointers, so comparing two <code>csp</code> values IS comparing age.  Ties resolve to the highest <code>csp</code> (youngest).</li>
+<li>Age is then true by construction, not by kernel behaviour: no PROT_NONE arena, no <code>MAP_FIXED</code> sequential mapping, no exhaustion or re-pack policy, no rule about where the memtable maps.</li>
+<li><code>X(,csSwap)</code> stops being an instantiation prerequisite (HIT.md calls it &quot;HIT's one prerequisite&quot;; <code>jab/hit.hpp:35</code> exists only to supply it for kv32/kv64/wh64) — pointer swaps are builtin, 8 bytes instead of 16, at one deref per compare.  <code>wh128cscp</code> (WHIFF.h:77) is the precedent for the pointer-to-slice type.</li>
+<li>The winner rule must hold identically in <code>Merge</code>, <code>Seek</code>, <code>SeekRange</code>'s drain and <code>Compact</code>: if a query and a compaction disagree, the value visibly changes the moment a merge runs.</li>
+<li><code>Merge</code> must EMIT the winner rather than an arbitrary tie member — today ties are only identical full elements so any will do; a keyed lane makes the choice load-bearing.</li>
+<li>Intra-run duplicates stay uncovered: two rows with one key inside one run share a <code>cs</code>, so <code>csp</code> order says nothing about them.  The memtable's PAST+DATA collapse dedup is what keeps them out of a committed run, which makes that dedup correctness-critical and obliges it to keep the arrival-newest.</li>
+<li>Pup stacks are lane-TYPED ON CREATE (ruling 2026-08-02), the same machinery as every jab container: the <code>.lane</code> tag picks per-lane <code>_pup_&lt;lane&gt;_*</code> leaves; the earlier &quot;dogpupsync bound once via the reserved key&quot; wording is dead — sort/dedup/collapse is a per-lane C instantiation selected by the lane, no stored hook, no per-call type.</li>
+<li>Handle split (ruling 2026-08-02): <code>dir</code> and <code>ext</code> hang on the JS object as plain JS strings; the C-land object is the kv64b dict, 64 cells, malloced, behind the handle.</li>
+<li>rw opens hold the memtable as the LAST dict entry, one of the 64 cells; ro opens have none.  At query time the memtable is 1 or 2 more runs (PAST, plus DATA when non-empty).</li>
+<li>Compaction is triggered by commit/flush IN C LAND (ruling 2026-08-02): Pup runs the ladder after seal; the JS user knows NOTHING about the state of the ladder.</li>
+<li>Lanes to instantiate: kv64, wh128, u64; spot's trigram lane is u64.</li>
+<li>Marker row is the CALLER's concern end to end (ruling 2026-08-02): the family puts it in its own vocabulary (it lands as the sealed run's tail), checks it on open via per-run views, drops failures.</li>
+<li>JS API (ruling 2026-08-02), the whole surface — today's <code>runs</code>, <code>_seq</code>, <code>mem</code>, <code>flush</code>, <code>compact</code> all die:</li>
+</ul>
+<pre><code>const idx = abc.index(lane, {dir, ext});  // scans &lt;dir&gt;/*&lt;ext&gt;, oldest-first
+idx.put(k, v);          // pair lanes; idx.put(v) scalar BigInt for u64
+idx.commit();           // family put its marker first; C collapses, seals, compacts
+idx.get(k);             // point lookup -&gt; val | undefined (newest wins)
+idx.range(lo, hi, cb);  // ordered [lo,hi) scan, cb may return &quot;enough&quot;
+idx.seek(k);            // cursor at first el &gt;= k; .next() pulls merged rows
+idx.count;              // committed runs      (open-time marker audit only)
+idx.run(i);             // read-only lane-typed view of run i, oldest-first
+idx.drop(i);            // unlink a markerless run; idx.drop() = all, re-derive
+idx.close();            // munmap runs + memtable, free the dict
+</code></pre>
+<ul>
+<li>OPEN: whether keeper's coverage probe and tail rebuild (<code>coverage</code>/<code>listLogs</code>/<code>maintain</code>) follow Pup into C or stay in <code>shared/ingest.js</code> — gritzko's call.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> inventory every run scan/mmap/name/merge site across abc, dog, jab and be (the 2026-08-02 survey is the starting list)</li>
+<li class="done"><input type="checkbox" checked disabled> Pup gains the memtable per the shape above: 4 KB buffer, append-only puts, the 512-byte sort/collapse rule, flush via tmp mmap + trim + remap + atomic rename</li>
+<li class="open"><input type="checkbox" disabled> STEP 1, dog: memtable file named exactly <code>&lt;ext&gt;</code> (not <code>.memtable</code> — <code>ext</code> carries its dot, one per stack even when two families share a dir); guard <code>ThinTail</code>/<code>AllData</code>/<code>DataAll</code>/<code>Count</code>/<code>CountAll</code>/<code>Seqno</code> against the reserved entry (<code>ThinTail</code> would unlink a file named <code>~0</code> today)</li>
+<li class="open"><input type="checkbox" disabled> STEP 2, dog: Pup drives the ladder — commit and page-full flush end with a <code>HITIsCompact</code> check + <code>HIT*Compact</code> cascade per the C defines; the compaction output seals through the same tmp + trim + rename path under a fresh pup_key; sources unlinked after</li>
+<li class="open"><input type="checkbox" disabled> STEP 3, jab: per-lane pup leaves <code>_pup_&lt;lane&gt;_{open,put,commit,run,drop,close}</code> + the merged read leaves over the pup handle, lanes kv64/wh128/u64, dogpupsync-role instantiated per lane in the binding (hit.hpp-style); handle = malloced 64-cell kv64b</li>
+<li class="open"><input type="checkbox" disabled> STEP 4, cont.cpp: <code>abc.index(lane, {dir, ext})</code> rebuilt on the pup handle per the JS API above (put/commit/get/range/seek/count/run/drop/close); <code>dir</code>+<code>ext</code> as JS strings on the object; jab's JS memtable, <code>_seq</code>, padStart naming, <code>mem.sort()</code> and the JS min-heap cursor all deleted</li>
+<li class="open"><input type="checkbox" disabled> STEP 5, jab tests: index.js reworked to the new surface — legacy padStart-named runs unlinked on open (index reads empty, family recomputes), commit + marker-row round trip, run(i)/drop(i) audit path, cap behavior unchanged</li>
+<li class="done"><input type="checkbox" checked disabled> HIT becomes the one ladder home; retire <code>MSET</code> (closes ABC-015's deferred follow-up, and <a href="../ABC/ABC-022.html">/todo/ABC/ABC-022</a> evaporates with the code it reports on).  <code>LSM</code> stays — different mechanism, live callers.  Two stale mentions left: <code>dog/abc/test/HEAP.c:30</code> comment, <code>dog/test/HUNK.c:810</code> URI fixture.</li>
+<li class="done"><input type="checkbox" checked disabled> HIT heap over <code>X(,csps)</code>: entries in a contiguous oldest-first stack array, heap permutes pointers only, ties win by highest <code>csp</code>; <code>Step</code>/<code>Down</code>/<code>Eject</code>/<code>Heap</code>/<code>Tops</code>/<code>AdvanceTops</code> go internal and the entry points build + heapify the 64-slot pointer array</li>
+<li class="done"><input type="checkbox" checked disabled> one 64-run cap constant across every entry point and both leaves (today <code>_seekrange_</code> enforces 64 at index.hpp:88 while MSET used 24), asserted at the boundary rather than assumed</li>
+<li class="done"><input type="checkbox" checked disabled> pin the oldest-first <code>runs[]</code> convention at the leaf — <code>_compact_</code> documents it, but the keyed JS <code>range</code> had to reverse its sources to obtain it</li>
+<li class="done"><input type="checkbox" checked disabled> update HIT callers for the <code>csps</code> heap: <code>git/REPACK.c:261-264</code>, the <code>_seekrange_</code>/<code>_compact_</code> leaves, <code>jab/hit.hpp</code>'s merge/intersect, and <code>BOXx.h</code>'s prerequisite list (free — BOX has no production caller)</li>
+<li class="done"><input type="checkbox" checked disabled> ladder + caps as C defines (64 max, 1/8) driving <code>HIT*Compact</code>; window the stack so an overfull shard is repairable</li>
+<li class="done"><input type="checkbox" checked disabled> monotonic pup_key allocator — one scheme, no stat-and-bump race between writers</li>
+<li class="open"><input type="checkbox" disabled> marker, per family and caller-side: write it before <code>commit</code>, check it on open, drop unmarked runs; a compaction output gets a fresh one and never inherits the sources'</li>
+<li class="open"><input type="checkbox" disabled> STEP 6, be: <code>store.js</code>/<code>graf.js</code> keep the <code>abc.index(lane, {dir, ext})</code> call shape; families put their marker row before <code>commit</code> and audit runs on open via <code>run(i)</code>/<code>drop(i)</code></li>
+<li class="open"><input type="checkbox" disabled> retire <code>shared/idxmaint.js</code>; find a home for keeper's coverage probe + tail rebuild</li>
+<li class="open"><input type="checkbox" disabled> docs: the state-in-C contract for this subsystem, the naming rule, the lane-choice rule (API.md, jab/INDEX.md, dog/INDEX.md)</li>
+<li class="open"><input type="checkbox" disabled> tests: reopen a dir of old padStart-named runs; &gt;64-run repair; two writers never collide on a name; a JS-written and a C-written run interchangeable</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="../JS/JS-116.html">/todo/JS/JS-116</a> reads <code>[DONE]</code> with all eight TODOs unchecked (closed via KEEP-004's Outcome); its ron60-naming item is superseded here.</li>
+<li><code>shared/ingest.js</code> books runs straight at the final path (no tmp, no rename) at :251, :303, :368 — an ordinary crash-safety defect on the land/post/patch path, its OWN ticket, not this one.</li>
+<li><a href="../JS/JS-121.html">/todo/JS/JS-121</a> is <code>[SLOP]</code>: its kv64 lane grew a JS memtable shadow-index precisely because rule #4 pointed that way — the keyed-lane question outlives it and lands here or in a successor.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

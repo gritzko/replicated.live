@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIT-028: git porcelain shim — a separate jsrc repo of git-named verbs delegating to the be basis</title>
+<meta property="og:title" content="GIT-028: git porcelain shim — a separate jsrc repo of git-named verbs delegating to the be basis">
+<meta property="og:description" content="The muscle-memory layer of the git compat story: a SEPARATE repo (not be/) carrying its own jsrc/verbs/, one bareword verb per everyday git command — clone checkout switch add commit push fetch pull merge rebase cherry-pick branch tag stash — each parsing only the handful of flags people actually type and delegating to the existing be verbs exactly per the Verbs cheat sheet. jab already scans every planted jsrc/, so the shim needs ZERO core changes; git command names do not collide with the verb basis, and status/log/diff already exist as views.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GIT/GIT-028.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GIT-028: git porcelain shim — a separate jsrc repo of git-named verbs delegating to the be basis</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+The muscle-memory layer of the git compat story: a SEPARATE repo (not <code>be/</code>) carrying its own <code>jsrc/verbs/</code>, one bareword verb per everyday git command — <code>clone checkout switch add commit push fetch pull merge rebase cherry-pick branch tag stash</code> — each parsing only the handful of flags people actually type and delegating to the existing be verbs exactly per the <a href="../../wiki/Verbs.html">Verbs</a> cheat sheet. jab already scans every planted <code>jsrc/</code>, so the shim needs ZERO core changes; git command names do not collide with the verb basis, and <code>status</code>/<code>log</code>/<code>diff</code> already exist as views.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><a href="../../wiki/Verbs.html">Verbs</a> §&quot;git → be cheat sheet&quot; is the dictionary: <code>add</code>→PUT, <code>commit</code>→POST, <code>checkout ?br</code>→GET, <code>merge</code>→PATCH+POST, <code>push</code>→PUT ssh://, <code>branch -d</code>→DELETE, <code>stash</code>→sub-branch idiom.</li>
+<li>jab verb discovery scans <code>&lt;dir&gt;/jsrc/</code> shards; multiple planted shards compose, so a compat repo rides alongside <code>be/</code> unmodified.</li>
+<li>Sibling layers: <a href="GIT-029.html">GIT-029</a> plumbing (same repo), <a href="GIT-027.html">GIT-027</a> wire compat — the shim serves humans, those serve software.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>jab clone URL</code>, <code>jab add f</code>, <code>jab commit -m msg</code>, <code>jab push</code>, <code>jab merge trunk</code> behave as the cheat-sheet composition end to end.</li>
+<li>Unmappable idioms answer with the Beagle idiom in plain words (<code>stash</code> → eager sub-branch, <code>reflog</code> → the ulog), never a half-emulation.</li>
+<li>The flag subset stays tiny and documented; anything else errors with the be-verb equivalent spelled out — teaching, not emulating.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Pure translation: shims compose existing verb/view invocations through the registry — no store, wire, or weave logic of their own.</li>
+<li>Shim verbs take (context, arg) and resolve through the standard resolve path like any verb; no private URI parsing.</li>
+<li>No flag sprawl re-import: the git surface is capped per command (the ~3-5 everyday flags); rejected flags name the be way in the error.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>One file per command under the compat repo's <code>jsrc/verbs/&lt;name&gt;/</code>; each maps flags → a be verb call sequence, then delegates output.</li>
+<li>Collision policy: git names that shadow existing views (<code>status</code>, <code>log</code>, <code>diff</code>) alias the view rather than re-render.</li>
+<li>Multi-step rows (<code>commit -am</code> = PUT <code>.</code> + POST; <code>merge</code> = PATCH + POST) run as a sequence with fail-fast between steps.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> 1. Repo scaffold + a plant test: jab resolves a shim bareword from a second jsrc/ shard next to be/'s.</li>
+<li class="open"><input type="checkbox" disabled> 2. The read row: <code>clone</code>, <code>fetch</code>, <code>checkout</code>/<code>switch</code>, <code>pull</code>.</li>
+<li class="open"><input type="checkbox" disabled> 3. The write row: <code>add</code>, <code>rm --cached</code>, <code>commit</code> (-m/-am), <code>push</code>.</li>
+<li class="open"><input type="checkbox" disabled> 4. The mix row: <code>merge</code>, <code>rebase</code>, <code>cherry-pick</code>, <code>branch</code>, <code>tag</code>.</li>
+<li class="open"><input type="checkbox" disabled> 5. Idiom-answer table: <code>stash</code>, <code>reflog</code>, <code>reset</code> → plain-words pointers to the Beagle move.</li>
+<li class="open"><input type="checkbox" disabled> 6. End-to-end test scripting the cheat-sheet rows against a fixture store; each shim asserts the same tree state as the be-verb form.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Flag semantics that LOOK mappable but are not (<code>checkout -b</code> is two verbs; <code>pull --rebase</code> is a loop) need the sequence spelled honestly.</li>
+<li>Two-step shims must not leave the tree half-moved on a mid-sequence refusal — fail-fast plus a plain-words &quot;what happened&quot; line.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Open. Filed 2026-07-29 from the git-compat-layer design discussion, option 1 of 3 (shim / plumbing <a href="GIT-029.html">GIT-029</a> / wire <a href="GIT-027.html">GIT-027</a>).</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

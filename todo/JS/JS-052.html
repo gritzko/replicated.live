@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-052</title>
+<title>JS-052: bin/patch.js + weave.merge3 — the absorb-merge verb</title>
+<meta property="og:title" content="JS-052: bin/patch.js + weave.merge3 — the absorb-merge verb">
+<meta property="og:description" content="be patch as JS: the LAST verb not mirrored. Resolve ours/theirs/fork, walk the fork/ours/theirs trees, 3-way-merge each diverged file into the worktree (conflict fences), append ONE patch row — no commit, no reachability. Verb-first (scope a): the post-side &quot;theirs&quot; consume is OUT — post.js's POSTSCOPE throw (post.js:160) stays, so landing a patch still needs native be post until a follow-up. Needs ONE new libdog leaf WEAVEMerge3Bytes + a weave.merge3 binding. ← JS-051. Picks up the PATCH the JS-046 umbrella deferred. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-052.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,101 +15,66 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-052 <a href="">HIGH</a>: <code>bin/patch.js</code> + <code>weave.merge3</code> — the absorb-merge verb</h1>
+<h1>JS-052: <code>bin/patch.js</code> + <code>weave.merge3</code> — the absorb-merge verb</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>be patch</code> as JS: the LAST verb not mirrored. Resolve ours/theirs/fork, walk the fork/ours/theirs trees, 3-way-merge each diverged file into the worktree (conflict fences), append ONE <code>patch</code> row — no commit, no reachability. Verb-first (scope a): the post-side &quot;theirs&quot; consume is OUT — <code>post.js</code>'s POSTSCOPE throw (post.js:160) stays, so landing a patch still needs native <code>be post</code> until a follow-up. Needs ONE new libdog leaf <code>WEAVEMerge3Bytes</code> + a <code>weave.merge3</code> binding. ← <a href="JS-051.html">JS-051</a>. Picks up the PATCH the <a href="JS-046.html">JS-046</a> umbrella deferred. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Native <code>be patch</code> → <code>sniff/PATCH.c</code>: 3-way weave merge (fork/ours/theirs),<p>
-writes merged bytes to the wt, appends one <code>patch</code> row, NO reachability (next <code>be post</code> squashes). Scopes: <code>?br</code> NEXT (one commit), <code>?br!</code> WHOLE (full stack), <code>#sha</code> NAMED (cherry). Row: <code>?heads/X#&lt;ours&gt;,&lt;theirs&gt;</code> (AT.h:5).
-</p>
-</li>
-<li>Per-file merge is <code>GRAFMergeWtFileTunable</code> (graf/GET.c:301) — DAG-history<p>
-weave, UNBINDABLE (graf). The bytes-only <code>GRAFMerge3Bytes</code> (graf/GET.c:467 — replay base→ours→theirs into ONE weave + <code>WEAVEEmitMerged</code>) depends ONLY on abc+dog (<code>WEAVEFromBlob</code>/<code>Apply</code>/<code>Diff</code> + <code>NEIL</code>/<code>tok</code>) → portable to libdog.
-</p>
-</li>
-<li><code>bin/post.js</code>/<code>get.js</code>/<code>bin/lib/*</code> give the rest: scope via <code>store</code>+<code>dag</code>,<p>
-trees via <code>git.tree</code>, row via <code>ulog.append</code>, marker scan <code>conflict.js</code>, wt write via <code>checkout</code>-style mode/symlink/exec + <code>io.setMtime</code> restamp.
-</p>
-</li>
+<li>Native <code>be patch</code> → <code>sniff/PATCH.c</code>: 3-way weave merge (fork/ours/theirs), writes merged bytes to the wt, appends one <code>patch</code> row, NO reachability (next <code>be post</code> squashes). Scopes: <code>?br</code> NEXT (one commit), <code>?br!</code> WHOLE (full stack), <code>#sha</code> NAMED (cherry). Row: <code>?heads/X#&lt;ours&gt;,&lt;theirs&gt;</code> (AT.h:5).</li>
+<li>Per-file merge is <code>GRAFMergeWtFileTunable</code> (graf/GET.c:301) — DAG-history weave, UNBINDABLE (graf). The bytes-only <code>GRAFMerge3Bytes</code> (graf/GET.c:467 — replay base→ours→theirs into ONE weave + <code>WEAVEEmitMerged</code>) depends ONLY on abc+dog (<code>WEAVEFromBlob</code>/<code>Apply</code>/<code>Diff</code> + <code>NEIL</code>/<code>tok</code>) → portable to libdog.</li>
+<li><code>bin/post.js</code>/<code>get.js</code>/<code>bin/lib/*</code> give the rest: scope via <code>store</code>+<code>dag</code>, trees via <code>git.tree</code>, row via <code>ulog.append</code>, marker scan <code>conflict.js</code>, wt write via <code>checkout</code>-style mode/symlink/exec + <code>io.setMtime</code> restamp.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>libdog: <code>WEAVEMerge3Bytes(base,ours,theirs,ext,out)</code> — port GRAFMerge3Bytes<p>
-(+ the <code>WEAVEFromBlob</code>/<code>Apply</code>/<code>Diff</code> it needs) into <code>dog/WEAVE.c</code>; reconcile the dog/graf <code>WEAVE.c</code> symbol dup. js: <code>weave.merge3(...)-&gt;Buf</code> leaf (rule #4).
-</p>
-</li>
-<li><code>bin/lib/patchscope.js</code>: resolve ours/theirs/fork + scope (NEXT/WHOLE/NAMED,<p>
-the <code>!</code>/<code>#</code> forms) over <code>store.resolveRef</code> + a <code>dag</code> LCA.
-</p>
-</li>
-<li><code>bin/patch.js</code>: tandem fork/ours/theirs tree walk → per-diverged file<p>
-<code>weave.merge3</code> → write merged bytes to the wt (mode/symlink/exec, mirror <code>sniff/PATCH.c:write_blob</code>), restamp, append <code>patch</code> row, status banner.
-</p>
-</li>
+<li>libdog: <code>WEAVEMerge3Bytes(base,ours,theirs,ext,out)</code> — port GRAFMerge3Bytes (+ the <code>WEAVEFromBlob</code>/<code>Apply</code>/<code>Diff</code> it needs) into <code>dog/WEAVE.c</code>; reconcile the dog/graf <code>WEAVE.c</code> symbol dup. js: <code>weave.merge3(...)-&gt;Buf</code> leaf (rule #4).</li>
+<li><code>bin/lib/patchscope.js</code>: resolve ours/theirs/fork + scope (NEXT/WHOLE/NAMED, the <code>!</code>/<code>#</code> forms) over <code>store.resolveRef</code> + a <code>dag</code> LCA.</li>
+<li><code>bin/patch.js</code>: tandem fork/ours/theirs tree walk → per-diverged file <code>weave.merge3</code> → write merged bytes to the wt (mode/symlink/exec, mirror <code>sniff/PATCH.c:write_blob</code>), restamp, append <code>patch</code> row, status banner.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>libabc+libdog ONLY; NO keeper/graf/sniff binding (post.js:10 &quot;graf unbindable<p>
-here&quot;). Full-history fidelity (the tunable form) is OUT: merge3 uses the fork/ours/theirs TIP blobs only — flag any history-sensitive divergence.
-</p>
-</li>
-<li>Scope (a): do NOT touch <code>decide.js</code>/<code>post.js</code> &quot;theirs&quot; consume — a follow-up<p>
-(JS-053) unblocks <code>be patch</code>→<code>be post</code>. Conflict markers land in the wt; the next native <code>be post</code> refuses (POSTCFLCT) until resolved, exactly as today.
-</p>
-</li>
+<li>libabc+libdog ONLY; NO keeper/graf/sniff binding (post.js:10 &quot;graf unbindable here&quot;). Full-history fidelity (the tunable form) is OUT: merge3 uses the fork/ours/theirs TIP blobs only — flag any history-sensitive divergence.</li>
+<li>Scope (a): do NOT touch <code>decide.js</code>/<code>post.js</code> &quot;theirs&quot; consume — a follow-up (JS-053) unblocks <code>be patch</code>→<code>be post</code>. Conflict markers land in the wt; the next native <code>be post</code> refuses (POSTCFLCT) until resolved, exactly as today.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Per-file merge is FULL-HISTORY weave reconstruction (mirrors<p>
-<code>GRAFMergeWtFileTunable</code>): DAG-fold each side's commit history into a weave via the BOUND dog leaves (<code>weave.fold</code>=WEAVENext linear, <code>weave.merge</code>=WEAVEMerge at merge commits), then <code>weave.merge</code> ours⊕theirs + <code>weave.merged</code> to fence. NOT a 3-blob merge — <code>weave.merge3</code> (= <code>graf merge</code> debug) was a wrong turn.
-</p>
-</li>
-<li>Scope resolve mirrors <code>sniff/PATCH.c</code> resolve_ours/target/parent_tip: ours =<p>
-wt tip, theirs = ref/cherry tip, fork = LCA(parent_tip, theirs) <a href="">branch</a> or parent(cherry) <a href="">named</a>; the <code>!</code> selects WHOLE vs NEXT ancestor-skip.
-</p>
-</li>
-<li>One <code>patch</code> row only, non-noop; verb <code>patch</code>; N-hash merge URI; restamp every<p>
-touched file to the row ts (AT.h stamp-set rule).
-</p>
-</li>
+<li>Per-file merge is FULL-HISTORY weave reconstruction (mirrors <code>GRAFMergeWtFileTunable</code>): DAG-fold each side's commit history into a weave via the BOUND dog leaves (<code>weave.fold</code>=WEAVENext linear, <code>weave.merge</code>=WEAVEMerge at merge commits), then <code>weave.merge</code> ours⊕theirs + <code>weave.merged</code> to fence. NOT a 3-blob merge — <code>weave.merge3</code> (= <code>graf merge</code> debug) was a wrong turn.</li>
+<li>Scope resolve mirrors <code>sniff/PATCH.c</code> resolve_ours/target/parent_tip: ours = wt tip, theirs = ref/cherry tip, fork = LCA(parent_tip, theirs) <a href="./branch.html">branch</a> or parent(cherry) <a href="./named.html">named</a>; the <code>!</code> selects WHOLE vs NEXT ancestor-skip.</li>
+<li>One <code>patch</code> row only, non-noop; verb <code>patch</code>; N-hash merge URI; restamp every touched file to the row ts (AT.h stamp-set rule).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="wontfix"><input type="checkbox" disabled> <del>DROPPED + reverted: <code>weave.merge3</code>/<code>WEAVEMerge3Bytes</code> (the 3-blob</del><p>
-  <code>GRAFMerge3Bytes</code> mirror) — that is the <code>graf merge</code> DEBUG primitive, not   patch's engine. No new binding needed: the weave-merge leaves are bound.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> <code>bin/patch.js</code> on full-history reconstruction (<code>buildSideWeave</code>/<code>foldCommit</code>/<p>
-  <code>mergeApply</code>): per file, parents-first DAG fold (<code>weave.fold</code> linear,   <code>weave.merge</code> at merges) → <code>weave.merge</code>+<code>weave.scope</code>+<code>weave.merged</code>. JS walk.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> Golden cases: NON-conflict byte-identical to native, 56/56 green (multirev-<p>
-  whole, readd-line, multiedit-line, addmod, next-branch, exec-symlink).
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> CONFLICT cases: pinned <code>SOURCE_DATE_EPOCH</code> (the DIS-051 <code>RONNow</code> hook) in<p>
-  <code>test/js/lib/patchcase.sh</code> → reproducible shas, stable (8/8, 5/5 ctest).   <code>conflict</code> MATCHES native; <code>same-anchor</code> gated to the dog golden (residual below).
-</p>
-</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>DROPPED + reverted: <code>weave.merge3</code>/<code>WEAVEMerge3Bytes</code> (the 3-blob <code>GRAFMerge3Bytes</code> mirror) — that is the <code>graf merge</code> DEBUG primitive, not patch's engine. No new binding needed: the weave-merge leaves are bound.</del></li>
+<li class="done"><input type="checkbox" checked disabled> <code>bin/patch.js</code> on full-history reconstruction (<code>buildSideWeave</code>/<code>foldCommit</code>/ <code>mergeApply</code>): per file, parents-first DAG fold (<code>weave.fold</code> linear, <code>weave.merge</code> at merges) → <code>weave.merge</code>+<code>weave.scope</code>+<code>weave.merged</code>. JS walk.</li>
+<li class="done"><input type="checkbox" checked disabled> Golden cases: NON-conflict byte-identical to native, 56/56 green (multirev- whole, readd-line, multiedit-line, addmod, next-branch, exec-symlink).</li>
+<li class="done"><input type="checkbox" checked disabled> CONFLICT cases: pinned <code>SOURCE_DATE_EPOCH</code> (the DIS-051 <code>RONNow</code> hook) in <code>test/js/lib/patchcase.sh</code> → reproducible shas, stable (8/8, 5/5 ctest). <code>conflict</code> MATCHES native; <code>same-anchor</code> gated to the dog golden (residual below).</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> CONFLICT-FENCE order is hash-based (dog SYMMETRIC <code>WEAVEMerge</code>) — ACCEPTED,<p>
-  not a bug; flake was a test artifact, fixed by the <code>SOURCE_DATE_EPOCH</code> pin.   <code>same-anchor</code> residual: native <code>GRAFMergeWtFileTunable</code> applies theirs' TIP   onto the ours-weave (ASYMMETRIC → structurally ours-first), dog merges   symmetrically (hash-order). Side-order only; row/banner/restamp match native.   Converges when <a href="../DOG/DOG-005.html">DOG-005</a> retires graf. (Not <a href="../DIS/DIS-044.html">DIS-044</a>; <code>WEAVEEmitMerged</code> untouched.)
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> CONFLICT-FENCE order is hash-based (dog SYMMETRIC <code>WEAVEMerge</code>) — ACCEPTED, not a bug; flake was a test artifact, fixed by the <code>SOURCE_DATE_EPOCH</code> pin. <code>same-anchor</code> residual: native <code>GRAFMergeWtFileTunable</code> applies theirs' TIP onto the ours-weave (ASYMMETRIC → structurally ours-first), dog merges symmetrically (hash-order). Side-order only; row/banner/restamp match native. Converges when <a href="../DOG/DOG-005.html">DOG-005</a> retires graf. (Not <a href="../DIS/DIS-044.html">DIS-044</a>; <code>WEAVEEmitMerged</code> untouched.)</li>
 <li class="blocked"><input type="checkbox" disabled> ← needs <a href="JS-051.html">JS-051</a> landed. File-disjoint bar a <code>weave.hpp</code>/<code>INDEX.md</code> touch.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED <code>4c6fa1fa</code> (on <code>1afd5f2d</code>): full-history weave reconstruction —<p>
-<code>bin/patch.js</code> + <code>bin/lib/patchscope.js</code> + <code>checkout.materialise</code> + 9 <code>test/js/patch/*</code> cases. Non-conflict byte-identical to native; conflicts deterministic via <code>SOURCE_DATE_EPOCH</code> (<code>same-anchor</code> = the DOG-005 graf-vs-dog residual, gated to the dog golden). 397/397 green on the reconciled tree. Landed onto the JS-053 main-tree merge; <code>test/CMakeLists.txt</code> fence resolved (both <code>be-js-patch</code>/<code>be-js-bro</code> blocks kept).
-</p>
-</li>
+<li>LANDED <code>4c6fa1fa</code> (on <code>1afd5f2d</code>): full-history weave reconstruction — <code>bin/patch.js</code> + <code>bin/lib/patchscope.js</code> + <code>checkout.materialise</code> + 9 <code>test/js/patch/*</code> cases. Non-conflict byte-identical to native; conflicts deterministic via <code>SOURCE_DATE_EPOCH</code> (<code>same-anchor</code> = the DOG-005 graf-vs-dog residual, gated to the dog golden). 397/397 green on the reconciled tree. Landed onto the JS-053 main-tree merge; <code>test/CMakeLists.txt</code> fence resolved (both <code>be-js-patch</code>/<code>be-js-bro</code> blocks kept).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>HEAD-003</title>
+<title>HEAD-003: be head hunk output is plain on a TTY (should be color)</title>
+<meta property="og:title" content="HEAD-003: be head hunk output is plain on a TTY (should be color)">
+<meta property="og:description" content="be head (e.g. be head be://localhost/beagle) prints its change hunks — the + &lt;sha&gt; &lt;ts&gt; &lt;subject&gt; commit line and the +/- &lt;path&gt; file rows — in PLAIN text even on an interactive terminal, where it should render in color like the other hunk verbs. The three-mode rule (dog/CLI.c:203: HUNKMode = ANSIIsTTY() ? HUNKOutColor : HUNKOutPlain) is in place, so the defect is in how HEAD's (possibly sub-aggregated) stream reaches the renderer, not in tty detection. Presentation is the shared bro renderer's job (Hunk-producer-renderer-split); HEAD must not ship pre-flattened plain.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/HEAD/HEAD-003.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,51 +16,35 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>HEAD-003: <code>be head</code> hunk output is plain on a TTY (should be color)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>be head</code> (e.g. <code>be head be://localhost/beagle</code>) prints its change hunks — the <code>+ &lt;sha&gt; &lt;ts&gt; &lt;subject&gt;</code> commit line and the <code>+</code>/<code>- &lt;path&gt;</code> file rows — in PLAIN text even on an interactive terminal, where it should render in color like the other hunk verbs. The three-mode rule (<code>dog/CLI.c:203</code>: <code>HUNKMode = ANSIIsTTY() ? HUNKOutColor : HUNKOutPlain</code>) is in place, so the defect is in how HEAD's (possibly sub-aggregated) stream reaches the renderer, not in tty detection. Presentation is the shared bro renderer's job (<a href="../../wiki/Bro.html">Hunk-producer-renderer-split</a>); HEAD must not ship pre-flattened plain.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Repro: <code>be head be://localhost/beagle</code> on a TTY → commit + file rows print<p>
-with no ANSI color (<code>--color</code> and a piped <code>| cat</code> look identical).
-</p>
-</li>
-<li>Lead: <code>beagle/BE.cli.c:522-619</code> forces <code>HUNKMode = HUNKOutTLV</code> while<p>
-CAPTURING sub reports (bro can't index pre-rendered ANSI), then restores. Hypothesis (verify): the aggregated parent stream is emitted without a final color re-render, so a TTY sees plain. Do not assume — trace it.
-</p>
-</li>
-<li><code>bro/BRO.exe.c:103</code> sets <code>b-&gt;color = (HUNKMode == HUNKOutColor)</code>; <code>NO_COLOR</code><p>
-still wins. Confirm whether HEAD's hunks even traverse the bro renderer.
-</p>
-</li>
+<li>Repro: <code>be head be://localhost/beagle</code> on a TTY → commit + file rows print with no ANSI color (<code>--color</code> and a piped <code>| cat</code> look identical).</li>
+<li>Lead: <code>beagle/BE.cli.c:522-619</code> forces <code>HUNKMode = HUNKOutTLV</code> while CAPTURING sub reports (bro can't index pre-rendered ANSI), then restores. Hypothesis (verify): the aggregated parent stream is emitted without a final color re-render, so a TTY sees plain. Do not assume — trace it.</li>
+<li><code>bro/BRO.exe.c:103</code> sets <code>b-&gt;color = (HUNKMode == HUNKOutColor)</code>; <code>NO_COLOR</code> still wins. Confirm whether HEAD's hunks even traverse the bro renderer.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>On a TTY (no <code>--plain</code>, no <code>NO_COLOR</code>), <code>be head</code> renders commit/file rows<p>
-in color, matching <code>be diff:</code>/<code>be status</code> hunk coloring.
-</p>
-</li>
+<li>On a TTY (no <code>--plain</code>, no <code>NO_COLOR</code>), <code>be head</code> renders commit/file rows in color, matching <code>be diff:</code>/<code>be status</code> hunk coloring.</li>
 <li><code>--plain</code>, <code>--tlv</code>, <code>NO_COLOR</code>, and a non-tty pipe still emit plain/TLV.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Color is the shared renderer's call only (<code>HUNKu8sFeed*</code>); producers stay<p>
-presentation-free per <a href="../../wiki/Bro.html">Hunk-producer-renderer-split</a>.
-</p>
-</li>
-<li>No double-render: a sub stream captured as TLV must be color-rendered<p>
-ONCE at the top, never fed pre-ANSI into bro (the <code>522-619</code> trap).
-</p>
-</li>
+<li>Color is the shared renderer's call only (<code>HUNKu8sFeed*</code>); producers stay presentation-free per <a href="../../wiki/Bro.html">Hunk-producer-renderer-split</a>.</li>
+<li>No double-render: a sub stream captured as TLV must be color-rendered ONCE at the top, never fed pre-ANSI into bro (the <code>522-619</code> trap).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(pending) Decide where the top-level HEAD aggregation re-renders to color<p>
-on a TTY — at the parent's final emit, after sub TLV is merged.
-</p>
-</li>
+<li>(pending) Decide where the top-level HEAD aggregation re-renders to color on a TTY — at the parent's final emit, after sub TLV is merged.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -73,5 +61,16 @@ on a TTY — at the parent's final emit, after sub TLV is merged.
 <ul>
 <li>Landed <code>1cc6fb6b</code> (beagle) + <code>6b9f35b8</code> (dog), 2026-06-20: &quot;be head/log color rows on tty + NO_COLOR&quot; — TTY HEAD hunks render in color, <code>NO_COLOR</code>/plain/pipe honored.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

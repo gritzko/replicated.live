@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BRO-013</title>
+<title>BRO-013: address-bar TAB path-completion from displayed-hunk tokens (U/F), FS fallback, cycle</title>
+<meta property="og:title" content="BRO-013: address-bar TAB path-completion from displayed-hunk tokens (U/F), FS fallback, cycle">
+<meta property="og:description" content="The pager address bar (:) now RETARGETS on a bareword path (URI-011b: the composer's wt-relative bareword + the isVerb probe, shared/spell.js), so verbs in ls //WHY-001 opens ls //WHY-001/verbs. But a PARTIAL word (ve) is still ambiguous verb-vs-path and the user must type the whole path by hand. Add Tab completion in command mode: complete the word being typed from the CURRENT view's hunk tokens — the hidden U nav URIs (universal, single-sourced via navlib.navLink, wt-relative) and the visible F filenames (listing views) already carry every on-screen path, so NO new token is needed (the &quot;token for paths&quot; is the existing U/F). Many matches CYCLE on repeated Tab; the inserted token is WT-RELATIVE with a trailing / for a directory, so it is URI-shaping (dodges the verb-peel) and compose routes it to arg 0. No hunk match → fall back to the FILESYSTEM under the view's context (//-authority wt root + path dir), stat-guessing dir-vs-file. JS (jab) pager only. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BRO/BRO-013.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -18,108 +22,59 @@ The pager address bar (<code>:</code>) now RETARGETS on a bareword path (<a href
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><a href="../URI/URI-011.html">URI-011b</a> just landed: <code>compose</code>/<code>shapeArg0</code>/<code>mergeUri</code> treat a leading<p>
-bareword as a WT-RELATIVE path and an <code>isVerb</code> probe stops a non-verb word (<code>verbs</code>) from being peeled as a verb. Completion is the missing input aid — a partial <code>ve</code> can't yet disambiguate to a path.
-</p>
-</li>
-<li>Hunk tokens ALREADY carry every path: <code>U</code> (hidden nav URI, wt-relative,<p>
-single-sourced <code>navlib.navLink</code>) in status/ls/log/tree/cat/diff; <code>F</code> (visible filename) in ls/tree/bro-dir (<code>views/ls/ls.js:64</code>, <code>views/tree/tree.js:64</code>, <code>view/bro.js:532</code>). The pager already walks them: <code>_uriAt</code>/<code>_lineUri</code>.
-</p>
-</li>
-<li>The address-bar edit buffer is <code>this.cmd</code>, driven char-by-char in<p>
-<code>_keyCommand</code> (<code>views/bro/pager.js</code>); <code>Tab</code> (0x09) is unhandled today — it falls through and is ignored.
-</p>
-</li>
-<li>dir-vs-file is knowable WITHOUT a stat for hunk candidates: an <code>F</code> name<p>
-followed by a <code>P</code> slash is a dir; a <code>U</code> scheme of <code>ls:</code>/<code>tree:</code> is a dir, <code>cat:</code>/<code>blob:</code> a file. For the FS fallback, <code>io.stat().kind</code>.
-</p>
-</li>
+<li><a href="../URI/URI-011.html">URI-011b</a> just landed: <code>compose</code>/<code>shapeArg0</code>/<code>mergeUri</code> treat a leading bareword as a WT-RELATIVE path and an <code>isVerb</code> probe stops a non-verb word (<code>verbs</code>) from being peeled as a verb. Completion is the missing input aid — a partial <code>ve</code> can't yet disambiguate to a path.</li>
+<li>Hunk tokens ALREADY carry every path: <code>U</code> (hidden nav URI, wt-relative, single-sourced <code>navlib.navLink</code>) in status/ls/log/tree/cat/diff; <code>F</code> (visible filename) in ls/tree/bro-dir (<code>views/ls/ls.js:64</code>, <code>views/tree/tree.js:64</code>, <code>view/bro.js:532</code>). The pager already walks them: <code>_uriAt</code>/<code>_lineUri</code>.</li>
+<li>The address-bar edit buffer is <code>this.cmd</code>, driven char-by-char in <code>_keyCommand</code> (<code>views/bro/pager.js</code>); <code>Tab</code> (0x09) is unhandled today — it falls through and is ignored.</li>
+<li>dir-vs-file is knowable WITHOUT a stat for hunk candidates: an <code>F</code> name followed by a <code>P</code> slash is a dir; a <code>U</code> scheme of <code>ls:</code>/<code>tree:</code> is a dir, <code>cat:</code>/<code>blob:</code> a file. For the FS fallback, <code>io.stat().kind</code>.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>Tab</code> in command mode completes the LAST whitespace-delimited word of<p>
-<code>this.cmd</code> against the current view's hunk paths: a unique match replaces the word, a shared prefix extends it, ambiguity CYCLES on repeated <code>Tab</code>.
-</p>
-</li>
-<li>The inserted token is WT-RELATIVE (the hunk paths already are) with a trailing<p>
-<code>/</code> for a directory, so it is URI-shaping — <code>compose</code> routes it to arg 0 and the verb-peel can't grab it.
-</p>
-</li>
-<li>No hunk candidate → readdir the view's context dir (its <code>//</code> wt root + path<p>
-dir) and complete from the FS, stat-appending <code>/</code> for a dir.
-</p>
-</li>
+<li><code>Tab</code> in command mode completes the LAST whitespace-delimited word of <code>this.cmd</code> against the current view's hunk paths: a unique match replaces the word, a shared prefix extends it, ambiguity CYCLES on repeated <code>Tab</code>.</li>
+<li>The inserted token is WT-RELATIVE (the hunk paths already are) with a trailing <code>/</code> for a directory, so it is URI-shaping — <code>compose</code> routes it to arg 0 and the verb-peel can't grab it.</li>
+<li>No hunk candidate → readdir the view's context dir (its <code>//</code> wt root + path dir) and complete from the FS, stat-appending <code>/</code> for a dir.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Reuse the existing tok32 <code>U</code>/<code>F</code> walk (<code>_uriAt</code>/<code>_lineUri</code> style) — NO new<p>
-tag, NO new hunk field. The &quot;some token for paths&quot; the user asked about IS the existing <code>U</code>/<code>F</code>.
-</p>
-</li>
-<li>Never hand-compose or regex-parse a URI: resolve the context dir via<p>
-<code>be</code>/<code>core/discover.js</code> + the URI class (<a href="../URI/URI-011.html">URI-011</a>, <a href="../../meta/work.html">work</a> Things-NOT-TO-DO).
-</p>
-</li>
-<li>Completion is WT-RELATIVE by default (matches <a href="../URI/URI-011.html">URI-011b</a>); a <code>./</code>-led stem<p>
-completes context-relative.
-</p>
-</li>
-<li>Repro-first, headless driver test (feed keys, assert <code>this.cmd</code>); no other<p>
-tests edited without leave (<a href="../../meta/work.html">Issues</a>).
-</p>
-</li>
+<li>Reuse the existing tok32 <code>U</code>/<code>F</code> walk (<code>_uriAt</code>/<code>_lineUri</code> style) — NO new tag, NO new hunk field. The &quot;some token for paths&quot; the user asked about IS the existing <code>U</code>/<code>F</code>.</li>
+<li>Never hand-compose or regex-parse a URI: resolve the context dir via <code>be</code>/<code>core/discover.js</code> + the URI class (<a href="../URI/URI-011.html">URI-011</a>, <a href="../../meta/work.html">work</a> Things-NOT-TO-DO).</li>
+<li>Completion is WT-RELATIVE by default (matches <a href="../URI/URI-011.html">URI-011b</a>); a <code>./</code>-led stem completes context-relative.</li>
+<li>Repro-first, headless driver test (feed keys, assert <code>this.cmd</code>); no other tests edited without leave (<a href="../../meta/work.html">Issues</a>).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Candidate source order: (1) current-view hunk tokens — <code>U</code> decoded path + <code>F</code><p>
-visible name; (2) FS readdir of the context dir. On-screen first (what the user sees), FS as the miss fallback.
-</p>
-</li>
-<li>Cycle state on the Pager: <code>{stem, cands, idx, atCmd}</code> — set on the first <code>Tab</code><p>
-of a stem, advanced on repeat, RESET by any non-<code>Tab</code> key in <code>_keyCommand</code> (editing restarts completion).
-</p>
-</li>
-<li>dir-vs-file: from a hunk, <code>F</code>+<code>P</code> or a <code>ls:</code>/<code>tree:</code> <code>U</code> scheme = dir, else<p>
-file; from the FS, <code>io.stat().kind</code>. A dir gets a trailing <code>/</code> (an unambiguous path token + a &quot;descend&quot; affordance).
-</p>
-</li>
-<li>Word boundary: complete the last space-split token of <code>this.cmd</code>; a leading<p>
-verb word (<code>cat te</code>) stays, only the tail completes.
-</p>
-</li>
+<li>Candidate source order: (1) current-view hunk tokens — <code>U</code> decoded path + <code>F</code> visible name; (2) FS readdir of the context dir. On-screen first (what the user sees), FS as the miss fallback.</li>
+<li>Cycle state on the Pager: <code>{stem, cands, idx, atCmd}</code> — set on the first <code>Tab</code> of a stem, advanced on repeat, RESET by any non-<code>Tab</code> key in <code>_keyCommand</code> (editing restarts completion).</li>
+<li>dir-vs-file: from a hunk, <code>F</code>+<code>P</code> or a <code>ls:</code>/<code>tree:</code> <code>U</code> scheme = dir, else file; from the FS, <code>io.stat().kind</code>. A dir gets a trailing <code>/</code> (an unambiguous path token + a &quot;descend&quot; affordance).</li>
+<li>Word boundary: complete the last space-split token of <code>this.cmd</code>; a leading verb word (<code>cat te</code>) stays, only the tail completes.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Repro/driver test: pager test feeds <code>p.key(0x3a); p.cmd=…; p.key(0x09)</code> and<p>
- asserts the completed <code>this.cmd</code> — landed in <code>ae6ac86f</code>.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> <code>_completions(stem)</code>: hunk-token <code>U</code>/<code>F</code> walk, prefix-filter, sorted, FS<p>
- fallback on miss (<code>views/bro/pager.js:542-550</code>) — landed <code>0d02e0e9</code>.
-</p>
-</li>
-<li class="done"><input type="checkbox" checked disabled> <code>_keyCommand</code> <code>Tab</code> branch: <code>b === 0x09 → _tabComplete()</code>; any other key<p>
- resets the cycle state <code>this._tab</code> (<code>pager.js:183,492-529</code>) — landed <code>0d02e0e9</code>.
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Repro/driver test: pager test feeds <code>p.key(0x3a); p.cmd=…; p.key(0x09)</code> and asserts the completed <code>this.cmd</code> — landed in <code>ae6ac86f</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> <code>_completions(stem)</code>: hunk-token <code>U</code>/<code>F</code> walk, prefix-filter, sorted, FS fallback on miss (<code>views/bro/pager.js:542-550</code>) — landed <code>0d02e0e9</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> <code>_keyCommand</code> <code>Tab</code> branch: <code>b === 0x09 → _tabComplete()</code>; any other key resets the cycle state <code>this._tab</code> (<code>pager.js:183,492-529</code>) — landed <code>0d02e0e9</code>.</li>
 <li class="done"><input type="checkbox" checked disabled> FS fallback <code>_fsCompletions(stem)</code> (<code>pager.js:550+</code>) — landed <code>ae6ac86f</code>.</li>
-<li class="done"><input type="checkbox" checked disabled> Cycle-on-repeat: <code>this._tab.atCmd === this.cmd</code> detects a repeat Tab on our<p>
- own output and advances (<code>pager.js:522</code>) — landed <code>0d02e0e9</code>.
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Cycle-on-repeat: <code>this._tab.atCmd === this.cmd</code> detects a repeat Tab on our own output and advances (<code>pager.js:522</code>) — landed <code>0d02e0e9</code>.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>The running pager loads its JS at LAUNCH from the launch tree's <code>be/</code> (jab<p>
-upward <code>be/</code>-scan) — completion shows only once it is the RUNNING tree (same caveat as <a href="BRO-012.html">BRO-012</a>); launch jab from the fixed worktree to see it.
-</p>
-</li>
+<li>The running pager loads its JS at LAUNCH from the launch tree's <code>be/</code> (jab upward <code>be/</code>-scan) — completion shows only once it is the RUNNING tree (same caveat as <a href="BRO-012.html">BRO-012</a>); launch jab from the fixed worktree to see it.</li>
 <li>be/ is a detached sub; landing the fix needs the <a href="../SUBS/SUBS-035.html">SUBS-035</a> bootstrap.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>LANDED, untagged: the Tab-completion core (<code>_tabComplete</code>/<code>_completions</code>/cycle state) rode be <code>0d02e0e9</code> (&quot;WHY-001: blame view for the js ver&quot;, 2026-07-05); the FS fallback (<code>_fsCompletions</code>) + driver test rode be <code>ae6ac86f</code> (&quot;COMMIT-007 and assorted fixes&quot;, 2026-07-05). No BRO-013-tagged commit exists — grep those hashlets, not the code.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

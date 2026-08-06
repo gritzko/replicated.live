@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-040: warm pager session degrades after clicks — context/replay state corrupts, errors mutate per click</title>
+<meta property="og:title" content="BRO-040: warm pager session degrades after clicks — context/replay state corrupts, errors mutate per click">
+<meta property="og:description" content="Live (gritzko, 2026-07-20, main tree): after a few clicks in ONE pager session, spells that worked start erring, and the error KIND changes as you keep clicking — no hunks, NAVNONE: no worktree, err: loop: the verb 'commit' has no plain-args handler. &quot;The actual path does not seem to matter. Just click around.&quot; Cold headless dispatch is fine (jab commit '?hl' from journal root reaches the verb — COMMITNONE from inside, NOT a dispatch miss), so the disease is accumulated SESSION STATE, not module conversion or cwd (the live pager never chdirs — grep io.chdir = 0; /todo/JS/JS-119 premise holds).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BRO/BRO-040.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-040: warm pager session degrades after clicks — context/replay state corrupts, errors mutate per click</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<p>
+Live (gritzko, 2026-07-20, main tree): after a few clicks in ONE pager session, spells that worked start erring, and the error KIND changes as you keep clicking — <code>no hunks</code>, <code>NAVNONE: no worktree</code>, <code>err: loop: the verb 'commit' has no plain-args handler</code>. &quot;The actual path does not seem to matter. Just click around.&quot; Cold headless dispatch is fine (<code>jab commit '?hl'</code> from journal root reaches the verb — COMMITNONE from inside, NOT a dispatch miss), so the disease is accumulated SESSION STATE, not module conversion or cwd (the live pager never chdirs — grep io.chdir = 0; <a href="/todo/JS/JS-119.html">JS-119</a> premise holds).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro A (gritzko): <code>be work</code> → enter a wt → click a file (CMakeLists.txt) → back → click the file again → <code>:why</code> → click any shaded token → <code>err: loop: the verb 'commit' has no plain-args handler</code>.</li>
+<li>Repro B (gritzko, simpler): <code>be status</code> → click a file → <code>:why</code> → back → <code>:why</code> → click → errors; kinds vary (<code>no hunks</code>, <code>no worktree</code>); &quot;starts happening after some clicks&quot;.</li>
+<li>Repro C (gritzko 2026-07-20, THE sharp one, run inside //BRO-040): <code>jab why CMakeLists.txt</code> → click chunk 1 (commit view loads, OK) → back → click chunk 2 → <code>err: NAVNONE: no worktree //BRO-040 //BRO-040/CMakeLists.txt/: why CMakeLists.txt</code>.  The address bar IS the evidence: context <code>//BRO-040/CMakeLists.txt/</code> — the FILE joined as a DIR (<a href="/todo/BRO/BRO-018.html">BRO-018</a> shape, NOT cured on this path, contra the first investigation) — and the spell still <code>why CMakeLists.txt</code>, so the replay re-joins under the junk.</li>
+<li>Repro C second question: <code>//BRO-040</code> reports &quot;no worktree&quot; though work/BRO-040 EXISTS — either <code>//NAME</code> self-reference fails when the session launched INSIDE that wt, or the junk context path breaks the anchor; the investigation must name which.</li>
+<li>Suspect seams, all OPEN, likely compounding per click:<ol>
+<li><a href="/todo/BRO/BRO-015.html">BRO-015</a> back/<code>R</code> re-drive the tracked spell with rest args STRIPPED (<code>_driveApply</code> records only verb+arg0) — a replayed <code>:why …</code> loses its subject.</li>
+<li><a href="/todo/BRO/BRO-018.html">BRO-018</a> a FILE view's context is joined as a DIR on the next reduce (<code>//WT/dir/file/sib</code> → &quot;no hunks&quot;) — each cat/why hop can compound the junk path.</li>
+<li><a href="/todo/BRO/BRO-039.html">BRO-039</a> audit: the pager persists the NEXT context off the clicked ARG, not the O context (<code>_ctxFrom(arg)</code> pager.js:744) — arg fragments (<code>?hashlet</code>) can leak into the persisted context; the strict-O cure is STAGED in //BRO-039 (NOT landed), and covers the O leg only — the U-follow reduction stays per its pending ruling.</li>
+<li><a href="/todo/JS/JS-074.html">JS-074</a> the registry mask turns ANY downstream junk-spell fallthrough into the phantom &quot;verb 'X' has no plain-args handler&quot; — the error-kind roulette.</li>
+</ol>
+</li>
+<li>The three error kinds map to ONE mangled coordinate: junk context that anchors no tree → NAVNONE no worktree; junk subject under a real tree → no hunks; junk spell falling into verb dispatch → the JS-074 phantom.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>pty repro red: script repro B (click file → <code>:why</code> → back → <code>:why</code> → click, then keep clicking) and assert the session stays healthy — same view bytes and NO error after N repetitions; today's frames show the degradation.</li>
+<li>Root-cause WHICH state rots (view.call context? this.ctx reduction? the back-replay spell?) by dumping the persisted context/call after each step in the pty run — evidence into this ticket, then fix at the source, not per-error patches.</li>
+<li>A fixed session is idempotent: any click loop (follow → back)* leaves context and recorded calls byte-identical to the first visit.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Rulings in force: context = <code>//WT/rel/dir/</code> mutated ONLY by navigation (<a href="/todo/BRO/BRO-024.html">BRO-024</a>); pager arg-blind, args never context donors; resolution via core/resolve_hash.js only; errors in plain words.</li>
+<li>Overlaps: //BRO-039 (staged, O-leg strict codec) — rebase over it, do NOT duplicate its cure; a fix here likely closes parts of <a href="/todo/BRO/BRO-015.html">BRO-015</a>/<a href="/todo/BRO/BRO-018.html">BRO-018</a> — supersede explicitly, link both ways.</li>
+<li>Verify through the real UI path: the pty click loop is the acceptance test; headless probes only corroborate.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>ROOT CAUSE (iter 2, pty-verified + orchestrator-corroborated): *<strong>fd exhaustion in the view drive</strong>*, not context logic.  ONE <code>why &lt;file&gt;</code> drive consumes <del>1007 fds (ordinary cat/status drives leak </del>17-20 each); then <code>abc.mmap(&quot;ULOG&quot;, &lt;wt&gt;/.be, &quot;r&quot;)</code> throws <code>No file descriptors available</code> and the pager's file→dir oracle goes BLIND: <code>_ctxFrom</code> (pager.js:822) only reduces a file when <code>_ctxKind</code>→<code>reg</code>, which runs discover.wtdir → treeAt → climb → <code>anchors()</code> (resolve_hash.js:61) → ulog.each.  So the FILE survives as a dir segment (<code>//BRO-040/CMakeLists.txt/</code>) and every later resolve fails.  The carrier is the BE-048 launch context, which for <code>jab why &lt;file&gt;</code> is deliberately the FILE — harmless while the oracle works, junk the moment it blinds.</li>
+<li>THE MASK: <code>ulog.each</code> (shared/ulog.js:42-48) swallows a failed mmap with <code>catch (e) { return; }</code> → ZERO rows, no error; <code>anchors</code> reads that as <code>!!row0</code> false → &quot;no worktree&quot;.  A resource failure is indistinguishable from an absent/empty log — the <a href="/todo/JS/JS-074.html">JS-074</a> disease in a second place.  Orchestrator verified the swallow in the main tree and reproduced the fd-hunger differentially: under <code>ulimit -n 64</code>, <code>jab status</code> completes, <code>jab why CMakeLists.txt</code> dies <code>Error: No file descriptors available</code>.</li>
+<li>Segment grows at STEP 3 (back), not step 4; step 4 only surfaces it, and only from a row in a DIFFERENT chunk (rows 6/10/18/22/30 fire; an in-chunk row like 14/26 passes).</li>
+<li>TREENONE reconciled: SAME fault, one cause — the earlier main-tree <code>TREENONE</code> is this exhaustion seen at tree.js:130 instead of at <code>anchors</code>.  Explains every symptom: accumulates with clicks, path-independent, error-kind roulette (<code>no hunks</code> / <code>no worktree</code> / <code>TREENONE</code> / the JS-074 plain-args phantom, all reproduced from one exhausted process), and &quot;cold headless is fine&quot;.</li>
+<li>(iter 1, SUPERSEDED) the headless &quot;nothing rots&quot; verdict was WRONG: a headless instrument never exhausts fds, so the oracle never blinds — the <a href="./[verify-through-real-ui-path.html">[verify-through-real-ui-path</a>] rule earning its keep.  BRO-015/BRO-018 remain genuinely cured by BRO-024. drives of both repros dump byte-identical <code>this.ctx</code>, <code>view.uri</code>, <code>view.call{verb,spell,context}</code>, <code>be.prev_uri</code> across N iterations — no pager coordinate rots.  <a href="/todo/BRO/BRO-015.html">BRO-015</a> (replay strips rest) and <a href="/todo/BRO/BRO-018.html">BRO-018</a> (file-as-dir) are already CURED by landed <a href="/todo/BRO/BRO-024.html">BRO-024</a>; <code>_ctxFrom</code> strips <code>?query</code>, so no <code>?hashlet</code> leaks into the context.  Suspects 1-3 all cleared.</li>
+<li>the real fault is DOWNSTREAM of the context: real-pty repro on the MAIN TREE dies <code>err: TREENONE</code> — views/tree/tree.js:130 (<code>resolve_hash(ctx,bare)</code> throw) / :144 (pin absent from the sub store) as the commit view resolves its tree object — and the persisted pager context was CORRECT (<code>//</code>) at that exact step.</li>
+<li>it is a RESIDENT-state fault: cold <code>jab commit ?hashlet</code> is OK, standalone interactive <code>jab commit ?hashlet</code> renders, and the same driveSpell returns 214 hunks in every headless config; it fails ONLY as a click-driven reentrant drive inside a long-lived interactive process AND only on the complex main-tree store (an authority-bearing fixture hive clicks the same why→commit path clean).  Store/resolve_hash/tree-object resident state — kin of the fd/mmap hazards (<a href="/todo/ABC/ABC-014.html">ABC-014</a>, keeper) — NOT the pager.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> pty repro red: real-UI main-tree driver, <code>err: TREENONE</code> on the why-token click, then the cascade (<code>no hunks: why</code>, <code>(no URI here)</code>)</li>
+<li class="done"><input type="checkbox" checked disabled> instrument: per-step context/view.call dump — NOTHING rots; the context is correct at the failing step (premise disproven)</li>
+</ul>
+<ul>
+<li><a href="./ .html"> </a> (a) THE LEAK — needs a gritzko RULING: close/open-once the per-object store mappings the why/blame walk leaks; this is <a href="/todo/ABC/ABC-014.html">ABC-014</a> territory and the mmap-close design is OPEN (the ABC-020 &quot;rework 2&quot; is disavowed), so it is NOT a worker's call.  <code>ulog.each</code> never closes its map even on success.</li>
+<li><a href="./ .html"> </a> (b) THE MASK — in scope here, independent of (a): ulog.each must distinguish absent/empty from a resource error and surface the latter in plain words, so exhaustion can never again pose as &quot;no worktree&quot; and silently corrupt the context.</li>
+<li>note: (b) ALONE cannot green the dance — the session is still out of fds, so step 4 would fail honestly instead of corrupting.</li>
+<li><a href="./ .html"> </a> latent, does NOT fire in the UI: <code>_runSpell</code>/<code>_ctxFrom</code>/ <code>_fillAuth</code> (pager.js:740/744/827) inherit authority from <code>cur</code> / scavenged <code>prev</code> for a rooted-but-authority-less target (probe: follow <code>/x</code> at <code>//WT-1</code> → <code>//WT-1/x</code>); real navLink never mints that shape — a <a href="/todo/BRO/BRO-024.html">BRO-024</a>-law violation, no repro</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>gritzko's account is &quot;starts after SOME clicks&quot;; the scripted driver hits TREENONE on the FIRST token click, deterministically. Either the scripted dance ≠ his dance, or there are TWO faults — resolve before trusting the re-scope.</li>
+<li>the re-scope lands in resident mmap/fd/store territory where <a href="/todo/ABC/ABC-020.html">ABC-020</a>'s &quot;rework 2&quot; is DISAVOWED — get a ruling before any resident-state change.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>NO code change, NO commit: investigation only, the clone work/BRO-040 is pristine (<code>jab diff</code> empty) and the main tree is unmutated (<code>///be#43a754a0</code>, 20 base / 1 wt, session-start state).</li>
+<li>Worker protocol deviations, flagged not excused: it planted a <code>jsrc</code> symlink in its /tmp scratch pointing at its OWN clean clone and ran jab from there, and it drove an interactive pager against the MAIN TREE (status rows carry mutating <code>[put]</code>/<code>[del]</code>) — both outside the iron rule; no damage found, tips verified unchanged.</li>
+<li>Repro driver kept: scratch <code>mainrepro.py</code> (real-UI RED, main tree); fixture drivers reproA/reprob click clean.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

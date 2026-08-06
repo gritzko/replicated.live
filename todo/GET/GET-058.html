@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-058 DONE: get must DECIDE by the quad table, not by ad-hoc flags</title>
+<meta property="og:title" content="GET-058 DONE: get must DECIDE by the quad table, not by ad-hoc flags">
+<meta property="og:description" content="get already RENDERS the quad (/blog/status.mkd, shared/quad.js) but does not DECIDE by it: verbs/get/get.js:1465 quadReport() calls quadOf on the POST-get tree as a report only, in a try/catch that downgrades failure to a warning, while the D5 leaf and shared/checkout.js apply() roll their own oldMap/dirty/isBinary logic with a trackUpdate flag bolted on by /todo/GET/GET-040. Same vocabulary on output, different mechanism on the deciding side — which is why cells drift (/todo/GET/GET-056, /todo/GET/GET-057, the DIS-082-jab loss). RULED (gritzko 2026-07-31): the per-file verdict is a 13-cell track x work table in the status letters against the root; and /todo/GET/GET-053 is RULED FF-ONLY, so the diverged branch is deleted, not rewritten.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-058.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-058 <a href="./DONE.html">DONE</a>: get must DECIDE by the quad table, not by ad-hoc flags</h1>
+<div>
+<p>
+Now: DONE
+</p>
+<p>
+Ask: gritzko Rev: ///be/#978b8a52
+</p>
+</div>
+<p>
+<code>get</code> already RENDERS the quad (<a href="../../blog/status.html">/blog/status.mkd</a>, <code>shared/quad.js</code>) but does not DECIDE by it: <code>verbs/get/get.js:1465 quadReport()</code> calls <code>quadOf</code> on the POST-get tree as a report only, in a try/catch that downgrades failure to a warning, while the D5 leaf and <code>shared/checkout.js apply()</code> roll their own oldMap/dirty/isBinary logic with a <code>trackUpdate</code> flag bolted on by <a href="GET-040.html">/todo/GET/GET-040</a>. Same vocabulary on output, different mechanism on the deciding side — which is why cells drift (<a href="GET-056.html">/todo/GET/GET-056</a>, <a href="GET-057.html">/todo/GET/GET-057</a>, the DIS-082-jab loss). RULED (gritzko 2026-07-31): the per-file verdict is a 13-cell track x work table in the status letters against the root; and <a href="GET-053.html">/todo/GET/GET-053</a> is RULED FF-ONLY, so the diverged branch is deleted, not rewritten.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>shared/quad.js</code> already computes every input the table needs: root = <code>dag.mergeBase(track, base)</code>, four columns <code>. same / x removed / o created / v advanced</code>, and the wt column measured vs BASE not root (gritzko 2026-07-17) — one require away from get, nothing to re-derive.</li>
+<li>The landed <a href="GET-040.html">/todo/GET/GET-040</a> fix (<code>///be/#978b8a52</code>, 2026-07-31 12:16, main tree tip) added the diverged TRACK UPDATE path: <code>trackUpdate</code> at get.js:453,475,536,794, <code>divMerge</code> (6 uses, ~:628-636), local-only-add and ours-deleted special cases at :1031,:1068, and the merge-base-blob weave leg at :1079. All of it serves the diverged case ONLY.</li>
+<li>The :1079 leg is wrong on its own terms: a dirty file's 3-way ancestor is the curTip blob (what the edit is a delta against), not the LCA blob — mixing the committed leg and the uncommitted leg into one weave.</li>
+<li>Under FF-only the four history shapes are: behind/FF (root = base, base column <code>.</code>), ahead (root = track, track column all <code>.</code> so every row is a no-op), same (all <code>.</code>), diverged (REFUSE on non-force; <code>get!</code> is the any-ref reset and consults no table).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>ONE decision table for both paths — the flat D5 leaf (<code>get.js</code> <del>:1054) and the sub checkout (<code>shared/checkout.js</code> </del>:227) index the SAME 13 cells; no second weave, no second binary heuristic.</li>
+<li><code>quadOf</code> the wt BEFORE the checkout, not only after; each row's track+base+wt chars pick THEIRS / OURS / WEAVE3 / DELETE / no-op.</li>
+<li>Delete the diverged machinery listed in Context, replaced by an FF reachability test that REFUSES (<a href="GET-053.html">/todo/GET/GET-053</a>); <code>dag.mergeBase</code> survives demoted to that test.</li>
+<li>The post-get <code>quadReport</code> stays, and now reports in the same terms the decision was made in; conflicts print in the glyphs <code>status</code> already prints (<a href="../DIS/DIS-080.html">/todo/DIS/DIS-080</a>).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>JS only, <code>be/</code>, run via <code>jab</code>. Do NOT run native <code>be</code>; do NOT open <code>beagle/</code>.</li>
+<li>Repro-first: a test per table cell BEFORE the rework; the existing get/sub buckets must stay green (<code>ctest -j16</code>, 328/328 at 978b8a52).</li>
+<li>Reuse only: <code>weave3</code> from <code>be/shared/weave.js</code>, <code>isBinary</code> from <code>be/views/diff/diff.js</code>, <code>quadOf</code>/<code>quadModel</code> from <code>be/shared/quad.js</code>, URI/hash via <code>be/core/resolve_hash.js</code>. No new mechanism, no new deps.</li>
+<li>Clone <code>///be/</code> at 978b8a52 (it holds the code being deleted). Norms: 2-line GET-058 comments, 1-line 64-char ticket-coded commit.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>THE TABLE (gritzko 2026-07-31), FF slice, rows = track vs root, cols = wt vs base:<ul>
+<li>n base: <code>T. W.</code> no-op / <code>T. Wv</code> OURS / <code>T. Wx</code> stays deleted</li>
+<li>n base: <code>Tv W.</code> THEIRS / <code>Tv Wv</code> WEAVE3 / <code>Tv Wx</code> THEIRS</li>
+<li>n base: <code>Tx W.</code> DELETE / <code>Tx Wv</code> OURS keep file / <code>Tx Wx</code> no-op</li>
+<li>ot in base: <code>To W-</code> THEIRS / <code>To Wo</code> WEAVE3 (add/add) / <code>T- Wo</code> OURS untracked / <code>T- W-</code> no-op</li>
+</ul>
+</li>
+<li>BINARY is a modifier on the both-sides-edited cells ONLY (<code>Tv Wv</code>, <code>To Wo</code>) → OURS + conflict: binary is never woven, a dirty binary is never reset. The six clean cells are byte-agnostic.</li>
+<li><code>Tv Wx</code> is THEIRS regardless of bytes (gritzko 2026-07-31): a local delete carries no content, so nothing is destroyed, only an intent that costs one <code>rm</code> to reassert; a local EDIT carries content and wins.</li>
+<li>Presence lives inside <code>o</code>/<code>x</code>, so the 12 illegal presence combinations of a bitmask cannot be written down, and edited-vs-locally-deleted stop sharing one &quot;dirty&quot; bit — the two defects of the current oldMap model.</li>
+<li>DIVERGED = both track and base columns lit at once; that is the only shape needing a two-leg fold, and FF-only removes it from the non-force path. AHEAD lights the base column too but reads no-op via <code>T.</code>, so it needs no special case.</li>
+<li><code>get!</code> bypasses the table entirely: unconditional THEIRS plus the untracked sweep — force stays the SOLE cleaning path (<a href="GET-040.html">/todo/GET/GET-040</a>'s invariant).</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> T0 — cell tests first: one repro per table cell, flat and sub, RED where trunk disagrees</li>
+<li class="open"><input type="checkbox" disabled> T1 — <code>quadOf</code> the PRE-get wt; thread the model into the D5 leaf and <code>checkout.apply</code></li>
+<li class="open"><input type="checkbox" disabled> T2 — one <code>verdict(track, base, wt, binary)</code> helper; both paths call it, nothing else decides</li>
+<li class="open"><input type="checkbox" disabled> T3 — FF gate: reachability test, REFUSE a diverged non-force get (<a href="GET-053.html">/todo/GET/GET-053</a>)</li>
+<li class="open"><input type="checkbox" disabled> T4 — delete <code>trackUpdate</code> (:453,:475,:536,:794), <code>divMerge</code>, :1031, :1068, :1079</li>
+<li class="open"><input type="checkbox" disabled> T5 — conflict rows in <code>status</code> glyphs (<a href="../DIS/DIS-080.html">/todo/DIS/DIS-080</a>); <code>quadReport</code> unchanged</li>
+<li class="open"><input type="checkbox" disabled> T6 — full <code>ctest -j16</code>, no regression in get/sub/patch/status/post buckets</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><code>quad.js</code> THROWS on &quot;no common ancestor&quot; by design and get's clone/bootstrap path has no base at all — that path must BYPASS the table, never acquire a degenerate root.</li>
+<li><a href="GET-048.html">/todo/GET/GET-048</a> (<a href="./HIGH.html">HIGH</a>, divergent+clean must be a plain reset) loses its premise here: there is no diverged non-force path left to reset wrongly, and <code>Tv W.</code> → THEIRS satisfies it by construction. Close it against this ticket, do not fix it separately.</li>
+<li>Sequencing: T3 and T4 are only correct under the FF-only ruling; if it is ever revisited, the two-leg fold (<code>root→base</code> committed + <code>base→work</code> dirty, same table applied twice) is what comes back.</li>
+<li>Staged rows must survive an FF base advance (gritzko 2026-07-29, <a href="GET-053.html">/todo/GET/GET-053</a>) — the <code>...V</code> → <code>...v</code> demotion is that ticket's, not a table cell.</li>
+<li>A wt based BEFORE <code>5c0d5c21</code> runs its own pre-fix jsrc during its first <code>get</code> and still clobbers dirty exec files — back the wt up before the first update of any stale clone.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Suggested commit: <code>GET-058: get decides by the quad table, no diverged path</code></li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

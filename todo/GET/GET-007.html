@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GET-007</title>
+<title>GET-007: be:// fetch re-ships already-present objects → unbounded shard bloat (498 MB pack vs 36 MB fresh clone)</title>
+<meta property="og:title" content="GET-007: be:// fetch re-ships already-present objects → unbounded shard bloat (498 MB pack vs 36 MB fresh clone)">
+<meta property="og:description" content="A clean fresh clone's .be/ is 36 MB, yet a re-fetched shard grew to a 498 MB / 290,853-object pack — the same objects at ~14× the bytes. The root cause is NOT a missing client-side negotiation (the client DOES advertise haves from the store) — it is server-side have-pruning that fails and re-ships the whole log, which the client then re-appends. The real fix is to make the peer ship only the objects the client lacks; the ingest-side dedup (below) is a held band-aid, not the cure. See GET, POST, CLAUDE.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-007.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>GET-007: <code>be://</code> fetch re-ships already-present objects → unbounded shard bloat (498 MB pack vs 36 MB fresh clone)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 A clean fresh clone's <code>.be/</code> is <strong>36 MB</strong>, yet a re-fetched shard grew to a <strong>498 MB / 290,853-object pack</strong> — the <strong>same</strong> objects at ~14× the bytes. The root cause is NOT a missing client-side negotiation (the client DOES advertise haves from the store) — it is <strong>server-side have-pruning that fails and re-ships the whole log</strong>, which the client then re-appends. The real fix is to make the peer ship only the objects the client lacks; the ingest-side dedup (below) is a held band-aid, not the cure. See <a href="../../wiki/GET.html">GET</a>, <a href="../../wiki/POST.html">POST</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
 </p>
@@ -41,5 +50,16 @@ Make the server ship only objects the client lacks; confirm the watermark failur
 <li>Held band-aid (ingest dedup, NOT the fix): a prior worker added decide-before-append dedup (<code>keep_pack_all_present</code>/<code>KEEPHas</code> in <code>keeper/KEEP.c</code>) — append-only-preserving, but it only triggers on an all-duplicate full pack (re-fetch of an unchanged repo) and filters on the 60-bit <code>hashlet</code> (a prefix match → a 60-bit collision would SILENTLY DROP a genuinely-new object). Keep it on a branch as a possible safety net, but do not rely on it; the negotiation fix makes it largely moot and avoids the silent-drop risk.</li>
 <li>Regression test under <code>test/get</code> / <code>keeper/test</code>; update <code>keeper/INDEX.md</code>.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DIS-058</title>
+<title>DIS-058: be/ JS submodule handling vs Submodules.mkd — recursion is READ-ONLY (status/diff/ls/lsr only); get/post/put/delete never descend, never clone/mount/commit a sub, no synthetic branches; the Edited dirty axis is inert (audit/umbrella)</title>
+<meta property="og:title" content="DIS-058: be/ JS submodule handling vs Submodules.mkd — recursion is READ-ONLY (status/diff/ls/lsr only); get/post/put/delete never descend, never clone/mount/commit a sub, no synthetic branches; the Edited dirty axis is inert (audit/umbrella)">
+<meta property="og:description" content="The be/ JS port treats submodules as a READ-time concern only: the recursing READ views (status, diff, ls/lsr) walk mounted subs in-process (core/recurse.js, views/status/status.js, views/diff/diff.js, views/ls/ls.js) and classify gitlink-vs-tip dirtiness with a full 3-axis SUBSDirty model (shared/subs.js), but the STATE verbs do NOT implement Submodules' &quot;seamless recursive experience where clone, checkout, and commit descend into subs by default&quot;. get records a 160000 leaf and never fetches/mounts/checks-out the child (get.js:607 &quot;gitlink: recorded, not written&quot;; checkout.js:138-140); post/put/delete skip gitlink subtrees and never run a child commit (fold-decide.js:154-201, stage.js:149/261, delete.js:78); there is NO synthetic/dot-branch creation or tracking anywhere; the Title-from-.gitmodules-URL-basename rule and the .gitmodules-URI fallback fetch are absent; and per shared/subs.js the dirty Edited axis (sub-local file edits ≠ R4.base) is INERT, so a parent is NOT marked dirty for an uncommitted edit inside a sub — contradicting Submodules' &quot;dirty if contains anything dirty&quot;. This is an AUDIT/umbrella ticket: it inventories the gaps D1..D14 and confirms two REVERSE cases where the JS exceeds the spec (the 3-axis classifier; the behind/diverged stale axes) so Submodules is the laggard there. Individual fixes should spawn their own SUBS/DIS sub-tickets. Scope is be/ only (not beagle/); sibling get/post audits are DIS-055/DIS-054; the dirty-classifier sibling is DIS-057; method per CLAUDE. See Submodules, Dirty, Store, Title, SUBS-027b, SUBS-037.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-058.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>DIS-058: be/ JS submodule handling vs Submodules.mkd — recursion is READ-ONLY (status/diff/ls/lsr only); get/post/put/delete never descend, never clone/mount/commit a sub, no synthetic branches; the Edited dirty axis is inert (audit/umbrella)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The <code>be/</code> JS port treats submodules as a READ-time concern only: the recursing READ views (status, diff, ls/lsr) walk mounted subs in-process (core/recurse.js, views/status/status.js, views/diff/diff.js, views/ls/ls.js) and classify gitlink-vs-tip dirtiness with a full 3-axis SUBSDirty model (shared/subs.js), but the STATE verbs do NOT implement <a href="../../wiki/Submodules.html">Submodules</a>' &quot;seamless recursive experience where clone, checkout, and commit descend into subs by default&quot;. <code>get</code> records a <code>160000</code> leaf and never fetches/mounts/checks-out the child (get.js:607 &quot;gitlink: recorded, not written&quot;; checkout.js:138-140); <code>post</code>/<code>put</code>/<code>delete</code> skip gitlink subtrees and never run a child commit (fold-decide.js:154-201, stage.js:149/261, delete.js:78); there is NO synthetic/dot-branch creation or tracking anywhere; the <a href="../../wiki/Title.html">Title</a>-from-<code>.gitmodules</code>-URL-basename rule and the <code>.gitmodules</code>-URI fallback fetch are absent; and per shared/subs.js the dirty Edited axis (sub-local file edits ≠ R4.base) is INERT, so a parent is NOT marked dirty for an uncommitted edit inside a sub — contradicting <a href="../../wiki/Submodules.html">Submodules</a>' &quot;dirty if contains anything dirty&quot;. This is an AUDIT/umbrella ticket: it inventories the gaps D1..D14 and confirms two REVERSE cases where the JS exceeds the spec (the 3-axis classifier; the behind/diverged stale axes) so <a href="../../wiki/Submodules.html">Submodules</a> is the laggard there. Individual fixes should spawn their own SUBS/DIS sub-tickets. Scope is <code>be/</code> only (not <code>beagle/</code>); sibling get/post audits are <a href="DIS-055.html">DIS-055</a>/<a href="DIS-054.html">DIS-054</a>; the dirty-classifier sibling is <a href="DIS-057.html">DIS-057</a>; method per <a href="../../beagle/CLAUDE.md">CLAUDE</a>. See <a href="../../wiki/Submodules.html">Submodules</a>, <a href="../../wiki/Dirty.html">Dirty</a>, <a href="../../wiki/Store.html">Store</a>, <a href="../../wiki/Title.html">Title</a>, <a href="../SUBS/SUBS-027b.html">SUBS-027b</a>, <a href="../SUBS/SUBS-037.html">SUBS-037</a>.
 </p>
@@ -107,5 +116,16 @@ The <code>be/</code> JS port treats submodules as a READ-time concern only: the 
 <li>Follow-up landings: D10 via SUBS-042 <code>1c4a97c8</code> + SUBS-044 <code>a715b0d3</code> (put/delete sub delegation + bare-verb sub sweeps); D18 via SUBS-045 <code>36b1aec0</code> (<code>.gitmodules</code>-declaration gate, classify.js:194-196 — no bogus <code>adv be</code>); SUBS-041 nesting cap <code>6388c34e</code>; GET-040 sub-reset recursion fix <code>0092271c</code>.</li>
 <li>STILL OPEN (the umbrella stays open): D8 per-sub push on a Host-slot post (UNBLOCKED — GIT-012/013 wire push landed <code>4370d67e</code>/<code>cb3881f8</code>; post.js:433 <code>!isPush</code> still skips postSubs); D11 HEAD no-descend (verbs/head/head.js exists, no recursion); D14 the INERT Edited dirty axis (shared/subs.js:24-34, with <a href="../SUBS/SUBS-027b.html">SUBS-027b</a>); D15/D16 <a href="../../wiki/Submodules.html">Submodules</a> spec updates (adv/stale taxonomy + <code>--nosub</code> scope).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

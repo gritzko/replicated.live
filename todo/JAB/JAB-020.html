@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-020 C/JS: narrow the pack bindings to one repack call — the per-object surface exists so JS can drive the record loop, and KEEP-006 moves that loop into libdog</title>
+<meta property="og:title" content="JAB-020 C/JS: narrow the pack bindings to one repack call — the per-object surface exists so JS can drive the record loop, and KEEP-006 moves that loop into libdog">
+<meta property="og:description" content="jab/pack.hpp exposes fourteen per-object primitives (packnext, packtype, packsize, packbaseoff, packref, packinflate, packresolve, packscan, packfeed, packfeedemit, deltapply, deltencode, plus packheader/packcount) for one reason: the ingest record loop runs in JS. KEEP-006 rules that loop into libdog as &quot;repack a git pack&quot;, with JS keeping only routing (URL classify, capability/want-have negotiation, pkt-line preamble, refs, shard resolution, rotate policy). So the clone path stops calling any of them and the binding surface becomes roughly one call. This is a NARROWING, not a deletion — packscan still backs the PACK-003 salvage-index rebuild over existing logs, and the primitives remain the test/diagnostic surface. Prototype and measurements are in KEEP-006; method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-020.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-020 <a href="./C/JS.html">JS</a>: narrow the pack bindings to one repack call — the per-object surface exists so JS can drive the record loop, and <a href="../KEEP/KEEP-006.html">KEEP-006</a> moves that loop into libdog</h1>
+<p>
+<code>jab/pack.hpp</code> exposes fourteen per-object primitives (<code>_pack_next</code>, <code>_pack_type</code>, <code>_pack_size</code>, <code>_pack_baseoff</code>, <code>_pack_ref</code>, <code>_pack_inflate</code>, <code>_pack_resolve</code>, <code>_pack_scan</code>, <code>_pack_feed</code>, <code>_pack_feed_emit</code>, <code>_delt_apply</code>, <code>_delt_encode</code>, plus <code>_pack_header</code>/<code>_pack_count</code>) for one reason: the ingest record loop runs in JS. <a href="../KEEP/KEEP-006.html">KEEP-006</a> rules that loop into libdog as &quot;repack a git pack&quot;, with JS keeping only routing (URL classify, capability/want-have negotiation, pkt-line preamble, refs, shard resolution, rotate policy). So the clone path stops calling any of them and the binding surface becomes roughly one call. This is a NARROWING, not a deletion — <code>_pack_scan</code> still backs the <a href="../PACK/PACK-003.html">PACK-003</a> salvage-index rebuild over existing logs, and the primitives remain the test/diagnostic surface. Prototype and measurements are in <a href="../KEEP/KEEP-006.html">KEEP-006</a>; method <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>jab/pack.hpp:388-403</code> registers the fourteen primitives; <code>jab/pack.hpp:246</code> <code>JABCpackScan</code> marshals <code>PIDXScan</code> into a caller region.</li>
+<li><code>be/shared/wire.js</code> currently returns <code>{ packFile, packLen, verified }</code> and stages a tmp pack via <code>drainToFile</code>/<code>spillToFile</code> — <a href="../KEEP/KEEP-006.html">KEEP-006</a> retires that shape for the clone path (never stored).</li>
+<li><code>be/shared/wire.js:250</code> <code>curlRun</code> buffers the whole https response in the JS heap; the fd is what should be handed over, not the bytes.</li>
+<li>Verified in <code>work/KEEP-006</code>: the libdog loop repacks the 6.33 GB linux pack from a PIPE with all 11,690,992 shas matching git, output byte-identical to the mapped run. JS sees no object bytes at any point.</li>
+<li><code>jab/io.cpp</code> <code>JABC_MAP_MAX</code> (2^31-1, added 2026-07-27) stops being load-bearing for clones once no multi-GB buffer reaches JS — it stays as the backstop for every other caller.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+The clone path crosses the JS/C boundary once per fetch instead of ~11.7M times, and no pack bytes are ever materialised in the JS heap.
+</p>
+<ul>
+<li>One binding, RULED 2026-07-27: <code>git.pack(fd, buf, shard, opts) -&gt; stats</code> — one call per fetch, no session handle, no step protocol.</li>
+<li><code>buf</code> (was <code>head</code>) is a JS <code>Buf</code>: PAST|DATA|IDLE over a JS-owned Uint8Array (<code>jab/buf.cpp</code>), already carrying whatever the pkt-line NAK/ACK reader ate off the wire.</li>
+<li>The binding reconstitutes a <code>u8b</code> over <code>bytes</code>/<code>_data</code>/<code>_idle</code>, drains DATA, <code>read()</code>s straight into IDLE, and writes the advanced <code>_data</code>/<code>_idle</code> back onto the JS object.</li>
+<li><code>buf</code> is REQUIRED (its DATA may be empty): without it the leading records are silently lost — the reason <code>drainToFile(fd, head, destDir)</code> carries one today.</li>
+<li>NO growth: JS sizes <code>buf</code> at the log cap via <code>io._ram</code> (anonymous MAP_NORESERVE, lazily faulted, RSS follows the working set); the binding never remaps and never allocates the input buffer.</li>
+<li>A record that outgrows <code>buf</code> cannot fit a capped log either, so it is a plain-words error (&quot;object at N exceeds the 2 GiB log cap&quot;), not a growth case.</li>
+<li><code>stats</code> carries objects/raw/ofs/ref counts, bytes in+out, the logs written, and a plain-words <code>error</code>; <code>refs</code> is STRUCK from the shape — refs stay JS routing per <a href="../KEEP/KEEP-006.html">KEEP-006</a>.</li>
+<li>The call OWNS the pack log and the index file and keeps BOTH OPEN for its duration, rotating the pair at the cap; map, scratch and fds die with the call.</li>
+<li><code>curlRun</code> hands over <code>child.stdout</code> rather than returning bytes; <code>spillToFile</code> and the <code>{packFile, packLen}</code> result shape go away for clone.</li>
+<li>The retained primitives keep working for salvage/diagnosis — <a href="../PACK/PACK-003.html">PACK-003</a>'s rebuild must not regress.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Errors cross the boundary in plain words, never as <code>ok64</code> codes: no <code>PACKBADOBJ</code>, <code>ZINFMORE</code>, <code>PIDXFAIL</code> reaching a user. See the standing ruling.</li>
+<li>libdog knows nothing of curl, HTTP or pkt-line (<a href="../KEEP/KEEP-006.html">KEEP-006</a> ruling) — the binding passes an fd and a shard, nothing protocol-shaped.</li>
+<li>No new buffer primitive: <code>abc/Bx.h</code> PAST|DATA|IDLE + <code>u8bShift</code>/<code>u8bUsed</code>/<code>u8bFed</code>/<code>u8bReMap</code> already cover the reader.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+Both open questions are RULED 2026-07-27; the signature above is settled.
+</p>
+<ul>
+<li>*<strong>Re-entrant REJECTED.</strong>* A session handle plus a MORE/DONE step protocol leaks the loop's state (input buffer, map, log+index fds) into the API and ruins encapsulation. One blocking call, everything owned inside.</li>
+<li>*<strong>Blocking is fine.</strong>* Clone is a foreground operation, and the C loop pumps <code>pol</code> itself between records — <code>pol</code> is in-process C, so keeping the pager and signals alive never has to go through JS.</li>
+<li>*<strong>Progress</strong>* is an optional callback invoked every N objects, restricted to printing (no re-entry into <code>git.*</code>) — it replaces the quota/step protocol that chunking would have needed.</li>
+<li>*<strong>No promises.</strong>* <code>be/</code> contains zero <code>async</code>/<code>await</code>/<code>Promise</code>: <code>io._read</code> blocks and <code>pol._watch</code>/<code>_more</code> is a callback poller, so the JS side is a plain synchronous call.</li>
+<li>*<strong>Allocation stays at the top of the chain</strong>* (JS <code>io._ram</code>), per CLAUDE.md §5, and the binding keeps <code>pack.hpp</code>'s pure-marshalling character — its only mutation of JS state is the <code>_data</code>/<code>_idle</code> write-back.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> Settle blocking vs chunked; write the signature — ruled above: one blocking <code>git.pack(fd, buf, shard, opts)</code>.</li>
+<li><a href="./v.html">v</a> <code>dog/git/REPACK.c</code>+<code>.h</code> library entry (<code>REPACKRun</code>); <code>REPACK.cli.c</code> is now a thin <code>dogrepack</code> driver over it.</li>
+<li><a href="./v.html">v</a> Statics and the never-freed scratch are gone: one call-owned <code>repack</code> context, released on every exit path.</li>
+<li><a href="./v.html">v</a> <code>git.pack(fd, buf, shard, opts) -&gt; stats</code> binding (<code>abc._pack_repack</code>, <code>jab/pack.hpp</code>); plain-words errors, <code>Buf</code> marshalling with <code>_data</code>/<code>_idle</code> write-back; <code>test/repack.js</code> (JABCrepack).</li>
+<li><a href="./ .html"> </a> <code>ZINFMORE</code> PROPAGATES, never collapsed to <code>PACKBADOBJ</code>: &quot;truncated here&quot; outlives &quot;damaged bytes&quot; and is what <a href="../PACK/PACK-003.html">PACK-003</a> salvage needs to tell a torn log from a corrupt one.</li>
+<li><a href="./ .html"> </a> On the three mapped-pack <code>PACKInflate</code> callers (<code>PACK.c:200,238,275</code>) <code>ZINFMORE</code> means truncated-and-unrefillable — document it there, do not rename it.</li>
+<li><a href="./ .html"> </a> Check no JS or test keys on <code>PACKBADOBJ</code> for a truncated tail (the code changed under them), and give <code>ZINFMORE</code> its own plain-words string at the boundary.</li>
+<li><a href="./ .html"> </a> <code>curlRun</code> hands over the fd; drop <code>spillToFile</code> and the <code>{packFile, packLen}</code> clone shape.</li>
+<li><a href="./v.html">v</a> <code>dog/INDEX.md</code> entry for <code>git/REPACK.h</code> (+ <code>PACKResolve</code>, <code>PIDXScanRef</code>, the <code>dogrepack</code>/<code>dogscan</code> pair).</li>
+<li><a href="./ .html"> </a> Give <code>_pack_scan</code>/<code>_pack_resolve</code> a finder so the binding reads rotated logs too: the js store already maps every log and holds the sha→(file,offset) index, so the question is how C++ asks it — not a new structure.</li>
+<li><a href="./ .html"> </a> Verify end-to-end through a real <code>jab get</code> of a large repo — the ingest still calls the OLD path; only <code>dogrepack</code>/<code>git.pack</code> exercise the new one.</li>
+<li><a href="./ .html"> </a> Confirm <a href="../PACK/PACK-003.html">PACK-003</a>'s salvage path still builds indexes over existing logs (the retained <code>_pack_scan</code>).</li>
+<li><a href="./ .html"> </a> Audit which of the fourteen primitives have no remaining caller; report, do not delete in this ticket.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Everything (the <a href="../KEEP/KEEP-006.html">KEEP-006</a> prototype, <code>ZINFMORE</code>, and now <code>REPACK.c</code>/<code>.h</code> + the binding) is UNCOMMITTED in the main tree, so a worker cloning <code>///jab</code> or <code>///jab/dog</code> still gets none of it.</li>
+<li>CLEARED in libdog 2026-07-27: a re-anchored REF record reads back via <code>PACKResolve</code>/<code>PIDXScanRef</code> + a caller finder (<a href="../KEEP/KEEP-006.html">KEEP-006</a> §Outcome; <code>dogscan</code> proves it on git.git at a 128 MB cap). The BINDING still runs the OFS-only pair, so <code>pack.scan: ref-delta</code> stands there until <code>_pack_scan</code>/<code>_pack_resolve</code> get a finder — which needs the js store's index reachable from C++, its own design step.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+Library entry + binding landed in the main tree (uncommitted), 2026-07-27; the JS ingest still runs the old path, so nothing is switched over yet.
+</p>
+<ul>
+<li><code>dog/git/REPACK.h</code>/<code>.c</code> — <code>REPACKRun(fd, buf, shard, conf, idx, st)</code>, one call per fetch; <code>dog/CMakeLists.txt</code> builds it into libdog, <code>dogrepack</code> is the CLI driver.</li>
+<li><code>jab/pack.hpp</code> — <code>_pack_repack</code> + plain-words error map; <code>jab/cont.cpp</code> makes <code>git.pack</code> callable while keeping <code>git.pack.ram/over/mmap/book</code>; <code>JABCPath</code> exported from <code>io.cpp</code> via <code>JABC.hpp</code>.</li>
+<li>Verified: git.git's 315 MB pack, 417,182/417,182 shas + types identical to <code>git verify-pack</code> (single log, 45 s); at a 128 MB cap it streams from a PIPE into 3 logs and emits *<strong>57,609</strong>* REF records — the exact crossing count <a href="../KEEP/KEEP-006.html">KEEP-006</a>'s prototype measured.</li>
+<li>Verified through the binding: <code>jab test/repack.js</code> — index entries written into the caller's wh128 region equal the native scanner's keys+offsets, the Buf cursor comes back advanced, a small cap rotates without losing an object; full jab suite 108/108.</li>
+<li>KNOWN, pre-existing: a log holding a re-anchored REF record cannot be scanned back (<code>pack.scan: ref-delta</code>) — <a href="../KEEP/KEEP-006.html">KEEP-006</a> §TODO &quot;Restore REF_DELTA resolution&quot; is the prerequisite, not a regression of this work.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

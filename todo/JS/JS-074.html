@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-074</title>
+<title>JS-074: core/registry.js — build masks load/syntax errors as unresolved verb</title>
+<meta property="og:title" content="JS-074: core/registry.js — build masks load/syntax errors as unresolved verb">
+<meta property="og:description" content="registry.build resolves a verb to its handler via two nested require attempts (views/ then verbs/). Both catches are BLIND to the error kind, so a module that EXISTS but throws at load (syntax error, bad require, throwing top-level) is swallowed and recorded null — later surfacing far away as the misleading &quot;no handler for verb&quot; loop refusal. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-074.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-074 <a href="./MED.html">MED</a>: <code>core/registry.js</code> — <code>build</code> masks load/syntax errors as unresolved verb</h1>
+<h1>JS-074: <code>core/registry.js</code> — <code>build</code> masks load/syntax errors as unresolved verb</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
 <p>
 <code>registry.build</code> resolves a verb to its handler via two nested <code>require</code> attempts (views/ then verbs/).  Both catches are BLIND to the error kind, so a module that EXISTS but throws at load (syntax error, bad require, throwing top-level) is swallowed and recorded <code>null</code> — later surfacing far away as the misleading &quot;no handler for verb&quot; loop refusal.  Method: <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -19,29 +28,14 @@
 <h3>Context</h3>
 <ul>
 <li><code>core/registry.js:36</code>: <code>try { mod = req(&quot;views/&quot; + verb + &quot;/&quot; + verb + &quot;.js&quot;); }</code></li>
-<li><code>core/registry.js:37-39</code>: `catch (e) { try { mod = req(&quot;verbs/&quot;...) }<p>
-catch (e2) { table<a href="./verb.html">verb</a> = null; continue; } }<code> — </code>e<code>/</code>e2` discarded.
-</p>
-</li>
-<li>A real not-found is the jab loader's &quot;cannot find&quot; string; a SYNTAX<p>
-error or a throwing top-level require throws a DIFFERENT error, yet both land in the same <code>table[verb] = null</code> not-found bucket.
-</p>
-</li>
-<li><code>core/loop.js:102-106</code>: a null handler is retried lazily, then<p>
-<code>throw &quot;loop: no handler for verb '&quot; + row.verb + &quot;' ...&quot;</code> — so a broken-but-present module is reported as MISSING, hiding the syntax error from the author.
-</p>
-</li>
+<li><code>core/registry.js:37-39</code>: <code>catch (e) { try { mod = req(&quot;verbs/&quot;...) } catch (e2) { table[verb] = null; continue; } }</code> — <code>e</code>/<code>e2</code> discarded.</li>
+<li>A real not-found is the jab loader's &quot;cannot find&quot; string; a SYNTAX error or a throwing top-level require throws a DIFFERENT error, yet both land in the same <code>table[verb] = null</code> not-found bucket.</li>
+<li><code>core/loop.js:102-106</code>: a null handler is retried lazily, then <code>throw &quot;loop: no handler for verb '&quot; + row.verb + &quot;' ...&quot;</code> — so a broken-but-present module is reported as MISSING, hiding the syntax error from the author.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>A view/verb module that throws at load must SURFACE its real error,<p>
-not be reported as an unresolved verb.
-</p>
-</li>
-<li>Only a genuine not-found (&quot;cannot find&quot;) stays the try-other-tree /<p>
-leave-absent path.
-</p>
-</li>
+<li>A view/verb module that throws at load must SURFACE its real error, not be reported as an unresolved verb.</li>
+<li>Only a genuine not-found (&quot;cannot find&quot;) stays the try-other-tree / leave-absent path.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
@@ -52,42 +46,41 @@ leave-absent path.
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Re-throw any caught error whose message does NOT contain the require<p>
-&quot;cannot find&quot; not-found marker; treat only not-found as fall-through.
-</p>
-</li>
-<li>The views/ catch: if <code>e</code> is NOT not-found, re-throw immediately (do<p>
-NOT fall to the verbs/ probe — the module was found, it threw).
-</p>
-</li>
+<li>Re-throw any caught error whose message does NOT contain the require &quot;cannot find&quot; not-found marker; treat only not-found as fall-through.</li>
+<li>The views/ catch: if <code>e</code> is NOT not-found, re-throw immediately (do NOT fall to the verbs/ probe — the module was found, it threw).</li>
 <li>The verbs/ catch: if <code>e2</code> is NOT not-found, re-throw; else <code>null</code>.</li>
-<li>Verify the EXACT jab loader not-found string (require.cpp) before<p>
-hard-coding it — a wrong substring re-masks everything.
-</p>
-</li>
+<li>Verify the EXACT jab loader not-found string (require.cpp) before hard-coding it — a wrong substring re-masks everything.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: a fixture view module with a top-level <code>throw</code> (or a<p>
- syntax error); assert <code>build</code> PROPAGATES it, not &quot;no handler for verb&quot;.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Confirm the jab &quot;cannot find&quot; not-found string in require.cpp.</li>
-<li class="open"><input type="checkbox" disabled> Gate both catches on that string; re-throw otherwise.</li>
+<li class="done"><input type="checkbox" checked disabled> Repro-first: fixture modules (top-level throw, syntax error, bad export shape) — red 0/5 masked on baseline, green 6/6 with the fix (test/registry.js).</li>
+<li class="done"><input type="checkbox" checked disabled> Not-found string pinned: <code>require: cannot find '&lt;spec&gt;' from '&lt;dir&gt;'</code> (jab/require.cpp resolveJsrc:72-73, resolve:80; thrown as a PLAIN STRING) — gate substring <code>cannot find</code>, handles string and Error throws.</li>
+<li class="done"><input type="checkbox" checked disabled> build(): both catches gated, non-not-found re-throws raw (views/ miss no longer falls to verbs/); resolveVerb(): require throw re-throws UNCONDITIONALLY as <code>cannot load verb '&lt;w&gt;' (&lt;file&gt;): &lt;err&gt;</code> (verbFile proved existence); convention-null in resolveVerb now loud (<code>exports no plain-args handler (bad module.exports shape)</code>) — build() keeps <code>fn | null</code> per constraint.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul class="todo">
 <li class="blocked"><input type="checkbox" disabled> None — local to <code>core/registry.js</code>.</li>
 </ul>
 <ul>
-<li>2026-07-07 audit: STILL OPEN — <code>core/registry.js:45-48</code> both <code>catch</code>es discard the error<p>
-(<code>catch(e){ try{...}catch(e2){ table[verb]=null; continue; } }</code>); no &quot;cannot find&quot; check.
-</p>
-</li>
+<li>2026-07-07 audit: STILL OPEN — <code>core/registry.js:45-48</code> both <code>catch</code>es discard the error (<code>catch(e){ try{...}catch(e2){ table[verb]=null; continue; } }</code>); no &quot;cannot find&quot; check.</li>
+<li>2026-07-10 revision: still OPEN — registry.js:45-48 both catches discard e/e2 -&gt; table<a href="./verb.html">verb</a>=null, no &quot;cannot find&quot; gate; NEW: resolveVerb:89 also swallows (catch-&gt;return null) despite its &quot;JS-074: a load error -&gt; absent&quot; label</li>
+<li>2026-07-19 LIVE HIT: work-view <code>[-N]</code> click in a warm pager session died as <code>err: loop: verb 'get' has no plain-args handler</code> — get.js, required cold after the day's landings, threw on the stale resident cache and resolveVerb:91 swallowed it (pty repro flips on an injected bad require). The cwd-pin ruling from the same incident is <a href="./JS-119.html">JS-119</a>.</li>
+<li>2026-07-30 RECURRENCE, identical shape (opus pty-verified): <code>[-1]</code> click in a warm <code>be work</code> session after the day's four landings (get.js rewritten 09:30-10:02 under the resident cache) → the same masked message, loop.js:419 ← resolveVerb null-collapse (registry.js:91). The <code>//KEY/: get</code> spell itself is lawful (views/work/work.js:496). The mask also hides <a href="./BRO-037.html">BRO-037</a>'s mis-resolved file-click behind the same phantom text. The staged fix in <code>//JS-074</code> cures this — land it (base 82ef082f is 5 behind; mind the stale-wt first-get hazard on update).</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(pending)</li>
+<li>Staged in work/JS-074 (<code>jab put</code>, NO post), clone at tip 82ef082f; verified by orchestrator (test/registry.js all-assertions-pass by absolute path, scope = core/registry.js + test/registry.js + CMakeLists foreach append). Dispatch suites green; test/work/getctx red is the pre-existing stale one (fix pending in work/GETCTX). Suggested commit: <code>JS-074: registry re-throws load/syntax errors instead of masking verbs as absent</code></li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

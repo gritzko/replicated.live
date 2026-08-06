@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TODO-008: ticket-valued meta clicks navigate to that ticket</title>
+<meta property="og:title" content="TODO-008: ticket-valued meta clicks navigate to that ticket">
+<meta property="og:description" content="Nit (gritzko, 2026-08-04): when a meta pair's value is a ticket code (On1: ABC-020, See: BE-050, Dup:, Sub: …), clicking that value must NAVIGATE to the ticket's page, not toggle a filter. /todo/TODO/TODO-004 made both halves clickable, but a value click replaces that key's filter in the arg line — and for ticket-valued keys filtering is presence-only, so the click is dead weight exactly where a jump is wanted.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/TODO/TODO-008.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>TODO-008: ticket-valued meta clicks navigate to that ticket</h1>
+<div>
+<p>
+Now: OPEN Sev: LOW Rep: ///be/ On1: TODO-004 Ask: gritzko
+</p>
+</div>
+<p>
+Nit (gritzko, 2026-08-04): when a meta pair's value is a ticket code (<code>On1: ABC-020</code>, <code>See: BE-050</code>, <code>Dup:</code>, <code>Sub:</code> …), clicking that value must NAVIGATE to the ticket's page, not toggle a filter. <a href="/todo/TODO/TODO-004.html">TODO-004</a> made both halves clickable, but a value click replaces that key's filter in the arg line — and for ticket-valued keys filtering is presence-only, so the click is dead weight exactly where a jump is wanted.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>TODO-004 click model: the spell carries the WHOLE arg line and a value click swaps that key's <code>Key:Value</code> filter in it.</li>
+<li>TODO-004 already lexes <code>[A-Z]+-[0-9]+</code> as the ticket-id class in the <code>:todo</code> arg grammar; the same class decides here.</li>
+<li>Registered ticket-valued keys per <a href="/meta/todo.html">todo</a>: <code>On1:</code> <code>On2:</code> … <code>See:</code> <code>Dup:</code> <code>Sub:</code>; values are one ticket code per slot.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A meta VALUE that lexes as a ticket id clicks to <code>:todo TKT-123</code> — same landing as clicking that ticket's board row.</li>
+<li>The KEY half keeps its present behavior (presence filter).</li>
+<li>Applies wherever meta pairs render: the ticket-view meta block and any board-row inline values.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The value's lexical class alone decides — no key registry; an unknown key with a ticket-shaped value navigates too.</li>
+<li>Click spell stays the whole-line BRO-025 shape; the pager stays arg-blind, resolution in the verb (Nav design law).</li>
+<li>A dangling target (no such ticket) gets the <code>:todo</code> verb's existing plain-words error, nothing new.</li>
+<li>Repro through the real UI path: a pty click on a rendered ticket-valued pair must FLIP from today's filter/no-op to landing on the ticket page; TLV-only probes do not count.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>ONE <code>navSpell(v)</code>: <code>shape(v)===&quot;key&quot;</code> → <code>todo v</code>, else null.</li>
+<li>Both render sites call it — the page meta block (pageLinks) and the board's inline <code>[value]</code> bracket (todoFilter).</li>
+<li>NO page-file probe at render: the class alone decides, and a dangling code lands on <code>todo</code>'s own miss line.</li>
+<li>The KEY half is untouched — still <code>Key:*</code> on the whole line.</li>
+</ul>
+<h3>TODOs</h3>
+<p>
+ -<a href="./v.html">v</a> pty repro: click a <code>See:</code> value in a ticket view — RED -<a href="./v.html">v</a> value classifier at render: ticket-id class → nav spell -<a href="./v.html">v</a> board inline values get the same treatment -<a href="./v.html">v</a> golden/pty: nav click lands, key click still filters -<a href="./v.html">v</a> ctest green; no unrelated rows disturbed
+</p>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><code>On1:</code>/<code>On2:</code> do NOT lex as meta pairs: metaidx KEYRE is <code>[A-Z][a-z][a-z]:</code> and metaBlock BREAKS at the first non-pair line, so every pair BELOW an <code>On1:</code> is lost to the index and to the click layer.  Repro'd, NOT fixed — own ticket (spec-code gap vs <a href="/meta/todo.html">todo</a>, which registers it).</li>
+<li>So the repro uses <code>See:</code> + an unregistered <code>Zzz:</code> instead.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>views/todo/todo.js only; new pty case <code>test/todo/nav</code> (be-js-todo-nav), RED before the fix, GREEN after; 350/350.</li>
+<li>commit: <code>TODO-008: ticket-valued meta pairs click to nav</code></li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

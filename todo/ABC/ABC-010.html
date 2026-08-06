@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ABC-010</title>
+<title>ABC-010: numeric/unicode parsing: overlong UTF-8, surrogates, wrap</title>
+<meta property="og:title" content="ABC-010: numeric/unicode parsing: overlong UTF-8, surrogates, wrap">
+<meta property="og:description" content="Number- and unicode-parsing batch (2026-07-07 review): a non-shortest-form UTF-8 acceptance gap, JSON unescape emitting CESU-8 the library itself rejects, and decimal drains that wrap u64 and return OK with a wrong value.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/ABC/ABC-010.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,59 +15,34 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>ABC-010: <a href="./MED.html">MED</a> numeric/unicode parsing: overlong UTF-8, surrogates, wrap</h1>
+<h1>ABC-010: numeric/unicode parsing: overlong UTF-8, surrogates, wrap</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
 <p>
 Number- and unicode-parsing batch (2026-07-07 review): a non-shortest-form UTF-8 acceptance gap, JSON unescape emitting CESU-8 the library itself rejects, and decimal drains that wrap u64 and return OK with a wrong value.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>UTF8.c:64</code> <code>_utf8sDrain32</code> — 4-byte overlong bound `code_point &lt;<p>
-0xffff<code> should be </code>&lt; 0x10000`: overlong U+FFFF (F0 8F BF BF) is accepted. Classic filter-bypass vector. (Distinct from landed ABC-003.)
-</p>
-</li>
-<li><code>JSON.c:261-271</code> <code>JSONUnEscape</code> — no surrogate-pair handling:<p>
-<code>😀</code> becomes two 3-byte CESU-8 sequences that the module's own <code>utf8sValid</code>/<code>_utf8sDrain32</code> reject as UTFBAD. Any astral char in standard JSON produces output failing the library's own validation.
-</p>
-</li>
-<li><code>01.h:394-406</code> <code>u64decdrain</code> — unchecked <code>a = a*10 + digit</code>;<p>
-&quot;18446744073709551617&quot; wraps to 1 and <code>i64decdrain</code> (INT.c:5-22) / <code>utf8sDrainInt</code> (UTF8.c:97-114) return OK with value 1. The I64_MAX range tests only catch wraps that land high. (Feed-side INT64_MIN item is MEM-021; this is the drain-side wrap.)
-</p>
-</li>
-<li><code>UTF8.c:74-86</code> <code>utf8sDrainFloat</code> — truncates the numeral at 31 bytes:<p>
-wrong value AND cursor stops mid-number, poisoning the next token. The copy-to-NUL-pad + strtod dance is also the abc.mkd anti-pattern.
-</p>
-</li>
-<li><code>JSON.c:122-153</code> formatter — <code>JSONFmt(&quot;}&quot;)</code> decrements <code>u8 depth</code> 0→255<p>
-(lexer accepts a bare &quot;}&quot;), feeding 255 indents; clamp or fail. Also <code>JSON.c:189</code> <code>sane()</code> omits the <code>indent</code> arg — NULL crashes.
-</p>
-</li>
-<li><code>01.h:438</code> <code>i64Zig</code> — <code>i * 2</code> is signed-overflow UB for |i| ≥ 2^62,<p>
-reachable via <code>ZINTu8sFeedInt</code> (ZINT.h:112). Fix: <code>((u64)i &lt;&lt; 1)</code>.
-</p>
-</li>
-<li><code>JSON.c:257</code> — accepts non-JSON escape <code>\0</code> (asymmetric with<p>
-JSONEscape); at least comment the leniency.
-</p>
-</li>
+<li><code>UTF8.c:64</code> <code>_utf8sDrain32</code> — 4-byte overlong bound <code>code_point &lt; 0xffff</code> should be <code>&lt; 0x10000</code>: overlong U+FFFF (F0 8F BF BF) is accepted. Classic filter-bypass vector. (Distinct from landed ABC-003.)</li>
+<li><code>JSON.c:261-271</code> <code>JSONUnEscape</code> — no surrogate-pair handling: <code>😀</code> becomes two 3-byte CESU-8 sequences that the module's own <code>utf8sValid</code>/<code>_utf8sDrain32</code> reject as UTFBAD. Any astral char in standard JSON produces output failing the library's own validation.</li>
+<li><code>01.h:394-406</code> <code>u64decdrain</code> — unchecked <code>a = a*10 + digit</code>; &quot;18446744073709551617&quot; wraps to 1 and <code>i64decdrain</code> (INT.c:5-22) / <code>utf8sDrainInt</code> (UTF8.c:97-114) return OK with value 1. The I64_MAX range tests only catch wraps that land high. (Feed-side INT64_MIN item is MEM-021; this is the drain-side wrap.)</li>
+<li><code>UTF8.c:74-86</code> <code>utf8sDrainFloat</code> — truncates the numeral at 31 bytes: wrong value AND cursor stops mid-number, poisoning the next token. The copy-to-NUL-pad + strtod dance is also the abc.mkd anti-pattern.</li>
+<li><code>JSON.c:122-153</code> formatter — <code>JSONFmt(&quot;}&quot;)</code> decrements <code>u8 depth</code> 0→255 (lexer accepts a bare &quot;}&quot;), feeding 255 indents; clamp or fail. Also <code>JSON.c:189</code> <code>sane()</code> omits the <code>indent</code> arg — NULL crashes.</li>
+<li><code>01.h:438</code> <code>i64Zig</code> — <code>i * 2</code> is signed-overflow UB for |i| ≥ 2^62, reachable via <code>ZINTu8sFeedInt</code> (ZINT.h:112). Fix: <code>((u64)i &lt;&lt; 1)</code>.</li>
+<li><code>JSON.c:257</code> — accepts non-JSON escape <code>\0</code> (asymmetric with JSONEscape); at least comment the leniency.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Repro-first: overlong drain, astral-pair unescape→utf8sValid, 21-digit<p>
-decimal, 40-char float, &quot;}&quot; format, ZINT-encode of I64_MIN/2^62.
-</p>
-</li>
-<li>Reject overlongs, combine surrogate pairs (reject lone ones), overflow-<p>
-check the decimal accumulator, unbounded float parse (ragel or ryu-side length check), clamp depth, unsigned Zig.
-</p>
-</li>
+<li>Repro-first: overlong drain, astral-pair unescape→utf8sValid, 21-digit decimal, 40-char float, &quot;}&quot; format, ZINT-encode of I64_MIN/2^62.</li>
+<li>Reject overlongs, combine surrogate pairs (reject lone ones), overflow- check the decimal accumulator, unbounded float parse (ragel or ryu-side length check), clamp depth, unsigned Zig.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Review-gated abc/. Decimal/float fixes touch hot parse paths — keep the<p>
-fast path branch-light.
-</p>
-</li>
+<li>Review-gated abc/. Decimal/float fixes touch hot parse paths — keep the fast path branch-light.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
@@ -85,5 +64,16 @@ fast path branch-light.
 <ul>
 <li>(open)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

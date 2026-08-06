@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORK-001: bare work shows the worktree forest</title>
+<meta property="og:title" content="WORK-001: bare work shows the worktree forest">
+<meta property="og:description" content="Bare work (/todo/BE/BE-043, unlanded board in work/BE-043) lists a flat button row per work/ worktree; the bare form must instead render the FOREST: the main tree with its mounts, the branch trees, and a foreign tail — every worktree hung under what it TRACKS. - Fleet survey 2026-07-18: 65 wts under work/; 34 anchor file:~/.be/?/beagle-ext, 7 file:…/jab/.be/?/libabc, 9 foreign (libdog etc); most latest get rows are detached ?#hash. - Track classification exists: shared/wtlog.js attachedBranch() → { uriTrack, track, br, detached, base }; sub pins are self-pointing get //wt/path/sub#pin rows (DIS-072, /wiki/Submodules). - DAG ground: shared/dag.js ancestors/aheadBehind walk per pair today; shards and the nested branch-name tree per /wiki/Store. - Models: views/status mount recursion (gitmodules order), views/du store scan, BE-043 views/work board (workDir, buttons).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/WORK/WORK-001.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>WORK-001: bare <code>work</code> shows the worktree forest</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Bare <code>work</code> (<a href="/todo/BE/BE-043.html">BE-043</a>, unlanded board in work/BE-043) lists a flat button row per work/ worktree; the bare form must instead render the FOREST: the main tree with its mounts, the branch trees, and a foreign tail — every worktree hung under what it TRACKS.
+</p>
+<ul>
+<li>Fleet survey 2026-07-18: 65 wts under work/; 34 anchor <code>file:~/.be/?/beagle-ext</code>, 7 <code>file:…/jab/.be/?/libabc</code>, 9 foreign (libdog etc); most latest <code>get</code> rows are detached <code>?#hash</code>.</li>
+<li>Track classification exists: shared/wtlog.js attachedBranch() → { uriTrack, track, br, detached, base }; sub pins are self-pointing <code>get //wt/path/sub#pin</code> rows (DIS-072, <a href="/wiki/Submodules.html">Submodules</a>).</li>
+<li>DAG ground: shared/dag.js ancestors/aheadBehind walk per pair today; shards and the nested branch-name tree per <a href="/wiki/Store.html">Store</a>.</li>
+<li>Models: views/status mount recursion (gitmodules order), views/du store scan, BE-043 views/work board (workDir, buttons).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Bare <code>work</code> renders three blocks — ASCII tree in plain mode, HUNK spans + hidden <code>U</code> nav in the pager:
+</p>
+<ol>
+<li>the TREE: the top wt as root, mounts recursed in .gitmodules order; each line <code>&lt;date5&gt; #&lt;hashlet8&gt; &lt;subject&gt;</code> off that line's cur tip; a work wt tracking a wt pin hangs under the tracked wt.</li>
+<li>BRANCHES: store → shard → branch (nested by name segments) → the wts tracking that branch, named by authority path (e.g. <code>//WORK-123/test</code>).</li>
+<li>FOREIGN: refs/anchors outside the project's stores, with the wts tracking them.</li>
+</ol>
+<ul>
+<li>Every wt row carries ahead/behind counts vs its TRACKED ref (ruling below), rendered compactly after the subject.</li>
+<li>Siblings name-sorted everywhere; a work wt is ONE row — no descent into its own mounts.</li>
+<li>DAG cost batched per shard: keeper opened ONCE per (store,project), ancestor closures memoized per distinct tip — hundreds of wts share a handful of tips.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Read-only view; discovery = readdir of <code>work/</code> (the BE-043 <code>.be</code>-file gate) + the context tree's mounts; NOTHING hardcoded.</li>
+<li>ALL URI/track/anchor parsing via the wtlog reader / uri / core resolve — no regexes, no string surgery (<a href="/meta/work.html">work</a> §NOT TO DO).</li>
+<li>Date column: the existing ron.date / render.dateCol 7-col utility (the 5-char <code>18Jul</code> form) — no new formatter.</li>
+<li>Keep BE-043's machinery (workDir, buttons, tests) — the forest is the BARE form; the flat board's chrome rides the wt rows.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Linking model superseded 2026-07-19: the forest links by TRACKING edge (tracked == upstream), work wts nest recursively — <a href="/todo/WORK/WORK-007.html">WORK-007</a>; the mounts-skeleton one-level attach below is stale.</li>
+<li>RULING (chat 2026-07-18): ahead/behind is computed against the wt's TRACKED ref, never the shard trunk or a shard-identity guess.</li>
+<li>RULING (chat 2026-07-18): link by TRACK — wt-pin trackers under the tracked wt (block 1), branch trackers under the branch (block 2), foreign refs + their trackers block 3.</li>
+<li>RULING (chat 2026-07-18): siblings name-sorted; the forest is part of <code>work</code> (bare form), not a separate verb.</li>
+<li>RULING (chat 2026-07-18): the blocks are TREE HUNKS — main-tree-tracking, branch-tracking, remote-tracking; an empty hunk is ABSENT, not rendered as an empty header.</li>
+<li>RULING (chat 2026-07-18): rails are Unicode box drawing (<code>├── └── │</code>), not <code>+--</code> ASCII.</li>
+<li>Approved sketch off the live fleet (<code>grep get work/*/.be</code>, 2026-07-18; 60 wts, all detached pins → branch hunk absent; subjects/counts elided):</li>
+</ul>
+<pre><code>16Jul #........ journal — the top wt
+├── be                18Jul #226c6228 …        beagle-ext ⇐ ~/.be
+│   ├── //BE-043          14Jul #33295788 …
+│   ├── //PATCH           18Jul #226c6228 …
+│   │   … (34 tracker wts, name-sorted) …
+│   └── test          09Jul #........ …       beagle-ext-tests
+│       └── //beagle-ext-tests  09Jul #73fc0c91 …
+├── jab               16Jul #016be1b3 …
+│   ├── //JS-114          11Jul #e300c639 …
+│   │   … (7 wts) …
+│   └── dog/abc       17Jul #........ …       libabc ⇐ jab/.be
+│       └── //ABC-017     17Jul #8d40ba3b …
+│           … (7 wts) …
+└── //BLAME-001       10Jul #5041ed18 …       tracks the top wt
+
+file:~/src/libdog/.be ?/libdog                remote
+├── //DOG-008         10Jul #79612854 …
+│   … (9 wts) …
+file:~/src/jab.be/.be ?/jab                   remote
+└── //DOG-021         14Jul #b58be37a …
+</code></pre>
+<ul>
+<li>Fleet oddities the classifier must survive: <code>//SUBS-054</code> anchors <code>file:/home/gritzko/.be/beagle-ext</code> (no <code>?/</code>); the seven <code>JS-*</code> wts anchor the jab WORKTREE (<code>file:…/journal/jab?/jab</code>), not a store.</li>
+<li>RULING (review 2026-07-18): main-tree repo rows (root + mounts) render BOLD in the pager; tracker wt rows unstyled; <code>--plain</code> carries no styling at all.</li>
+<li>RULING (review 2026-07-18): wt row layout = <code>//KEY  [get] [post]  &lt;ahbeh&gt;  &lt;time5&gt; #&lt;hashlet8&gt; &lt;subject&gt;</code> — buttons named for their VERBS (<a href="./update.html">update</a>→<a href="./get.html">get</a>, <a href="./merge.html">merge</a>→<a href="./post.html">post</a>) and placed right after the key so they are always reachable; the ahbeh field is padded (~8 chars), behind in salmon, ahead in salad green.</li>
+<li>Review 2026-07-18 confirms: project root as the first hunk's root is right; an empty branch hunk absent is right (zero wts track a branch today).</li>
+<li>RULING (review 2026-07-18): <code>[diff]</code> rides BETWEEN <code>[get]</code> and <code>[post]</code>; button colors blue/yellow/green respectively; the subject is trimmed to ~30 chars; the key/URI click navigates to the wt's status.</li>
+<li>RULING (review 2026-07-18): linking — a wt tracking a mount/tree hangs under that tree; a wt tracking a parent's PIN hangs under that parent; a wt tracking a BRANCH goes to the separate <code>store → shard → branch → //worktree</code> tree (hunk 2).</li>
+<li>RULING (review 2026-07-18): tracker rows hang on DOTTED rails (<code>┄</code>), actual subdirs/mounts on solid <code>─</code> — so trackers never read as real subdirs. CONFIRMED (gritzko 2026-07-18): mounts first (solid, .gitmodules order), then ALL of the node's trackers as ONE name-sorted dotted run (supersedes the grouped trunk-pin/wt-pin runs).</li>
+<li>RULING (review 2026-07-18): the hunk-2 tree is <code>store → shard → [branch →] //worktree</code> — the branch level is OPTIONAL: a detached wt whose shard maps to no mount (<code>//BLAME-001</code> on shard <code>project</code>) hangs DIRECTLY under the shard node, branchless. An anchor may omit the shard name (bare <code>?</code> trunk / the <code>?/</code>-less SUBS-054 form) — resolve it through the standard resolver (never guess); the wt always lands on a concrete shard.</li>
+<li>RULING (review 2026-07-18): <code>[rm -rf]</code> is replaced by <code>[done]</code> and <code>[dont]</code>, placed AFTER the message: each MOVES the wt (recoverable discard — no safety gap), and a TICKET-named wt also flips its ticket header status to <code>[DONE]</code> / <code>[DONT]</code> (page via the shared ticket lookup); a non-ticket-named wt just moves. Supersedes the <code>rm //KEY</code> emit and reshapes <a href="/todo/BE/BE-044.html">BE-044</a>'s verb into move+mark.</li>
+<li>RULING (review 2026-07-18 r2): the discard root is <code>work/done/</code> — done/dont wts <code>mv</code> there (same device, no EXDEV; supersedes <code>/tmp/&lt;basename&gt;</code>), and the view IGNORES <code>work/done/</code> entirely.</li>
+<li>RULING (review 2026-07-18 r2): main-tree repo rows embolden the NAME only, the rest of the row normal weight.</li>
+<li>RULING (review 2026-07-18 r2): the name/key column pads RIGHT to a fixed ~16 chars with a dotted filler line, so every row's buttons start at one aligned column.</li>
+<li>RULING (review 2026-07-18 r2): main-tree rows' time/hashlet/message columns align to the SAME offsets as wt rows' (repo rows pad across the buttons+ahbeh region).</li>
+<li>RULING (review 2026-07-18 r3, amended): the ahbeh cell is <code>_+99-99</code> — content right-aligned to 7, ONE space each side (the right-side gap is dateCol's own lead, no trailing pad); both counts inline; display clamps at 99.</li>
+<li>RULING (review 2026-07-18 r2): main-tree repo rows MAY show ah/beh vs their own tracked ref — for a mount that is likely the PARENT's pin of the sub (the de-jure <code>sub</code> pin), rendered in the shared ahbeh column.</li>
+<li>(pending) a detached wt (bare <code>get ?#hash</code>, tracking neither wt nor branch) hangs under its anchor SHARD node in block 2?</li>
+<li>(pending) does the branch block list ALL shard branches or only the tracked ones?</li>
+<li>(pending) do block-1/2 wt rows keep the BE-043 <a href="./update.html">update</a>/<a href="./merge.html">merge</a>/<a href="./rm -rf.html">rm -rf</a> buttons in pager mode?</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./ .html"> </a> red-first fixture forest (test/work/view/): main wt + nested mounts + four wt flavors (pin-track, branch-track, detached, foreign) → pinned plain output</li>
+<li><a href="./ .html"> </a> classify: work/ scan + attachedBranch() → { block, parentKey } per wt; anchors resolved through the wtlog reader only</li>
+<li><a href="./ .html"> </a> shard registry: (store,project) → keeper opened once; per-tip ancestor-closure memo; aheadBehind COUNTS vs the tracked ref (shared/dag.js)</li>
+<li><a href="./ .html"> </a> model: the three blocks as pure data, name-sorted; branch nesting off the shard <code>refs</code> rows (branchlib)</li>
+<li><a href="./ .html"> </a> render: plain tree with Unicode box-drawing rails (ruling above); pager HUNK spans — <code>U</code> nav per row, buttons per the pending ruling</li>
+<li><a href="./ .html"> </a> wire as bare <code>work</code>; the flat board absorbed; BE-043's tests updated to the new bare form</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="/todo/WORK/WORK-002.html">WORK-002</a>: the view's <a href="./get.html">get</a> button mutates the LAUNCH tree, not the row's wt — all mutation buttons unsafe on foreign-context rows until fixed.</li>
+<li>Landing 2026-07-18 stalled on ONE pager.js weave conflict → <a href="/todo/POST/POST-032.html">POST-032</a> (conflict must mark+record, not hard-err; carries the SALVAGED hybrid resolution — merge it into this wt's pager.js before re-posting; local commit c32ddd17 holds the full change).</li>
+<li>BE-043's work.js is UNLANDED (lives only in work/BE-043) — land or absorb it first, else two <code>work</code> bare forms collide.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

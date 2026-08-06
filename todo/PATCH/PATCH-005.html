@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PATCH-005</title>
+<title>PATCH-005: be patch whole-tree merge fetches subs from their .gitmodules github URL, not parent-relative from the patch source → WIRECLFL</title>
+<meta property="og:title" content="PATCH-005: be patch whole-tree merge fetches subs from their .gitmodules github URL, not parent-relative from the patch source → WIRECLFL">
+<meta property="og:description" content="A whole-tree be patch be://spot/journal?main! merges the parent (journal) level CLEANLY (202 noop, 2 take-theirs, 1 merged, 3 added, 0 conflict), then recurses into the submodules and fetches each sub's THEIRS from its declared .gitmodules remote — for the be sub that is git@github.com:gritzko/beagle-ext.git (scp-style, offline/unreachable) → sniff: submodule fetch failed for git@github.com:gritzko/beagle-ext.git / WIRECLFL / BEDOGEXIT. The CLONE (be get be://localhost/journal) recurses the SAME subs fine — it resolves each sub parent-relative from the source (be://…/journal/&lt;sub&gt;, SUBS-024). PATCH's sub-recursion lacks that parent-kind resolution. Blocks the whole-tree spot merge. Method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PATCH/PATCH-005.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,75 +15,61 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>PATCH-005 <a href="./HIGH.html">HIGH</a>: <code>be patch</code> whole-tree merge fetches subs from their <code>.gitmodules</code> github URL, not parent-relative from the patch source → WIRECLFL</h1>
+<h1>PATCH-005: <code>be patch</code> whole-tree merge fetches subs from their <code>.gitmodules</code> github URL, not parent-relative from the patch source → WIRECLFL</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 A whole-tree <code>be patch be://spot/journal?main!</code> merges the parent (journal) level CLEANLY (202 noop, 2 take-theirs, 1 merged, 3 added, 0 conflict), then recurses into the submodules and fetches each sub's THEIRS from its declared <code>.gitmodules</code> remote — for the <code>be</code> sub that is <code>git@github.com:gritzko/beagle-ext.git</code> (scp-style, offline/unreachable) → <code>sniff: submodule fetch failed for git@github.com:gritzko/beagle-ext.git</code> / <code>WIRECLFL</code> / <code>BEDOGEXIT</code>. The CLONE (<code>be get be://localhost/journal</code>) recurses the SAME subs fine — it resolves each sub parent-relative from the source (<code>be://…/journal/&lt;sub&gt;</code>, <a href="../SUBS/SUBS-024.html">SUBS-024</a>). PATCH's sub-recursion lacks that parent-kind resolution. Blocks the whole-tree spot merge. Method <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Repro (live 2026-06-26): in a clean <code>be get be://localhost/journal</code> clone,<p>
-<code>be patch 'be://spot/journal?main!'</code> → parent merge OK, then <code>get html?91ae5b53</code>, <code>sniff: submodule fetch failed for git@github.com:gritzko/beagle-ext.git</code> / WIRECLFL / <code>get beagle?…</code> / <code>get beagle/abc?…</code> / BEDOGEXIT. The <code>be</code> sub (scp-git url) is the failure; <code>beagle</code> (https) gets further.
-</p>
-</li>
-<li>GET does NOT have this: <code>be get be://localhost/journal</code> recursed <code>be</code>/<code>beagle</code>/<code>html</code><p>
-parent-relative from the source (<code>get be?498e7dbe</code> etc.), never touching github.
-</p>
-</li>
-<li>PATCH.c notes the sub gitlink delta is &quot;re-got by the parent's BEActSubsPatch<p>
-gitlink-diff recursion (reuses GET)&quot; (<code>sniff/PATCH.c:79</code>) — but that recursion fetches the sub from its <code>.gitmodules</code> url, not the parent-relative candidate GET's top level builds via <code>SNIFFSubCandidateFromSource</code> (<a href="../SUBS/SUBS-024.html">SUBS-024</a>, <code>sniff/SUBS.c:427</code>).
-</p>
-</li>
-<li>RELATED merge-URI findings (same session, lower priority — <code>?main!</code> is the working<p>
-form): <code>be patch be://spot/journal?&lt;sha&gt;!</code> (sha in query) → WIRECLFL (the wire advertises refs, not a bare sha); <code>be patch be://spot/journal#&lt;sha&gt;</code> (remote + fragment) → PATCHFAIL (&quot;URI must be <code>?&lt;br&gt;</code>/<code>?&lt;br&gt;!</code>/<code>#&lt;sha&gt;</code>&quot;). So a remote merge can only be addressed by BRANCH (<code>?main!</code>), not by sha — worth its own usability note.
-</p>
-</li>
+<li>Repro (live 2026-06-26): in a clean <code>be get be://localhost/journal</code> clone, <code>be patch 'be://spot/journal?main!'</code> → parent merge OK, then <code>get html?91ae5b53</code>, <code>sniff: submodule fetch failed for git@github.com:gritzko/beagle-ext.git</code> / WIRECLFL / <code>get beagle?…</code> / <code>get beagle/abc?…</code> / BEDOGEXIT. The <code>be</code> sub (scp-git url) is the failure; <code>beagle</code> (https) gets further.</li>
+<li>GET does NOT have this: <code>be get be://localhost/journal</code> recursed <code>be</code>/<code>beagle</code>/<code>html</code> parent-relative from the source (<code>get be?498e7dbe</code> etc.), never touching github.</li>
+<li>PATCH.c notes the sub gitlink delta is &quot;re-got by the parent's BEActSubsPatch gitlink-diff recursion (reuses GET)&quot; (<code>sniff/PATCH.c:79</code>) — but that recursion fetches the sub from its <code>.gitmodules</code> url, not the parent-relative candidate GET's top level builds via <code>SNIFFSubCandidateFromSource</code> (<a href="../SUBS/SUBS-024.html">SUBS-024</a>, <code>sniff/SUBS.c:427</code>).</li>
+<li>RELATED merge-URI findings (same session, lower priority — <code>?main!</code> is the working form): <code>be patch be://spot/journal?&lt;sha&gt;!</code> (sha in query) → WIRECLFL (the wire advertises refs, not a bare sha); <code>be patch be://spot/journal#&lt;sha&gt;</code> (remote + fragment) → PATCHFAIL (&quot;URI must be <code>?&lt;br&gt;</code>/<code>?&lt;br&gt;!</code>/<code>#&lt;sha&gt;</code>&quot;). So a remote merge can only be addressed by BRANCH (<code>?main!</code>), not by sha — worth its own usability note.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>PATCH's sub-recursion fetches each sub's theirs PARENT-RELATIVE from the patch source<p>
-(<code>be://spot/journal/&lt;sub&gt;</code>), mirroring GET/POST (<a href="../SUBS/SUBS-024.html">SUBS-024</a>); the <code>.gitmodules</code> remote is only the fallback for a non-beagle parent. A whole-tree <code>be patch be://spot/journal?main!</code> completes through every sub.
-</p>
-</li>
+<li>PATCH's sub-recursion fetches each sub's theirs PARENT-RELATIVE from the patch source (<code>be://spot/journal/&lt;sub&gt;</code>), mirroring GET/POST (<a href="../SUBS/SUBS-024.html">SUBS-024</a>); the <code>.gitmodules</code> remote is only the fallback for a non-beagle parent. A whole-tree <code>be patch be://spot/journal?main!</code> completes through every sub.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Native sniff/keeper. Reuse <code>SNIFFSubCandidateFromSource</code> (the GET-side parent-relative<p>
-resolver) in BEActSubsPatch's sub fetch. Repro-first (CLAUDE.md §17): a hermetic 2-level be:// fixture whose sub MUST be fetched parent-relative (its <code>.gitmodules</code> url unreachable), RED today, GREEN after. Don't regress single-project patch.
-</p>
-</li>
+<li>Native sniff/keeper. Reuse <code>SNIFFSubCandidateFromSource</code> (the GET-side parent-relative resolver) in BEActSubsPatch's sub fetch. Repro-first (CLAUDE.md §17): a hermetic 2-level be:// fixture whose sub MUST be fetched parent-relative (its <code>.gitmodules</code> url unreachable), RED today, GREEN after. Don't regress single-project patch.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>In BEActSubsPatch (the gitlink-diff recursion that re-gets the sub at theirs), build<p>
-the sub fetch URI with <code>SNIFFSubCandidateFromSource(&lt;patch-source&gt;, &lt;sub-basename&gt;)</code> FIRST (the <code>be://…/journal/&lt;sub&gt;</code> candidate), fall back to the declared <code>.gitmodules</code> url only when the parent source isn't a beagle multi-project remote — exactly the arms GET/HEAD already use (HEAD-004 / <a href="../SUBS/SUBS-024.html">SUBS-024</a>).
-</p>
-</li>
+<li>In BEActSubsPatch (the gitlink-diff recursion that re-gets the sub at theirs), build the sub fetch URI with <code>SNIFFSubCandidateFromSource(&lt;patch-source&gt;, &lt;sub-basename&gt;)</code> FIRST (the <code>be://…/journal/&lt;sub&gt;</code> candidate), fall back to the declared <code>.gitmodules</code> url only when the parent source isn't a beagle multi-project remote — exactly the arms GET/HEAD already use (HEAD-004 / <a href="../SUBS/SUBS-024.html">SUBS-024</a>).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: hermetic be:// parent+sub merge where the sub's <code>.gitmodules</code> url is<p>
- unreachable; assert the merge fetches the sub parent-relative (RED today → WIRECLFL).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: hermetic be:// parent+sub merge where the sub's <code>.gitmodules</code> url is unreachable; assert the merge fetches the sub parent-relative (RED today → WIRECLFL).</li>
 <li class="open"><input type="checkbox" disabled> Route BEActSubsPatch's sub fetch through the parent-relative candidate resolver.</li>
 <li class="open"><input type="checkbox" disabled> Rebuild <code>beagle/build</code>; verify <code>be patch be://spot/journal?main!</code> recurses all subs.</li>
 <li class="open"><input type="checkbox" disabled> (Separate) usability note for the <code>?&lt;sha&gt;!</code>/remote-<code>#&lt;sha&gt;</code> rejection.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>This is the live blocker for the whole-tree spot merge (the treadmill goal). The<p>
-parent-level merge already works; only the sub-source resolution remains.
-</p>
-</li>
+<li>This is the live blocker for the whole-tree spot merge (the treadmill goal). The parent-level merge already works; only the sub-source resolution remains.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>DISPROVEN / already-fixed on current trunk (2026-06-26).  The WIRECLFL<p>
-does NOT reproduce: a beagle parent re-gets each moved sub gitlink PARENT-RELATIVE during patch via the existing GET-011 historical-REFS locator recovery (<code>subs_recover_locator</code> reads the parent shard's recorded <code>be:</code> source row → builds the <code>?/&lt;sub&gt;</code> sibling candidate, sniff/SUBS.c).  No explicit source-threading needed.  Verified with a hermetic 2-level be:// fixture (dead <code>.gitmodules</code> url, sub reachable only parent-relative): the patch lands the sub from the sibling shard, never touches the dead url.  Kept as a regression guard <code>test/patch/38-sub-source-parent-relative</code> (lands with PATCH-006 <code>9ed6f41b</code>).  No code change.
-</p>
-</li>
+<li>DISPROVEN / already-fixed on current trunk (2026-06-26).  The WIRECLFL does NOT reproduce: a beagle parent re-gets each moved sub gitlink PARENT-RELATIVE during patch via the existing GET-011 historical-REFS locator recovery (<code>subs_recover_locator</code> reads the parent shard's recorded <code>be:</code> source row → builds the <code>?/&lt;sub&gt;</code> sibling candidate, sniff/SUBS.c).  No explicit source-threading needed.  Verified with a hermetic 2-level be:// fixture (dead <code>.gitmodules</code> url, sub reachable only parent-relative): the patch lands the sub from the sibling shard, never touches the dead url.  Kept as a regression guard <code>test/patch/38-sub-source-parent-relative</code> (lands with PATCH-006 <code>9ed6f41b</code>).  No code change.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

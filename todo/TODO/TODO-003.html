@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TODO-003 DONE: meta-pair index — kv64 rows over todo/</title>
+<meta property="og:title" content="TODO-003 DONE: meta-pair index — kv64 rows over todo/">
+<meta property="og:description" content="Search over ticket meta pairs (Sta: OPEN presence, Who: gritzko exact) backed by a store-resident LSM index that decides WHICH tickets the board opens — it never renders. Rulings 2026-08-03: the keyed kv64 lane (a re-put overwrites, so a pair is a mutable cell), wh64-shaped path-major rows, the value stored literally when it fits ron60, and an mtime sweep that reconciles per-ticket blocks. Consumers: the :todo board (/todo/TODO/TODO-001, /todo/BE/BE-038); the arg/click/sort layer is /todo/TODO/TODO-004.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/TODO/TODO-003.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>TODO-003 <a href="./DONE.html">DONE</a>: meta-pair index — kv64 rows over <code>todo/</code></h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
+<p>
+Search over ticket meta pairs (<code>Sta: OPEN</code> presence, <code>Who: gritzko</code> exact) backed by a store-resident LSM index that decides WHICH tickets the board opens — it never renders. Rulings 2026-08-03: the keyed <code>kv64</code> lane (a re-put overwrites, so a pair is a mutable cell), wh64-shaped path-major rows, the value stored literally when it fits ron60, and an mtime sweep that reconciles per-ticket blocks. Consumers: the <code>:todo</code> board (<a href="/todo/TODO/TODO-001.html">TODO-001</a>, <a href="/todo/BE/BE-038.html">BE-038</a>); the arg/click/sort layer is <a href="/todo/TODO/TODO-004.html">TODO-004</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Meta pairs are the <code>Key: value</code> leaf, <a href="/wiki/StrictMark.html">StrictMark</a> §&quot;Meta pairs&quot;; ticket keys (<code>Who: Due: For: …</code>) registered in <a href="/meta/todo.html">todo</a>.</li>
+<li>Ticket status moves OUT of the header into a meta pair (ruling 2026-08-02, one-shot perl migration), so the open list becomes a plain key query.</li>
+<li>Tickets are edited in real time: committed blobs cannot answer an open-ticket query, and the working tree is what the board renders.</li>
+<li>The KEYED lane landed 2026-08-02: <code>kv64Z</code> compares keys only, so a re-put of one key wins at <code>get</code>, <code>range</code> and <code>seek</code> alike (<code>jab/test/index.js:112</code>).</li>
+<li><code>abc.index(&quot;kv64&quot;, {dir, ext})</code> is a handle on a dog Pup stack — runs, memtable and the 1/8 ladder are all C (<code>jab/pup.hpp</code>, <code>jab/INDEX.md</code> §&quot;pup.hpp&quot;).</li>
+<li><code>jab/API.md</code> §&quot;abc.index&quot; is STALE: <code>.runs</code>, <code>._seq</code>, <code>.mem</code>, <code>.flush</code>, <code>.compact</code> and the dir-less RAM backing are gone, and <code>commit()</code> is the seal verb.</li>
+<li>Until <a href="/todo/DOG/DOG-026.html">DOG-026</a> emits leaf kinds, extraction is the per-line regex <code>^([A-Z][a-z][a-z]): (.*)$</code> — the meta pair is line-local by design, so the regex IS the grammar.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+<code>shared/metaidx.js</code>: a LAZY indexing API over one <code>kv64</code> lane in the store shard — the caller asks for a filtered ticket list and the index brings itself up to date to serve it. <a href="/todo/TODO/TODO-004.html">TODO-004</a> is built on this surface.
+</p>
+<ul>
+<li>The one entry point: scan the fs, index whatever is unindexed, then answer the filter FROM the index — no separate &quot;build&quot; verb for a caller to forget.</li>
+<li>Row: key <code>(path_hl:40 | key_code:20 | kind:4)</code> -&gt; val <code>(kind:4 | value:60)</code> — the wh64 field split (<code>dog/WHIFF.h</code>) that keeper and graf already ride.</li>
+<li>Path-major: one ticket's pairs are ONE contiguous block, so <code>prefix(path_hl&lt;&lt;24n, 24, cb)</code> reads a whole ticket's meta in one pass.</li>
+<li><code>key_code</code> is the 3-char key VERBATIM at 6 bits/char (18 of the 20 bits), injective — a meta key never collides and a ticket's pairs sort stably.</li>
+<li>The value is stored LITERALLY when its normalized form fits 60 bits of ron60, else as its hash: a literal ranges and compares exactly, a hash only equals.</li>
+<li>Scan: readdir <code>todo/</code>, stat each ticket file, re-lex every one whose mtime is at or past the mark, reconcile its block, write the new mark row.</li>
+<li>Answer: scan the rows carrying that key code, keep the matching values, map <code>path_hl</code> back through the readdir walk — that list is the filtered tickets.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The index decides WHICH tickets to open, never what to show — titles and bodies come off the file, so nothing renders straight from the index.</li>
+<li>A ticket is any <code>.mkd</code> under <code>todo/</code> whose name fits the ticket-code regex, PLUS any DIR whose name fits it and which holds a <code>README.mkd</code>/<code>README.md</code> (the fat layout, <a href="/meta/todo.html">todo</a>).</li>
+<li>A fat ticket's identity is the DIR, but the indexed and stat'ed path is its <code>README</code> — one row block per ticket either way, and the attached files never index.</li>
+<li>40-bit path hashlets collide at ~0.45 expected pairs per 1M tickets, but the sweep holds the COMPLETE path list, so a collision is DETECTED: drop both paths from the index that session and read them directly.</li>
+<li>The sweep OWNS staleness: with the value in the row there is no confirming read left to kill a stale row, so a vanished pair or a deleted file must be tombstoned against the ticket's block.</li>
+<li>Value normalization is despaced and decased (ruling 2026-08-02) — the payload is a match token, not a render source; the key needs none, its <code>[A-Z][a-z][a-z]</code> shape being canonical already.</li>
+<li>Rows put between two commits must fit ONE 4 KB memtable page (256 kv64 rows), so batch at 200 — the <code>shared/ingest.js</code> <code>idxWriter</code> discipline.</li>
+<li>Intermediate seals must NOT advance the mark: a crash mid-sweep may cost a redundant re-lex, never mark an unlexed file done.</li>
+<li>The mark is the MAX mtime observed in the scan (ruling 2026-08-03), held in a sentinel row per wt (reserved kind, key above every path block) — a clock is never consulted, so clock skew between the fs and the process cannot exist.</li>
+<li>The mtime test is <code>&gt;=</code> the mark: a redundant re-lex costs one read, a missed edit gives a wrong answer, and a file touched mid-scan lands past the mark and re-lexes next time.</li>
+<li>Scope is <code>todo/</code>'s <code>.mkd</code> files (ruling); the runs live in the store's shard dir alongside <code>keeper.idx</code>, ext <code>.meta.idx</code> — never in <code>&lt;wt&gt;/.be</code>, which is a FILE whenever the store is not colocated.</li>
+<li>The shard is resolved through <code>shared/store.js</code> (<code>&lt;store&gt;/.be/&lt;project&gt;/</code>, the opened store's <code>.shard</code>), never composed by hand.</li>
+<li>Worktrees SHARE a shard, so <code>path_hl</code> hashes the wt-qualified path and the mark row is per-wt (the sentinel key carries the wt code); a global mark would let wt A's sweep mark wt B's unindexed files as done.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Overturned 2026-08-03: the <code>wh128</code> lane, key-hashlet-major rows, 40-bit key hashlets, the <code>line</code> field, and &quot;filter-grade, never truth&quot; — a keyed lane makes a pair a mutable cell, so the row IS the current value.</li>
+<li>Overturned from the 2026-07-31 draft: blob-keyed rows, 128-bit key and value digests, &quot;no ranges, no enumeration&quot;, and the <a href="../SPOT/SPOT-003.html">SPOT-003</a> substrate dependency.</li>
+<li>Ticket identity is the PATH, so the numbering scheme is orthogonal: this index never waits on a RON ticket code, and that code stays worth doing for the counter problem alone.</li>
+<li><code>Sta: OPEN</code> is a full index scan under path-major ordering (a key column is not contiguous), which costs far less than the fs sweep that precedes it; a key-major twin lane is the fallback if it ever shows.</li>
+<li>Per-key normalization is where ranges come from: <code>Due: 2026-08-03</code> stored as the ron60 date <code>26803</code> sorts and ranges, free text hashes.</li>
+<li>Path-keying costs the blob-at-a-new-path and moved-subtree cases nothing, because staleness is an mtime question here, not a hash-identity one.</li>
+<li>Multi-key board queries (<code>Sta</code>+<code>Who</code>+<code>Due</code>) intersect on <code>path_hl</code> before the board opens anything, per <a href="/todo/TODO/TODO-001.html">TODO-001</a>.</li>
+<li>Key vocabulary stays out of the index (any 3-letter key encodes); <a href="/meta/todo.html">todo</a> governs which keys exist and which the views offer.</li>
+<li>OPEN: the status key's name, and whether severity splits off (<code>Sta: OPEN</code> plus <code>Sev: HIGH</code>) or stays merged as the header has it — gritzko's call, and a <a href="/meta/todo.html">todo</a> spec edit.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> <code>shared/metaidx.js</code>: row pack/unpack + <code>abc.index(&quot;kv64&quot;, {dir: shard, ext: &quot;.meta.idx&quot;})</code> open/close</li>
+<li class="open"><input type="checkbox" disabled> the lazy entry point: scan -&gt; index the unindexed -&gt; answer the filter, one call, for <a href="/todo/TODO/TODO-004.html">TODO-004</a></li>
+<li class="open"><input type="checkbox" disabled> the scan: readdir + mtime-at-or-past-mark re-lex, per-ticket block reconcile (tombstone what vanished), max-mtime mark row written last</li>
+<li class="open"><input type="checkbox" disabled> the answer: key-code scan, value match, <code>path_hl</code> -&gt; path, the filtered ticket list</li>
+<li class="open"><input type="checkbox" disabled> ron60 value packing + the per-key normalizers (<code>Due:</code> -&gt; date, free text -&gt; hash)</li>
+<li class="open"><input type="checkbox" disabled> path-hash collision detector: two live paths on one <code>path_hl</code> -&gt; exclude both, read them directly</li>
+<li class="open"><input type="checkbox" disabled> line-regex extractor with the <code>Due\:</code> escape; swap to <a href="/todo/DOG/DOG-026.html">DOG-026</a> kinds when they land</li>
+<li class="open"><input type="checkbox" disabled> golden: cold fill vs warm skip, edited file re-lexed, vanished pair tombstoned, deleted file, absent key early-out, two wts on one shard, crash-mid-sweep re-lex</li>
+<li class="open"><input type="checkbox" disabled> status-to-meta-pair migration: the perl pass over <code>todo/**/*.mkd</code> plus key registration in <a href="/meta/todo.html">todo</a> (human-owned spec edit)</li>
+<li class="open"><input type="checkbox" disabled> wire into the <code>:todo</code> board (<a href="/todo/TODO/TODO-001.html">TODO-001</a>, <a href="/todo/BE/BE-038.html">BE-038</a>)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The <a href="../SPOT/SPOT-003.html">SPOT-003</a> and <a href="/todo/JS/JS-121.html">JS-121</a> dependencies are BOTH dropped: the keyed <code>kv64</code> lane landed 2026-08-02 and serves the overwrite collapse this index is built on.</li>
+<li><a href="/todo/DOG/DOG-026.html">DOG-026</a> is no longer a dependency: the meta pair is line-local, so the regex is the grammar, and the <code>line</code> field is gone.</li>
+</ul>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

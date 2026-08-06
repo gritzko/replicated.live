@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DIFF-010</title>
+<title>DIFF-010: weave.fold: failed (out full?) — the diff/weave fold buffer overflows without grow-on-full</title>
+<meta property="og:title" content="DIFF-010: weave.fold: failed (out full?) — the diff/weave fold buffer overflows without grow-on-full">
+<meta property="og:description" content="err: Error: weave.fold: failed (out full?) — the JS weave.fold (WEAVENext, the diff/merge fold binding over the C WEAVE; see be/verbs/patch/patch.js:12) overflows its output buffer (&quot;out full&quot;) on a large fold, and the caller does NOT grow-and-retry. be/core/loop.js:128-142 ALREADY does grow-on-&quot;out full&quot; (doubles the cap, replays the held records) — but a DIRECT weave.fold call (the diff:/commit: diff path in be/views/diff/diff.js) lacks that, so it throws. Surfaced live via COMMIT-006's commit: diff-inline on a commit with a large change. Sibling of DIFF-007 (diff outtoks overflow) + the JS-055 grow-on-NOROOM pattern. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIFF/DIFF-010.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,91 +16,65 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>DIFF-010: <code>weave.fold: failed (out full?)</code> — the diff/weave fold buffer overflows without grow-on-full</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>err: Error: weave.fold: failed (out full?)</code> — the JS <code>weave.fold</code> (WEAVENext, the diff/merge fold binding over the C WEAVE; see <code>be/verbs/patch/patch.js:12</code>) overflows its output buffer (&quot;out full&quot;) on a large fold, and the caller does NOT grow-and-retry. <code>be/core/loop.js:128-142</code> ALREADY does grow-on-&quot;out full&quot; (doubles the cap, replays the held records) — but a DIRECT <code>weave.fold</code> call (the <code>diff:</code>/<code>commit:</code> diff path in <code>be/views/diff/diff.js</code>) lacks that, so it throws. Surfaced live via <a href="../COMMIT/COMMIT-006.html">COMMIT-006</a>'s <code>commit:</code> diff-inline on a commit with a large change. Sibling of <a href="DIFF-007.html">DIFF-007</a> (diff outtoks overflow) + the <a href="../JS/JS-055.html">JS-055</a> grow-on-NOROOM pattern. Method: <a href="../../meta/work.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Live error: <code>err: Error: weave.fold: failed (out full?)</code>. <code>weave.fold</code> =<p>
-WEAVENext (binding over C <code>graf/dog WEAVE</code>); its output buffer fills (&quot;out full&quot; = the binding's NOROOM) on a large diff fold.
-</p>
-</li>
-<li><code>be/core/loop.js:128-142</code> grows on &quot;out full&quot; (double cap + replay) for the<p>
-LOOP's records; <code>:142</code> only grows when the error includes &quot;full&quot;. A DIRECT <code>weave.fold</code> call (diff.js / the commit: diff-inline) bypasses that → throws.
-</p>
-</li>
-<li>C WEAVE caps: <code>graf/WEAVE.c</code> (SNOROOM/NOROOM ~:324/452/587), <code>dog/WEAVE.c</code><p>
-<code>WEAVE_FULL_HUNK_MAX</code> (:1260). The binding surfaces these as &quot;out full&quot;.
-</p>
-</li>
+<li>Live error: <code>err: Error: weave.fold: failed (out full?)</code>. <code>weave.fold</code> = WEAVENext (binding over C <code>graf/dog WEAVE</code>); its output buffer fills (&quot;out full&quot; = the binding's NOROOM) on a large diff fold.</li>
+<li><code>be/core/loop.js:128-142</code> grows on &quot;out full&quot; (double cap + replay) for the LOOP's records; <code>:142</code> only grows when the error includes &quot;full&quot;. A DIRECT <code>weave.fold</code> call (diff.js / the commit: diff-inline) bypasses that → throws.</li>
+<li>C WEAVE caps: <code>graf/WEAVE.c</code> (SNOROOM/NOROOM ~:324/452/587), <code>dog/WEAVE.c</code> <code>WEAVE_FULL_HUNK_MAX</code> (:1260). The binding surfaces these as &quot;out full&quot;.</li>
 <li>Trigger: <code>jab commit:?&lt;sha&gt;</code> (COMMIT-006 diff-inline) / <code>jab diff:</code> on a big diff.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>A large diff/weave fold does NOT error &quot;out full&quot; — the <code>weave.fold</code> caller grows<p>
-the output buffer + retries (mirror <code>loop.js:128-142</code> / <a href="../JS/JS-055.html">JS-055</a>), or sizes to content.
-</p>
-</li>
+<li>A large diff/weave fold does NOT error &quot;out full&quot; — the <code>weave.fold</code> caller grows the output buffer + retries (mirror <code>loop.js:128-142</code> / <a href="../JS/JS-055.html">JS-055</a>), or sizes to content.</li>
 <li><code>jab diff:</code> / <code>commit:</code> / <code>patch</code> over a large change render the full diff, no throw.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Prefer grow-on-full + replay (the <code>loop.js</code> / <a href="../JS/JS-055.html">JS-055</a> pattern) over a bigger fixed<p>
-cap (a fixed bump just moves the cliff). Reuse <code>loop.js</code>'s grow-on-full if shareable.
-</p>
-</li>
-<li>Localize ALL direct <code>weave.fold</code> callers (be/views/diff/diff.js + be/verbs/patch/patch.js<p>
-+ any shared weave helper). ABC/JS style. Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17).
-</p>
-</li>
+<li>Prefer grow-on-full + replay (the <code>loop.js</code> / <a href="../JS/JS-055.html">JS-055</a> pattern) over a bigger fixed cap (a fixed bump just moves the cliff). Reuse <code>loop.js</code>'s grow-on-full if shareable.</li>
+<li>Localize ALL direct <code>weave.fold</code> callers (be/views/diff/diff.js + be/verbs/patch/patch.js + any shared weave helper). ABC/JS style. Repro-first (<a href="../../beagle/CLAUDE.md">CLAUDE</a> §17).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>CHOSE a SHARED wrapper <code>be/shared/weave.js</code>: <code>growOnFull(make, op, cap, hint)</code><p>
-(generalises loop.js:128-142) + <code>fold</code>/<code>merge</code> builders; diff/patch both reuse it.
-</p>
-</li>
-<li>Grow EVERY overflow point, not just the named fold: the WEAVE fold AND the HUNK<p>
-emit (emitDiff/emitFull) AND the per-record plain/color io.buf all throw &quot;...full&quot;.
-</p>
-</li>
-<li>Sites found: diff.js diffFile wA/wB folds + emitDiff/emitFull + emitHunks render;<p>
-patch.js foldCommit fold+merge, mergeApply merge+merged, aliveOf/adjacent-skip alive.
-</p>
-</li>
-<li>diff.js's <code>ctx.views</code> is unpopulated in the live loop, so <code>jab diff:</code> returns empty;<p>
-the fold path is reached via <code>commit:?&lt;sha&gt;</code> (commit.js COMMIT-006, calls diff VIEW).
-</p>
-</li>
+<li>CHOSE a SHARED wrapper <code>be/shared/weave.js</code>: <code>growOnFull(make, op, cap, hint)</code> (generalises loop.js:128-142) + <code>fold</code>/<code>merge</code> builders; diff/patch both reuse it.</li>
+<li>Grow EVERY overflow point, not just the named fold: the WEAVE fold AND the HUNK emit (emitDiff/emitFull) AND the per-record plain/color io.buf all throw &quot;...full&quot;.</li>
+<li>Sites found: diff.js diffFile wA/wB folds + emitDiff/emitFull + emitHunks render; patch.js foldCommit fold+merge, mergeApply merge+merged, aliveOf/adjacent-skip alive.</li>
+<li>diff.js's <code>ctx.views</code> is unpopulated in the live loop, so <code>jab diff:</code> returns empty; the fold path is reached via <code>commit:?&lt;sha&gt;</code> (commit.js COMMIT-006, calls diff VIEW).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Repro-first: <code>jab commit:?&lt;sha&gt;</code> on a 2800-line change → `weave.fold: failed (out<p>
- full?)`, exit 1 (RED).  diff.js diffFile fold overflows the fixed 1&lt;&lt;18 WEAVE cap.
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Repro-first: <code>jab commit:?&lt;sha&gt;</code> on a 2800-line change → <code>weave.fold: failed (out full?)</code>, exit 1 (RED).  diff.js diffFile fold overflows the fixed 1&lt;&lt;18 WEAVE cap.</li>
 <li class="done"><input type="checkbox" checked disabled> Fix: shared grow-on-full retry (shared/weave.js) at every diff.js/patch.js overflow.</li>
 <li class="done"><input type="checkbox" checked disabled> Test be/test/diff/12-large-fold-grow/run.sh + be/ suite green; small diffs unaffected.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>The be-js-bro-pager &quot;dup-const&quot; seen mid-run was the concurrent BRO-005 log-link<p>
-worker writing pager.js — transient, GREEN once that landed (<code>4febec96</code>).  Only the pre-existing be-js-bro-universal stale xfail stays red; both untouched here.
-</p>
-</li>
+<li>The be-js-bro-pager &quot;dup-const&quot; seen mid-run was the concurrent BRO-005 log-link worker writing pager.js — transient, GREEN once that landed (<code>4febec96</code>).  Only the pre-existing be-js-bro-universal stale xfail stays red; both untouched here.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>(LANDED be <code>f3389efa</code> + be/test <code>374cbae0</code>) Fix: shared <code>be/shared/weave.js</code> grow-on-&quot;out full&quot; retry<p>
-(growOnFull/fold/merge), used by <code>be/views/diff/diff.js</code> (diffFile folds 94-114, emitHunks render 136-139) + <code>be/verbs/patch/patch.js</code> (foldCommit, mergeApply, aliveOf).  weave.fold sites: diff.js:95-96/100-101 (was), patch.js:184/202/171/283.
-</p>
-</li>
-<li>Test <code>be/test/diff/12-large-fold-grow/run.sh</code> (RED: out-full+exit1; GREEN: diff<p>
- renders).  be/ suite green bar the two pre-existing bro fails.  STOPPED pre-commit.
-</p>
-</li>
+<li>(LANDED be <code>f3389efa</code> + be/test <code>374cbae0</code>) Fix: shared <code>be/shared/weave.js</code> grow-on-&quot;out full&quot; retry (growOnFull/fold/merge), used by <code>be/views/diff/diff.js</code> (diffFile folds 94-114, emitHunks render 136-139) + <code>be/verbs/patch/patch.js</code> (foldCommit, mergeApply, aliveOf).  weave.fold sites: diff.js:95-96/100-101 (was), patch.js:184/202/171/283.</li>
+<li>Test <code>be/test/diff/12-large-fold-grow/run.sh</code> (RED: out-full+exit1; GREEN: diff renders).  be/ suite green bar the two pre-existing bro fails.  STOPPED pre-commit.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

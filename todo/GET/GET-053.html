@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-053 DONE: bare get goes FF/FB-only; get! becomes the any-commit reset</title>
+<meta property="og:title" content="GET-053 DONE: bare get goes FF/FB-only; get! becomes the any-commit reset">
+<meta property="og:description" content="RULED into /wiki/GET (gritzko, 2026-08-01): a bare get may only move the wt ALONG cur's line — fast-forward or fast-backward, &quot;refuses otherwise&quot; (/wiki/GET &quot;Forceful execution&quot;); diverged and unrelated targets need the bang, which resets to any commit, discards local changes and deletes untrackeds. Divergence resolves through two loud doors: patch (weave theirs in) or get! (adopt theirs). Kills the diverged-plain-reset machinery of GET-048 and the silent non-FF clobber class of GET-014.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/GET/GET-053.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-053 <a href="./DONE.html">DONE</a>: bare <code>get</code> goes FF/FB-only; <code>get!</code> becomes the any-commit reset</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
+<p>
+RULED into <a href="../../wiki/GET.html">/wiki/GET</a> (gritzko, 2026-08-01): a bare <code>get</code> may only move the wt ALONG cur's line — fast-forward or fast-backward, &quot;refuses otherwise&quot; (<a href="../../wiki/GET.html">/wiki/GET</a> &quot;Forceful execution&quot;); diverged and unrelated targets need the bang, which resets to any commit, discards local changes and deletes untrackeds. Divergence resolves through two loud doors: <code>patch</code> (weave theirs in) or <code>get!</code> (adopt theirs). Kills the diverged-plain-reset machinery of <a href="GET-048.html">GET-048</a> and the silent non-FF clobber class of <a href="GET-014.html">GET-014</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Today bare <code>get</code> moves the wt to ANY ref: a diverged target is a plain reset (<a href="GET-048.html">GET-048</a>), needing merge-base <code>basePaths</code> classification and still risking silent loss (<a href="GET-014.html">GET-014</a>, <a href="GET-052.html">GET-052</a>); <code>get!</code> means &quot;discard dirty edits + sweep untracked&quot; (<a href="../../wiki/GET.html">/wiki/GET</a> §2.2, <a href="GET-040.html">GET-040</a>).
+</p>
+<ul>
+<li>Line-only makes bare <code>get</code> provably lossless: oldTip and target are ancestor-related either way, so the weave has a true common base and never a merge-base fold.</li>
+<li>A diverged peer can land objects but can never move the wt onto its own line (the <a href="GET-014.html">GET-014</a> clobber class dies structurally); a BEHIND peer still can, see the open question below.</li>
+<li><code>get '#~1'</code> rewind is a fast-backward, so it STAYS a bare form (the earlier &quot;rewind is PUT's ground&quot; reading is retired by the 2026-08-01 spec).</li>
+</ul>
+<h3>Goals</h3>
+<p>
+Land the line gate in <code>be/verbs/get/get.js</code> (and the native twin); the spec is written and the bang semantics are ruled, so the code is the only thing left.
+</p>
+<ul>
+<li>Bare <code>get</code> and every fetch-leg update refuse an OFF-LINE target (diverged, unrelated) in plain words: &quot;not on this line — <code>patch</code> to merge, <code>get!</code> to reset&quot;; ancestor and descendant targets both pass.</li>
+<li>RULING (gritzko 2026-07-29, from the <a href="GET-057.html">GET-057</a> incident; extended 2026-08-01): staged rows STAY across any bare get, forward or backward — no silent <code>...V</code> → <code>...v</code> demotion; only <code>get!</code> clears them.</li>
+<li>RULING (gritzko 2026-08-01) on a BEHIND remote: the network leg does NOTHING — a stale peer's older tip is a no-op, not a rewind and not a refusal, so the <a href="GET-019.html">GET-019</a> class stays dead; fast-backward is a LOCAL motion.</li>
+<li><code>get!</code> reaches any commit: diverged, unrelated, backward detach (<a href="../../wiki/GET.html">/wiki/GET</a> &quot;not necessarily fast-forward or fast-backward&quot;).</li>
+<li>The refusal fires BEFORE the wtlog append — today every seed appends the get row first, then fans out; pre-append refusal also serves the <a href="GET-016.html">GET-016</a>/<a href="GET-018.html">GET-018</a> atomicity line.</li>
+</ul>
+<h3>Constraints</h3>
+<p>
+Concerns raised in review (2026-07-24); the first two are settled by the 2026-08-01 spec, the third stands:
+</p>
+<ul>
+<li>SETTLED nuke-by-habit: fast-backward is bare now, so only a genuinely DIVERGED switch demands the bang — the everyday <code>git checkout feat</code> analogue no longer routes through the destructive door.</li>
+<li>SETTLED subs: a parent moving a sub's pin BACKWARD is a fast-backward, a bare-legal motion; the <a href="GET-047.html">GET-047</a> §4.1 pin-attached update stays declarative regardless.</li>
+<li>CONCERN <code>get!</code> reach: &quot;any ref&quot; includes unrelated history — <code>crossUpdate</code>'s unconditional unrelated refusal (get.js:441) would need a force override, reopening the &quot;another project in the cell's clothes&quot; hazard <a href="GET-047.html">GET-047</a> guards; <code>sweepUntracked</code> on an unrelated-ref jump approximates <code>rm -rf</code> of the wt, making the <a href="GET-051.html">GET-051</a> pre-discard guard load-bearing.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+The bang-semantics split is RULED (c) by <a href="../../wiki/GET.html">/wiki/GET</a> 2026-08-01; (a) and (b) are dead:
+</p>
+<ul>
+<li>RULED (c): one bang, one meaning — any commit AND discard (reset to a clean state, local changes dropped, untrackeds deleted); no separate destruction-only form.</li>
+<li>(a) dead: the bang stays destructive; the spec binds &quot;any commit&quot; and &quot;clean state&quot; in the same sentence.</li>
+<li>(b) dead: the line gate is not scoped to same-track updates — a branch switch obeys it too, and stays bare as long as the target is on cur's line.</li>
+</ul>
+<p>
+The FAST-BACKWARD case in <a href="./GET-058.html">GET-058</a> terms (the landed quad classifier decides, this only says which column feeds it):
+</p>
+<ol>
+<li>The deciding axis is TARGET vs BASE, never &quot;track vs root&quot; literally; the wt column stays measured vs BASE in both directions (<a href="./GET-058.html">GET-058</a>).</li>
+<li>FAST-FORWARD: root = mergeBase = base, so the track column IS target-vs-base — the 13 cells are indexed exactly as <a href="./GET-058.html">GET-058</a> wrote them.</li>
+<li>FAST-BACKWARD: nothing to add — <code>checkout.trackChar(oldSha, newSha)</code> already computes that axis directly, so the backward cells (<code>o</code>→delete, <code>x</code>→restore) fall out of the landed code (VERIFIED 2026-08-01: <code>test/get/line-backward</code> was green before any edit).</li>
+<li>So no inversion helper was written; the backward test stays as a regression guard on <code>trackChar</code>.</li>
+<li>Both columns lit at once = DIVERGED = refuse (bare) — the shape the table never has to fold, as <a href="./GET-058.html">GET-058</a> states.</li>
+<li>Nothing else moves: same 13 cells, same WEAVE3/OURS/THEIRS/DELETE verdicts, same binary modifier on the both-sides-edited cells.</li>
+</ol>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> gritzko rules on the bang split — (c), <a href="../../wiki/GET.html">/wiki/GET</a> 2026-08-01; <code>get!</code> vs UNRELATED history still open (does the GETCELL refusal at get.js:441 survive force?)</li>
+<li><a href="./ .html"> </a> line gate: compute <code>relate.verdict</code> in every seed BEFORE <code>appendWtlog</code> (seedLocal, seedRemote, handleWtSeed, crossUpdate, inRepoSeed) — refuse <code>diverged</code>/<code>unrelated</code> pre-append, PASS <code>behind</code></li>
+<li><a href="./v.html">v</a> fast-backward axis: no work needed, <code>checkout.trackChar</code> is already target-vs-base (Design decisions 3-4)</li>
+<li><a href="./ .html"> </a> plain-words refusal message (&quot;not on this line — <code>patch</code> to merge, <code>get!</code> to reset&quot;), never a bare code</li>
+<li><a href="./ .html"> </a> bare <code>get '#~1'</code> and backward detach <code>?&lt;sha&gt;</code>/<code>#&lt;sha&gt;</code> KEEP working (fast-backward); the bang is needed only off-line</li>
+<li><a href="./ .html"> </a> sub carve-out: §4.1 pin-attached sub updates stay declarative (never line-checked); the §4.2 <code>get!</code> override unchanged</li>
+<li><a href="./ .html"> </a> drop the <a href="GET-048.html">GET-048</a> diverged machinery (<code>basePaths</code>, merge-base del classification) from the non-force path</li>
+<li><a href="./ .html"> </a> <a href="GET-051.html">GET-051</a> pre-discard size guard lands before (or with) the widened <code>get!</code></li>
+<li><a href="./ .html"> </a> staging survives any bare get: classify/wtlog row-liveness keeps put rows across the new get tip row (ruling above); tests = stage, FF get, still <code>...V</code>; stage, FB get, still <code>...V</code>; <code>get!</code> clears</li>
+<li><a href="./ .html"> </a> network leg: a behind fetched tip is a NO-OP (objects land, wt and cur do not move) — no wtlog get row, no refusal text</li>
+<li><a href="./ .html"> </a> tests: off-line refusal cells added to the <a href="GET-047.html">GET-047</a> matrix, plus a fast-BACKWARD accept cell; same-tip recovery and detached recovery stay green</li>
+<li><a href="./v.html">v</a> spec: <a href="../../wiki/GET.html">/wiki/GET</a> intro + &quot;Forceful execution&quot; written by gritzko 2026-08-01; <a href="../../wiki/Verbs.html">/wiki/Verbs</a> cheat sheet (<code>git checkout feat</code> row) still to check — his page, request his edit</li>
+<li><a href="./ .html"> </a> the <a href="./GET-058.html">GET-058</a> quad classifier stays as landed; this ticket only adds the fast-backward axis derivation (Design decisions) — no second mechanism</li>
+<li><a href="./ .html"> </a> mark <a href="GET-048.html">GET-048</a> <a href="./STALE.html">STALE</a> with a pointer here once the gate lands (<a href="GET-052.html">GET-052</a>'s hazard dies with it)</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Unblocked (bang split ruled); the gate itself is small, but its pre-append placement touches every seed and overlaps the <a href="GET-018.html">GET-018</a> atomicity design.</li>
+</ul>
+<h2>Outcome</h2>
+<p>
+(open)
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

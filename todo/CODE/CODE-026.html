@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-026: index-accelerate history + search consumers (blocked on GRAF-002/SPOT-003)</title>
+<meta property="og:title" content="CODE-026: index-accelerate history + search consumers (blocked on GRAF-002/SPOT-003)">
+<meta property="og:description" content="Deps: BLOCKED on landing two worktree modules into be/ — GRAF-002 shared/commitindex.js (lazy commit-DAG index: p1 parentage / p2 commit→tree / p3 tree-child edges / p4 commit-ts) and SPOT-003 shared/spotidx.js (trigram reject-filter). Both are put-staged, NOT in be/ yet. Perf only. See Beagle indices.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-026.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>CODE-026: index-accelerate history + search consumers (blocked on GRAF-002/SPOT-003)</h1>
+<div>
+<p>
+Now: OPEN Sev: LOW
+</p>
+</div>
+<p>
+Deps: BLOCKED on landing two worktree modules into be/ — <a href="../GRAF/GRAF-002.html">GRAF-002</a> <code>shared/commitindex.js</code> (lazy commit-DAG index: p1 parentage / p2 commit→tree / p3 tree-child edges / p4 commit-ts) and <a href="../SPOT/SPOT-003.html">SPOT-003</a> <code>shared/spotidx.js</code> (trigram reject-filter). Both are put-staged, NOT in be/ yet. Perf only. See <a href="../../wiki/URI.html">Beagle indices</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>These consumers do full O(history) / O(tree) / O(files) walks that a landed index would answer index-only; the indexes exist as worktree modules but are not merged, so today the walks are the only option.</li>
+<li>commitindex p1-p4 (GRAF-002) serves parentage / commit→tree / tree-child / ts; spotidx (SPOT-003) is the trigram pre-filter for tree-wide search.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Once the indexes land, retarget each walk below onto the index; keep the full-walk path as the cold/miss fallback the indexes already assume.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Do NOT re-implement either index here — consume commitindex / spotidx once landed. be/ JS only. Each retarget is behavior-preserving (same results, fewer object reads), repro-gated on a warm-vs-cold walk-count.</li>
+</ul>
+<h2>WIP</h2>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./-.html">-</a> lastcommit.js:62 first-touch age per list entry (O(history×tree), hit on every <code>list:</code>) → commitindex p1+p3+p4 <a href="./dep GRAF-002.html">dep GRAF-002</a></li>
+<li><a href="./-.html">-</a> log.js:185/:282 branch + file history → commitindex p1/p2/p3/p4 <a href="./dep GRAF-002.html">dep GRAF-002</a></li>
+<li><a href="./-.html">-</a> why.js:105 blame closure + weave.build → commitindex p1/p2/p3 <a href="./dep GRAF-002.html">dep GRAF-002</a></li>
+<li><a href="./-.html">-</a> head.js:170 rebuilds a wh128 child→parent index INLINE per call → persisted commitindex p1 <a href="./dep GRAF-002.html">dep GRAF-002</a></li>
+<li><a href="./-.html">-</a> spot/search.js:175 full-scan grep/spot/regex → spotidx trigram filter <a href="./dep SPOT-003.html">dep SPOT-003</a></li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>All items blocked until <a href="../GRAF/GRAF-002.html">GRAF-002</a> / <a href="../SPOT/SPOT-003.html">SPOT-003</a> merge into be/; unblock this ticket when they land (verify via <code>jab log</code>, not the worktree READMEs).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Blocked. Suggested commit (per item, post-merge): <code>CODE-026: &lt;consumer&gt; via commitindex/spotidx</code>.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

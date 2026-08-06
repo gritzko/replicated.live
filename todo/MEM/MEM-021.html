@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-021</title>
+<title>MEM-021 DONE: abc + jab latent low-severity bounds/overflow hardening</title>
+<meta property="og:title" content="MEM-021 DONE: abc + jab latent low-severity bounds/overflow hardening">
+<meta property="og:description" content="Six low-severity, latent defects in abc and jab: unchecked streaming writes, extreme-size integer UB feeding mmap, an array overrun only at astronomic offsets, a munmap-failure leak, a signed-negation UB in int formatting, and an unchecked malloc in io.log. None is reachable at realistic sizes today, but each is a real unsafety the style forbids; the goal is defensive hardening (with a repro where feasible).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-021.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,9 +15,14 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>MEM-021: abc latent low-severity bounds/overflow hardening</h1>
+<h1>MEM-021 <a href="./DONE.html">DONE</a>: abc + jab latent low-severity bounds/overflow hardening</h1>
+<div>
 <p>
-Five low-severity, latent defects in abc: unchecked streaming writes, extreme-size integer UB feeding mmap, an array overrun only at astronomic offsets, a munmap-failure leak, and a signed-negation UB in int formatting. None is reachable at realistic sizes today, but each is a real unsafety the style forbids; the goal is defensive hardening (with a repro where feasible).
+Now: DONE
+</p>
+</div>
+<p>
+Six low-severity, latent defects in abc and jab: unchecked streaming writes, extreme-size integer UB feeding mmap, an array overrun only at astronomic offsets, a munmap-failure leak, a signed-negation UB in int formatting, and an unchecked <code>malloc</code> in <code>io.log</code>. None is reachable at realistic sizes today, but each is a real unsafety the style forbids; the goal is defensive hardening (with a repro where feasible).
 </p>
 <h2>Issues</h2>
 <p>
@@ -25,6 +34,7 @@ Latent unsafety, grouped for one cleanup pass.
 <li><code>abc/MMAP.c:23-31</code> <code>MMAPresize</code> — non-MREMAP path leaks the new mapping if <code>munmap</code> of the old region fails.</li>
 <li><code>abc/DNS.h:219-237</code> <code>DNSNameText</code> — ignores <code>u8sFeed1</code>/<code>u8sFeed</code> NOROOM, silently truncating the decoded name with no error (no OOB, but style-mandated check missing).</li>
 <li><code>abc/UTF8.c:116-127</code> <code>utf8sFeedInt</code> — <code>u = -*i</code> negates <code>INT64_MIN</code> (signed-overflow UB); <code>utf8sDrainInt</code> already guards the magnitude.</li>
+<li><code>jab/io.cpp:971-975</code> <code>JABCioLog</code> — <code>malloc(max)</code> return unchecked (JS-115 missed this site), then written by <code>JSStringGetUTF8CString</code>: NULL write under OOM; <code>JSValueToStringCopy</code> NULL is unchecked too (only <code>*exception</code> is tested).</li>
 </ul>
 <h2>Blockers</h2>
 <p>
@@ -32,15 +42,26 @@ None. All require extreme inputs or allocator failure.
 </p>
 <h2>WIP</h2>
 <p>
-Re-verified 2026-07-07 (abc now at dog/abc; <code>round_power_of_2</code> lives in 01.h): all five sites unfixed.
+Re-verified 2026-08-04 at <code>///jab#9dc100ea</code> (abc now at dog/abc; <code>round_power_of_2</code> lives in 01.h): all five abc sites still unfixed, plus the sixth <code>jab/io.cpp</code> site found in the same sweep.
 </p>
 <h3>TODOs</h3>
 <p>
- -<a href="./ .html"> </a> <code>dog/abc/SKIPx.h:67</code> <code>SKIPfeed</code> — slice still formed over <code>k-&gt;off + X(SKIP,len)(pos)</code> with no clamp (<code>off[40]</code> at :20, len can hit 41); cap at <code>sizeof(off)/sizeof(T)</code> like <code>SKIPfinish</code> (:85 has the check).  -<a href="./ .html"> </a> <code>dog/abc/01.h:242-245</code> <code>round_power_of_2</code> — still <code>1UL &lt;&lt; (64 - clz64(a))</code>, UB shift for a in (2^63,2^64); callers <code>MMAPresize4</code>/<code>MMAPmayresize</code> (dog/abc/MMAP.h:25,32) still overflow-prone before rounding.  -<a href="./ .html"> </a> <code>dog/abc/MMAP.c:27-28</code> <code>MMAPresize</code> — non-MREMAP path: <code>munmap(old)</code> failure <code>testc</code>-returns leaking <code>new_mem</code>; unmap the new mapping first.  -<a href="./ .html"> </a> <code>dog/abc/DNS.h:233</code> <code>DNSNameText</code> — <code>u8sFeed(into, label)</code> return still ignored (silent truncation); the dot feed (:228-230) is now $empty-guarded but the label feed is not. Same unchecked <code>u8sFeed(into, label)</code> pattern at DNS.h:170 and :212.  -<a href="./ .html"> </a> <code>dog/abc/UTF8.c:119-121</code> <code>utf8sFeedInt</code> — still <code>u = -*i</code> (INT64_MIN signed-negation UB); compute the magnitude unsigned.
+ -<a href="./ .html"> </a> <code>dog/abc/SKIPx.h:67</code> <code>SKIPfeed</code> — slice still formed over <code>k-&gt;off + X(SKIP,len)(pos)</code> with no clamp (<code>off[40]</code> at :20, len can hit 41); cap at <code>sizeof(off)/sizeof(T)</code> like <code>SKIPfinish</code> (:85 has the check). -<a href="./ .html"> </a> <code>dog/abc/01.h:242-245</code> <code>round_power_of_2</code> — still <code>1UL &lt;&lt; (64 - clz64(a))</code>, UB shift for a in (2^63,2^64); callers <code>MMAPresize4</code>/<code>MMAPmayresize</code> (dog/abc/MMAP.h:25,32) still overflow-prone before rounding. -<a href="./ .html"> </a> <code>dog/abc/MMAP.c:27-28</code> <code>MMAPresize</code> — non-MREMAP path: <code>munmap(old)</code> failure <code>testc</code>-returns leaking <code>new_mem</code>; unmap the new mapping first. -<a href="./ .html"> </a> <code>dog/abc/DNS.h:233</code> <code>DNSNameText</code> — <code>u8sFeed(into, label)</code> return still ignored (silent truncation); the dot feed (:228-230) is now $empty-guarded but the label feed is not. Same unchecked <code>u8sFeed(into, label)</code> pattern at DNS.h:170 and :212. -<a href="./ .html"> </a> <code>dog/abc/UTF8.c:119-121</code> <code>utf8sFeedInt</code> — still <code>u = -*i</code> (INT64_MIN signed-negation UB); compute the magnitude unsigned. -<a href="./ .html"> </a> <code>jab/io.cpp:973-974</code> <code>JABCioLog</code> — check the <code>malloc</code> (throw/skip on NULL) like <code>JABChexDecode</code> (codec.cpp:51-52) does, and NULL-check <code>JSValueToStringCopy</code> at :971 as <code>JABCPath</code> (io.cpp:30) does.
 </p>
 <h3>Blockers and bummers</h3>
 <p>
 None. All require extreme inputs or allocator failure.
 </p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CFOLD-002: a tokenizer failure masks as &quot;buffer full&quot; and turns a mergeable file into a FALSE CONFLICT</title>
+<meta property="og:title" content="CFOLD-002: a tokenizer failure masks as &quot;buffer full&quot; and turns a mergeable file into a FALSE CONFLICT">
+<meta property="og:description" content="DIFF-015 fixed the diff view: a fold failure now falls back to the plain-text lexer instead of erasing the file. The SAME mask survives on the merge side. jab/cfold.hpp:180 collapses every non-CFOLDBIG failure into cfold.fold: failed (buffer full?), and four JS callers gate on the substring &quot;full&quot;, so a tokenizer derail is silently taken for an over-cap skip. Measured 2026-08-04: weave3(base, ours, theirs, &quot;js&quot;) on verbs/mark/render.js bytes THROWS, the same call with ext &quot;&quot; merges (26269 bytes) — so jab get over an uncommitted edit to any slash-in-class .js file (/todo/DOG/DOG-021) reports a conflict that does not exist.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CFOLD/CFOLD-002.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>CFOLD-002: a tokenizer failure masks as &quot;buffer full&quot; and turns a mergeable file into a FALSE CONFLICT</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH Ask: gritzko Env: musl/JSC jab, wt <code>//DIFF-015-recheck</code> (a <code>///be</code> clone) Rev: ///be#014aa381 See: DIFF-015 Rep: ///be/
+</p>
+</div>
+<p>
+<a href="../DIFF/DIFF-015.html">DIFF-015</a> fixed the diff view: a fold failure now falls back to the plain-text lexer instead of erasing the file. The SAME mask survives on the merge side. <code>jab/cfold.hpp:180</code> collapses every non-<code>CFOLDBIG</code> failure into <code>cfold.fold: failed (buffer full?)</code>, and four JS callers gate on the substring <code>&quot;full&quot;</code>, so a tokenizer derail is silently taken for an over-cap skip. Measured 2026-08-04: <code>weave3(base, ours, theirs, &quot;js&quot;)</code> on <code>verbs/mark/render.js</code> bytes THROWS, the same call with ext <code>&quot;&quot;</code> merges (26269 bytes) — so <code>jab get</code> over an uncommitted edit to any slash-in-class <code>.js</code> file (<a href="/todo/DOG/DOG-021.html">DOG-021</a>) reports a conflict that does not exist.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Live throw site is <code>jab/cfold.hpp:179-180</code>, not <code>jab/weave.hpp:189</code> — the latter is dead code that <a href="../DIFF/DIFF-015.html">DIFF-015</a> named; only <code>CFOLDBIG</code> is forwarded distinctly.</li>
+<li>Gates matching the catch-all substring: <code>verbs/get/get.js:1127</code>, <code>shared/checkout.js:272</code>, <code>verbs/patch/patch.js:219</code>, <code>shared/expected.js:137</code> (all verified present at <code>#014aa381</code>).</li>
+<li>Harm per gate: get and checkout set <code>mg = null</code> (bogus <code>con</code> row), patch emits <code>failed</code>, expected drops the EXPECTED provenance — all with no signal, exactly the <a href="../DIFF/DIFF-015.html">DIFF-015</a> class.</li>
+<li><code>CFOLDBIG</code>'s own message (&quot;the file is too big to weave (over 16 MB of history)&quot;) contains no <code>&quot;full&quot;</code>, so every one of those gates RETHROWS where it meant to skip — latent, no <code>be/</code> file reaches it today.</li>
+<li>Clean, do not touch: <code>views/diff/diff.js:167,179,306</code> and <code>core/loop.js:88</code> (grow-and-replay) gate correctly for their own purpose.</li>
+<li>Trigger is <a href="/todo/DOG/DOG-021.html">DOG-021</a>: JST ends a regex literal at a <code>/</code> inside a char class, so any file with such a class folds <code>JSTBAD</code>.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A fold/merge failure NEVER silently degrades a merge: either the file merges, or the operator is told in plain words what happened (<a href="/todo/README.html">README</a> norms).</li>
+<li><code>jab/cfold.hpp</code> throws carry the real ok64 code, so over-cap, over-16MB-history and tokenizer-fail are three distinguishable outcomes, not one string.</li>
+<li>Callers gate on the code, never on a substring of a catch-all message; the <code>CFOLDBIG</code> rethrow-instead-of-skip gap closes with them.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Touches two repos: <code>jab/cfold.hpp</code> (the throw) and <code>///be</code> JS gates; <code>jab/</code> is read-only for agents, so the C++ side needs gritzko or an explicit order.</li>
+<li>No parallel differ/merger: the ruled remedy shape is a retry-fold under libdog's <code>TXTT</code> (ext <code>&quot;&quot;</code>), as <a href="../DIFF/DIFF-015.html">DIFF-015</a> landed for diff — a hand-rolled Myers differ was <code>rm -rf</code>-ed once for this.</li>
+<li>Repro-first: the false conflict must be watched failing in a be wt before any gate is opened up.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>OPEN QUESTION for gritzko: may MERGE fall back to <code>TXTT</code> like diff does? That trades token granularity for line granularity on the failing file — the 2026-07-29 ruling covered the diff VIEW only, and a merge ruling was not given.</li>
+<li>Until that is ruled, the safe half is the diagnosis: forward the code and make each gate say which of the three things happened.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: <code>jab get</code> over an uncommitted edit to a slash-in-class <code>.js</code> file yields a bogus <code>con</code> row, watched failing first.</li>
+<li class="open"><input type="checkbox" disabled> <code>jab/cfold.hpp</code>: fold/merge throws carry the ok64 code; over-cap, <code>CFOLDBIG</code> and tokenizer-fail are distinct.</li>
+<li class="open"><input type="checkbox" disabled> Gates match the code, not <code>&quot;full&quot;</code>: <code>get.js:1127</code>, <code>checkout.js:272</code>, <code>patch.js:219</code>, <code>expected.js:137</code>.</li>
+<li class="open"><input type="checkbox" disabled> <code>CFOLDBIG</code> reaches those gates as a rethrow today — cover it once the codes are forwarded.</li>
+<li class="open"><input type="checkbox" disabled> Drop or align the dead <code>jab/weave.hpp:189</code> throw so it stops advertising the old message.</li>
+<li class="open"><input type="checkbox" disabled> After the ruling: merge-side <code>TXTT</code> retry, or an explicit refusal with a plain-words notice.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="/todo/DOG/DOG-021.html">DOG-021</a> stays open meanwhile: any slash-in-class <code>.js</code> file folds <code>JSTBAD</code>, so the false conflict is reproducible on demand.</li>
+<li>The merge-granularity ruling above blocks the last TODO only; the forwarding work is unblocked.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

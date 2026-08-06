@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PATCH-012</title>
+<title>PATCH-012: get's 3-way weave has NO grow-on-out full retry (the only weave without it) — a big file throws, silently stays at OURS, and the next commit REVERTS the incoming side</title>
+<meta property="og:title" content="PATCH-012: get's 3-way weave has NO grow-on-out full retry (the only weave without it) — a big file throws, silently stays at OURS, and the next commit REVERTS the incoming side">
+<meta property="og:description" content="verbs/get/get.js:926-943 hand-rolls weave3 with FIXED caps — abc.ram(&quot;WEAVE&quot;, 1&lt;&lt;18) for each of the four folds, 1&lt;&lt;19 for the merge, io.buf(1&lt;&lt;20) for the render — and never catches the binding's out full throw. Every OTHER weave in the tree grows and replays (DIFF-010): core/loop.js:71-85 doubles the cap and re-feeds the held records, shared/weave.js carries that retry for PATCH's per-file merge (patch.js:44-46), and views/diff/diff.js:29-30 mirrors it. So a be get that must 3-way merge a large dirty file throws out full mid-reconcile and the leaf is LEFT AT OURS — the update reports done, the incoming side is silently absent, and a post on top records a commit whose parent claims the incoming changes while its trees revert them. Hit live 2026-07-16: updating work/DIS-072 from af94f0ea to fec59ed5 left verbs/post/post.js (~35KB), verbs/get/get.js, views/refs/refs.js and views/status/status.js at ours; the resulting e74ae263 (parent fec59ed5) carried DIS-074:0/DIS-075:0 markers where its own parent has 5/2 — it REVERTED two landed tickets while the log claimed them. gritzko rolled it back. Same failure CLASS as DIS-041 (a weave that bails leaves the file UNMERGED); that one fixed the graf-index path, this one is the cap path.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PATCH/PATCH-012.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>PATCH-012 <a href="./HIGH.html">HIGH</a>: <code>get</code>'s 3-way weave has NO grow-on-<code>out full</code> retry (the only weave without it) — a big file throws, silently stays at OURS, and the next commit REVERTS the incoming side</h1>
+<h1>PATCH-012: <code>get</code>'s 3-way weave has NO grow-on-<code>out full</code> retry (the only weave without it) — a big file throws, silently stays at OURS, and the next commit REVERTS the incoming side</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>verbs/get/get.js:926-943</code> hand-rolls <code>weave3</code> with FIXED caps — <code>abc.ram(&quot;WEAVE&quot;, 1&lt;&lt;18)</code> for each of the four folds, <code>1&lt;&lt;19</code> for the merge, <code>io.buf(1&lt;&lt;20)</code> for the render — and never catches the binding's <code>out full</code> throw. Every OTHER weave in the tree grows and replays (<a href="../DIFF/DIFF-010.html">DIFF-010</a>): <code>core/loop.js:71-85</code> doubles the cap and re-feeds the held records, <code>shared/weave.js</code> carries that retry for <a href="../../wiki/PATCH.html">PATCH</a>'s per-file merge (patch.js:44-46), and <code>views/diff/diff.js:29-30</code> mirrors it. So a <code>be get</code> that must 3-way merge a large dirty file throws <code>out full</code> mid-reconcile and the leaf is LEFT AT OURS — the update reports done, the incoming side is silently absent, and a <code>post</code> on top records a commit whose parent claims the incoming changes while its trees revert them. Hit live 2026-07-16: updating <code>work/DIS-072</code> from <code>af94f0ea</code> to <code>fec59ed5</code> left <code>verbs/post/post.js</code> (~35KB), <code>verbs/get/get.js</code>, <code>views/refs/refs.js</code> and <code>views/status/status.js</code> at ours; the resulting <code>e74ae263</code> (parent <code>fec59ed5</code>) carried DIS-074:0/DIS-075:0 markers where its own parent has 5/2 — it REVERTED two landed tickets while the log claimed them. gritzko rolled it back. Same failure CLASS as <a href="../DIS/DIS-041.html">DIS-041</a> (a weave that bails leaves the file UNMERGED); that one fixed the graf-index path, this one is the cap path.
 </p>
@@ -55,7 +64,7 @@ The cap must not become a silent truncation, and the retry must stay in one plac
 </ul>
 <h3>TODOs</h3>
 <ul>
-<li><a href="./v.html">v</a> repro: <code>test/get/dirty-big/run.sh</code> (<code>be-js-get-dirty-big</code>) — A: ~600KB dirty 3-way lands both sides; B: ~4.5MB refuses loudly (non-zero, ours intact, durable <code>con</code> row); pre-fix code fails A with <code>weave.fold: failed (out full?)</code></li>
+<li><a href="./v.html">v</a> repro: <code>test/get/dirty-big/run.sh</code> (<code>be-js-get-dirty-big</code>) — A: <del>600KB dirty 3-way lands both sides; B: </del>4.5MB refuses loudly (non-zero, ours intact, durable <code>con</code> row); pre-fix code fails A with <code>weave.fold: failed (out full?)</code></li>
 <li><a href="./v.html">v</a> weave3 routed through shared/weave.js <code>fold</code>/<code>merge</code>; render via <code>io.ram(MAX_SOURCE_MARKED_UP)</code> (patch.js:198's sink); all <code>abc.ram(&quot;WEAVE&quot;,…)</code> + <code>io.buf(1&lt;&lt;20)</code> caps deleted</li>
 <li><a href="./v.html">v</a> over-cap/still-full weave refuses LOUDLY (see design decisions)</li>
 <li><a href="./v.html">v</a> audit: get's render cap fixed by the fix itself; <code>verbs/patch/patch.js:366</code> <code>outBuf/aliveBuf io.buf(1&lt;&lt;20)</code> are DEAD (never referenced) — delete-worthy, own ticket; pack.scan (<code>jab.be/pack.hpp:289</code>) is a count-trusting class, <code>shared/ingest.js</code> buildIndex/indexAppended do NOT catch it — ticketed as <a href="/todo/PACK/PACK-003.html">PACK-003</a></li>
@@ -69,12 +78,18 @@ The cap must not become a silent truncation, and the retry must stay in one plac
 <ul>
 <li>FILED 2026-07-16 off a live incident (the <code>e74ae263</code> silent revert, rolled back by gritzko).</li>
 <li>2026-07-16 fix + repro in <code>work/PATCH-012</code> (uncommitted): 3-hunk get.js diff + new <code>test/get/dirty-big/run.sh</code>; suite 242/242 green (orchestrator re-ran). Awaiting review/land order.</li>
+<li>Landed <code>cde00857</code> (2026-07-16, &quot;PATCH-012: better error handling&quot;).</li>
+<li>The native <code>be get</code> silent-ours sibling and <code>verbs/patch/patch.js:366</code> dead buffers were left for their own tickets; pack.scan is <a href="/todo/PACK/PACK-003.html">PACK-003</a>.</li>
 </ul>
 <div class="footer">
 ❧
-<a href="/feed.rss">RSS feed</a> ❧
-<a href="https://github.com/gritzko/beagle-ext">Beagle</a> ❧
-<a href="https://github.com/gritzko/jab">JAB</a>
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
 ❧
 </div>
 </body>

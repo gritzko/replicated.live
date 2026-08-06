@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JS-042</title>
+<title>JS-042: JABC FILE bindings — io.stat mtime + lstat/readlink/symlink/chmod</title>
+<meta property="og:title" content="JS-042: JABC FILE bindings — io.stat mtime + lstat/readlink/symlink/chmod">
+<meta property="og:description" content="The bin/.js extensions hand-roll workarounds for file metadata JABC doesn't expose, though the C leaves already exist (abc/FILE.h): io.stat drops the filestat mtime/atime (FILE.h:311) and follows symlinks (FILEStat, not FILELStat), and there is no readlink/symlink/chmod. Surface them so JS can read mtimes, classify+apply symlinks, and set the exec bit. THIS ticket adds the bindings + a JABC test ONLY — the bin/.js rewire is JS-044, kept separate so this tree stays js/-only and disjoint from JS-043. Found by the bin/.js review. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-042.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,77 +15,63 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-042 <a href="">MED</a>: JABC FILE bindings — <code>io.stat</code> mtime + lstat/readlink/symlink/chmod</h1>
+<h1>JS-042: JABC FILE bindings — <code>io.stat</code> mtime + lstat/readlink/symlink/chmod</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The <code>bin/*.js</code> extensions hand-roll workarounds for file metadata JABC doesn't expose, though the C leaves already exist (<code>abc/FILE.h</code>): <code>io.stat</code> drops the <code>filestat</code> mtime/atime (<code>FILE.h:311</code>) and follows symlinks (<code>FILEStat</code>, not <code>FILELStat</code>), and there is no <code>readlink</code>/<code>symlink</code>/<code>chmod</code>. Surface them so JS can read mtimes, classify+apply symlinks, and set the exec bit. THIS ticket adds the bindings + a JABC test ONLY — the <code>bin/*.js</code> rewire is <a href="JS-044.html">JS-044</a>, kept separate so this tree stays js/-only and disjoint from <a href="JS-043.html">JS-043</a>. Found by the bin/*.js review. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>io.stat</code> (<code>js/io.cpp</code>) returns <code>{size, mode, kind}</code> via <code>FILEStat</code> (follows<p>
-links). The <code>filestat</code> struct (<code>abc/FILE.h:310-316</code>) already carries <code>mtime</code>/<code>atime</code> as ron60; <code>FILELStat</code>/<code>FILEReadLink</code>/<code>FILESymLink</code>/<code>FILEChmod</code> are implemented leaves, all unbound.
-</p>
-</li>
-<li>Consumers (rewired in <a href="JS-044.html">JS-044</a>): <code>classify.js</code> <code>batchMtimes</code> spawns<p>
-<code>/usr/bin/stat</code> for mtimes; <code>classify.js:119-128</code> recovers a symlink kind from a thrown stat; <code>checkout.js</code> can't apply symlinks / the exec bit.
-</p>
-</li>
+<li><code>io.stat</code> (<code>js/io.cpp</code>) returns <code>{size, mode, kind}</code> via <code>FILEStat</code> (follows links). The <code>filestat</code> struct (<code>abc/FILE.h:310-316</code>) already carries <code>mtime</code>/<code>atime</code> as ron60; <code>FILELStat</code>/<code>FILEReadLink</code>/<code>FILESymLink</code>/<code>FILEChmod</code> are implemented leaves, all unbound.</li>
+<li>Consumers (rewired in <a href="JS-044.html">JS-044</a>): <code>classify.js</code> <code>batchMtimes</code> spawns <code>/usr/bin/stat</code> for mtimes; <code>classify.js:119-128</code> recovers a symlink kind from a thrown stat; <code>checkout.js</code> can't apply symlinks / the exec bit.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
 <li><code>io.stat(path)</code> → <code>{size, mode, kind, mtime, atime}</code> (mtime/atime BigInt ron60).</li>
 <li><code>io.lstat(path)</code> → same shape, no symlink follow (<code>FILELStat</code>).</li>
-<li><code>io.readlink(path)</code> → string; <code>io.symlink(target, linkpath)</code>; `io.chmod(path,<p>
-mode)`.
-</p>
-</li>
-<li>A JABC ctest exercises each: symlink round-trip, <code>chmod 0755</code>, lstat a dangling<p>
-link, read a known mtime.
-</p>
-</li>
+<li><code>io.readlink(path)</code> → string; <code>io.symlink(target, linkpath)</code>; <code>io.chmod(path, mode)</code>.</li>
+<li>A JABC ctest exercises each: symlink round-trip, <code>chmod 0755</code>, lstat a dangling link, read a known mtime.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Pure marshalling over existing <code>abc/FILE.h</code> leaves — no new abc, no dog.<p>
-Bindings hold no memory (rule #4). Follow <code>js/io.cpp</code> + <code>js/API.md</code>/<code>INDEX.md</code>.
-</p>
-</li>
+<li>Pure marshalling over existing <code>abc/FILE.h</code> leaves — no new abc, no dog. Bindings hold no memory (rule #4). Follow <code>js/io.cpp</code> + <code>js/API.md</code>/<code>INDEX.md</code>.</li>
 <li>mtime/atime cross as BigInt ron60 (the <code>ron</code> codec convention <code>dateCol</code> uses).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Extend <code>JABCioStat</code> to set mtime/atime; add <code>JABCioLStat</code>/<code>ReadLink</code>/<code>SymLink</code><p>
-/<code>Chmod</code> in <code>js/io.cpp</code>, install in <code>main.cpp</code>; register a ctest (<code>JABCstat</code> or extend an existing io test).
-</p>
-</li>
+<li>Extend <code>JABCioStat</code> to set mtime/atime; add <code>JABCioLStat</code>/<code>ReadLink</code>/<code>SymLink</code> /<code>Chmod</code> in <code>js/io.cpp</code>, install in <code>main.cpp</code>; register a ctest (<code>JABCstat</code> or extend an existing io test).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: <code>test/js/.../stat.js</code> (or extend) asserts the new fields/leaves;<p>
-  register in <code>js/CMakeLists.txt</code>.
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Repro-first: <code>test/js/.../stat.js</code> (or extend) asserts the new fields/leaves; register in <code>js/CMakeLists.txt</code>.</li>
 <li class="open"><input type="checkbox" disabled> Implement in <code>js/io.cpp</code> + install; update <code>js/API.md</code> + <code>js/INDEX.md</code>.</li>
 <li class="open"><input type="checkbox" disabled> <code>ctest -R JABC</code> green; ASAN/LSan clean.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>None. <a href="JS-044.html">JS-044</a> consumes this — do NOT touch <code>bin/*.js</code> here (keep the tree<p>
-disjoint from <a href="JS-043.html">JS-043</a>).
-</p>
-</li>
+<li>None. <a href="JS-044.html">JS-044</a> consumes this — do NOT touch <code>bin/*.js</code> here (keep the tree disjoint from <a href="JS-043.html">JS-043</a>).</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>Landed <code>ff7a378e</code> (FF onto trunk <code>69f51bd3</code>): <code>io.stat</code> carries mtime/atime<p>
-(BigInt ron60) + <code>io.lstat</code>/<code>readlink</code>/<code>symlink</code>/<code>chmod</code> over <code>abc/FILE.h</code> leaves (<code>js/io.cpp</code> + a shared <code>JABCStatObj</code> helper). Repro <code>JABCstat</code> (<code>js/test/stat.js</code>); 24/24 JABC green, ASAN/LSan clean; API.md/INDEX.md updated.
-</p>
-</li>
-<li>Surfaced two <code>be</code> bugs in worktree setup: the path-form <code>file:</code> URL misparse in<p>
-<code>be get</code> (already filed), and offline submodule get-by-hash reporting <code>ok</code> but writing no files (<a href="../GET/GET-032.html">GET-032</a>).
-</p>
-</li>
+<li>Landed <code>ff7a378e</code> (FF onto trunk <code>69f51bd3</code>): <code>io.stat</code> carries mtime/atime (BigInt ron60) + <code>io.lstat</code>/<code>readlink</code>/<code>symlink</code>/<code>chmod</code> over <code>abc/FILE.h</code> leaves (<code>js/io.cpp</code> + a shared <code>JABCStatObj</code> helper). Repro <code>JABCstat</code> (<code>js/test/stat.js</code>); 24/24 JABC green, ASAN/LSan clean; API.md/INDEX.md updated.</li>
+<li>Surfaced two <code>be</code> bugs in worktree setup: the path-form <code>file:</code> URL misparse in <code>be get</code> (already filed), and offline submodule get-by-hash reporting <code>ok</code> but writing no files (<a href="../GET/GET-032.html">GET-032</a>).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

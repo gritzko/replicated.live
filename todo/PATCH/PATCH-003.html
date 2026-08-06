@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PATCH-003</title>
+<title>PATCH-003: be patch '&lt;x&gt;!' patch-from broken — false-noop+mutation (local) and dead source (remote)</title>
+<meta property="og:title" content="PATCH-003: be patch '&lt;x&gt;!' patch-from broken — false-noop+mutation (local) and dead source (remote)">
+<meta property="og:description" content="The ! patch-from operator misbehaves two ways, both seen reconciling the ~/todo/JS-053 worktree against landed ?6a0ce1b7 (URI-006 St.2): a LOCAL ?! reports &quot;nothing absorbed&quot; yet mutates the worktree, and a REMOTE &lt;uri&gt;! absorbs nothing at all while a pinned ?&lt;sha&gt;! absorbs 41. Net: be patch '!' cannot be trusted to reconcile, and when it claims a noop it may still have written. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/PATCH/PATCH-003.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,35 +16,25 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>PATCH-003: <code>be patch '&lt;x&gt;!'</code> patch-from broken — false-noop+mutation (local) and dead source (remote)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 The <code>!</code> patch-from operator misbehaves two ways, both seen reconciling the <code>~/todo/JS-053</code> worktree against landed <code>?6a0ce1b7</code> (<a href="../URI/URI-006.html">URI-006</a> St.2): a LOCAL <code>?!</code> reports &quot;nothing absorbed&quot; yet mutates the worktree, and a REMOTE <code>&lt;uri&gt;!</code> absorbs nothing at all while a pinned <code>?&lt;sha&gt;!</code> absorbs 41. Net: <code>be patch '!'</code> cannot be trusted to reconcile, and when it claims a noop it may still have written. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>be patch '?!'</code> → <code>noop=11 … (nothing absorbed — no patch row staged)</code> BUT then<p>
-<code>get abc?40cf6df6</code> + <code>mod abc/FILE.c</code> + <code>mod abc/FILE.h</code> — fetched abc and edited two files while reporting it did nothing.
-</p>
-</li>
-<li><code>be patch 'be://localhost/beagle-journal?/beagle!'</code> → same `noop=11 … nothing<p>
-absorbed<code>, though </code>be head be://…?/beagle<code> then reports </code>1 ahead, 1 behind, 100 changed`. The remote patch-source resolved to nothing.
-</p>
-</li>
-<li>Contrast (works): <code>be patch '?6a0ce1b7!'</code> → `noop=163 take-theirs=41 merged=1<p>
-added=2 deleted=2`, applied St.2's files cleanly. Only the pinned-sha form worked.
-</p>
-</li>
+<li><code>be patch '?!'</code> → <code>noop=11 … (nothing absorbed — no patch row staged)</code> BUT then <code>get abc?40cf6df6</code> + <code>mod abc/FILE.c</code> + <code>mod abc/FILE.h</code> — fetched abc and edited two files while reporting it did nothing.</li>
+<li><code>be patch 'be://localhost/beagle-journal?/beagle!'</code> → same <code>noop=11 … nothing absorbed</code>, though <code>be head be://…?/beagle</code> then reports <code>1 ahead, 1 behind, 100 changed</code>. The remote patch-source resolved to nothing.</li>
+<li>Contrast (works): <code>be patch '?6a0ce1b7!'</code> → <code>noop=163 take-theirs=41 merged=1 added=2 deleted=2</code>, applied St.2's files cleanly. Only the pinned-sha form worked.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>be patch '?!'</code> and <code>be patch '&lt;remote-uri&gt;!'</code> resolve the SAME patch source a pinned<p>
-<code>?&lt;sha&gt;!</code> does, and absorb the real divergence (or report honestly why not).
-</p>
-</li>
-<li>A <code>noop</code>/&quot;nothing absorbed&quot; result means ZERO worktree mutation — never a silent<p>
-<code>get</code>/<code>mod</code> of files after the noop banner.
-</p>
-</li>
+<li><code>be patch '?!'</code> and <code>be patch '&lt;remote-uri&gt;!'</code> resolve the SAME patch source a pinned <code>?&lt;sha&gt;!</code> does, and absorb the real divergence (or report honestly why not).</li>
+<li>A <code>noop</code>/&quot;nothing absorbed&quot; result means ZERO worktree mutation — never a silent <code>get</code>/<code>mod</code> of files after the noop banner.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
@@ -63,10 +57,18 @@ added=2 deleted=2`, applied St.2's files cleanly. Only the pinned-sha form worke
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>Landed <code>9044dda1</code> (test) + <code>44df6916</code> (fix) on beagle trunk (symptom<p>
-a). Root: PATCH's gitlink classification compared theirs-vs-OURS, not theirs-vs-BASE — an ancestor source then &quot;take-theirs&quot; reset the sub gitlink BACKWARD on a noop. Fix: sniff/PATCH.c gitlink arm (theirs-vs-fork-base) + a SUBSDirty stale gate in beagle/BE.cli.c BEActSubsPatch so the sub re-get skips on/ahead pins (+KEEPClose before sniff sub-mount spawn, else parent/child .lock self-deadlock). Repro: test/patch/37-sub- ancestor-noop (ssh). Symptom b (remote <code>&lt;uri&gt;!</code> dead) does NOT repro on current trunk — remote <code>?master!</code> resolves the same source as pinned <code>?&lt;sha&gt;!</code> (added=1 both); likely fixed by URI-006/URI-002.
-</p>
-</li>
+<li>Landed <code>9044dda1</code> (test) + <code>44df6916</code> (fix) on beagle trunk (symptom a). Root: PATCH's gitlink classification compared theirs-vs-OURS, not theirs-vs-BASE — an ancestor source then &quot;take-theirs&quot; reset the sub gitlink BACKWARD on a noop. Fix: sniff/PATCH.c gitlink arm (theirs-vs-fork-base) + a SUBSDirty stale gate in beagle/BE.cli.c BEActSubsPatch so the sub re-get skips on/ahead pins (+KEEPClose before sniff sub-mount spawn, else parent/child .lock self-deadlock). Repro: test/patch/37-sub- ancestor-noop (ssh). Symptom b (remote <code>&lt;uri&gt;!</code> dead) does NOT repro on current trunk — remote <code>?master!</code> resolves the same source as pinned <code>?&lt;sha&gt;!</code> (added=1 both); likely fixed by URI-006/URI-002.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

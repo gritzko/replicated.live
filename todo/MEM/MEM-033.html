@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-033</title>
+<title>MEM-033 DONT: JABCReport casts exception OBJECT to JSStringRef (js/main.cpp)</title>
+<meta property="og:title" content="MEM-033 DONT: JABCReport casts exception OBJECT to JSStringRef (js/main.cpp)">
+<meta property="og:description" content="JABCReport reports a thrown JS exception. In the message branch (JSValueIsObject &amp;&amp; has message), it fetches ref=message (a real JSStringRef) into page, overwrites the NUL with newline, then calls JSStringGetUTF8CString((JSStringRef)exception, page+len, PAGESIZE-len) — but exception is a JS OBJECT, not a string. Casting an object to JSStringRef makes JSC reinterpret the object's heap layout as a StringImpl, reading a bogus length and char pointer: type confusion / OOB-garbage read into a stack buffer, reachable from any uncaught Error with a message. The sibling Stack branch correctly uses (JSStringRef)ref, confirming a copy-paste defect. The goal is to use ref, bound by remaining page, and re-terminate.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-033.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>MEM-033: JABCReport casts exception OBJECT to JSStringRef (js/main.cpp)</h1>
+<h1>MEM-033 <a href="./DONT.html">DONT</a>: JABCReport casts exception OBJECT to JSStringRef (js/main.cpp)</h1>
+<div>
+<p>
+Now: DONT
+</p>
+</div>
 <p>
 <code>JABCReport</code> reports a thrown JS exception. In the message branch (<code>JSValueIsObject</code> &amp;&amp; has message), it fetches <code>ref=message</code> (a real JSStringRef) into <code>page</code>, overwrites the NUL with newline, then calls <code>JSStringGetUTF8CString((JSStringRef)exception, page+len, PAGESIZE-len)</code> — but <code>exception</code> is a JS OBJECT, not a string. Casting an object to <code>JSStringRef</code> makes JSC reinterpret the object's heap layout as a <code>StringImpl</code>, reading a bogus length and char pointer: type confusion / OOB-garbage read into a stack buffer, reachable from any uncaught <code>Error</code> with a message. The sibling Stack branch correctly uses <code>(JSStringRef)ref</code>, confirming a copy-paste defect. The goal is to use <code>ref</code>, bound by remaining <code>page</code>, and re-terminate.
 </p>
@@ -38,5 +47,16 @@ Use the message ref; bound and terminate.
 <li>Replace <code>(JSStringRef)exception</code> at :140 with the already-fetched <code>ref</code> (the message JSStringRef).</li>
 <li>Bound the second write by remaining <code>page</code> space and re-append a NUL before <code>fprintf</code>/<code>printf</code>.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

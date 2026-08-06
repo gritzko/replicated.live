@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOG-024 DONE: heading and todo markers are not 4-char quads — MKDTB eats a 5th byte, rejects padded #</title>
+<meta property="og:title" content="DOG-024 DONE: heading and todo markers are not 4-char quads — MKDTB eats a 5th byte, rejects padded #">
+<meta property="og:description" content="Ruling (gritzko, 2026-07-28): EVERY StrictMark block marker is exactly one 4-char quad and is self-delimiting — there is no gap space outside the quad. A heading is a run of 1-4 # padded with spaces in any columns (# , # , # , #, ## , ## , ##, ### , ###, ####), its level the COUNT of #; a todo marker is exactly - / -v / -- / -x, four chars, no trailing space. Content always begins at depth4+4; a leading space there is content, and the renderer trims it. MKDTB (MKDTB.c.rl:58,65) implements neither rule, and the JS port has already drifted from the C one on the todo case.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DOG/DOG-024.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG-024 <a href="./DONE.html">DONE</a>: heading and todo markers are not 4-char quads — MKDTB eats a 5th byte, rejects padded <code>#</code></h1>
+<div>
+<p>
+Now: DONE Sev: MED
+</p>
+</div>
+<p>
+Ruling (gritzko, 2026-07-28): EVERY StrictMark block marker is exactly one 4-char quad and is self-delimiting — there is no gap space outside the quad. A heading is a run of 1-4 <code>#</code> padded with spaces in any columns (<code>#   </code>, <code> #  </code>, <code>  # </code>, <code>   #</code>, <code>##  </code>, <code> ## </code>, <code>  ##</code>, <code>### </code>, <code> ###</code>, <code>####</code>), its level the COUNT of <code>#</code>; a todo marker is exactly <code>-[ ]</code> / <code>-[v]</code> / <code>-[-]</code> / <code>-[x]</code>, four chars, no trailing space. Content always begins at <code>depth*4+4</code>; a leading space there is content, and the renderer trims it. <code>MKDTB</code> (<code>MKDTB.c.rl:58,65</code>) implements neither rule, and the JS port has already drifted from the C one on the todo case.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>todo = '-' '[' (…) ']' sp</code> (<code>MKDTB.c.rl:58</code>) requires a 5th byte, so JAB-001:51-57's gapless <code>-[v]New …</code> lines are not todo items at all — they render as paragraphs.</li>
+<li><code>heading = ('#'{1,4}) sp @h_level (sp* $h_space)</code> (<code>MKDTB.c.rl:65</code>) demands the run start at the quad's column 0 AND be followed by &gt;=1 space: bare <code>####</code> is rejected, and <code> #  </code> / <code>  # </code> / <code>   #</code> fall through to paragraph.</li>
+<li>The JS <code>classify</code> (<code>render.js:322</code>) already disagrees with C: its todo is 4 chars wide (<code>content = i + 4</code>), its heading takes <code>#{1,4}</code> before a space OR EOL, still unpadded — two renderers, two grammars.</li>
+<li>Corpus census (2026-07-28, 7228 headings): 7221 are already exact quads (<code>### </code>, <code>##  </code>, <code>#   </code>); 5 are <code>###  </code> and 1 is <code>#### </code> (fine — the extra space becomes content).</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>MKDTBlock</code> accepts the padded <code>#</code>-run quad like it already accepts padded <code>quote</code>/<code>bullet</code>, with <code>b-&gt;heading</code> = the count of <code>#</code> bytes.</li>
+<li>A todo marker matches on 4 chars, leaving the following byte to content.</li>
+<li><code>b-&gt;content</code> is <code>depth*4+4</code> for every marker shape; C and JS classify identically.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Grammar changes belong in <code>MKDTB.c.rl</code> (<code>ragel -C MKDTB.c.rl -o MKDTB.rl.c -L</code>) — no hand-rolled line scanning creeps back into <code>MKDT.c</code>.</li>
+<li>Only one corpus line breaks under the ruling and it is a fix, not a test edit: <code>blog/follow-up.mkd:1</code> <code>#  &quot;New model economics&quot;</code> is a 3-char prefix and needs one more space.</li>
+<li>Renderers must trim the leading content space so <code>####</code> + <code>&quot; Smallest header&quot;</code> still renders the old text (<code>MARK.c:336-340</code>, <code>render.js</code> heading branch).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>heading</code> mirrors the existing <code>quote</code>/<code>bullet</code> shape: the alternation of <code>#</code>-run positions inside the quad, level from the run length, content at the quad end.</li>
+<li>The gap-space concept survives only as prose: a full quad self-delimits, so nothing needs a following space.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: <code>TOK01</code> cases for <code> ## Sub</code>, <code>   #Top</code>, <code>####Smallest</code>, <code>-[v]New</code>.</li>
+<li class="open"><input type="checkbox" disabled> <code>MKDTB.c.rl</code>: padded heading quad + level-by-count; todo drops the trailing <code>sp</code>.</li>
+<li class="open"><input type="checkbox" disabled> Mirror both in <code>classify</code> (<code>render.js:322</code>); C and JS agree case-for-case.</li>
+<li class="open"><input type="checkbox" disabled> Trim the leading content space in the heading/todo emit paths.</li>
+<li class="open"><input type="checkbox" disabled> Fix <code>blog/follow-up.mkd:1</code>; re-render the site and diff for stray changes.</li>
+<li class="open"><input type="checkbox" disabled> Spec: <code>wiki/StrictMark.mkd</code> :68 (gap space), :70-:71 (exception list), §Headers example block.</li>
+<li class="open"><input type="checkbox" disabled> Spun off <a href="./DOG-025.html">DOG-025</a><a href="./DOG-025.html">25</a>: code span/fence inners — tokenize, but recognize no nested formatting.</li>
+<li class="open"><input type="checkbox" disabled> Renderer-side bullets (trim, classify mirror, follow-up.mkd fix, site re-render) execute in <a href="./MARK-013.html">MARK-013</a><a href="../MARK/MARK-013.html">13</a>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none known)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>737d196b (dog): quad grammar + inline span re-lex landed; the code-inners gap spun off to <a href="./DOG-025.html">DOG-025</a><a href="./DOG-025.html">25</a>.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

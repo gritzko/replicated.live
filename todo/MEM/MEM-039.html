@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-039</title>
+<title>MEM-039 DONT: js — io.mmap SIZEMAX buffer-overrun on a path-conversion failure, plus an mmap ownership leak</title>
+<meta property="og:title" content="MEM-039 DONT: js — io.mmap SIZEMAX buffer-overrun on a path-conversion failure, plus an mmap ownership leak">
+<meta property="og:description" content="js/io.cpp has two error-path memory bugs in the same FFI surface. (1) buffer-overrun: io.mmap(path) writes the path via JSStringGetUTF8CString then does u8sFeedn(u8bIdle(path), page, len-1) with no check that len&gt;0 — if JSC returns 0 on a conversion error, len-1 wraps to SIZEMAX and the feed runs a massive OOB. (2) leak-on-error: JABCioFileMap FILEMapRO's a live mmap meant to transfer to the JS GC via the typed-array deallocator, but if the JSObjectMakeTypedArray creation FAILS the ownership transfer never happens and the mmap leaks. js is WIP (JSC-blocked), but both are real and on the error path. From the MEM sweep.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-039.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>MEM-039: js — io.mmap SIZE_MAX buffer-overrun on a path-conversion failure, plus an mmap ownership leak</h1>
+<h1>MEM-039 <a href="./DONT.html">DONT</a>: js — io.mmap SIZE_MAX buffer-overrun on a path-conversion failure, plus an mmap ownership leak</h1>
+<div>
+<p>
+Now: DONT
+</p>
+</div>
 <p>
 js/io.cpp has two error-path memory bugs in the same FFI surface. (1) buffer-overrun: io.mmap(path) writes the path via JSStringGetUTF8CString then does <code>u8sFeedn(u8bIdle(path), page, len-1)</code> with no check that len&gt;0 — if JSC returns 0 on a conversion error, len-1 wraps to SIZE_MAX and the feed runs a massive OOB. (2) leak-on-error: JABCioFileMap FILEMapRO's a live mmap meant to transfer to the JS GC via the typed-array deallocator, but if the JSObjectMakeTypedArray* creation FAILS the ownership transfer never happens and the mmap leaks. js is WIP (JSC-blocked), but both are real and on the error path. From the <a href="MEM.html">MEM</a> sweep.
 </p>
@@ -37,5 +46,16 @@ Guard the length and release the mmap on the creation-failure path.
 <li>Add <code>if (len == 0) &lt;bail&gt;</code> before the <code>len-1</code> feed.</li>
 <li>On the typed-array-create failure branch, FILEUnMap the buffer before returning.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

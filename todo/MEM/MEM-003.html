@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-003</title>
+<title>MEM-003: SORTu64 clamps wrong chunk → OOB read (abc/SORT.c)</title>
+<meta property="og:title" content="MEM-003: SORTu64 clamps wrong chunk → OOB read (abc/SORT.c)">
+<meta property="og:description" content="SORTu64's merge carves chunks of clen u64s and tries to clamp the trailing partial chunk, but the clamp targets the physical last array slot after the heap has reordered chunks by value, so the actual overrunning chunk survives unclamped and is later consumed, reading up to (clen-1)8 bytes past the from/into buffer. The goal is to clamp each partial chunk at creation time, before it enters the heap.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-003.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>MEM-003: SORTu64 clamps wrong chunk → OOB read (abc/SORT.c)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 <code>SORTu64</code>'s merge carves chunks of <code>clen</code> u64s and tries to clamp the trailing partial chunk, but the clamp targets the physical last array slot <strong>after</strong> the heap has reordered chunks by value, so the actual overrunning chunk survives unclamped and is later consumed, reading up to <code>(clen-1)*8</code> bytes past the <code>from</code>/<code>into</code> buffer. The goal is to clamp each partial chunk at creation time, before it enters the heap.
 </p>
@@ -37,5 +46,16 @@ Clamp at chunk construction, drop the unreliable post-hoc clamp.
 <li>Repro first: add a <code>SORT</code> test case with 65 (and 4097) u64 inputs; confirm OOB read under ASan.</li>
 <li>After <code>p += clen</code>, set <code>chunk[1] = p &gt; from64[1] ? (u8c*)from64[1] : (u8c*)p;</code> and remove the <code>$last(chunksdata)</code> clamp.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

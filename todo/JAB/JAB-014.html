@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAB-014: net.accept swallows real errors as &quot;not ready&quot; — pol.IN accept loop busy-spins</title>
+<meta property="og:title" content="JAB-014: net.accept swallows real errors as &quot;not ready&quot; — pol.IN accept loop busy-spins">
+<meta property="og:description" content="JABCNetAccept (jab/net.cpp:76) maps every non-OK from TCPAccept to -1, though the ABC op distinguishes NETAGAIN from TCPFAIL (dog/abc/TCP.h:21). A real failure (EMFILE, ECONNABORTED) thus looks like EAGAIN, and the level-triggered pol.IN accept loop spins on it instead of throwing. NET.md promises &quot;Errors throw out of the loop… (other than EAGAIN)&quot; and maps &quot;TCPAccept (EAGAIN → -1)&quot; — the code honors neither. Found in the 2026-07-24 jab/ review.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-014.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JAB-014: net.accept swallows real errors as &quot;not ready&quot; — pol.IN accept loop busy-spins</h1>
+<div>
+<p>
+Now: OPEN Sev: MED
+</p>
+</div>
+<p>
+<code>JABCNetAccept</code> (jab/net.cpp:76) maps every non-OK from <code>TCPAccept</code> to <code>-1</code>, though the ABC op distinguishes <code>NETAGAIN</code> from <code>TCPFAIL</code> (dog/abc/TCP.h:21). A real failure (EMFILE, ECONNABORTED) thus looks like EAGAIN, and the level-triggered <code>pol.IN</code> accept loop spins on it instead of throwing. NET.md promises &quot;Errors throw out of the loop… (other than EAGAIN)&quot; and maps &quot;TCPAccept (EAGAIN → <code>-1</code>)&quot; — the code honors neither. Found in the 2026-07-24 jab/ review.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>A server that hits its fd cap should die loudly, not eat a core at 100%.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>net.accept</code> returns <code>-1</code> only for NETAGAIN; every other failure throws, matching NET.md.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Repro-first: drive accept into a distinguishable failure (e.g. fd exhaustion via setrlimit) and assert a throw, not <code>-1</code>.</li>
+<li>Errors in plain words per the standing ruling.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(pending)</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro: forced accept failure → throw.</li>
+<li class="open"><input type="checkbox" disabled> Branch on NETAGAIN vs the rest in JABCNetAccept.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>(none)</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending)</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

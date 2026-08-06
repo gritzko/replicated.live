@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-119: verb resolution must not depend on cwd/chdir — pin the jsrc climb root at session start</title>
+<meta property="og:title" content="JS-119: verb resolution must not depend on cwd/chdir — pin the jsrc climb root at session start">
+<meta property="og:description" content="RULING (gritzko, chat 2026-07-19, out of the -N-click investigation): which CODE a verb name resolves to must never depend on where the process happens to be chdir'd — capture the climb root ONCE at session start. - Today registry.js:66-67 verbFile(w, startDir) defaults dir = startDir || io.cwd() PER CALL, and loop.js invokes resolveVerb(w, undefined, …) — every cold verb require reads the live process cwd. - Currently benign only by accident: the pager never chdirs (row context rides loop.cli opts2.context as data, BE-039/BRO-024), so cwd == launch cwd for the whole session. Any future verb/editor leg that chdirs would silently re-root the climb into a FOREIGN tree's jsrc and mix that tree's code into the resident session. - Sibling defect from the same incident: a load-error from the resolved file is swallowed to &quot;absent&quot; — that mask is JS-074 (live-hit note added there), not this ticket.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JS/JS-119.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-119: verb resolution must not depend on cwd/chdir — pin the jsrc climb root at session start</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+RULING (gritzko, chat 2026-07-19, out of the <code>[-N]</code>-click investigation): which CODE a verb name resolves to must never depend on where the process happens to be chdir'd — capture the climb root ONCE at session start.
+</p>
+<ul>
+<li>Today <code>registry.js:66-67</code> <code>verbFile(w, startDir)</code> defaults <code>dir = startDir || io.cwd()</code> PER CALL, and loop.js invokes <code>resolveVerb(w, undefined, …)</code> — every cold verb require reads the live process cwd.</li>
+<li>Currently benign only by accident: the pager never chdirs (row context rides <code>loop.cli</code> opts2.context as data, BE-039/BRO-024), so cwd == launch cwd for the whole session. Any future verb/editor leg that chdirs would silently re-root the climb into a FOREIGN tree's jsrc and mix that tree's code into the resident session.</li>
+<li>Sibling defect from the same incident: a load-error from the resolved file is swallowed to &quot;absent&quot; — that mask is <a href="./JS-074.html">JS-074</a> (live-hit note added there), not this ticket.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+The jsrc climb root is captured once at MAIN/session entry and threaded to every <code>verbFile</code>/<code>resolveVerb</code> call; a mid-session <code>chdir</code> changes NOTHING about verb resolution.
+</p>
+<ul>
+<li><code>startDir</code> stays as the explicit test/override hook.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Behavior today is identical (cwd never moves) — this is hardening; no golden churn expected.</li>
+<li>Root captured from the launch cwd's jsrc climb, not re-derived per call; keep verbFile's signature.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> red: fixture session resolves a verb, chdir into a second tree carrying a DIFFERENT jsrc verb of the same name, resolve again — must load the LAUNCH tree's code</li>
+<li class="open"><input type="checkbox" disabled> capture the root at entry (be/loop init), thread through resolveVerb/verbFile default; green</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<h2>Outcome</h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

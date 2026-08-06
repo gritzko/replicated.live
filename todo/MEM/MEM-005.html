@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-005</title>
+<title>MEM-005: HUNK renderers index text by unvalidated token offsets (dog/HUNK.c)</title>
+<meta property="og:title" content="MEM-005: HUNK renderers index text by unvalidated token offsets (dog/HUNK.c)">
+<meta property="og:description" content="Every HUNK renderer treats tok32Offset(...) (a 27-bit value taken verbatim from the wire) as a byte index into hk-&gt;text, but the TXT ('X') and TOK ('K') TLV records are drained independently with no cross-check, so a relayed/received hunk whose token offsets exceed the text length drives a$part/pointer-walk reads past hk-&gt;text. Separately the 'K' value bytes are aliased directly as tok32c, an unaligned-load + length-mismatch hazard. The goal is to validate (and align) the token record once at drain time so all renderers inherit a safe invariant.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-005.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,6 +16,11 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>MEM-005: HUNK renderers index text by unvalidated token offsets (dog/HUNK.c)</h1>
+<div>
+<p>
+Now: DONE
+</p>
+</div>
 <p>
 Every HUNK renderer treats <code>tok32Offset(...)</code> (a 27-bit value taken verbatim from the wire) as a byte index into <code>hk-&gt;text</code>, but the TXT (<code>'X'</code>) and TOK (<code>'K'</code>) TLV records are drained independently with no cross-check, so a relayed/received hunk whose token offsets exceed the text length drives <code>a$part</code>/pointer-walk reads past <code>hk-&gt;text</code>. Separately the <code>'K'</code> value bytes are aliased directly as <code>tok32c*</code>, an unaligned-load + length-mismatch hazard. The goal is to validate (and align) the token record once at drain time so all renderers inherit a safe invariant.
 </p>
@@ -39,5 +48,16 @@ Centralize a drain-time validation+alignment, then drop the per-renderer trust.
 <li>In <code>HUNKu8sDrain</code>, require the <code>'K'</code> length to be a multiple of <code>sizeof(tok32)</code>, copy into aligned arena scratch (<code>a_lign(tok32,…)</code>), and reject any <code>tok32Offset &gt; $len(hk-&gt;text)</code> (a <code>hunk_toks_valid(hk)</code> gate).</li>
 <li>Defensively clamp <code>hi</code>/<code>lo</code>/<code>span_hi</code> to <code>tlen</code> in each renderer as belt-and-suspenders.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

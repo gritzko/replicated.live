@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MEM-035</title>
+<title>MEM-035 DONT: io.cpp callbacks miss argc/NULL/bounds guards (js/io.cpp)</title>
+<meta property="og:title" content="MEM-035 DONT: io.cpp callbacks miss argc/NULL/bounds guards (js/io.cpp)">
+<meta property="og:description" content="Two JS-reachable IO callbacks dereference unchecked inputs. JABCioFileMap reads JSValueIsString(ctx,args0) with no argc guard (every sibling guards argc first), so io.mmap() with zero args is an out-of-bounds read of the JSC argument vector and passes a garbage JSValueRef to JSValueIsString. JABCioNetConnect calls JABCioMakeFileObject(cfd,…), which returns NULL when cfd&gt;=POLMaxFiles() (1024), then immediately passes that NULL into JSObjectSetProperty without a NULL check → null deref; worse, JSFILES+cfd is computed and POLTrackEvents called before the bound is validated, an OOB into the fixed 1024-entry array. The goal is the missing argc guard plus the NULL/bounds checks the file's convention already uses elsewhere.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-035.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>MEM-035: io.cpp callbacks miss argc/NULL/bounds guards (js/io.cpp)</h1>
+<h1>MEM-035 <a href="./DONT.html">DONT</a>: io.cpp callbacks miss argc/NULL/bounds guards (js/io.cpp)</h1>
+<div>
+<p>
+Now: DONT
+</p>
+</div>
 <p>
 Two JS-reachable IO callbacks dereference unchecked inputs. <code>JABCioFileMap</code> reads <code>JSValueIsString(ctx,args[0])</code> with no <code>argc</code> guard (every sibling guards <code>argc</code> first), so <code>io.mmap()</code> with zero args is an out-of-bounds read of the JSC argument vector and passes a garbage <code>JSValueRef</code> to <code>JSValueIsString</code>. <code>JABCioNetConnect</code> calls <code>JABCioMakeFileObject(cfd,…)</code>, which returns NULL when <code>cfd&gt;=POLMaxFiles()</code> (1024), then immediately passes that NULL into <code>JSObjectSetProperty</code> without a NULL check → null deref; worse, <code>JS_FILES+cfd</code> is computed and <code>POLTrackEvents</code> called before the bound is validated, an OOB into the fixed 1024-entry array. The goal is the missing <code>argc</code> guard plus the NULL/bounds checks the file's convention already uses elsewhere.
 </p>
@@ -38,5 +47,16 @@ Add the guards matching the file's convention.
 <li><code>JABCioFileMap</code>: add <code>if (argc&lt;1 || !JSValueIsString(ctx,args[0]))</code> → set exception, return undefined.</li>
 <li><code>JABCioNetConnect</code>: validate <code>cfd&lt;POLMaxFiles()</code> before <code>JS_FILES+cfd</code>/<code>POLTrackEvents</code>; null-check <code>file</code>, cleanup the fd, return undefined.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

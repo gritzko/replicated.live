@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JGET-008</title>
+<title>JGET-008: sameSourceUri builds a malformed ssh:////host authority — same-source sub candidate always unreachable</title>
+<meta property="og:title" content="JGET-008: sameSourceUri builds a malformed ssh:////host authority — same-source sub candidate always unreachable">
+<meta property="og:description" content="For an ssh:// or be:// parent, the &quot;fetch the sub from the SAME source we are talking to&quot; candidate is always unreachable because sameSourceUri double-prefixes the authority: the URI binding already returns u.authority === &quot;//localhost&quot;, and the builder prepends another //, yielding ssh:////localhost/…?/sub. So the primary (live-source) sub candidate is dead and recursion falls back to the .gitmodules URL (which then hits JGET-007). Part of JGET-001; method Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/JGET/JGET-008.html">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -11,7 +15,12 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JGET-008 <a href="./HIGH.html">HIGH</a>: <code>sameSourceUri</code> builds a malformed <code>ssh:////host</code> authority — same-source sub candidate always unreachable</h1>
+<h1>JGET-008: <code>sameSourceUri</code> builds a malformed <code>ssh:////host</code> authority — same-source sub candidate always unreachable</h1>
+<div>
+<p>
+Now: OPEN Sev: HIGH
+</p>
+</div>
 <p>
 For an <code>ssh://</code> or <code>be://</code> parent, the &quot;fetch the sub from the SAME source we are talking to&quot; candidate is always unreachable because <code>sameSourceUri</code> double-prefixes the authority: the URI binding already returns <code>u.authority === &quot;//localhost&quot;</code>, and the builder prepends another <code>//</code>, yielding <code>ssh:////localhost/…?/sub</code>. So the primary (live-source) sub candidate is dead and recursion falls back to the <code>.gitmodules</code> URL (which then hits <a href="JGET-007.html">JGET-007</a>). Part of <a href="JGET-001.html">JGET-001</a>; method <a href="../../meta/work.html">Issues</a>.
 </p>
@@ -19,33 +28,21 @@ For an <code>ssh://</code> or <code>be://</code> parent, the &quot;fetch the sub
 <h3>Context</h3>
 <ul>
 <li>Surfaced in <code>beagle/test/get/{05,11,18,53}</code> (ssh parent + same-source sub).</li>
-<li>Root: <code>be/shared/submount.js:121</code><p>
-<code>const auth = u.authority ? &quot;//&quot; + u.authority : &quot;&quot;;</code> — but <code>u.authority</code> is already slash-prefixed (<code>//localhost</code>), so the result is <code>ssh:</code> + <code>//</code> + <code>//localhost</code> = <code>ssh:////localhost</code>. Verified via a direct unit probe of <code>sameSourceUri</code>.
-</p>
-</li>
+<li>Root: <code>be/shared/submount.js:121</code> <code>const auth = u.authority ? &quot;//&quot; + u.authority : &quot;&quot;;</code> — but <code>u.authority</code> is already slash-prefixed (<code>//localhost</code>), so the result is <code>ssh:</code> + <code>//</code> + <code>//localhost</code> = <code>ssh:////localhost</code>. Verified via a direct unit probe of <code>sameSourceUri</code>.</li>
 <li>Native composes the same-source locator correctly and mounts.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li><code>sameSourceUri</code> produces a well-formed <code>ssh://host/path?/sub</code> (single <code>//</code>),<p>
-so the live-source candidate is the working primary for ssh/be parents.
-</p>
-</li>
+<li><code>sameSourceUri</code> produces a well-formed <code>ssh://host/path?/sub</code> (single <code>//</code>), so the live-source candidate is the working primary for ssh/be parents.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>No hand-rolled URI string surgery beyond the binding's parts. Repro-first<p>
-(a <code>sameSourceUri</code> unit assertion + a sub-mount parity case).
-</p>
-</li>
+<li>No hand-rolled URI string surgery beyond the binding's parts. Repro-first (a <code>sameSourceUri</code> unit assertion + a sub-mount parity case).</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>Use the bare host (<code>u.host</code>) for the authority segment, not <code>u.authority</code>:<p>
-<code>const auth = u.host ? &quot;//&quot; + u.host : &quot;&quot;;</code> (carry userinfo/port only if the binding splits them out separately). Re-verify against be:// and ssh:// parents.
-</p>
-</li>
+<li>Use the bare host (<code>u.host</code>) for the authority segment, not <code>u.authority</code>: <code>const auth = u.host ? &quot;//&quot; + u.host : &quot;&quot;;</code> (carry userinfo/port only if the binding splits them out separately). Re-verify against be:// and ssh:// parents.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -62,5 +59,16 @@ so the live-source candidate is the working primary for ssh/be parents.
 <li>RETIRED 2026-07-07 (audit): fixed as <a href="../SUBS/SUBS-047.html">SUBS-047</a> defect (A) — <code>sameSourceUris</code> builds every candidate with <code>URI.make</code>, no hand-concat; the <code>:////</code> shape is unit-guarded.</li>
 <li>Landed: c43324f4 (URI-013) + the SUBS-047 changeset (in the d80bdb5c/50e90012 window; <code>be/test/submount.js</code> added then).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

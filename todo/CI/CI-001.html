@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CI-001: long-running qemu CI workers (Ubuntu + FreeBSD) on the beagle wire</title>
+<meta property="og:title" content="CI-001: long-running qemu CI workers (Ubuntu + FreeBSD) on the beagle wire">
+<meta property="og:description" content="Beagle needs GitHub-Actions-style per-commit CI: build + ctest on Ubuntu and on FreeBSD (the closest self-hostable stand-in for mac). The Verbs basis is closed, so CI is an Extensions script, jab ci, not a verb. The runners are two LONG-RUNNING qemu VMs, each an ssh-reachable host holding a persistent clone (warm ninja cache, amortized FreeBSD boot), named like any remote: ssh://ubuntu-ci, ssh://fbsd-ci. No Docker as architecture — Linux containers cannot run FreeBSD; a containerized localhost is at most one runner flavor later. Pull-model first; push-into blocks on GIT-022.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CI/CI-001.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>CI-001: long-running qemu CI workers (Ubuntu + FreeBSD) on the beagle wire</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<p>
+Beagle needs GitHub-Actions-style per-commit CI: build + ctest on Ubuntu and on FreeBSD (the closest self-hostable stand-in for mac). The <a href="../../wiki/Verbs.html">Verbs</a> basis is closed, so CI is an <a href="../../wiki/Extensions.html">Extensions</a> script, <code>jab ci</code>, not a verb. The runners are two LONG-RUNNING qemu VMs, each an ssh-reachable host holding a persistent clone (warm ninja cache, amortized FreeBSD boot), named like any remote: <code>ssh://ubuntu-ci</code>, <code>ssh://fbsd-ci</code>. No Docker as architecture — Linux containers cannot run FreeBSD; a containerized localhost is at most one runner flavor later. Pull-model first; push-into blocks on <a href="../GIT/GIT-022.html">GIT-022</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>The verb basis is fixed and orthogonal (<a href="../../wiki/Verbs.html">Verbs</a>); new behaviour ships as a <code>be/</code> extension run by jab (<a href="../../wiki/Extensions.html">Extensions</a>), never as a verb.</li>
+<li>Docker only covers the Ubuntu leg (containers share the Linux kernel); FreeBSD needs a qemu/bhyve VM or real hardware — so the runner abstraction is &quot;an ssh-reachable host&quot;, not a container framework.</li>
+<li>Push-into a VM needs the ssh-remote receive-pack serve arm, which does not exist yet — <a href="../GIT/GIT-022.html">GIT-022</a>; local-exec <code>receivePack</code> landed via <a href="../POST/POST-028.html">POST-028</a>.</li>
+<li>The worker loop in <a href="../../meta/work.html">/meta/work</a> (clone → cmake+ninja → ctest -j16 → report) is the template; a CI run is that loop minus the code edits.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Every trunk commit gets a green/red build+ctest verdict on Ubuntu AND FreeBSD, published on the site (html/ + feed.rss) without hand-driving.</li>
+<li>Runners are disposable at the VM layer: a wedged VM is reverted/rebuilt from its base image like any worker worktree — no pet state.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>All bytes cross the beagle wire or ssh; NO virtio-9p/shared-mount shortcuts — a runner stays remote-shaped so real remote hosts work same.</li>
+<li>Runner code lives in the <code>be/</code> submodule (beagle-ext) and versions with it; the CI roster/spec is a greppable page in the journal tree.</li>
+<li>qcow2 base image + backing-file overlay per runner; revert = rm overlay.</li>
+<li>Runners are named by URIs in the roster; all URI composition/resolution via the standard library (resolve_hash.js / uri), never hand-rolled.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Pull model first: each VM loops <code>be head ssh://journal?*</code> → on change <code>be get</code> → build+test → append a result row; no inbound auth surface.</li>
+<li>The VM's result log is itself a beagle tree the journal side fetches — the same wire in reverse; no scp side-channels.</li>
+<li>Flip to push-into (<code>be put/post ssh://ubuntu-ci</code>) once <a href="../GIT/GIT-022.html">GIT-022</a> lands; the loop then becomes a receive-hook around the same build script.</li>
+</ul>
+<h3>TODOs</h3>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> 1. Spec page <code>meta/ci.mkd</code>: runner roster (URIs), trees to build, ctest targets, result-row format (commit sha, host, status, log link).</li>
+<li class="open"><input type="checkbox" disabled> 2. Ubuntu runner image: qcow2 base with toolchain (cmake, ninja, ragel, compiler), jab bin, ssh key; staged checkpoints per <a href="./CI-003.html">CI-003</a>.</li>
+<li class="open"><input type="checkbox" disabled> 3. FreeBSD runner image: same via pkg; PROVE jab builds+runs on FreeBSD first — the mac-substitute load-bearing assumption.</li>
+<li class="open"><input type="checkbox" disabled> 4. <code>be/ci.js</code> runner mode: poll head → get → cmake/ninja → ctest -j16 → write result row + captured log into the VM's result tree.</li>
+<li class="open"><input type="checkbox" disabled> 5. <code>be/ci.js</code> collector mode (journal side): fetch each runner's result tree, aggregate per-commit status across runners.</li>
+<li class="open"><input type="checkbox" disabled> 6. Render: a make target folding CI status into html/ + feed.rss next to the blog render; red runs get the log excerpt inline.</li>
+<li class="open"><input type="checkbox" disabled> 7. Red-run procedure: collector drafts a <code>todo/CI/</code> ticket body with the log attached as evidence; the user files/approves it.</li>
+<li class="blocked"><input type="checkbox" disabled> 8. Push-into mode: runners accept <code>be put/post ssh://&lt;runner&gt;</code> and build on receive — blocked on <a href="../GIT/GIT-022.html">GIT-022</a>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="../GIT/GIT-022.html">GIT-022</a> gates step 8 (push mode); steps 1–7 proceed pull-only.</li>
+<li>jab on FreeBSD is unproven (JSC build, io bindings); step 3 verifies before any FreeBSD automation is written.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Open. Filed 2026-07-24 from the CI design discussion; no code yet.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

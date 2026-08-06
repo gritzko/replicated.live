@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SPOT-002: shared/spot.js — hunk-substrate locators (#L123, #needle, #/re/, #'pattern')</title>
+<meta property="og:title" content="SPOT-002: shared/spot.js — hunk-substrate locators (#L123, #needle, #/re/, #'pattern')">
+<meta property="og:description" content="Every view (why:, cat:, diff:, spot:) emits the same {uri, text, toks} hunk stream, so the locator/search layer must consume tokenized hunks, not raw bytes. Hidden link toks — U (click-target URI bytes) and O (why's origin-commit link) — are zero-width and must be invisible to matching AND to line/col math. Supersedes SPOT-001 (grammar re-ruled by gritzko 2026-07-18).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/SPOT/SPOT-002.html">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SPOT-002: shared/spot.js — hunk-substrate locators (#L123, #needle, #/re/, #'pattern')</h1>
+<div>
+<p>
+Now: OPEN
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Every view (<code>why:</code>, <code>cat:</code>, <code>diff:</code>, <code>spot:</code>) emits the same <code>{uri, text, toks}</code> hunk stream, so the locator/search layer must consume tokenized hunks, not raw bytes. Hidden link toks — <code>U</code> (click-target URI bytes) and <code>O</code> (why's origin-commit link) — are zero-width and must be invisible to matching AND to line/col math. Supersedes <a href="SPOT-001.html">SPOT-001</a> (grammar re-ruled by gritzko 2026-07-18).
+</p>
+<ul>
+<li>Consumers: <code>why:</code>/<code>cat:</code>/<code>diff:</code> fragment scoping, the spot view rebuild, the pager's in-view <code>/jump</code> — all funnel into one resolver.</li>
+<li>Any emitted hunk is valid input: a why/diff hunk is searchable without re-tokenizing.</li>
+</ul>
+<h3>Goals</h3>
+<p>
+<code>shared/spot.js</code>: parse a fragment locator, resolve it over one or many hunks, clip sub-hunks. Fragment grammar (ruling, 2026-07-18):
+</p>
+<ul>
+<li><code>#L123</code>, <code>#L123-160</code> — line / line range (the C <code>HUNKu8sMakeURI</code> <code>#L42</code> convention);</li>
+<li><code>#needle</code> — substring (CAPOGrep twin, the fallback);</li>
+<li><code>#/re/</code> — regex (CAPOPcreGrep twin);</li>
+<li><code>#'tok pattern'</code> — structural SPOT (a-z bind one token, A-Z a block, two-space gap).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Hashlets resolve via <a href="../../be/core/resolve_hash.js">resolve_hash</a> FIRST; spot.js never sees them. <code>L</code>-prefixed lines keep the namespaces disjoint; a bare hex-looking needle loses to the hashlet.</li>
+<li>Reuse: lift <code>views/spot/match.js</code> matchers; needle tokenizing rides <code>tok.parse</code> — no manual parsing beyond the locator grammar.</li>
+<li>Spans are hunk-byte-space truth; line/col derived in the same walk, U/O toks excluded from both.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+API sketch (C twins: SPOTTokenize, SPOTInit/SPOTNext, SPOTReplace, CAPOGrep/CAPOPcreGrep, HUNKu32sClip, grepCtx):
+</p>
+<ul>
+<li><code>parse(frag)</code> → typed locator (line | substr | regex | spot).</li>
+<li><code>compile(loc, ext)</code> — per-syntax needle prep; tokenizes <code>'pattern'</code> with the hunk's own lexer, so one locator works across <code>.c</code>/<code>.js</code>/<code>.mkd</code> hunks; <code>m.next(hunk)</code> → <code>{lo, hi, line, col}</code> | null, SPOTNext-style.</li>
+<li><code>find(loc, hunk)</code> — one hunk: compile against hunk.ext, drain next() → all spans ascending; callers pick first/nearest/all.</li>
+<li><code>scan(loc, hunks)</code> — many hunks: lazy, yields <code>{hunk, spans}</code>, recompiles only on ext change (mixed-language result sets).</li>
+<li><code>clip(hunk, lo, hi)</code> — HUNKu32sClip twin: token-edge snap, a hidden U/O sticks to its visible predecessor (never split a <code>[visible][U/O]</code> pair); line numbers stay absolute (pre-clip).</li>
+<li><code>window(loc, hunk, nctx)</code> — find + merge ±nctx line windows (grepCtx) + clip → <a href="./subhunk.html">subhunk</a> — the one-call view helper.</li>
+<li><code>fromFile(bytes, ext)</code> — tok.parse wrapper for raw-file callers; views pass hunks as-is.</li>
+<li><code>replace(loc, hunk, tmpl)</code> — SPOTReplace twin, structural locators only.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li><a href="./v.html">v</a> parse + compile + find over hunks; four locator syntaxes</li>
+<li><a href="./v.html">v</a> U/O skip in matchers and line/col accounting (shared walk)</li>
+<li><a href="./v.html">v</a> clip + window, U/O-pair-safe, absolute gutter lines</li>
+<li><a href="./v.html">v</a> scan over multi-hunk streams, per-ext recompile</li>
+<li><a href="./v.html">v</a> lift match.js matchers to shared (no behavior change) — views/spot/{match,ext}.js → shared/, search.js repointed</li>
+<li><a href="./v.html">v</a> repro: golden table — each syntax over .c/.js/.mkd fixtures, why-hunk input leg (O toks present), hashlet NON-capture leg</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><code>replace</code> ships literal-span only: true SPOTReplace bind back-substitution needs shared/match.js to expose its a-z/A-Z binds (today spans only) — follow-up ticket candidate.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Staged (put only, NOT posted) in //SPOT-002 on base //SPOT/#9928a0be: shared/{spot,match,ext}.js new + views/spot/search.js repointed; test sub: test/spot/locator/{check.js,run.sh}. The two relocated originals are pending DELETIONS (<code>x</code>) — <code>put</code> can't stage removals, the commit must capture them.</li>
+<li>Orchestrator re-verified 2026-07-19: be-js-spot-locator PASS, be-js-spot-search regression PASS (own re-run, not just the worker's word).</li>
+<li>Suggested commit: <code>SPOT-002: shared/spot.js hunk locators + lift matchers</code></li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>
