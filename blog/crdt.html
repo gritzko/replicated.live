@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Git, CRDT, Markdown</title>
+<meta property="og:title" content="Git, CRDT, Markdown">
+<meta property="og:description" content="There have been many attempts to make git store project metadata. Indeed, GitHub has Issues and Wikis, Fossil has a bug tracker, wiki, forum and chat. The metadata is critical to a project, but bare git can't store it. The main obstacles are two: structured data and merges. First, we have to deal with semi-structured data, not just source code or text. Second, that data must survive merges and other revision control adventures.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/blog/crdt.html">
+<meta property="og:image" content="https://replicated.live/blog/img/todo2.png">
+<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>Git, CRDT, Markdown</h1>
+<div>
+<dl class="meta"><dt>Vox:</dt><dd>gritzko</dd></dl>
+<dl class="meta"><dt>Day:</dt><dd>Fri 07 Aug 2026</dd></dl>
+<dl class="meta"><dt>For:</dt><dd>public</dd></dl>
+</div>
+<p>
+There have been many attempts to make git store project metadata. Indeed, GitHub has Issues and Wikis, Fossil has a bug tracker, wiki, forum and chat. The metadata is critical to a project, but bare git can't store it. The main obstacles are two: structured data and merges. First, we have to deal with semi-structured data, not just source code or text. Second, that data must survive merges and other revision control adventures.
+</p>
+<p>
+Look at the current LLM-assisted coding practices. Most often, people have a folder of Markdown files that boots up LLM agents. It may be wiki-structured, issue-tracker-structured or not structured much. Either way, you can not get too far by reexplaining everything to every new Claude again. Normally, you would put that folder into a git repo. But can it be more structured rather than less? It would be annoying to grep for open tickets each time. It would be even more annoying to merge a dozen unfamiliar tickets on each pull.
+</p>
+<p>
+Almost every attempt to solve these problems relies on a structured CRDT format. I myself authored several CRDT formats, and I track <a href="http://crdt.tech">the field</a> closely. One way is to use a dedicated native-CRDT format, e.g. <a href="https://github.com/drpcorg/chotki">RDX</a> or <a href="https://automerge.org/">Automerge</a>. The Beagle project started as an <a href="https://github.com/gritzko/go-rdx">RDX based</a> SCM, CRDT top to bottom. A more pragmatic way is to cram CRDT metadata into a regular git repo.  In particular, <a href="https://docs.rs/radicle-cob/latest/radicle_cob/">Radicle</a> and <a href="https://git-meta.com/">git-meta</a> do that trick. The problem is that native-CRDT becomes incompatible with git, while git-CRDT abuses the normal git machinery to do distributed database operations. Most mainstream databases can not even do CRDT. And git is a <a href="https://nesbitt.io/2025/12/24/package-managers-keep-using-git-as-a-database.html">terrible database</a>. 
+</p>
+<p>
+For <a href="https://github.com/gritzko/beagle">Beagle</a>, that dilemma was solved by picking the third path. The very need for a CRDT store grew from the use of expensive <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a> parsers. Once those got replaced with fast Ragel-based tokenizers, git's blob store was OK again. No need to store the AST, as Ragel can tokenize any source file instantly on read. All the diffing, blaming and merging is now token-level CRDT over git-stored blobs. That is coarser than character-level tracking real-time editors use (e.g. Google Docs). Still, so much sharper than line-level Unix/git legacy diffs. As a free bonus, Beagle is now syntax aware, enough for merge, syntax hili, structured search and so on. All these things are implemented in <a href="https://github.com/gritzko/libdog">libdog</a> while Beagle is the <a href="./js.html">malleable upper part</a> of the thing.
+</p>
+<p>
+But CRDT merges of Markdown do not solve the structure problem. What if I want to find all the open tickets assigned to me? Markdown has no &quot;fields&quot; or &quot;attributes&quot;. So I added them! In fact, I use <a href="https://replicated.live/wiki/StrictMark.html">StrictMark</a>, a dialect of Markdown with a formal grammar. As one might guess, it is stricter:
+</p>
+<ol>
+<li>all block-level formatting goes at the beginning of a line in 4-char blocks,</li>
+<li>all inline formatting is single-char bracketed.</li>
+</ol>
+<figure class="right w40">
+<img src="./img/todo2.png#rightw40" alt="Beagle: the ticket list view">
+<figcaption>Beagle: the ticket list view</figcaption>
+</figure>
+<p>
+So I added headers to StrictMark, like
+</p>
+<pre><code>    Due: Sat 8 Aug 2026
+</code></pre>
+<p>
+Agents picked up this syntax instantly. Then, I made Beagle parse and store the values. A folder with Markdown files became a database in an instant. The outcome:
+</p>
+<ol>
+<li>it is a folder of Markdown files,</li>
+<li>which are stored in git blobs,</li>
+<li>in a 100% git-compatible revision control system,</li>
+<li>merge is CRDT,</li>
+<li>everything is queryable like a database.</li>
+</ol>
+<p>
+As of now, I have <a href="https://replicated.live/blog/click.html">1000 tickets in the repo</a> and all the operations are instant. Having 1mln tickets would not change much, big-O wise. I have my own local GitHub to collaborate with agents. I can push and pull to/from github.com.  As long as I do my merges locally, it is all CRDT.
+</p>
+<p>
+Solved.
+</p>
+<hr>
+<h2>The true nerd part</h2>
+<p>
+As an academic exercise, let's do key CRDT data structures in StrictMark.  Is consistency 100% guaranteed?  Of course not, because we have multiple levels of consistency here: from bytes to tokens to language AST to correct build to all tests blinking green to actually having a correct program in the end.  That is a universe of requirements, some of them unrealistic or mutually contradictory.  Still, let's see how key data structures can be represented in StrictMark.
+</p>
+<p>
+CT/RGA vector is trivial, as <code>libdog</code> merges versions with the <a href="https://arxiv.org/abs/2002.09511">chronofold</a> data structure, which is CT/RGA. For Beagle, any part of this text is a vector of tokens.  On merge, some anomalies are still possible.  For example, two concurrently inserted tokens can merge in the byte stream and become one syntactical token in the result. This case Beagle indicates and marks as a <em>conflict</em>: concurrently inserted segments touch each other. Higher-level inconsistencies are possible even with no CRDT-level conflict though. The merged code is never guaranteed to be semantically valid. Still, most of the friction is removed here.
+</p>
+<p>
+CRDT sets can be represented in CT/RGA if tokens get sorted by some criteria, e.g. alphabetically. Then, plain merges will be 100% correct, while merges of concurrent overlapping changes can potentially break the order as the CRDT layer is unaware of our sorting criteria. That can be solved by making the parser tolerant to element reordering and duplication.
+</p>
+<p>
+CRDT maps, again, deal perfectly fine with non-overlapping changes, while, e.g., a concurrent value rewrite in a key-value pair may bring some chaos, like <code>Key: Value1Value2</code>. Again, the only way forward is to make the parser tolerant and normalize on every write. Frankly, this concurrent LWW conflict has no good solution -- there is no criterion to pick one of two causally unlinked options.
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>
