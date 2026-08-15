@@ -3,8 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Worktree</title>
+<title>Worktree: a checked-out tree with its state in one wtlog</title>
+<meta property="og:title" content="Worktree: a checked-out tree with its state in one wtlog">
+<meta property="og:description" content="A worktree is a checked-out tree on disk, with its per-call state in one append-only &lt;wt&gt;/.be/wtlog. The goal is cheap, disposable worktrees over one hard-to-break Store — a machine needs only one store per upstream repo, and every extra worktree is just a dir pointing back. The method: row 0's base get anchors the store, later get/post rows track the branch and tip, Sniff stamps each file it touches with the row's timestamp, and POST reads those stamps back to classify files at commit time.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/wiki/Worktree.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -23,16 +35,16 @@ Per-wt state — base branch, base tip, and pending <a href="PATCH.html">PATCH</
 <li>Colocated: <code>&lt;wt&gt;/.be/</code> is the store dir itself, beside the wt files; wtlog row 0 is a <code>get</code> rooted at <code>file:&lt;wt&gt;/.be/&lt;project&gt;</code>.</li>
 <li>Secondary: <code>&lt;wt&gt;/.be</code> is a FILE whose first <code>get</code> row points at the primary store; <a href="Sniff.html">Sniff</a> follows it and shares the pool.</li>
 <li>One branch has at most one active worktree, tracked in the branch reflog; extra worktrees are dirs whose wtlog points back.</li>
-<li>Branch is GET-owned: only <code>get</code> sets cur's branch — a checkout/clone, or an explicit <code>be get ?branch</code>; <code>post</code>/<code>put</code>/<code>delete</code> advance the tip but never switch branch, and a bare <code>be get</code> FFs the tip yet keeps the branch.</li>
+<li>Branch is GET-owned: only <code>get</code> sets cur's branch — a checkout/clone, or an explicit <code>be get ?branch</code>; a commit (<code>be post 'msg'</code>) advances the WORKTREE only, the branch tip moves only by an explicit <code>be post ?branch</code>, and a bare <code>be get</code> FFs the wt to the tip yet keeps the branch.</li>
 </ul>
-<h2>The --at coordinate</h2>
+<h2>The context URI</h2>
 <p>
-Every <code>be</code> invocation relays exactly one coordinate to each sub-dog on argv — <code>--at &lt;branch-uri&gt;#&lt;sha&gt;</code> — and the worker derives everything else itself, so the dogs share no out-of-band state.
+Every command runs against a context <a href="URI.html">URI</a> — <code>//worktree/path?rev</code> — the versioned cwd; there is no argv relay (the old <code>--at</code> coordinate is gone, no dogs are spawned anymore).
 </p>
 <ul>
-<li><code>&lt;branch-uri&gt;</code> is cur's branch <a href="URI.html">URI</a> (the intent); <code>&lt;sha&gt;</code> is cur's tip at resolve time, pinned against a concurrent post.</li>
-<li>The format is <code>&lt;root&gt;?/&lt;project&gt;/&lt;branch&gt;#&lt;sha&gt;</code>; the resolved tip lives only here and in <code>refs</code>, never in an argv query.</li>
-<li>Everything else the worker derives: it walks cwd up to the nearest <code>.be/</code> and reads wtlog row 0 for the base branch.</li>
+<li>In the CLI the context derives from cwd: walk up to the nearest <code>.be/</code>, read wtlog row 0 for the base branch (see <a href="Nav.html">Nav</a>).</li>
+<li>In the pager the context is the address bar, mutated only by navigation spells, never scavenged from rendered output.</li>
+<li>A <code>?rev</code> context reads repo objects and ignores the wt files; verbs are free to drop context parts that don't apply.</li>
 </ul>
 <h2>File classification by stamps</h2>
 <p>
@@ -54,5 +66,16 @@ Branches are mkdir-cheap, so the idiom is to fork preventively: mint a sub-branc
 <li>Stash is a code smell: speculative work belongs on a sub-branch, so staging and <code>git stash</code> are both unnecessary (see <a href="Store.html">Store</a>).</li>
 <li>Bring it home: <code>be patch ?./feat/exp</code> weaves the whole chain into the parent's wt, then <code>be post '#feat'</code> makes one commit.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

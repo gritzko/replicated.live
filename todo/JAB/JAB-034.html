@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/JAB/JAB-034.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,13 @@
 </a>
 <h1>JAB-034: the ULOG handle is a bare pointer-as-Number — no finalizer, no ownership, no guard</h1>
 <div>
-<p>
-Now: OPEN Sev: MED Ask: gritzko Env: webkitgtk-4.1 JSC C API, jab/ulog.hpp Rev: ///jab#8335085b Rep: ///jab See: JAB-033
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>MED</dd></dl>
+<dl class="meta"><dt>Ask:</dt><dd>gritzko</dd></dl>
+<dl class="meta"><dt>Env:</dt><dd>webkitgtk-4.1 JSC C API, jab/ulog.hpp</dd></dl>
+<dl class="meta"><dt>Rev:</dt><dd>///jab#8335085b</dd></dl>
+<dl class="meta"><dt>Rep:</dt><dd>///jab</dd></dl>
+<dl class="meta"><dt>See:</dt><dd><a href="/todo/JAB/JAB-033.html">JAB-033</a></dd></dl>
 </div>
 <p>
 <code>_ulog_open</code> heap-boxes a booked mmap plus its <code>wh128</code> sidecar and hands the raw pointer to JS as a *<strong>Number</strong>*. A Number owns nothing: drop it and the mapping, its fd and the sidecar leak for the life of the process — GC cannot reclaim what it was never told about. The reverse cast is unguarded too, so any JS number reaches raw memory. Found while measuring <a href="/todo/JAB/JAB-033.html">JAB-033</a>; today's two callers happen to close correctly, so this is a LATENT defect of the binding contract, not a live leak.
@@ -58,13 +70,13 @@ The handle OWNS its resources: dropping it on the floor is reclaimable, and a bo
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <h3>TODOs</h3>
-<ul>
-<li><a href="./ .html"> </a> red probe: dropped handles leak maps + fds; red today</li>
-<li><a href="./ .html"> </a> red probe: stale / garbage handle must refuse, not dereference</li>
-<li><a href="./ .html"> </a> give the handle a JSClassRef with private data + a finalizer that closes idempotently</li>
-<li><a href="./ .html"> </a> validate the handle on every entry point (<code>_ulog_append/_count/_rowTime/_close</code>)</li>
-<li><a href="./ .html"> </a> count the handle's mapping + fd in the <a href="/todo/JAB/JAB-033.html">JAB-033</a> pin counters</li>
-<li><a href="./ .html"> </a> full suite green, <code>jab/test/ulog_book.js</code> included</li>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> red probe: dropped handles leak maps + fds; red today</li>
+<li class="open"><input type="checkbox" disabled> red probe: stale / garbage handle must refuse, not dereference</li>
+<li class="open"><input type="checkbox" disabled> give the handle a JSClassRef with private data + a finalizer that closes idempotently</li>
+<li class="open"><input type="checkbox" disabled> validate the handle on every entry point (<code>_ulog_append/_count/_rowTime/_close</code>)</li>
+<li class="open"><input type="checkbox" disabled> count the handle's mapping + fd in the <a href="/todo/JAB/JAB-033.html">JAB-033</a> pin counters</li>
+<li class="open"><input type="checkbox" disabled> full suite green, <code>jab/test/ulog_book.js</code> included</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <h2>Outcome</h2>

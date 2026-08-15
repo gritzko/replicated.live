@@ -3,8 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>URI</title>
+<title>URI: scheme://authority/path?ref#fragment</title>
+<meta property="og:title" content="URI: scheme://authority/path?ref#fragment">
+<meta property="og:description" content="Beagle employs Uniform Resource Identifiers (URIs) to uniformly identify all the revision controlled resources (surprise!). URIs address any repos, files, branches, revisions, blobs and any views/projections the system can produce. URI format is scheme:path#fragment. The use of URIs mainly agrees with the common practices. Revision specific info goes into query (?branch) or fragment (#hashpin). The query/branch part implies some actual history DAG while the fragment/pin implies lone commit object.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/wiki/URI.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -12,28 +24,35 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>URI: scheme://authority/path?ref#fragment</h1>
+<div>
 <p>
-Beagle employs Uniform Resource Identifiers (URIs) to uniformly identify all the revision controlled resources (surprise!). URIs address any repos, files, branches, revisions, blobs and any views/projections the system can produce. URI format is <code>[scheme:][//authority][path][?ref][#fragment]</code> and each component reflects one orthogonal aspect:
+-- gritzko
 </p>
-<ul>
-<li><code>scheme:</code> is the transport (<code>ssh:</code>/<code>https:</code>/<code>be:</code>/<code>file:</code>) or a <a href="Projector.html">Projector</a> view (<code>sha1:</code>/<code>diff:</code>/…);</li>
-<li><code>//authority</code> is a host, implies a remote repo, e.g. https://github.com;</li>
-<li><code>/path</code> is the file path (normally: within a project, legacy: repo path on a host); </li>
-<li><code>?ref</code> is a revision specifier: project, branch, tag, or a detached commit sha hash;</li>
-<li><code>#fragment</code> is free-form verb payload: a commit message, a line jump, an extension filter, etc.</li>
-</ul>
-<h2>Shape changes semantics</h2>
+</div>
 <p>
-Each populated URI slot adds its effect orthogonally, and the slot combination determines the operation shape, e.g. for <a href="PATCH.html">PATCH</a> where the <code>?</code>/<code>!</code> shape selects the absorb scope while <a href="">POST</a> sets the provenance (see <a href="../blog/uris.html">the dirty-words post</a>).
+Beagle employs Uniform Resource Identifiers (URIs) to uniformly identify all the revision controlled resources (surprise!). URIs address any repos, files, branches, revisions, blobs and any views/projections the system can produce. URI format is <code>[scheme:][//authority][path][?ref][#fragment]</code>. The use of URIs mainly agrees with the common practices. Revision specific info goes into query (<code>?branch</code>) or fragment (<code>#hashpin</code>). The query/branch part implies some actual history DAG while the fragment/pin implies lone commit object.
 </p>
-<ul>
-<li><code>be patch ?feat</code> absorbs one commit, <code>?feat!</code> the whole branch, <code>#sha</code> one named commit — scope at <a href="PATCH.html">PATCH</a>, provenance at <a href="">POST</a>.</li>
-<li>A bare <code>//host</code> reads the cache while <code>ssh://host</code> opens the wire — the scheme alone flips cached vs network.</li>
-<li>The scheme also picks the protocol: <code>ssh:</code>/<code>https:</code>/<code>http:</code>/<code>git:</code> run git's pack wire, <code>be:</code> runs beagle's keeper wire (a <code>.git</code> path forces git).</li>
-<li><code>diff:</code> vs <code>diff:?br</code> vs <code>diff:?a..b</code> change the diff from/to sides; the <code>..</code> range keeps the fragment free for a <code>#L&lt;n&gt;</code> line anchor (<code>diff:&lt;path&gt;?a..b#L12</code>, clickable). Legacy <code>?a#b</code> (fragment = to) still parses. Slots compose like verb slots.</li>
-<li>An empty <code>?</code> slot in a URI means the project trunk; no <code>?</code> slot at all means cur (see Refs rule 0).</li>
-</ul>
-<h2>Relative URIs</h2>
+<h2><code>//URI-123</code></h2>
+<p>
+Local <strong>worktree</strong> URIs: a scheme-less <code>//name</code> is a worktree, period — a remote URI always carries its transport scheme. Worktrees live in the the meta-project's <code>work/</code> dir: <code>work/URI-123/</code> goes as <code>//URI-123</code>, its files as <code>//URI-123/main.js</code>. The <code>work/</code> dir is ignored by the meta-project's own revision control; the worktrees under it share one <a href="./Store.html">Store</a>.
+</p>
+<h2><code>file:/home/gritzko/src/</code></h2>
+<p>
+Filesystem based URI. Standard. No authority. May point to a literal file or directory. May point at a repo/worktree. Then, the path must lead to a <code>.be/</code> store or a <code>.be</code> store pointer. Paths ending in <code>.be</code> imply the exact store path. May use query/fragment for branch/hash. <code>file:</code> clone creates a flat worktree / reuses the original store.
+</p>
+<h2><code>https://github.com</code></h2>
+<p>
+A regular <code>git</code> smart protocol HTTP URI, same as GitHub provides. By convention, may add branch/hash information into query/fragment; that info is consumed/stripped locally.
+</p>
+<h2><code>ssh://git@github.com</code></h2>
+<p>
+A regular ssh-based <code>git</code> smart protocol endpoint. <code>git</code> tends to use ssh-style non-standard URI syntax, e.g. <code>git@github.com:gritzko/libdog.git</code>. Beagle accepts that, but normalizes to <code>ssh://git@github.com/gritzko/libdog.git</code> internally, see <a href="https://datatracker.ietf.org/doc/html/rfc3986">RFC3986</a>. May use query/fragment for branch/hash.
+</p>
+<h2><code>be://replicated.live?/project/branch</code></h2>
+<p>
+Beagle protocol URI. The protocol supports sharded <code>.be</code> <a href="./Store.html">Store</a>s carrying multiple projects, some scalability and performance features. Works over HTTP. Natively uses query and fragment for branch/hash information, passes that to the server.
+</p>
+<h2>Relative URIs: <code>./sub</code>, <code>../</code>, <code>?hashlet</code>, etc</h2>
 <p>
 URIs as typed by the user can be context-dependent — relative or implied paths, tags, branches. For internal use and storage fully-resolved URIs are safer, so URIs get <strong>resolved</strong> at the entry point, to prevent any later ambiguity.
 </p>
@@ -47,32 +66,81 @@ URI paths specify paths in the tree objects that lead to the tree/blob/submodule
 <li>recursive paths that cross into submodules, e.g. <code>abc/ZINT.h</code></li>
 <li>relative paths, e.g. <code>../README.md</code></li>
 </ul>
-<h3>Ref shapes: resolved, absolute, project- &amp; branch-relative</h3>
+<h3>Query shapes: resolved, absolute, project- &amp; branch-relative</h3>
 <p>
-Beagle branches are tree-structured, the trunk is named as the project e.g. <code>?/beagle/submods</code>. Cases are:
+Beagle branches are tree-structured, the trunk is named as the project e.g. <code>?/beagle</code>. Cases are:
 </p>
 <ul>
-<li><code>?</code> project-relative (the trunk),</li>
-<li><code>?/project</code> absolute, some project's trunk,</li>
-<li><code>?branch</code> project-relative, a top level branch (not the trunk),</li>
-<li><code>?/project/branch/</code> absolute, a top level branch,</li>
+<li><code>?</code> the trunk,</li>
+<li><code>?branch</code> a top level branch (not the trunk),</li>
 <li><code>?..</code> branch-relative, the parent branch,</li>
 <li><code>?./fix</code> branch-relative, a tag or a child branch,</li>
-<li><code>?/project/branch/fix</code> absolute,</li>
-<li><code>?7d37f90f</code> project-relative, detached commit hashlet,</li>
-<li><code>?7d37f90f85dfd6ec218c7cf635c9bf5fd744b8ee</code> project-relative, detached, commit hash,</li>
-<li><code>?/project/7d37f90f85dfd6ec218c7cf635c9bf5fd744b8ee</code> absolute, detached, commit hash.</li>
-<li><code>?/project#7d37f90f85dfd6ec218c7cf635c9bf5fd744b8ee</code> absolute, project trunk, pinned hash.</li>
-<li><code>?/project/branch#7d37f90f85dfd6ec218c7cf635c9bf5fd744b8ee</code> absolute, branch, pinned.</li>
+<li><code>?7d37f90f</code> detached commit hashlet,</li>
+<li><code>?7d37f90f85dfd6ec218c7cf635c9bf5fd744b8ee</code> detached, commit hash,</li>
 </ul>
-<h2><code>be</code> CLI argument classification</h2>
+<h3>URI-&gt;hash resolution</h3>
 <p>
-Every non-flag argv token becomes one URI via <code>DOGNormalizeArg</code>; the token's markers decide the slot, so the common case needs no punctuation.
+In all contexts that require resolution to a hash, we use
 </p>
-<ul>
-<li>An argv token with whitespace is a fragment (<code>be post 'fix the typo'</code>); <code>?</code>/<code>#</code>/<code>/</code> or a <code>scheme:</code> send it to the URI lexer.</li>
-<li>A bareword argv token with no markers lands in the verb's natural slot via <code>DOGPromoteBareword</code> (see <a href="Verbs.html">Verbs</a>).</li>
-<li>One scheme per URI: <code>sha1:</code> is itself the scheme, so <code>sha1:ssh://…</code> is not a valid shape — fetch then read separately.</li>
-</ul>
+<pre><code>    resolve_hash(context_uri, uri) -&gt; {
+	    store: &quot;/home/gritzko/.be/&quot;,  // object store
+		mpath: &quot;/home/gritzko/src/journal/&quot;, // main tree
+		shard: &quot;libdog&quot;,   // the repo in question
+		wtree: &quot;ABC-123&quot;,  // worktree
+		spath: &quot;abc/&quot;,     // (innermost) submodule path
+		rpath: &quot;SHA.h&quot;,    // path within submodule
+		chash: &quot;f425d6a84528cdf46125a3c12bfd2979786eadad&quot;,
+		otype: &quot;blob&quot;,
+	    ohash: &quot;5efa169aeadd9b0c952cfffdd0b8d1f8c81bd119&quot;,
+    }
+</code></pre>
+<p>
+In all the CLI runs, the context URI is derived from  <code>$PWD</code>, in all TUI runs by the TUI shell. Resolution proceeds as follows:
+</p>
+<ol>
+<li>First, we resolve the root of the project. We keep  climbing till we find the topmost <code>.be</code> file or dir</li>
+</ol>
+<p>
+	still lower than <code>$HOME</code>. That is the project root 	It either has its own <strong>store</strong> in <code>.be/</code> or its <code>.be</code> 	file references the repo in the first line, as e.g. 	<code>26625HI34e	repo	file:/home/gritzko/.be/journal</code> 	At this point, we have <code>store</code> and <code>mpath</code>.
+</p>
+<ol>
+<li><code>//WT/wtrel</code> stands for <code>$SRC_ROOT/work/WT/wtrel</code>,</li>
+</ol>
+<p>
+	 <code>///mtrel</code> stands for <code>$SRC_ROOT/mtrel</code>, worktree 	 and maintree paths respectively.
+</p>
+<ol>
+<li><code>uri</code> is resolved relative to the <code>context_uri</code> the following way:</li>
+</ol>
+<p>
+	 1. if <code>uri</code> lacks a worktree, it is taken from the 	    <code>context_uri</code> 	 2. if <code>uri</code> has a relative path, it is resolved 	    relative to the <code>context_uri</code>
+</p>
+<ol>
+<li>At this point, the filesystem path is fixed, we may derive <code>shard</code>, <code>wtree</code>, <code>spath</code>, <code>rpath</code>.</li>
+<li>At which point we resolve <code>chash</code>:<ol>
+<li>If the object <code>#fullsha1hash</code> is set, we check  in <code>store</code>/<code>shard</code> index if it is a commit, done.</li>
+<li>If <code>#hashlet</code> is set, we resolve it against <code>store</code>/ <code>shard</code> index, check if it is a commit, done.</li>
+<li>If the <code>?branch</code> is set, we resolve it against  <code>store</code>/<code>shard</code> reflog, done.</li>
+<li>If <code>?hashlet</code> is set, we resolve it against <code>store</code>/ <code>shard</code> index, check if it is a commit, done.</li>
+</ol>
+</li>
+</ol>
+<p>
+	5.  Having <code>wtree</code> and <code>spath</code> we check the tree's 	    current commit (the last get or post record), done.
+</p>
+<ol>
+<li>If <code>rpath</code> is specified, we follow the path from the <code>store</code>/<code>shard</code>/<code>chash</code> root to obtain <code>otype</code>, <code>ohash</code>.</li>
+</ol>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

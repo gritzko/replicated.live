@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DOG/DOG-010.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>DOG-010: ULOG row injection + one-bad-line permanent rebuild DoS</h1>
 <div>
-<p>
-Now: OPEN Sev: HIGH
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
 </div>
 <p>
 <code>dog/ULOG.c</code> emits log rows with plain <code>URIutf8Feed</code> (<code>ULOG.c:40</code>) — nothing rejects or escapes <code>\n</code>, <code>\t</code>, SP, or <code>#</code> in URI components, even though abc ships <code>URIutf8FeedSafe</code> (<code>abc/URI.h:62-71</code>) for exactly this trust boundary and worktree FILENAMES flow into <code>rec-&gt;uri.path</code>. A file named <code>x\n0\tdel\t?refs/heads/main</code> forges a complete extra attribution row. Worse, any malformed/non-monotonic line bricks the log: <code>ulog_scan_log</code> (<code>ULOG.c:233-235</code>) aborts on the FIRST <code>ULOGBADFMT</code>/<code>ULOGCLOCK</code>, so once the sidecar goes stale (clone, sidecar deleted, RO anon fallback, crash) EVERY subsequent <code>ULOGOpen</code> fails permanently — one crafted filename is a durable DoS on the wtlog. Method: <a href="../../meta/work.html">Issues</a>.

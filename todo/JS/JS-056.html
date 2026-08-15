@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/JS/JS-056.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>JS-056: <code>store.js</code> mmap the on-disk <code>keeper.idx</code> instead of rebuilding the object index every open</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>be/lib/store.js</code> <code>index()</code> builds an in-RAM <code>abc.index(&quot;wh128&quot;,{mem})</code> by <code>pk.scan</code>/<code>indexPackByWalk</code> over EVERY pack object — and since a pack is offset-addressed, that forces resolving+SHA-1ing all objects (~11 s / 2.5 GB on the journal's 40 MB pack; this is why <code>jab status</code> looked hung). The keeper ALREADY persists that exact map on disk as <code>NNNNN.keeper.idx</code> LSM/SST runs (<a href="../../wiki/Indices.html">Indices</a>). <code>locate()</code> should mmap+range those runs, not rebuild. Proven: <code>abc.index(&quot;wh128&quot;,{dir,ext:&quot;keeper.idx&quot;})</code> opens the runs and a prefix range returns <code>707bbbb</code> instantly. JS-030 follow-up. Method: <a href="../../rule/Issues.html">Issues</a>.

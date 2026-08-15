@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/PACK/PACK-004.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>PACK-004: repack ingest REFUSES a REF_DELTA that arrives in the source pack — thin packs and every non-<code>ofs-delta</code> peer abort</h1>
 <div>
-<p>
-Now: OPEN Sev: HIGH
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
 </div>
 <p>
 <code>22bec7d6</code> restored REF_DELTA on the READ side only. <code>PACKResolve</code>/<code>PIDXScanRef</code> take a <code>pack_ref_find</code> so a rotated log's cross-log bases resolve, and <code>REPACK.c:314</code> EMITS REF_DELTA whenever a crossing delta lands in a new log — but <code>REPACK.c:308</code> still carries <code>test(obj.type != PACK_OBJ_REF_DELTA, REPACKBASE)</code>, so a source pack that CONTAINS a REF_DELTA record aborts with &quot;pack: a delta cites a base that never arrived&quot;. That is not an exotic input: a THIN pack names its bases by sha by construction (<a href="../KEEP/KEEP-006.html">KEEP-006</a> §Fetch-side rules says so outright), and so does any peer that did not negotiate <code>ofs-delta</code>. Every incremental fetch is a thin pack, so this bites the moment <a href="../JAB/JAB-020.html">JAB-020</a> routes <code>jab get</code> through <code>git.pack</code>. Found by the <a href="../TEST/TEST-004.html">TEST-004</a> treadmill; method <a href="../../meta/work.html">Issues</a>.
@@ -59,13 +66,13 @@ Now: OPEN Sev: HIGH
 <li>Deciding whether the finder is passed in by JS or opened from the shard path inside libdog is open — libdog knows the shard already, and <a href="../KEEP/KEEP-006.html">KEEP-006</a> rules that JS keeps only routing.</li>
 </ul>
 <h3>TODOs</h3>
-<ul>
-<li><a href="./ .html"> </a> Add the finder to <code>REPACKRun</code>'s signature and thread it to the delta branch.</li>
-<li><a href="./ .html"> </a> Replace the <code>REPACK.c:308</code> refusal with a REF resolve: find the base by sha, apply the delta, emit as the base's type.</li>
-<li><a href="./ .html"> </a> Make the finder search the shard's existing logs as well as the run's own index (a thin pack's bases predate the fetch).</li>
-<li><a href="./ .html"> </a> Keep the genuine miss a plain-words error, distinct from a truncated stream.</li>
-<li><a href="./ .html"> </a> <a href="../TEST/TEST-004.html">TEST-004</a> <code>pack.js --thin</code>: build a thin pack with <code>git pack-objects --thin</code> and assert the objects land.</li>
-<li><a href="./ .html"> </a> Verify end-to-end through a real incremental <code>jab get</code>, not a unit probe.</li>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Add the finder to <code>REPACKRun</code>'s signature and thread it to the delta branch.</li>
+<li class="open"><input type="checkbox" disabled> Replace the <code>REPACK.c:308</code> refusal with a REF resolve: find the base by sha, apply the delta, emit as the base's type.</li>
+<li class="open"><input type="checkbox" disabled> Make the finder search the shard's existing logs as well as the run's own index (a thin pack's bases predate the fetch).</li>
+<li class="open"><input type="checkbox" disabled> Keep the genuine miss a plain-words error, distinct from a truncated stream.</li>
+<li class="open"><input type="checkbox" disabled> <a href="../TEST/TEST-004.html">TEST-004</a> <code>pack.js --thin</code>: build a thin pack with <code>git pack-objects --thin</code> and assert the objects land.</li>
+<li class="open"><input type="checkbox" disabled> Verify end-to-end through a real incremental <code>jab get</code>, not a unit probe.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>

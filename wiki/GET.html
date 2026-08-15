@@ -3,8 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GET</title>
+<title>GET: repo-to-worktree verb (checkout, clone, switch, restore)</title>
+<meta property="og:title" content="GET: repo-to-worktree verb (checkout, clone, switch, restore)">
+<meta property="og:description" content="gritzko">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/wiki/GET.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -18,7 +30,7 @@ gritzko
 </p>
 </div>
 <p>
-GET exports git trees from repo into the worktree: clone, switch branch, detach, or restore in git's terms. It never changes history — it only resets the worktree to a chosen version, maybe re-applying uncommitted changes. The exact action is defined by the shape of the URI:
+GET exports git trees from repo into the worktree: clone, switch branch, detach, or restore in git's terms. The regular form does fast-forward/backward, maybe re-applying uncommitted changes. The forceful form resets the worktree to a chosen version, deleting all the untrackeds. The exact action is defined by the shape of the URI:
 </p>
 <ol>
 <li>Path: (unless Host is set) scopes to file/subtree/submod,<ul>
@@ -29,30 +41,30 @@ GET exports git trees from repo into the worktree: clone, switch branch, detach,
 <li>Query: the branch/tag/hash to switch to,<ul>
 <li>a bare sha detaches (will stay detached on commit),</li>
 <li>empty <code>?</code> is the trunk, see <a href="./URI.html">URI</a>,</li>
-<li>no query defaults to the current branch.</li>
+<li><code>?.</code> is the current branch.</li>
 </ul>
 </li>
-<li>Host: remote to fetch from (uses the cached tip if no scheme set),</li>
-<li>Scheme: the protocol (ssh: be: file:) to use.</li>
+<li>Host: either a remote or a scheme-less form of <code>//name</code> for a worktree.</li>
+<li>Scheme: the protocol (ssh: be: file:) to use for a remote.</li>
 </ol>
 <h2>CLI use</h2>
 <pre><code>    be get...
-    ?feat                — switch wt+cur to branch feat
-    ?./fix               — enter a child branch (?../sib a sibling)
-    ?                    — switch to the trunk
-    ?abc1234             — detached checkout at a sha
-    #~1                  — rewind cur one commit, reset the wt
-    file.c               — restore one file from cur's baseline
-    file.c?feat          — get file.c from feat's tip
-    //origin?feat        — reset from the cached tip (no network)
-    ssh://host?feat      — fetch, then checkout
-    ssh://host/repo.git  — clone: fetch + checkout (recurses subs)
-    file:../proj?feat    — wire an empty cwd as a sibling worktree
-                         — (empty) bare: FF the wt to cur's branch tip
+                         (empty) bare: move the wt to cur's branch tip
+    ?feat                switch wt+cur to branch feat
+    ?./fix               enter a child branch (?../sib a sibling)
+    ?                    switch to the trunk
+    ?abc1234             detached checkout at a sha
+    #~1                  rewind cur one commit, reset the wt
+    file.c               restore one file from cur's baseline
+    file.c?feat          get file.c from feat's tip
+    //ABC-123            checkout the rev worktree ABC-123 is on
+    ssh://host?feat      fetch, then checkout
+    ssh://host/repo.git  clone: fetch + checkout (recurses subs)
+    file:../proj?feat    wire an empty cwd as a sibling worktree
 </code></pre>
 <h2>RefLog/WTLog interaction</h2>
 <ol>
-<li>Reference Log: resolves the <code>?ref</code> to a tip sha,<ul>
+<li>Reference Log: resolves the <code>?ref#sha</code> to a tip sha,<ul>
 <li>a remote fetch writes a remote-tracking get record (with #hash).</li>
 </ul>
 </li>
@@ -63,7 +75,64 @@ GET exports git trees from repo into the worktree: clone, switch branch, detach,
 </ol>
 <h2>Forceful execution</h2>
 <p>
-<code>be get!</code> resets the worktree to a clean state, all local changes discarded.
+The regular form can only do fast-forward or fast-backward, refuses otherwise. The local changes get carried over by weave merge. The forceful form <code>be get!</code> resets the worktree to a clean state, all local changes discarded. That can be any commit, not necessarily fast-forward or fast-backward. 
 </p>
+<h2>Summary of invocation patterns</h2>
+<div>
+<p>
+gritzko, no LLM allowed
+</p>
+</div>
+<p>
+<code>get</code> is the most basic Beagle operation: get a specific revision of a repo and probably its nested submodules. Clone, checkout, update, switch, etc. The recentmost <code>get</code> defines which ref the tree <strong>tracks</strong> and what is its <strong>base</strong> commit (base commit can also be changed by <code>post</code>).
+</p>
+<ol>
+<li><code>get</code> comes in many forms:<ol>
+<li>bare get - implies the tracked ref as the argument (the recentmost get record of the wtlog contains the tracked URI; can be any case of 2..6)</li>
+</ol>
+</li>
+</ol>
+<p>
+	2.  <code>get ?branch</code>, <code>get ?tag</code>, specify the target ref in the local store (can use branch paths, incl relative, e.g. <code>get ?../sibling_branch</code>) 	3.  <code>get //worktree/path</code> - worktree get (reads the <strong>base</strong> hash of that tree, tracks that tree afterwards, same-store op), 	4.  <code>get #hash</code> - direct commit checkout, detaches the worktree; 	5.  <code>get #~1</code> - roll back one commit, 	6.  <code>get file:...</code>, <code>get https:...</code>, <code>get ssh:...</code>, <code>get 	be:...</code> all include the network leg, conversation with git's or own daemon to obtain refs and objects; the only pattern that changes something in the store.
+</p>
+<ol>
+<li><code>get</code> can be 0. bootstrap clone, no local copy, creates wtlog and the checkout 1. normal, when dirty file changes get weaved into the new versions</li>
+</ol>
+<p>
+	2. <code>get!</code> forceful that discards local changes and untracked files, can go to any commit (not just ff/fb)  	3. <code>get file.c</code>, <code>get dir/</code> - current tip, narrowed to a specific path (recovers) 	4. <code>get! file.c</code> narrowed forceful, resets a file/subdir 	5. <code>get //WORK/submod/path/file.c</code> cherry-picking files from other refs (an optional feature)
+</p>
+<ol>
+<li>commit history wise, the target can be 1. ahead</li>
+</ol>
+<p>
+	2. behind 	3. same - nothing to do 	4. divergent 
+</p>
+<ol>
+<li>the tree dirtiness: 0. clean tree - get new blobs, 1. in case local files have uncommitted changes, those are carried over by weave merge; if that fails, errs out.</li>
+<li><code>get</code> submodule recursion rules:<ol>
+<li>does not recur if invoked with <code>--nosub</code></li>
+<li>by default: gets submodule's pinned hash</li>
+</ol>
+</li>
+</ol>
+<p>
+	    -   for every submodule that is attached to the parent's pin 		-   while ignoring modules that are attached differently
+</p>
+<div>
+<ol>
+<li><code>get!</code> forcefully: into every submodule, gets its pinned hash</li>
+</ol>
+</div>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

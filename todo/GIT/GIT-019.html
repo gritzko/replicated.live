@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/GIT/GIT-019.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>GIT-019: reuse ONE receive-pack session for push — advert+verdict+pack, no hangup/reconnect</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 A <code>jab post //host</code> push opens the remote's <code>git-receive-pack</code> TWICE: first in <code>relate.relate</code>→<code>wire.advertRefs</code>, only to read the old tip for the FF gate, and closed with a BARE <code>io.close</code> (no flush) so git-receive-pack dies <code>fatal: the remote end hung up unexpectedly</code> on EVERY push, even a successful one; then AGAIN in <code>wire.push</code>, which RE-drains the identical advert before sending the pack. One push, two connections, one gratuitous scary line. Reuse ONE session: advertise once, keep the child alive, run the LOCAL FF verdict + build the pack from that advert's haves, send updates+pack on the SAME fds; on the advert-only / non-FF refusal path send a flush-pkt (<code>0000</code>) before close so receive-pack exits clean. Respect GIT-016's graph-only <code>relate</code> spine — make its advert INJECTABLE, do not fuse wire transfer into the verdict. JS only (<code>be/</code>, via <code>jab</code>). Method: <a href="../../meta/work.html">work</a>; siblings <a href="GIT-013.html">GIT-013</a>/<a href="GIT-016.html">GIT-016</a>; cuts <a href="../BE/BE-006.html">BE-006</a> stacked-error noise.

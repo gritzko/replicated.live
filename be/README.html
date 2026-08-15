@@ -3,23 +3,120 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>README</title>
+<title>Beagle SCM</title>
+<meta property="og:title" content="Beagle SCM">
+<meta property="og:description" content="Beagle is a 100% git-compatible source code management system for the LLM era. Beagle uses git's storage model and sync protocol as-is. It reworks everything else for the world where effort is cheap and attention is precious. Beagle lets you run many sessions in parallel, track hundreds of worktrees and tickets.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/be/README.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>Beagle the SCM</h1>
+<h1>Beagle SCM</h1>
 <p>
-This is the JavaScript implementation of Beagle SCM. The only dependency is <a href="https://github.com/gritzko/jab/">JAB</a> the JavaScript runtime. Symlink/mv this as a <code>be/</code> dir in cwd or any higher dir  (e.g. `$HOME/be/). Jab will pick it up.
+Beagle is a 100% git-compatible source code management system for the LLM era. Beagle uses git's storage model and sync protocol as-is.  It reworks everything else for the world where effort is cheap and attention is precious. Beagle lets you run many sessions in parallel, track hundreds of worktrees and tickets.
 </p>
 <p>
-See the <a href="https://replicated.wiki/wiki/Verbs">wiki</a> and guides for <a href="https://replicated.wiki/meta/work">usage patterns</a>.  This implementation is TUI-centric, any command opens a pager.
+Beagle accepts the fact that LLMs are <a href="https://replicated.live/blog/follow-up">not compilers</a> and focuses on taming their  non-determinism in two ways:
+</p>
+<ol>
+<li>automating everything repeatable to use it as a tool,</li>
+<li>building a selection funnel for the LLM-authored code.</li>
+</ol>
+<p>
+The next-level abstraction is not a worktree, nor a set of branches, but a <strong>wave of evolution</strong>. Let them evolve and speciate, then select, mix, repeat.
+</p>
+<h2>Beagle use</h2>
+<p>
+&lt;img align=&quot;right&quot; width=&quot;40%&quot; src=&quot;blob/status.png&quot; alt=&quot;be status&quot;&gt; Beagle's basic verb vocabulary is HTTP-like and all addressing is URI-based.
+</p>
+<ul>
+<li><a href="https://replicated.live/wiki/GET">get</a> is clone/pull/checkout;</li>
+<li><a href="https://replicated.live/wiki/POST">post</a> is commit/fast-forward/push;</li>
+<li><a href="https://replicated.live/wiki/PATCH">patch</a> is merge/rebase/cherry-pick;</li>
+<li><a href="https://replicated.live/wiki/PUT">put</a> is stage (also set ref);</li>
+<li><a href="https://replicated.live/wiki/DELETE">delete</a> is stage deletion (also drop ref);</li>
+</ul>
+<p>
+Most of the time you would probably use the TUI. Start with <code>be status</code> or <code>be work</code> for an overview. All Beagle commands start the pager/TUI by default. <code>:</code> is the command mode (e.g. <code>:status&lt;Enter&gt;</code>). <code>q</code> or <code>:quit&lt;Enter&gt;</code> is quit.
+</p>
+<h2>Beagle features</h2>
+<ol>
+<li>This implementation is <a href="https://replicated.live/blog/status">TUI-centric</a>, any command opens a pager.</li>
+<li>The TUI is browser-like, all things that can be clickable are clickable.</li>
+<li>Both external (e.g. GitHub) and internal (e.g. worktrees) addressing is URI-based.</li>
+<li>Beagle expects <a href="https://replicated.live/blog/worktree">*lots* of worktrees</a> and many agentic sessions to run in parallel.</li>
+<li>Worktrees in turn get organized into a tree-of-life through upstream-fork links. That is essential to keep track of them and propagate the changes.</li>
+</ol>
+<h2>Build and Installation</h2>
+<p>
+The only dependency is <a href="https://github.com/gritzko/jab/">JAB</a> the anti-bloat JavaScript runtime. JAB packs a lot of revision-control-specific bindings and APIs.
+</p>
+<ol>
+<li>Build JAB (cmake) or <a href="https://github.com/gritzko/jab/releases">download</a> it from GitHub, install it in your <code>$PATH</code>.</li>
+</ol>
+<div>
+<pre><code>        git clone --recurse-submodules https://github.com/gritzko/jab.git
+        cd jab &amp;&amp; mkdir build &amp;&amp; cd build &amp;&amp; cmake .. &amp;&amp; make -j8
+        mkdir -p ~/bin &amp;&amp; cp bin/jab ~/bin/ &amp;&amp; ln -s ~/bin/jab ~/bin/be
+        export PATH=$PATH:~/bin
+</code></pre>
+</div>
+<ol>
+<li>You may also want to install a symlink, like <code>be -&gt; jab</code> to use the <code>be</code> command.</li>
+<li>Clone the Beagle repo <a href="https://github.com/gritzko/beagle-ext">itself</a> to <code>jsrc</code> anywhere from the current dir up. Then, just for the fun of it, make a self-hosted beagle checkout.<pre><code>        git clone --recurse-submodules https://github.com/gritzko/beagle.git jsrc
+        mkdir beagle &amp;&amp; cd beagle
+        be get https://github.com/gritzko/beagle.git &amp;&amp; be status
+</code></pre>
+<p>
+The resulting <code>beagle</code> dir you may move anywhere, update with <code>be get</code>, etc.
+</p>
+</li>
+<li>JAB picks the sources from <code>jsrc/</code> dirs in <code>$PWD</code> and up the parent chain (not <code>node_modules</code>). See the <code>jsrc</code> self-link in this repo; it lets Beagle revision-control itself.</li>
+<li>You may submodule beagle-ext into your project as <code>jsrc/</code> or make a <code>$HOME/jsrc</code> symlink.</li>
+</ol>
+<p>
+Once <code>be</code> runs, it clones itself; a Beagle clone takes a URI with a branch query. The tests live in a separate repo, checked out as a <code>test/</code> worktree.
 </p>
 <p>
-All the heavy-lifting is done by <a href="https://github.com/gritzko/libdog">libdog</a> through JAB bindings. So, if this set of command does not suit  you, then complain to Claude, and please share the results.
+In case you have Beagle already, things look simpler. Just note that beagle checks things out into the <strong>current</strong> dir and all its commands recurse into submodules by default:
 </p>
+<pre><code>    mkdir beagle &amp;&amp; cd beagle
+    be get 'https://github.com/gritzko/beagle.git'
+    cmake . &amp;&amp; make -j20 test
+</code></pre>
+<h2>Customization and Speciation</h2>
+<p>
+Any user-facing behavior is implemented in JavaScript and customizable. Users are expected to develop their custom verb/view sets.  Any established workflow should be taken from the LLM's probabilistic hands and <a href="https://replicated.live/blog/away">automated</a>. Just put your <code>jsrc/</code> on a different level than Beagle's if you want to build on top of it. Creating your own set of commands from scratch is also OK, it just takes longer. All the revision-control heavy-lifting, source code tokenization and suchlike is all done by <a href="https://github.com/gritzko/libdog">libdog</a> through JAB bindings.
+</p>
+<h2>Contribution</h2>
+<p>
+Beagle is very experimental. All contributions and (especially) feedback are appreciated.
+</p>
+<p>
+&lt;p align=&quot;center&quot;&gt; &lt;img src=&quot;blob/smith.png&quot; alt=&quot;Agent Smith seated across from his machine twin, copies lining the walls&quot;&gt; &lt;br&gt; &lt;em&gt;We are no longer coded, Mr. Smith. We are grown.&lt;/em&gt; &lt;br&gt; &lt;em&gt;Fate, it seems, is not without a sense of irony.&lt;/em&gt; &lt;/p&gt;
+</p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

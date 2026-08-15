@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DOG/DOG-009.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>DOG-009: HOME adopts untrusted <code>.be</code> anchors — store-root redirect, TOML injection</h1>
 <div>
-<p>
-Now: OPEN Sev: HIGH
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
 </div>
 <p>
 <code>dog/HOME.c</code>'s cwd-walk discovery is the git CVE-2022-24765 class: it probes every ancestor for <code>.be</code> and adopts the first hit with ZERO trust validation. For a secondary-worktree anchor (a <code>.be</code> regular file), <code>home_anchor_resolve</code> (<code>HOME.c:637-682</code>) takes row-0's URI path VERBATIM and makes it <code>h-&gt;root</code> — the store root — with no ownership check, no symlink rejection (<code>FILEStat</code> follows symlinks; <code>FILELStat</code> exists and is unused), and no containment/absolute-path requirement. Running any dog inside a hostile cloned/untarred directory then routes rw opens (<code>home_ensure_markers</code>, <code>DOGPupCreate</code>) to an attacker-chosen path. Separately <code>home_bootstrap_config</code> (<code>HOME.c:110-125</code>) writes <code>git config</code> <code>user.name</code>/<code>email</code> into <code>.be/config</code> as <code>name = &quot;&lt;value&gt;&quot;</code> with NO escaping, so a value containing <code>&quot;</code> or <code>\n</code> injects arbitrary TOML (e.g. forging the <code>HOMEHost</code> ref-authority). Method: <a href="../../meta/work.html">Issues</a>.

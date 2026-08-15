@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/GET/GET-008.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>GET-008: <code>be get!</code> (≡ <code>be get --force</code>) resets the world — its <code>get</code> row voids prior staged records (append-only, NO truncation)</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>be get!</code> is just <code>be get --force</code> (the bang injects <code>--force</code>, nothing more) and is the clean-slate reset. It does NOT need to truncate <code>.be/wtlog</code>: the wtlog is <strong>append-only</strong>, and a <code>get</code> row IS a boundary — it is &quot;a hard reset of the world&quot; that resets both the pd boundary (<code>SNIFFAtLastPostTs</code>, <code>sniff/AT.c:631-634</code>) and the patch boundary (<code>at_patch_boundary_start</code>, <code>sniff/AT.c:544-547</code>, DIS-010). So once a fresh <code>get</code> row is appended, every prior staged <code>put</code>/<code>patch</code> record falls <strong>below</strong> the boundary and is void — POST/PATCH already ignore everything before the most recent <code>get</code>/commit-all-<code>post</code>. Clearing a poisoned wtlog (origin: <a href="./POST-011.html">POST-011</a> Part B — accumulated staged <code>patch</code> rows → <code>be post</code> <code>POSTNOMSG</code>) is therefore just running <code>be get!</code>, which appends that boundary. The only real question is whether a <strong>no-op</strong> <code>be get!</code> (target already == cur) still appends the <code>get</code> row; if it short-circuits without one, the reset doesn't happen. See <a href="../../wiki/GET.html">GET</a>, <a href="../../wiki/POST.html">POST</a>, <a href="./POST-011.html">POST-011</a>, <a href="../../CLAUDE.md">CLAUDE</a>.

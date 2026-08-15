@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DOG/DOG-014.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>DOG-014: <code>PACKResolveOfs</code> ping-pong sizing — undocumented invariant, latent heap overflow</h1>
 <div>
-<p>
-Now: OPEN Sev: MED
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>MED</dd></dl>
 </div>
 <p>
 <code>dog/git/PACK.c</code>'s <code>PACKResolveOfs</code> applies the delta chain bottom-up, ping-ponging the apply result between <code>delta[0]+half</code> and <code>base[0]</code> (<code>PACK.c:265-285</code>), where <code>half = deltalen/2</code> (<code>:213</code>). Every <code>DELTApply</code> output gauge is <code>{dst,dst,dst+half}</code> (<code>:278</code>), so when <code>dst == base[0]</code> up to <code>half</code> bytes may be written into the <code>base</code> scratch — which is <code>baselen</code> bytes. Safety therefore REQUIRES <code>half &lt;= baselen</code>, i.e. <code>deltalen &lt;= 2*baselen</code>, and NOTHING checks or documents it. A symmetric over-read exists via <code>bsl = {src, src+outsz}</code> (<code>:277</code>). Latent today (keeper <code>KEEP.c:428-429</code> and the tests size both scratches equally, so <code>half = baselen/2 &lt; baselen</code>), but a future caller giving a larger delta scratch than base scratch gets an attacker-<code>result_sz</code>-driven heap overflow. Distinct from the keeper-side <a href="../MEM/MEM-022.html">MEM-022</a>/<a href="../GIT/GIT-004.html">GIT-004</a> resolver work — this bug is in the surviving OFS apply loop in <code>dog/git</code>. Method: <a href="../../meta/work.html">Issues</a>.

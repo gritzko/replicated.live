@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/BE/BE-012.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>BE-012: emitPack's 256-byte deflate slack overflows on incompressible blobs — every push of such a repo aborts</h1>
 <div>
-<p>
-Now: OPEN Sev: HIGH
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
 </div>
 <p>
 <code>emitPack</code> (<code>shared/wire.js:441</code>) sizes a FIXED <code>Uint8Array</code> at <code>1024 + Σ(obj.bytes.length + 256)</code>, but <code>ZINFDeflate</code> is real zlib: incompressible input (jpeg, zip, already-compressed binary) deflates to <code>len + ~5 B per 64KB stored block + header/adler</code> ≈ 330 B/MB, so any object over ~4MB needs more than 256 B of slack. <code>git.pack.over(...)</code> has no growth path — <code>abc._pack_feed</code> throws <code>pack: feed (full?)</code> (jab <code>pack.hpp:117</code>). Pushing (or serving via uploadPack, which reuses buildPushPack) a repo containing one large binary always fails with a cryptic error. From the 2026-07-07 be/ review (<a href="REVIEW.html">BE/REVIEW</a>), CONFIRMED with a sizing probe. Method <a href="../../rule/Issues.html">Issues</a>.

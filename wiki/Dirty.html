@@ -3,8 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Dirty</title>
+<title>File/dir/submodule dirtiness status</title>
+<meta property="og:title" content="File/dir/submodule dirtiness status">
+<meta property="og:description" content="The dirtiness/status describes how the state of a file in a work tree differs from the base state in the repo. That is used by status, post and other commands. post's mission is to bring the git tree into the same state as the work tree. For get, it is the other way around. The decision tree for file dirtiness status is listed here.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/wiki/Dirty.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -55,6 +67,19 @@ The dirtiness/status describes how the state of a file in a work tree differs fr
 <li><code>-</code> absent in work tree</li>
 </ol>
 </div>
+<h2>What counts as a conflict</h2>
+<p>
+<code>cnf</code> is decided on the RGA weave, not on hunk overlap: it marks concurrent edits that no total order can reconcile. The rule is symmetric — <a href="PATCH.html">PATCH</a> on a dirty wt, patch against patch, <a href="GET.html">GET</a> against local edits — no side is privileged.
+</p>
+<ul>
+<li>Two insertions conflict only when they share an anchor (the same RGA parent), so the weave must interleave them at one point.</li>
+<li>Insertions at different anchors never conflict, however close they render; adjacency in the text is not overlap in the weave.</li>
+<li>An insertion conflicts with an alien removal only when interior to the removed run: both its neighbours are tombstoned there.</li>
+<li>An insertion abutting a removed run merges cleanly: anchored on the last survivor before the hole, or the first one after it.</li>
+<li>Removals never conflict with removals, overlapping or not, because tombstones union idempotently.</li>
+<li>A modification is removal plus insertion at one spot, so edit-vs-edit and edit-vs-delete are one interior-insertion case.</li>
+<li>A hunk-level differ misses this: line-span overlap both hides the interior insertion and cries conflict on a plain abutment.</li>
+</ul>
 <h2>Nesting</h2>
 <p>
 For directories and submodules (gitlinks) most statuses work the same. Directory is implied dirty if any of its contents are dirty; same applies to submodules. That is implied, not shown. Staging any file in a dir stages the dir (as a git tree object). Any staged change in a submodule stages a submodule, more or less the same way.
@@ -67,5 +92,16 @@ For directories and submodules (gitlinks) most statuses work the same. Directory
 <li><code>post</code> present here, not there</li>
 <li><code>miss</code> present there, not here</li>
 </ol>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

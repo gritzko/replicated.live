@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/MEM/MEM-034.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>MEM-034 <a href="./DONT.html">DONT</a>: main() script slurp unchecked ftell/malloc/fread → OOB (js/main.cpp)</h1>
 <div>
-<p>
-Now: DONT
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONT</dd></dl>
 </div>
 <p>
 The script-file loader in <code>main()</code> slurps the file with no validation. <code>long len = ftell(f)</code> is unchecked: on a non-seekable file (pipe/FIFO/char device) <code>ftell</code> returns -1, so <code>malloc(len+1)</code> becomes <code>malloc(0)</code>, <code>fread</code> is called with count <code>(size_t)-1</code>, and <code>script[len]=='\0'</code> writes <code>script[-1]</code> — a deterministic heap-underflow OOB write. The <code>malloc</code> return is unchecked (NULL write under OOM) and the <code>fread</code> count is ignored (uninitialized bytes before the NUL parsed by <code>JABCExecute</code>). It also <code>fopen</code>s <code>argv[1]</code> instead of the parsed <code>script_file</code>. Local CLI utility (operator is the actor), but the underflow is trivially reachable. The goal is to validate <code>ftell&gt;=0</code>, check <code>malloc</code>, and terminate at the actual <code>fread</code> count.

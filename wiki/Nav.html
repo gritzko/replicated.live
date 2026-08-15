@@ -3,8 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Nav</title>
+<title>Nav: editing one slot of a (verb · URI) address</title>
+<meta property="og:title" content="Nav: editing one slot of a (verb · URI) address">
+<meta property="og:description" content="Between Beagle CLI and the Bro pager, there is a unified navigation framework. Its mission is to make a versioned repo as navigable as a regular filesystem (cd, ls, cat, grep, etc). So moving around in the pager must not be any more complicated than moving around in the regular Unix shell. The general idea is that the current position is saved in the context URI (like $PWD), while movements mutate one axis at a time: path, revision, worktree, etc.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/wiki/Nav.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -12,60 +24,50 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>Nav: editing one slot of a (verb · URI) address</h1>
+<div>
 <p>
-Navigation moves around Beagle's resources by editing ONE axis of the current address while the other axes carry over. Every invocation — a CLI argv, a <a href="Bro.html">Bro</a> pager <code>:</code>-spell, or a click on a hunk — is <code>module(args)</code>: the head word names a JS module (a <a href="Verbs.html">Verbs</a> verb or a <a href="Projector.html">Projector</a> view), the tail is its args, i.e. a <a href="URI.html">URI</a>. A pager view carries a live <code>(verb · scheme · authority · path · ref · frag)</code> state; a spell mutates one slot and inherits the rest. One tokenizer and one &quot;does the name resolve&quot; test serve both the CLI entry and the pager; an address resolves once, at entry, never re-derived downstream.
+-- gritzko
 </p>
-<h2>Invocation is module(args)</h2>
+</div>
 <p>
-The head token resolves to a module and the tail becomes its args; there is no verb-vs-scheme classifier, only &quot;does the name name a module.&quot;
-</p>
-<ul>
-<li>A head word is a VERB/VIEW iff it resolves to a module file (<code>verbs/&lt;w&gt;/&lt;w&gt;.js</code> or <code>views/&lt;w&gt;/&lt;w&gt;.js</code>); the tail tokens are its args.</li>
-<li>A head that resolves to NO module is itself a URI/path arg to a default view — a dir opens <code>ls</code>, a file opens <code>cat</code>/<a href="Bro.html">Bro</a>.</li>
-<li>The pager runs the SAME <code>module(args)</code>: a spell or click calls the resolved module fn directly — no argv re-stringify, no <code>--tlv</code> capture round-trip.</li>
-<li>ONE tokenizer serves CLI and pager, retiring the entry 3-shape gate and the pager's separate spell parser. See <a href="../todo/JAB/JAB-004.html">JAB-004</a>, <a href="../todo/DIS/DIS-060.html">DIS-060</a>.</li>
-</ul>
-<h2>Views are verbs, not schemes</h2>
-<p>
-A projector is an operation, not a transport, so it lives in the head (verb) slot; the scheme slot narrows to addressing alone.
+Between Beagle CLI and the Bro pager, there is a unified navigation framework. Its mission is to make a versioned repo as navigable as a regular filesystem (<code>cd</code>, <code>ls</code>, <code>cat</code>, <code>grep</code>, etc). So moving around in the pager must not be any more complicated than moving around in the regular Unix shell. The general idea is that the current position is saved in the <strong>context URI</strong> (like $PWD), while movements mutate one axis at a time: path, revision, worktree, etc.
 </p>
 <ul>
-<li>Schemes ADDRESS only: transport <code>ssh:</code>/<code>https:</code>/<code>git:</code>/<code>be:</code>/<code>file:</code> plus content-addressing <code>sha1:</code>; a verb never appears as a scheme.</li>
-<li>Read views (<code>diff</code>/<code>ls</code>/<code>cat</code>/<code>grep</code>/<code>log</code>/<code>status</code>/…) are verbs — <code>diff foo?a..b</code>, <code>cat x?main</code> — never <code>diff:</code>/<code>cat:</code>.</li>
-<li>Freeing the scheme slot re-enables the composition <a href="URI.html">URI</a> once forbade: <code>diff https://host/x?a..b</code>, a lens over a remote, now parses.</li>
-<li>Removes the verb/scheme conflation at its root, not as a patch. See <a href="../todo/DIS/DIS-060.html">DIS-060</a>, <a href="Projector.html">Projector</a>.</li>
+<li>in the CLI, the context URI is defined by the current dir (worktree, path, branch all come from pwd-based detection),</li>
+<li>in the pager, the current URI is displayed in the address bar,</li>
+<li>relative-path arguments get resolved against the context URI, e.g. <code>//ABC-123/path/file.c + .. = //ABC-123/path/</code>,</li>
+<li>resolution is the verb's job — <code>resolve(context, base, rel)</code> at the verb's entry; the pager is arg-blind and never pre-merges,</li>
+<li>authority-only arguments switch the worktree, e.g. <code>//beagle/main.js + //ABC-123 = //ABC-123/main.js</code>; the target worktree supplies its own revision, irrespective of the old context,</li>
+<li>a <code>?rev</code> context means: ignore the worktree files, read repo objects; verbs are free to ignore/drop context parts that don't apply (e.g. a write verb drops <code>?rev</code>),</li>
+<li>query-only arguments: the same,</li>
+<li>query arguments can be relative as well, e.g. <code>//ABC-123? + ?./branch = //ABC-123?branch</code>,</li>
+<li>fragment-only arguments: the same,</li>
+<li>multipart URIs are taken verbatim, e.g. <code>git@github.com:gritzko/libdog.git</code> is context-independent,</li>
+<li>pager commands are called <strong>spells</strong>; they come in several formats:<ol>
+<li>context-mutating relative <code>./paths</code>, </li>
+<li>context-mutating relative <code>?queries</code>,</li>
+<li>context-mutating <code>//TREES</code>,</li>
+<li>verb-and-arguments command invocations.</li>
+</ol>
+</li>
 </ul>
-<h2>Navigation edits one slot</h2>
+<h2>Verb-args-context</h2>
 <p>
-A spell SETS the slots it names and INHERITS the unnamed from the current view; typed input is PARSED by the URI lexer (never re-classified by hand) and each present component overrides its slot.
+All Beagle commands get implemented as JavaScript modules exporting one <code>command(context_uri, args...)</code> function. So, CLI and pager invocations are very much alike: they take the context from the environment, find the module, call the function, pass the arguments verbatim. On top of that, the pager has context-mutating <strong>spells</strong>, so the user may rerun the last command in a slightly different context, e.g. change the directory, revision, or a worktree. E.g. with <code>cat file.c</code> rendered, the spell <code>://ABC-123</code> reruns it as <code>//ABC-123/file.c</code> — the same file from another worktree.
 </p>
-<ul>
-<li><code>./test</code> — path axis: descend into a subdir, keep verb + ref + authority.</li>
-<li><code>diff</code> / <code>status</code> — verb axis: re-lens the same object, keep the URI.</li>
-<li><code>?</code> / <code>?feat</code> — ref axis: bare <code>?</code> is the trunk, <code>?feat</code> a branch, keep path + verb.</li>
-<li>Naming <code>//NAME</code> switches the WORKTREE/authority and KEEPS the rest (verb·path·ref) — a worktree is the same project, so its branches/paths still resolve; <code>//</code> = the main tree.</li>
-<li>A REF change (<code>?feat</code>) KEEPS the <code>#L&lt;n&gt;</code> position (same file, jump preserved); a PATH change DROPS it (a line anchor is meaningless in another file).</li>
-<li>The verb changes only when a verb word LEADS the spell (<code>diff file.c</code>); a <code>?ref</code>/<code>/path</code>/<code>//auth</code> edit keeps the current verb.</li>
-<li>BACK pops the view stack: each forward spell PUSHES a snapshot of its full address; backspace restores the previous one wholesale, so an abandoned <code>post ssh://…</code> screen is never the inherit base.</li>
-</ul>
-<h2>Worktrees and remotes are authorities</h2>
 <p>
-The authority slot names WHICH working copy or remote; a bare <code>//</code> reads locally, a scheme opts into the wire.
+Every command emits <code>{ts,verb,uri}</code> hunks containing token streams.  Hunk tokens can be click-targets containing URIs (U) or <code>verb args</code> spells (O).
 </p>
-<ul>
-<li>Bare <code>//host</code> reads the CACHE (<code>//github.com/gritzko/beagle</code>); <code>ssh://</code>/<code>https://</code>/<code>git://</code> open the wire — the scheme flips cached vs network <a href="URI.html">URI</a>.</li>
-<li>An authority of shape <code>[A-Z]+-[0-9]+</code> (<code>//DIS-060</code>) is a WORKTREE at <code>${be.todo_root}/&lt;name&gt;</code> — a pure SHAPE test, no filesystem probe.</li>
-<li><code>TODO_ROOT</code> (default <code>$HOME/todo</code>) is read once and folded onto the ambient <code>be.todo_root</code>; CLI and pager share the one global.</li>
-<li><code>:status //DIS-060</code> reads that worktree's live working dir (dirty + staged), verb + path + ref inherited; <code>//</code> (or <code>//.</code>) returns to the main tree.</li>
-</ul>
-<h2>Click-targets are spells</h2>
-<p>
-A hunk's <code>U</code>-tag carries a <code>verb args</code> spell, store-prefixed, so click-through re-dispatches in the store the hunk came from.
-</p>
-<ul>
-<li>Every projector emits <code>{ts,verb,uri}</code> hunks; a click-target is a spell (<code>verb args</code>), not a bare URI <a href="Bro.html">Bro</a>.</li>
-<li>A descended or submodule view prefixes its nav URIs with the store authority so a click resolves in the RIGHT store, never the cwd store. See <a href="../todo/SUBS/SUBS-045.html">SUBS-045</a>.</li>
-<li>A relative clicked/typed path re-anchors to the worktree root via cwd, then resolves. See <a href="../todo/URI/URI-010.html">URI-010</a>.</li>
-</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

@@ -3,8 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>POST</title>
+<title>POST: the tip-advancing commit-making verb (commit, ff, push)</title>
+<meta property="og:title" content="POST: the tip-advancing commit-making verb (commit, ff, push)">
+<meta property="og:description" content="gritzko">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/wiki/POST.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -18,21 +30,18 @@ gritzko
 </p>
 </div>
 <p>
-POST makes a commit and/or advances a branch tip, in all combinations. Always does fast-forward, refuses non-linear changes. The exact action sequence is defined by the shape of the URI:
+POST makes a commit and/or advances a branch tip, in all combinations. A commit advances the WORKTREE only; the tracked branch tip moves only by an explicit <code>?branch</code> — the two motions never couple (pins are the exception: the parent rewrites a sub's <code>//wt/path#hash</code> pin record on any base move, see <a href="Submodules.html">Submodules</a>). Always does fast-forward, refuses non-linear changes. The exact action sequence is defined by the shape of the URI:
 </p>
 <ol>
 <li>Path: (unless Host is set) narrows the commit to a path/submodule.</li>
 <li>Fragment: contains the commit message (if new commit is intended).<ul>
-<li>if any files are explicitly staged (PUT/DELETE), adds those,</li>
-<li>if none staged, auto-stages all changes (if none, errs out),</li>
-<li>with active PATCH, may reuse the old commit message (rebase),<p>
-then fragment can be empty (e.g. <code>be post #</code>).
-</p>
-</li>
+<li>if any files are explicitly staged (PUT/DELETE), commits exactly those; a sub with put files commits first, the gitlink bubbles one level up (<a href="Submodules.html">Submodules</a>),</li>
+<li>if none staged, auto-stages all changes to make the tree clean — dirty sub files bottom-up, then the resulting gitlinks (if none, errs out),</li>
+<li>with active PATCH, may reuse the old commit message (rebase), then fragment can be empty (e.g. <code>be post #</code>).</li>
 </ul>
 </li>
-<li>Query: contains the target branch (remote if Host set) to advance,<ul>
-<li>defaults to the branch the worktree tracks (if any),</li>
+<li>Query: the target branch (remote if Host set) to advance to the wt base,<ul>
+<li>the ONLY way a branch tip moves; a commit alone never advances it,</li>
 <li>(wt may untie from a branch if committed to other one).</li>
 </ul>
 </li>
@@ -42,8 +51,6 @@ then fragment can be empty (e.g. <code>be post #</code>).
 <h2>CLI use</h2>
 <pre><code>    be post...
     #msg                    — commit msg, refer back (merge parent)
-    #msg!                   — commit, forget origin (squash)
-    #!                      — reuse absorbed msg, forget (rebase step)
     #                       — reuse absorbed msg (empty fragment)
                             — (empty) bare: reuse absorbed msg (patch)
     ./path                  — narrow commit to path/submodule
@@ -52,10 +59,9 @@ then fragment can be empty (e.g. <code>be post #</code>).
     ?..                     — advance parent branch to the wt hash
     ?                       — advance trunk to the wt hash
     ?other#msg              — commit onto ?other, untie wt from cur
-    //host                  — FF-push cur's tip to remote (no commit)
-    //host#msg              — commit, then FF-push to remote
-    //host?branch           — push cur's tip to remote branch
-    ssh://host/repo?branch  — push to remote branch over the wire
+    ssh://host              — FF-push cur's tip to the remote (no commit)
+    ssh://host#msg          — commit, then FF-push to the remote
+    ssh://host/repo?branch  — push to a remote branch over the wire
     be://host?branch        — push over beagle's keeper wire
 </code></pre>
 <h2>RefLog/WTLog interaction</h2>
@@ -74,5 +80,43 @@ then fragment can be empty (e.g. <code>be post #</code>).
 </li>
 </ol>
 <h2>Merges, rebases and squashes</h2>
+<h2>Summary of invocation patterns</h2>
+<div>
+<p>
+garbled by LLM; no more LLM allowed
+</p>
+</div>
+<p>
+Each arg shape maps to exactly one action; every tip motion is a fast-forward. A bare post advances the track, a <code>#msg</code> makes a commit, <code>?branch</code> moves a ref, <code>//wt</code> and host targets advance other trees.
+</p>
+<ol>
+<li>bare <code>post</code> advances the TRACK (the recentmost get record); it never commits.<ul>
+<li>tracking a branch: FF its ref to cur's tip; refuses in plain text when already at/past cur or unable to fast-forward,</li>
+<li>tracking a worktree (a <code>//X</code> track row): get-style merge cur's tip into the target's files, then FF its base,</li>
+<li>detached: refused, no track to advance; exception: an active patch reuses the absorbed message,</li>
+<li>tracking a remote branch: FF-push cur's tip to that remote branch over the wire; no local commit.</li>
+</ul>
+</li>
+<li><code>post '#msg'</code> makes a commit; the wt base moves, no ref ever does.<ul>
+<li>selective mode: any active put/delete in the mounted tree ⇒ commit exactly the staged set, staged subs first,</li>
+<li>commit-all mode: nothing staged anywhere ⇒ auto-stage all changes, dirty subs bottom-up, the parent last,</li>
+<li>a recursed sub's commit may spice the parent's message up with the sub path, like <code>[dog]</code> or <code>[dog/abc]</code> (case <code>./jab</code>).</li>
+</ul>
+</li>
+<li><code>post ?branch</code>: FF-move that ref to cur's tip, no commit, cur untouched; an absent branch is created; <code>?</code> trunk, <code>?..</code> parent.</li>
+<li><code>post //wt/path</code>: merge the files into the target first (a conflict refuses BEFORE the base moves), then FF the target's base.</li>
+<li><code>post ssh://host?br</code>: FF-push cur's existing tip over the wire, no local commit; <code>ssh://host#msg</code> commits first, then pushes.</li>
+</ol>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

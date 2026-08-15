@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/MEM/MEM-026.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>MEM-026: bare call() leaks owned buffers/ULOG on error paths (sniff)</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 Three sniff functions acquire owned OS resources (256MB mmaps, heap buffers, an open ULOG mmap) then hit a bare <code>call()</code> whose return-on-error bypasses the function's own cleanup. <code>GET.c:1414 HOMEBranchDir</code> leaks 4×256MB mmaps + the subs heap buffer past <code>GET_BUFS_FREE()</code>. <code>SNIFF.c:219 PATHu8bFeed</code> leaks the just-opened wtlog mmap and leaves the singleton half-initialized (no <code>ULOGClose</code>/<code>zerop</code>), unlike every sibling arm; RW opens also skip <code>FILETrimBook</code>, leaving on-disk pad bytes. <code>LS.c:271-272</code> leak the <code>c.text</code> mmap (and <code>c.toks</code>) when a later allocation fails. The goal is to route every error path through existing cleanup.

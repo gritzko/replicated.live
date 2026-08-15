@@ -3,23 +3,32 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CODE-028 DONE: in-body require() in hot loops — hoist to regular top-level requires</title>
-<meta property="og:title" content="CODE-028 DONE: in-body require() in hot loops — hoist to regular top-level requires">
+<title>CODE-028: in-body require() in hot loops — hoist to regular top-level requires</title>
+<meta property="og:title" content="CODE-028: in-body require() in hot loops — hoist to regular top-level requires">
 <meta property="og:description" content="54 call sites across 24 be/ files call require() from inside a function body, so the spec is re-RESOLVED on every invocation: jab/require.cpp load() runs resolve() BEFORE it consults cacheabs, and resolution is normalize() plus an io.stat per candidate. The module body still evals once — what repeats is the path work. One be todo render pays this 80,342 times on core/resolvehash.js alone. RULING (gritzko 2026-08-04): the idiom is wrong; these become regular top-level requires. The loader-side memo is JAB-010's, in ///jab — a separate repo and a separate ticket; this one does not wait on it.">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/CODE/CODE-028.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>CODE-028 <a href="./DONE.html">DONE</a>: in-body <code>require()</code> in hot loops — hoist to regular top-level requires</h1>
+<h1>CODE-028: in-body <code>require()</code> in hot loops — hoist to regular top-level requires</h1>
 <div>
-<p>
-Now: DONE Sev: MED Rep: ///be/ See: JAB-010
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>MED</dd></dl>
+<dl class="meta"><dt>Rep:</dt><dd>///be/</dd></dl>
+<dl class="meta"><dt>See:</dt><dd><a href="/todo/JAB/JAB-010.html">JAB-010</a></dd></dl>
 </div>
 <p>
 54 call sites across 24 be/ files call <code>require()</code> from inside a function body, so the spec is re-RESOLVED on every invocation: <code>jab/require.cpp</code> <code>load()</code> runs <code>resolve()</code> BEFORE it consults <code>cache[abs]</code>, and resolution is <code>normalize()</code> plus an <code>io.stat</code> per candidate. The module body still evals once — what repeats is the path work. One <code>be todo</code> render pays this 80,342 times on <code>core/resolve_hash.js</code> alone. RULING (gritzko 2026-08-04): the idiom is wrong; these become regular top-level requires. The loader-side memo is JAB-010's, in <code>///jab</code> — a separate repo and a separate ticket; this one does not wait on it.
@@ -66,13 +75,13 @@ Pure refactor: no verb behaviour, no output bytes, no module identity changes.
 <li><code>verbs/get/get.js</code> needs ONE symbol from fetchleg (<code>landTip</code>); fetchleg top-level requires get back — same two cures apply.</li>
 </ul>
 <h3>TODOs</h3>
-<ul>
-<li><a href="./ .html"> </a> repro: a stat-counting harness pinning <code>resolve_hash.js</code> stats per <code>be todo</code> render, before and after.</li>
-<li><a href="./ .html"> </a> hoist the 52 cycle-free sites, file by file.</li>
-<li><a href="./ .html"> </a> break the <code>discover</code>/<code>resolve_hash</code> cycle, then hoist <code>discover.js:151</code> <code>_rh()</code> and its callers.</li>
-<li><a href="./ .html"> </a> break the <code>get</code>/<code>fetchleg</code> cycle, then hoist <code>get.js:513</code>.</li>
-<li><a href="./ .html"> </a> re-run the cycle detector; assert zero top-level cycles.</li>
-<li><a href="./ .html"> </a> <code>ctest -j16</code> green, <code>be todo</code> output byte-identical to before.</li>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro: a stat-counting harness pinning <code>resolve_hash.js</code> stats per <code>be todo</code> render, before and after.</li>
+<li class="open"><input type="checkbox" disabled> hoist the 52 cycle-free sites, file by file.</li>
+<li class="open"><input type="checkbox" disabled> break the <code>discover</code>/<code>resolve_hash</code> cycle, then hoist <code>discover.js:151</code> <code>_rh()</code> and its callers.</li>
+<li class="open"><input type="checkbox" disabled> break the <code>get</code>/<code>fetchleg</code> cycle, then hoist <code>get.js:513</code>.</li>
+<li class="open"><input type="checkbox" disabled> re-run the cycle detector; assert zero top-level cycles.</li>
+<li class="open"><input type="checkbox" disabled> <code>ctest -j16</code> green, <code>be todo</code> output byte-identical to before.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>

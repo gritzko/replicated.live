@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/PATCH/PATCH-004.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>PATCH-004: <code>be patch '#&lt;sha&gt;'</code> (named-commit cherry-pick) ASAN container-overflow crash</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>be patch '#&lt;sha&gt;'</code> — cherry-pick ONE named commit onto cur — ABORTS with an ASAN container-overflow (memory corruption) when the named commit is a SIBLING of cur (the two diverged at a common base). Live: from the beagle tree at <code>d6f7e138</code> (DIS-053, off base <code>25851a5a</code>), <code>be patch '#ae64dc7f'</code> (SUBS-036, also off <code>25851a5a</code> — a sibling) → <code>Container overflow</code> / <code>==NNNN==ABORTING</code> → <code>BEDOGEXIT</code>; the patch applied nothing (the tree was unharmed). So the named-commit cherry-pick / weave path has a real memory bug. The bootstrap binary is ASAN/debug, so it CAUGHT the overflow and aborted — a release build might corrupt silently. Found 2026-06-26 reconciling a fork. Kin of <a href="../DIS/DIS-042.html">DIS-042</a>'s noted PATCH/RESOLVE-side fragility. Method: <a href="../../meta/work.html">Issues</a>.
@@ -58,7 +64,11 @@ Now: DONE
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>FIXED + landed <code>#3852ffe1</code> (ff onto trunk <code>213c9003</code>). Root cause was NOT a weave container-overflow — it was a stack-use-after-scope: the <code>#&lt;sha&gt;</code> cherry path expanded a short hashlet into an <code>if</code>-scoped <code>sha1hex hex40</code> and aliased <code>frag</code> into it, then <code>resolve_cherry</code> read <code>frag</code> after the block (PATCH.c:1195 ← :1608; RESOLVE.c:231). The full-40-hex pick (test 11) skipped the block, so only a hashlet repro'd. Fix: hoist <code>hex40</code> to outlive <code>resolve_cherry</code> (sniff/PATCH.c ~1602). Repro test test/patch/36-cherry-pick-hashlet (RED→GREEN); live <code>be patch '#ae64dc7f'</code> onto <code>d6f7e138</code> now clean; full ctest 348/348 ASAN-clean. <code>be://localhost?</code> push blocked (wire off) — see Blockers.</li>
+<li>FIXED + landed <code>#3852ffe1</code> (ff onto trunk <code>213c9003</code>). Root cause was NOT a weave container-overflow — it was a stack-use-after-scope: the <code>#&lt;sha&gt;</code> cherry path expanded a short hashlet into an <code>if</code>-scoped <code>sha1hex hex40</code> and aliased <code>frag</code> into it, then <code>resolve_cherry</code> read <code>frag</code> after the block (PATCH.c:1195 ← :1608; RESOLVE.c:231). The full-40-hex pick (test 11) skipped the block, so only a hashlet repro'd.<dl class="meta"><dt>Fix:</dt><dd>hoist `hex40` to outlive `resolve_cherry` (sniff/PATCH.c ~1602).</dd></dl>
+<p>
+Repro test test/patch/36-cherry-pick-hashlet (RED→GREEN); live <code>be patch '#ae64dc7f'</code> onto <code>d6f7e138</code> now clean; full ctest 348/348 ASAN-clean. <code>be://localhost?</code> push blocked (wire off) — see Blockers.
+</p>
+</li>
 </ul>
 <div class="footer">
 ❧

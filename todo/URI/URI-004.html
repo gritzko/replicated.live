@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/URI/URI-004.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>URI-004: drop the abc <code>uri</code> path-<code>segments</code> buffer and the Bx <code>uri</code> containers</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>uri</code> is NOT a fixed-bit-layout record (like <code>sha256</code>/<code>wh128</code>) — it is a variable parse-result whose component slices are views into the source text. So two pieces of <code>abc/URI.h</code> earn their removal: the inline <code>u8csbp segments</code> <strong>buffer</strong> the lexer materializes, and the <strong>Bx-generated <code>uri</code> containers</strong> (<code>urib</code>/<code>uris</code>/…). A buffer of parsed <code>uri</code> values is fragile (each value's slices point into a separate, separately-owned source text) and the &quot;solid container&quot; benefits don't apply to a non-fixed type. <strong>Two changes, keep everything else:</strong> (1) drop <code>segments</code>, walk <code>path</code> via <strong><code>abc/PATH</code></strong> on demand; (2) drop the Bx machinery, carry URIs as <strong>UNPARSED text</strong> (<code>u8css</code>/<code>u8csb</code>) and parse a single <code>uri</code> on demand where decomposition is needed. The <code>uri</code> struct itself (its <code>data</code> field + the 8 component slices, minus <code>segments</code>), the <code>urip</code>/<code>uricp</code>/<code>uric</code> pointer typedefs, and the parse/feed/relative functions all STAY. Adjust every API user accordingly. abc/core change — maintainer-reviewed. See <a href="../../rule/Issues.html">Issues</a>, <a href="../../CLAUDE.md">CLAUDE</a>, <a href="../../wiki/URI.html">URI-spec</a>, <a href="URI-002.html">URI-002</a>.

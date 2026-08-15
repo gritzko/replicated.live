@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DOG/DOG-023.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>DOG-023: jab binds no read-only ULOG open, tail, or ts-seek — JS reads bypass the wh128 sidecar entirely</h1>
 <div>
-<p>
-Now: OPEN
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
 </div>
 <p>
 <code>jab/ulog.hpp</code> boxes a native ULOG as a handle and binds <code>_ulog_open</code>/<code>_append</code>/<code>_count</code>/<code>_rowUri</code>/<code>_rowTime</code>/<code>_close</code> (:347-361), but <code>_ulog_open</code> is <code>ULOGOpen</code> — always RW/booked. There is no <code>ULOGOpenRO</code>, no <code>ULOGHead</code>/<code>ULOGTail</code>, no <code>ULOGSeek</code>/<code>ULOGFind</code>, and no <code>_ulog_rowVerb</code>, so a row cannot even be fully read through a handle. Consequently every JS reader (<code>shared/ulog.js each</code>/<code>drain</code>) skips the handle, raw-<code>mmap</code>s the file and walks it linearly — the <code>wh128</code> sidecar index the log maintains is unused on every read. Bind the missing read leaves. Scope is jab ONLY; the JS consumer cut-over is a separate ticket in the be tree.

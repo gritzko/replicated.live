@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/MEM/MEM-032.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>MEM-032 <a href="./DONT.html">DONT</a>: JABCu8bImport builder overflow + JSC refcount leaks (js/convert.cpp)</h1>
 <div>
-<p>
-Now: DONT
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONT</dd></dl>
 </div>
 <p>
 The <code>JABCu8bImport</code> family imports JS values into an RDX builder with two memory defects. <code>JABCu8bImportString</code> sizes the <code>JSStringGetUTF8CString</code> write by the string's worst-case UTF-8 length (<code>maxSize</code>) instead of the builder's idle room, so a large string overflows <code>u8bIdle</code> (the <code>u8bReserve</code> call is commented out as a todo) and <code>*idle</code> is hand-advanced instead of <code>u8bFed</code>. The same paths leak owned JSC refs: <code>JSValueToStringCopy</code> is never <code>JSStringRelease</code>'d and <code>JSObjectCopyPropertyNames</code> is never <code>JSPropertyNameArrayRelease</code>'d (incl. call-macro error early-returns). The code is compiled WIP with no in-tree callers yet, so the overflow is latent. The goal is to bound the write to idle room and release every owned ref.

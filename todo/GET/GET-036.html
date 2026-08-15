@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/GET/GET-036.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>GET-036: the be/-extension self-locator is mis-created — <code>be get</code> leaves an empty <code>be/</code> dir, and every <code>be</code>/<code>jab</code> run recreates a <code>&lt;wt-basename&gt; -&gt; &lt;abs-wt&gt;</code> self-symlink instead of <code>be -&gt; .</code></h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 beagle-ext is located by a self-symlink named <code>be</code> at the project root, so <code>jab</code> resolves the extension via its upward <code>be</code>-scan (<code>beagle/js/require.cpp</code>). That locator is mis-created two ways, and is correct ONLY when the worktree directory is itself literally named <code>be</code> (the canonical main tree, where the basename rule coincidentally yields the right name). (1) <code>be get</code> of beagle-ext materialises <code>be</code> as an EMPTY DIRECTORY, not the symlink — repro: <code>be get file:/home/gritzko/.be/?/beagle-ext</code> into a dir NOT named <code>be</code> (e.g. <code>/tmp/x/ZZZ</code>) leaves an empty <code>ZZZ/be/</code>, no self-symlink. (2) Every subsequent <code>be</code>/<code>jab</code> run in the worktree (re)creates a symlink named after the WORKTREE BASENAME with an ABSOLUTE self-target — verified: in <code>~/todo/DIS-057</code>, removing <code>DIS-057 -&gt; /home/gritzko/todo/DIS-057</code> by hand and running <code>be status</code> recreates it. The fallout: in any worktree NOT named <code>be</code>, the <code>be</code> locator is broken, so <code>jab</code> falls back to the stale global <code>/tmp/be -&gt; ~/journal/be</code> and runs the WRONG (main-tree) be/ scripts — which masked DIS-057's status changes during review (the bro-pager colour thread). Scope: beagle C core (<code>be</code>/<code>jab</code> runtime + <code>be get</code> checkout). See <a href="../../beagle/CLAUDE.md">CLAUDE</a>; method <a href="../../rule/Issues.html">Issues</a>.

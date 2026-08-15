@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/SUBS/SUBS-016.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>SUBS-016: latent <code>O_TRUNC</code> seed of a submodule's <code>refs</code>/<code>wtlog</code> (<code>sniff/SUBS.c:410/420</code>)</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 When seeding a submodule's trunk dir on (re-)fetch, <code>sniff/SUBS.c</code> creates the sub's <code>refs</code> (line 410) and <code>wtlog</code> (line 420) with <code>FILECreate</code>, which opens <code>O_TRUNC</code> (the code's own comments at <code>:339</code>/<code>:394</code> acknowledge it). It is gated by <code>if (!already_mounted)</code> (line 402), where <code>already_mounted = SNIFFSubIsMount(reporoot, path)</code> (line 345) — so <strong>today it only fires when the sub is not mounted, i.e. there is nothing to wipe, and it is safe</strong>. The defect is <strong>structural</strong>: a single boolean stands between a live <code>refs</code>/<code>wtlog</code> and <code>ftruncate(0)</code>. If <code>SNIFFSubIsMount</code> ever returns a false-negative (reports not-mounted while a live sub log exists), the seed truncates that live log to 0 — the exact <a href="../ULOG/ULOG-001.html">ULOG-001</a> zeroing class, in the submodule seed path. Harden by construction: never <code>O_TRUNC</code> a log path. See <a href="../../rule/Issues.html">Issues</a>, <a href="../../CLAUDE.md">CLAUDE</a>, <a href="../ULOG/ULOG-001.html">ULOG-001</a>, <a href="../../wiki/Submodules.html">Submodules</a>.

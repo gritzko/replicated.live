@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DIS/DIS-025.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>DIS-025: <code>be patch</code> squash uses the target's PARENT as merge base — silently drops commits when cur is behind the target</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <strong>HIGH — silent data loss. STAGE 1 LANDED (<code>a31c7fbd</code>); data loss FIXED.</strong> Remaining: the <code>KEEPResolveURI</code> funnel consolidation (Stage 2/3 below) — a separate session.  Original report follows.  <code>be patch ?&lt;target&gt;</code> computes the squash merge base as <code>LCA(target's parent-branch tip, target)</code>, which for a target commit resolves to the target's <strong>immediate parent</strong>.  That is correct only when cur is a <strong>descendant</strong> of that fork (the intended &quot;absorb a feature branch's stack into its parent&quot; case).  When <strong>cur is an ancestor of the fork</strong> — i.e. cur is <strong>behind</strong> the target (reconciling a stale clone, or patching a trunk commit that is ahead of cur) — every commit in <code>(cur .. fork]</code> is NOT in cur, yet the per-file classifier treats it as already-in-base and <strong>silently drops it</strong>.  <code>be patch</code> exits <strong>0</strong>, <code>failed=0</code>.  (<code>be get</code>'s reconcile hits a related but distinct symptom on the same inputs — <code>sniff: merge failed … (graf err)</code> — see &quot;Related&quot; below.)

@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/JAB/JAB-009.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>JAB-009: mkd tok32 ends drift 1 byte per backslash-escape — MKDTonEscape shrinks the token, HUNKTokCB accumulates lengths</h1>
 <div>
-<p>
-Now: OPEN Sev: MED
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>MED</dd></dl>
 </div>
 <p>
 Found via <a href="/todo/BRO/BRO-028.html">BRO-028</a> (gritzko's <code>jab cat todo/ABC/ABC-011.mkd</code> colour desync). Every markdown backslash-escape <code>\X</code> in prose sheds exactly 1 byte from every SUBSEQUENT tok32 end, so colour runs land mid-word with a shift that grows down the page. The desync is in the raw <code>tok.parse(bytes,&quot;mkd&quot;)</code> binding output — JS painting and the C <code>.color()</code> sink faithfully paint the wrong spans they are given.
@@ -53,9 +60,9 @@ tok32 ends tile the source for any mkd input; the BRO-028 xfail flips green.
 Pointer-based end in HUNKTokCB: <code>end = tok[1] - base</code>, base added to HUNKTokCtx, the accumulator <code>off</code> field removed. Verified no lexer synthesizes tokens outside the source buffer ('U' nav tokens are packed by separate HUNK table code, never via this callback), so the pointer is always valid; fixes BOTH HUNKu32bTokenize consumers (tok.hpp binding + hunk.hpp) and leaves the HTML renderer's shrunk escape token untouched.
 </p>
 <h3>TODOs</h3>
-<ul>
-<li><a href="./v.html">v</a> pointer-based end in HUNKTokCB (dog/HUNK.c:1543-1569, +5/-4); repro HUNKTestTokenizeEscape in dog/test/HUNK.c (<code>ctest -R HUNKtest</code>): <code>a \r b</code> was S1 W2 P3 W4 S5 W6 (RED), now S1 W2 P4 W5 S6 W7 — tiles.</li>
-<li><a href="./ .html"> </a> flip BRO-028's <code>be-js-cat-color</code> WILL_FAIL off once this MERGES and the installed jab is rebuilt.</li>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> pointer-based end in HUNKTokCB (dog/HUNK.c:1543-1569, +5/-4); repro HUNKTestTokenizeEscape in dog/test/HUNK.c (<code>ctest -R HUNKtest</code>): <code>a \r b</code> was S1 W2 P3 W4 S5 W6 (RED), now S1 W2 P4 W5 S6 W7 — tiles.</li>
+<li class="open"><input type="checkbox" disabled> flip BRO-028's <code>be-js-cat-color</code> WILL_FAIL off once this MERGES and the installed jab is rebuilt.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <p>

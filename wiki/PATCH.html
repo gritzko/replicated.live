@@ -3,8 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PATCH</title>
+<title>PATCH: absorb another branch's work into the worktree</title>
+<meta property="og:title" content="PATCH: absorb another branch's work into the worktree">
+<meta property="og:description" content="PATCH absorbs commits from another branch into cur's worktree and records the absorbed sha(s) in .be/wtlog for the next POST to consume; it never commits on its own. The cycle is patch → test → post, one absorption per landing commit — so every commit that lands is a tested commit, never a chain of unverified work. PATCH is one verb in the Beagle Verbs vocabulary, and unlike GET it weave-merges theirs rather than overwriting the worktree.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/wiki/PATCH.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -13,53 +25,82 @@
 </a>
 <h1>PATCH: absorb another branch's work into the worktree</h1>
 <p>
-PATCH absorbs commits from another branch into cur's worktree and records the absorbed sha(s) in <code>.be/wtlog</code> for the next <a href="POST.html">POST</a> to consume; it never commits on its own. The cycle is patch → test → post — run once per merge, cherry-pick, or squash, or looped per commit for rebase — so every commit that lands is a tested commit, never a chain of unverified work. PATCH is one verb in the Beagle <a href="Verbs.html">Verbs</a> vocabulary, and unlike <a href="GET.html">GET</a> it weave-merges theirs rather than overwriting the worktree.
+PATCH absorbs commits from another branch into cur's worktree and records the absorbed sha(s) in <code>.be/wtlog</code> for the next <a href="POST.html">POST</a> to consume; it never commits on its own. The cycle is patch → test → post, one absorption per landing commit — so every commit that lands is a tested commit, never a chain of unverified work. PATCH is one verb in the Beagle <a href="Verbs.html">Verbs</a> vocabulary, and unlike <a href="GET.html">GET</a> it weave-merges theirs rather than overwriting the worktree.
 </p>
 <ul>
-<li>Does not commit: the absorbed sha(s) are staged in <code>.be/wtlog</code>, and the next <a href="POST.html">POST</a> turns them into a commit with a header.</li>
-<li>PATCH selects scope only: the trailing <code>!</code> picks one commit vs the whole branch; provenance is decided later, at <a href="POST.html">POST</a>.</li>
+<li>Does not commit, does not stage: the absorbed sha(s) are recorded in <code>.be/wtlog</code>, and the next <a href="POST.html">POST</a> turns them into a commit with a header; staging is <a href="./PUT.html">PUT</a>'s job.</li>
+<li>PATCH picks the line and the origin record: <code>?ref</code> absorbs the whole missing commit line, <code>#hash</code> cherry-picks one commit; plain patch records the ref as a merge <code>parent</code>, forceful <code>patch!</code> as a local <code>foster</code>.</li>
 <li>A dirty wt is fine: a 3-way WEAVE merges theirs against the wt's current bytes, so dirty files never cause a refusal.</li>
 <li>Conflicts are loud: a conflict hits stderr and exits non-zero, stopping an unattended <code>patch &amp;&amp; post</code> before a bad commit.</li>
 </ul>
-<h2>Three shapes</h2>
+<h2>Shapes and provenance</h2>
 <p>
-The PATCH URI form selects scope only — the bang <code>!</code> on <code>?br</code> is the whole-branch toggle — and every shape takes the usual extras (<code>//host</code> to fetch first, <code>./path</code> to scope). The operation (merge/rebase/squash/cherry) is scope-at-patch plus provenance-at-<a href="POST.html">POST</a> per <a href="../blog/uris.html">the dirty-words post</a>; PATCH never carries a <code>#message</code>.
+The URI slot picks WHAT is absorbed; the verb bang picks how the origin is recorded in the next commit. URI bangs are retired (the old <code>?br!</code> whole-branch toggle is gone — <code>?ref</code> always takes the whole missing line); the bang rides the verb only, and PATCH never carries a <code>#message</code>.
 </p>
 <ul>
-<li><code>?&lt;br&gt;</code> one commit: absorb the next not-yet-replayed commit on <code>?br</code> (bare branch = one — a flip from the old squash).</li>
-<li><code>?&lt;br&gt;!</code> whole branch: replay <code>fork..br.tip</code> in one wt-merge — the bang means &quot;the entire branch&quot;, not &quot;one&quot;.</li>
-<li><code>#&lt;hash&gt;</code> named commit: absorb the one named commit, after which <a href="POST.html">POST</a> records a <code>picked</code> header (next to <code>foster</code>).</li>
+<li><code>?&lt;ref&gt;</code> (or bare patch = the tracked ref): absorb every missing commit of that line; the next <a href="POST.html">POST</a> records the ref as a non-first <code>parent</code>.</li>
+<li><code>patch! ?&lt;ref&gt;</code>: same absorption, origin recorded as a <code>foster</code> header git does not understand — the fostered object is not propagated to other replicas, a local reference only.</li>
+<li><code>#&lt;hash&gt;</code> cherry-pick, the special case: absorb the one named commit; recorded as <code>picked</code>, never a parent.</li>
+<li>A path-scoped shape records no origin at all (see the path-scoped section below).</li>
 </ul>
-<h2>CLI use</h2>
+<h2>Summary of invocation patterns</h2>
+<div>
 <p>
-PATCH chooses scope; the named op is PATCH-scope plus <a href="POST.html">POST</a>-provenance — rebase-one = <code>?br</code> + <code>post #!</code>, merge = <code>?br!</code> + <code>post '#msg'</code>, squash = <code>?br!</code> + <code>post '#msg!'</code>, cherry = <code>#sha</code> + <code>post #!</code>.
+gritzko, no LLM edits allowed
 </p>
-<ul>
-<li><code>be patch ?feat</code> absorbs the next commit of <code>feat</code>; pair with <code>be post #!</code> for a rebase-step, loop it for a full rebase.</li>
-<li><code>be patch ?feat!</code> absorbs the whole branch; <code>be post '#msg'</code> then merges (refer), <code>be post '#msg!'</code> squashes (forget).</li>
-<li><code>be patch ?..!</code> replays the parent's whole stack into the wt, while <code>be patch ?./fix</code> absorbs one commit of a child branch.</li>
-<li><code>be patch '#abc1234'</code> absorbs one named commit (cherry-pick with <code>be post #!</code>); <code>be patch ssh://origin?main!</code> fetches then absorbs the whole branch.</li>
-<li><code>be patch file.c?feat</code> applies one file's version from <code>?feat</code>, recording no foster row.</li>
-<li><code>be patch spot:#'Old'-&gt;'New'.c</code> delegates an in-place structural rewrite to spot.</li>
-<li>Multiple PATCHes compose: each PATCH appends a <code>patch</code> row the next POST consumes.</li>
-</ul>
+</div>
+<p>
+PATCH applies changes from a commit/branch, thus implementing merge, rebase, cherry pick.
+</p>
+<ol>
+<li><code>patch</code> comes in many forms:<ol>
+<li>bare <code>patch</code> implies the tracked ref is the argument, so all the &quot;miss&quot; commits from that ref get applied and become &quot;ptch&quot;</li>
+<li><code>patch ?branch</code>, <code>patch ?tag</code>, <code>patch ?hash</code> specify the commit line to patch in explicitly</li>
+<li><code>patch //worktree/path</code> - worktree get (the actual tree base commit line)</li>
+<li><code>patch #hash</code> cherry picks a particular commit, no parents, the hash is mentioned in a commit as &quot;picked&quot;, not &quot;parent&quot;</li>
+<li><code>patch file:...</code>, <code>patch https:...</code> and others imply the remote leg that updates remote refs, may download objects</li>
+</ol>
+</li>
+<li><code>patch</code> modes<ol>
+<li>whole tree (default)</li>
+<li><code>patch path/file?ref</code> scoped to file/dir</li>
+</ol>
+</li>
+<li>commit history wise, the target ref can be<ol>
+<li>behind, same as the current: nothing to do</li>
+<li>ahead, divergent: apply the missing</li>
+</ol>
+</li>
+<li><code>patch</code> submodule recursion<ol>
+<li>does not recur with <code>--nosub</code></li>
+<li>by default: recurs; the state of the local tree is only used by weave merge; if a submodule tracks something else but the pin, applies patches anyway</li>
+</ol>
+</li>
+<li>merge/rebase<ol>
+<li>default <code>patch</code> mentions the ref in the commit as non-first <code>parent</code></li>
+</ol>
+</li>
+</ol>
+<p>
+	2.  <code>patch!</code> forceful - mentions the the ref as <code>foster</code> (header not understood by git, so the object is not propagated to other replicas, for local reference only)
+</p>
 <h2>Ancestor-skip walk</h2>
 <p>
-A whole-branch <code>?br!</code> replays only the commits cur doesn't already have; a one-commit <code>?br</code> finds the next un-absorbed commit by walking the source's first-parent chain.
+An absorption replays only the commits cur doesn't already have — the missing set of the target line, computed by reachability from cur.
 </p>
 <ul>
-<li>Whole-branch <code>?br!</code> replays only commits not already reachable from cur via parent ∪ foster.</li>
+<li>A line absorption (<code>?ref</code> or bare patch) replays only commits not already reachable from cur via parent ∪ foster.</li>
 <li><code>picked</code> headers are dedup-only and do not participate in reachability.</li>
-<li>One-commit <code>?br</code> walks <code>?br</code>'s first-parent chain and stops at the first sha already reachable from cur.</li>
+<li>A target behind or equal to cur has an empty missing set — nothing to do.</li>
 </ul>
 <h2>Merge base: full stack vs single commit</h2>
 <p>
-The scope splits by merge base, which lets one verb be git's merge, rebase, and cherry-pick: whole-branch <code>?br!</code> weaves the full <code>fork..tip</code> stack against auto-LCA(cur, theirs), while a named commit or one-commit <code>?br</code> weaves one commit against its parent.
+The merge base splits by shape: a line absorption weaves the whole missing stack against auto-LCA(cur, theirs), while a cherry weaves one commit against its own parent. The git-visible operation is picked by the origin record (<code>parent</code> vs <code>foster</code>), not by the base.
 </p>
 <ul>
-<li>Whole-branch <code>?br!</code> uses auto-LCA(cur, theirs) and replays the full not-yet-reachable stack — git's <code>merge</code> / <code>pull --squash</code>.</li>
-<li>A named commit or one-commit <code>?br</code> uses the base parent(theirs), weaving that one commit's diff — git's <code>cherry-pick</code>/<code>rebase</code>.</li>
-<li>All shapes are merge-then-<a href="POST.html">POST</a>; only the base differs at PATCH and the provenance is recorded at POST, so one verb covers four git commands.</li>
+<li>Line <code>?ref</code> uses auto-LCA(cur, theirs) and replays the full not-yet-reachable stack; with the <code>parent</code> header this is git's merge.</li>
+<li>Cherry <code>#hash</code> uses parent(theirs) as the base, weaving that one commit's diff — git's cherry-pick, recorded <code>picked</code>.</li>
+<li><code>patch!</code>'s <code>foster</code> keeps the same weave but hides the link from git — the landed history reads linear, the rebase flavor.</li>
 </ul>
 <h2>Weave merge</h2>
 <p>
@@ -97,5 +138,16 @@ Two PATCH-side formats are still unsettled, both about how downstream tools read
 <li>The token-level 4-char conflict delimiters need a stable wire format for bro, graf-resolve, and a <code>git mergetool</code> adapter.</li>
 <li>A &quot;partial picked&quot; header naming <code>&lt;sha&gt;:&lt;path&gt;</code> for path-scoped forensics is a possible future extension.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

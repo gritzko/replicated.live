@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/GET/GET-016.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>GET-016: <code>be get</code> is non-atomic for the wt (ref advances before the write) and <code>get --force</code>/<code>get!</code> won't full-reset a drifted worktree</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>be get</code>'s COMMIT POINT (<code>sniff/GET.c:1338-1353</code>) appends the <code>get</code> ULOG row and advances the local branch tip BEFORE the worktree mutation, whose own comment admits it &quot;is not crash-safe — a partial run leaves a mix of new contents and old paths&quot;; so a midway fail (or any path that advances the ref without completing the write) leaves the ref/wtlog ahead of the tree, and because checkout is a baseline↔target <strong>delta</strong> (<code>get_overlap_check</code>, <code>GET.c:319-335</code>) the now-equal baseline==target paths fall into the no-op-overlay bucket (<code>GET.c:264-297</code>) and are skipped, so the stale bytes are never rewritten and the wt is permanently drifted with no automatic recovery — <code>--force</code> only steers the <strong>dirty</strong> classification (<code>GET.c:458-475</code>), never the no-op skip (<code>GET.c:272</code>), so even <code>get!</code> can't reset it. See <a href="../../wiki/GET.html">GET</a>, <a href="../../rule/Issues.html">Issues</a>, <a href="./GET-012.html">GET-012</a>, <a href="./GET-014.html">GET-014</a>.

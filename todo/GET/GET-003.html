@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/GET/GET-003.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>GET-003: <code>be get be://localhost?/beagle</code> (project-selector clone, empty path) dies WIRECLFL</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 The keeper wire protocol selects the project with a <code>?/project</code> <strong>query</strong> selector — <code>WIREServePath</code> (<code>keeper/WIRECLI.c:143-151</code>) appends it to the served path, and both the local-exec and ssh keeper branches rely on it (<code>:204-209</code>, <code>:242-249</code>, &quot;convey an explicit <code>?/proj</code> so the server serves THAT shard&quot;). But <code>wcli_spawn</code> rejects an <strong>empty path</strong> with <code>WIRECLFL</code> at <code>:165</code> (and again at <code>:237</code>, after stripping the leading <code>/</code>) — <strong>before</strong> the scheme is even classified (<code>is_be</code>/<code>is_keeper</code> at <code>:170-172</code>) and before the query selector is used. So <code>be get be://localhost?/beagle</code> — the natural keeper clone form (project in the query, default store, no repo path) — dies <code>WIRECLFL</code>. This blocked the <a href="../../skill/Issues.html">Issues</a> fix-and-land loop (couldn't clone beagle over <code>be://</code>). It is not get-specific: <code>be head be://localhost?/beagle</code> and <code>be patch</code> fetch fail the same way (shared wire client). See <a href="../../wiki/GET.html">GET</a>, <a href="../../wiki/URI.html">URI</a>, <a href="../../blog/uris.html">blog/uris.mkd</a>, <a href="../../CLAUDE.md">CLAUDE</a>.

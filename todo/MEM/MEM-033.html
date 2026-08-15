@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/MEM/MEM-033.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>MEM-033 <a href="./DONT.html">DONT</a>: JABCReport casts exception OBJECT to JSStringRef (js/main.cpp)</h1>
 <div>
-<p>
-Now: DONT
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONT</dd></dl>
 </div>
 <p>
 <code>JABCReport</code> reports a thrown JS exception. In the message branch (<code>JSValueIsObject</code> &amp;&amp; has message), it fetches <code>ref=message</code> (a real JSStringRef) into <code>page</code>, overwrites the NUL with newline, then calls <code>JSStringGetUTF8CString((JSStringRef)exception, page+len, PAGESIZE-len)</code> — but <code>exception</code> is a JS OBJECT, not a string. Casting an object to <code>JSStringRef</code> makes JSC reinterpret the object's heap layout as a <code>StringImpl</code>, reading a bogus length and char pointer: type confusion / OOB-garbage read into a stack buffer, reachable from any uncaught <code>Error</code> with a message. The sibling Stack branch correctly uses <code>(JSStringRef)ref</code>, confirming a copy-paste defect. The goal is to use <code>ref</code>, bound by remaining <code>page</code>, and re-terminate.

@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/MEM/MEM-031.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>MEM-031 <a href="./DONT.html">DONT</a>: WOOFApiOpen leaks dogs/buffers on later open failure (woof/CONN.c)</h1>
 <div>
-<p>
-Now: DONT
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONT</dd></dl>
 </div>
 <p>
 <code>WOOFApiOpen</code> acquires keeper/graf/spot/sniff and three cli buffers, then sets <code>woof_api_ready=YES</code> only at <code>:581</code>. If a later alloc (:565-567), <code>PATHu8bFeed</code>, or <code>memfd_create</code> (:578-579 <code>fail(WOOFFAIL)</code>) fails, it returns with <code>ready</code> still NO and no cleanup, since <code>call()</code>/<code>fail()</code> do bare returns with no finalizer. <code>WOOFApiClose</code> is gated on <code>woof_api_ready</code> (:586) so it early-returns, and <code>woof_serve</code> only flips <code>WOOF.api=NO</code>; the open keeper object-store mmap plus graf/spot/sniff singletons and cli buffers leak for the process lifetime. The goal is to release every partially-acquired resource on the error path.

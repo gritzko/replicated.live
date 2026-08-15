@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/MEM/MEM-027.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>MEM-027 <a href="./DONT.html">DONT</a>: patch_walk unbounded BASS carving exhausts the arena (sniff/PATCH.c)</h1>
 <div>
-<p>
-Now: DONT
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONT</dd></dl>
 </div>
 <p>
 Recursive <code>patch_walk</code> <code>a_carve</code>s <del>29MB per directory level (3×4MB trees + 16MB blob + entry arrays) and recurses into every subdir with no depth bound; the plain recursive call keeps each parent's carve live for the whole subtree, so a tree </del>34 levels deep overflows the 1GB ABC_BASS. The leaf loop also issues <code>(void)fetch_blob</code> / <code>(void)GRAFMerge3Bytes</code> / <code>(void)GRAFMergeWtFileTunable</code> as plain calls, so any callee BASS scratch is never rewound per iteration and accumulates with file count. <code>a_carve</code> returns BNOROOM (graceful, no OOB), so this is resource exhaustion that fails deep/large trees unpredictably. The goal is to bound depth and reclaim per-leaf scratch.

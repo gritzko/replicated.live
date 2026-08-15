@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/MEM/MEM-013.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>MEM-013: POLLoop mutates a stale poller slot after re-entrant callback (abc/POL.c)</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>POLLoop</code> captures <code>idx = POLFind(fd)</code> and <code>at = *data + idx</code> from the pre-callback heap, runs <code>at-&gt;callback(...)</code>, then tests/clears/ejects via the now-stale <code>at</code>/<code>idx</code> — but the callback may call <code>POLTrackEvents</code>/<code>POLIgnoreEvents</code>/<code>POLAddTime</code>, which <code>sUp</code>/<code>sDown</code>-swap or eject heap elements, so the post-callback code operates on whichever poller now occupies that slot (possibly past the shrunk <code>$len</code>). Because <code>POL_QUEUE</code> is fixed-cap it stays in-allocation (no UAF), but it reads/writes the wrong poller and can double-eject. The goal is to re-resolve by fd after the callback.

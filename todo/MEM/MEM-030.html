@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/MEM/MEM-030.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>MEM-030: serve_static leaks mmap on full conn ring (woof/CONN.c)</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>serve_static</code> maps the whole static asset via <code>FILEMapRO</code> and only releases it at <code>:326 FILEUnMap</code>. The intervening <code>call(static_envelope)</code> and <code>call(u8bFeed)</code> feed the file-sized body into the ~3MB conn out ring; <code>u8bFeed</code> returns BNOROOM when ring idle &lt; body and PRO.h <code>call()</code> returns from <code>serve_static</code> before <code>FILEUnMap</code>, leaking one file-sized VMA plus fd per request. Repeatable and attacker-triggerable for any larger-than-ring static file, exhausting address space / fds. The goal is to never let a <code>call()</code> between map and unmap escape — unmap on every path.

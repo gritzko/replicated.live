@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/PACK/PACK-003.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>PACK-003: idxmaint <code>pack.scan: scan (out full? corrupt?)</code> on every <code>jab status</code> — single-pack scan vs JS-117 multi-pack keeper logs</h1>
 <div>
-<p>
-Now: OPEN Sev: HIGH
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
 </div>
 <p>
 <code>jab status</code> in the journal tree prints <code>idxmaint: Error: pack.scan: scan (out full? corrupt?)</code> TWICE before rendering. idxmaint finds keeper logs with no idx coverage and calls <code>ingest.buildIndex</code> → <code>pk.scan</code> → native <code>PIDXScan</code> over the WHOLE log; the scan is single-pack/header-count-driven, a JS-117 log with appended packs behind the first header makes it fail. The logs stay unindexed forever, so their objects stay <code>unk</code>/<code>miss</code> — and the warn repeats on EVERY status. Deferred from <a href="/todo/PATCH/PATCH-012.html">PATCH-012</a> (&quot;count-trusting class, needs own repro/ticket&quot;); distinct from <a href="/todo/JAB/JAB-008.html">JAB-008</a> (BASS drain — this repros in a FRESH process).
@@ -62,13 +69,13 @@ Diagnosis OVERTURNED the intro's hypothesis twice: the journal shard is healthy 
 <li>Fix (shared/ingest.js): <code>walkOffsets</code> extent census (skips GET-046 verbatim embedded headers, stops at torn bytes); <code>resolveEntries</code> grow-on-NOROOM; buildIndex keeps the native scan as fast path, on throw salvage-indexes every resolvable record + bookmarks the full extent — one-time rebuild, no re-warn.</li>
 </ul>
 <h3>TODOs</h3>
-<ul>
-<li><a href="./v.html">v</a> diagnose per log: journal 1-4 healthy/covered; beagle torn zero tail; beagle.new corrupt region (table in worker report).</li>
-<li><a href="./v.html">v</a> repro <code>test/packsalvage.js</code> (<code>be-js-unit-packsalvage</code>): torn tail (the incident error), embedded-pack drop, both, ofs-delta NOROOM — all red on pristine be/.</li>
-<li><a href="./v.html">v</a> fix: salvage path in buildIndex (+77/-21 in shared/ingest.js).</li>
-<li><a href="./ .html"> </a> split the pack.hpp:289 throw (jab-side, untouched): PIDXFAIL vs out-full vs NOROOM.</li>
-<li><a href="./ .html"> </a> expose PIDXScan <code>from_off</code> through the <code>pk.scan</code> binding (hardcodes 0) — native segment scans later.</li>
-<li><a href="./v.html">v</a> verify: copies of both bad logs salvage 28986/28986 + 3073 parseable records, full-extent coverage, warn-free; suite 267/267 <code>-LE big</code>. Store itself untouched — the fix must MERGE before the real <code>jab status</code> warns clear; beagle's 325 torn records + beagle.new's garbage need a re-fetch to heal <code>miss</code> rows.</li>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> diagnose per log: journal 1-4 healthy/covered; beagle torn zero tail; beagle.new corrupt region (table in worker report).</li>
+<li class="done"><input type="checkbox" checked disabled> repro <code>test/packsalvage.js</code> (<code>be-js-unit-packsalvage</code>): torn tail (the incident error), embedded-pack drop, both, ofs-delta NOROOM — all red on pristine be/.</li>
+<li class="done"><input type="checkbox" checked disabled> fix: salvage path in buildIndex (+77/-21 in shared/ingest.js).</li>
+<li class="open"><input type="checkbox" disabled> split the pack.hpp:289 throw (jab-side, untouched): PIDXFAIL vs out-full vs NOROOM.</li>
+<li class="open"><input type="checkbox" disabled> expose PIDXScan <code>from_off</code> through the <code>pk.scan</code> binding (hardcodes 0) — native segment scans later.</li>
+<li class="done"><input type="checkbox" checked disabled> verify: copies of both bad logs salvage 28986/28986 + 3073 parseable records, full-extent coverage, warn-free; suite 267/267 <code>-LE big</code>. Store itself untouched — the fix must MERGE before the real <code>jab status</code> warns clear; beagle's 325 torn records + beagle.new's garbage need a re-fetch to heal <code>miss</code> rows.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <p>

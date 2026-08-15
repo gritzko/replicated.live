@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/ULOG/ULOG-003.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>ULOG-003: RW ULOG open fails once a wtlog reaches 256 rows — booked idx sidecar won't grow past its 4096-byte init</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 Any RW/append ULOG open (<code>ULOGOpen</code>→<code>ULOGOpenIdx</code>, via <code>abc._ulog_open</code>) FAILS with <code>Error: ulog._open failed</code> once the log holds ≥256 rows.  <code>ULOGOpenIdx</code> books the on-disk index sidecar at <code>ULOG_IDX_INIT_DEFAULT</code> (4096 B) and <code>ulog_idx_rebuild</code> writes one <code>wh128</code> per row PLUS a tail sentinel, so <strong>n</strong> rows → <strong>n</strong>+1 entries; 4096/<code>sizeof(wh128)</code>(16) = 256, so the 256th row (257th entry) needs the booked sidecar to grow past its init and the &quot;grow on demand via FILEBookEnsure&quot; (<code>dog/ULOG.c:148</code>) does not.  mmap READS stay lenient (watermark=byteLength) so <code>status</code>/reads work — only the RW open dies.  Wedges <code>be post</code> on any long-lived worktree.  Native <code>dog/</code>, shared by <code>be</code> + <code>jab</code>.  Sibling of <a href="../STATUS/STATUS-003.html">STATUS-003</a>.

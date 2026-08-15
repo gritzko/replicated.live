@@ -3,8 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>README</title>
+<title>BE-008: be put/be post leak a sub's empty-put PUTNONE cascade</title>
+<meta property="og:title" content="BE-008: be put/be post leak a sub's empty-put PUTNONE cascade">
+<meta property="og:description" content="A be put/be post whose parent SUCCEEDS still leaks a spurious error cascade from its recursion into an UNCHANGED submodule: the sub's internal put step fails with sniff: put: no changes (or no eligible paths), an empty put put: banner, then Error: PUTNONE and Error: NONE — all printed even though the command succeeded and exits 0. An unchanged submodule must be a silent no-op on recursion, not an error spray. Evidence: garbage.txt (landing JS-036 742c06ff in a store-backed worktree with abc unchanged). Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/BE/BE-008/README.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -12,77 +24,41 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>BE-008: <code>be put</code>/<code>be post</code> leak a sub's empty-put PUTNONE cascade</h1>
+<div>
+<dl class="meta"><dt>Now:</dt><dd>STALE</dd></dl>
+</div>
 <p>
 A <code>be put</code>/<code>be post</code> whose parent SUCCEEDS still leaks a spurious error cascade from its recursion into an UNCHANGED submodule: the sub's internal put step fails with <code>sniff: put: no changes</code> (or <code>no eligible paths</code>), an empty <code>put put:</code> banner, then <code>Error: PUTNONE</code> and <code>Error: NONE</code> — all printed even though the command succeeded and exits 0. An unchanged submodule must be a silent no-op on recursion, not an error spray. Evidence: <a href="garbage.txt">garbage.txt</a> (landing JS-036 <code>742c06ff</code> in a store-backed worktree with <code>abc</code> unchanged). Method: <a href="../../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>be put</code> (bare) staged <code>js/cont.cpp</code>/<code>js/pack.hpp</code> in the parent, then<p>
-recursed <code>put put:abc</code> → <code>sniff: put: no changes</code> + <code>Error: PUTNONE</code> + <code>Error: NONE</code>, all on a successful put. See <a href="garbage.txt">garbage.txt</a>.
-</p>
-</li>
-<li><code>be post 'JS-036…'</code> recursed <code>post abc</code> → <code>sniff: put: no eligible paths</code> +<p>
-empty <code>put put:</code> + <code>Error: PUTNONE</code> + <code>Error: NONE</code>, THEN the real <code>post ?742c06ff</code>. The garbage interleaves before the success row.
-</p>
-</li>
-<li>Kin: <a href="../../POST/POST-019.html">POST-019</a> (sub ADVANCED → put banner leaks), <a href="../BE-006.html">BE-006</a>/<a href="../BE-003.html">BE-003</a> (stacked<p>
-<code>Error:</code> lines → one uniform line), <a href="../../POST/POST-022.html">POST-022</a>/<a href="../BE-007.html">BE-007</a> (sub-push wrecked output, landed). This is the unchanged-sub no-op case, none of the above.
-</p>
-</li>
+<li><code>be put</code> (bare) staged <code>js/cont.cpp</code>/<code>js/pack.hpp</code> in the parent, then recursed <code>put put:abc</code> → <code>sniff: put: no changes</code> + <code>Error: PUTNONE</code> + <code>Error: NONE</code>, all on a successful put. See <a href="garbage.txt">garbage.txt</a>.</li>
+<li><code>be post 'JS-036…'</code> recursed <code>post abc</code> → <code>sniff: put: no eligible paths</code> + empty <code>put put:</code> + <code>Error: PUTNONE</code> + <code>Error: NONE</code>, THEN the real <code>post ?742c06ff</code>. The garbage interleaves before the success row.</li>
+<li>Kin: <a href="../../POST/POST-019.html">POST-019</a> (sub ADVANCED → put banner leaks), <a href="../BE-006.html">BE-006</a>/<a href="../BE-003.html">BE-003</a> (stacked <code>Error:</code> lines → one uniform line), <a href="../../POST/POST-022.html">POST-022</a>/<a href="../BE-007.html">BE-007</a> (sub-push wrecked output, landed). This is the unchanged-sub no-op case, none of the above.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>An unchanged submodule on <code>put</code>/<code>post</code> recursion emits NOTHING — no<p>
-<code>PUTNONE</code>/<code>NONE</code>, no empty <code>put put:</code> banner; the parent output stays clean.
-</p>
-</li>
-<li>A genuine top-level <code>be put</code> with nothing to stage still reports <code>PUTNONE</code><p>
-(user asked to put nothing) — only the internal sub-recursion path is silenced.
-</p>
-</li>
+<li>An unchanged submodule on <code>put</code>/<code>post</code> recursion emits NOTHING — no <code>PUTNONE</code>/<code>NONE</code>, no empty <code>put put:</code> banner; the parent output stays clean.</li>
+<li>A genuine top-level <code>be put</code> with nothing to stage still reports <code>PUTNONE</code> (user asked to put nothing) — only the internal sub-recursion path is silenced.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>BE/sniff dispatch + the submodule-recursion put/post path; exit code is<p>
-already success (0) — this is output hygiene, do not change the status.
-</p>
-</li>
-<li>Aligns with <a href="../BE-003.html">BE-003</a>'s single error surface, but here the fix is to NOT treat<p>
-an empty sub as an error at all.
-</p>
-</li>
+<li>BE/sniff dispatch + the submodule-recursion put/post path; exit code is already success (0) — this is output hygiene, do not change the status.</li>
+<li>Aligns with <a href="../BE-003.html">BE-003</a>'s single error surface, but here the fix is to NOT treat an empty sub as an error at all.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>The internal per-submodule put step treats &quot;no eligible paths&quot;/<code>PUTNONE</code> as a<p>
-benign skip (silent no-op), not a propagated error — mirrors <a href="../../POST/POST-019.html">POST-019</a>'s &quot;suppress the standalone put banner for the internal path&quot;.
-</p>
-</li>
+<li>The internal per-submodule put step treats &quot;no eligible paths&quot;/<code>PUTNONE</code> as a benign skip (silent no-op), not a propagated error — mirrors <a href="../../POST/POST-019.html">POST-019</a>'s &quot;suppress the standalone put banner for the internal path&quot;.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> POST arm: the internal gitlink bump runs <code>be put -q &lt;sub&gt;</code> with stdout<p>
-  captured (<code>BE.cli.c::bepost_bump_sub</code> :3028-3098) and <code>-q</code> opens an   EMPTY-state HUNK table (<code>sniff/PUT.c:1174-1193</code>) — no banner, no PUTNONE;   <code>becli</code> folds <code>*NONE</code>→OK under <code>-q</code> (<code>BE.cli.c:5255-5262</code>). Landed untagged   (SUBS-029 <code>3fd64016</code>/<code>c2e1b0d9</code> + 25/26Jun batch), verified at tip <code>b0fb0ce4</code>.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> PUT arm STILL LEAKS: bare <code>be put</code> sub recursion (<code>BEActSubsRelay</code>,<p>
-  <code>BE.cli.c:4254</code>) deliberately passes NO <code>-q</code> (comment :4266) and   <code>BERelaySub</code>/<code>be_recurse_capture</code> capture stdout ONLY — the clean sub child   still prints <code>sniff: put: no changes</code> (<code>sniff/PUT.c:729</code>) + sniff MAIN   <code>Error: PUTNONE</code> + be MAIN <code>Error: NONE</code> (<code>abc/PRO.h:384</code>) on inherited stderr.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Fix the put arm without losing the NONE-class exit the relay keys on<p>
-  (:4266): e.g. capture/blackhole the child's stderr in <code>be_recurse_capture</code>   (<code>SUBS.c:314-341</code>) for the recursion path, or pass <code>-q</code> and detect no-op by   empty captured stdout as <code>bepost_bump_sub</code> already does (<code>BE.cli.c:3085</code>).
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Kill the banner-only <code>put:&lt;sub&gt;</code> relay hunk for a wholly no-op sub (the<p>
-  PUT-003 residual): the non-quiet child still flushes its <code>put:</code> banner with   zero rows; needs the defer-banner/HUNKTableAbort change or the <code>-q</code> route.
-</p>
-</li>
-<li class="open"><input type="checkbox" disabled> Repro-first (<code>test/put/</code>): parent dirty + unchanged mounted sub, bare<p>
-  <code>be put</code> → assert stderr has no <code>no changes</code>/<code>Error: PUTNONE</code>/<code>Error: NONE</code>   and stdout no empty <code>put:&lt;sub&gt;</code> hunk; top-level truly-empty put keeps   PUTNONE (guard: <code>test/put/09-sub-only-dirty-exit</code> tail case).
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> POST arm: the internal gitlink bump runs <code>be put -q &lt;sub&gt;</code> with stdout captured (<code>BE.cli.c::bepost_bump_sub</code> :3028-3098) and <code>-q</code> opens an EMPTY-state HUNK table (<code>sniff/PUT.c:1174-1193</code>) — no banner, no PUTNONE; <code>becli</code> folds <code>*NONE</code>→OK under <code>-q</code> (<code>BE.cli.c:5255-5262</code>). Landed untagged (SUBS-029 <code>3fd64016</code>/<code>c2e1b0d9</code> + 25/26Jun batch), verified at tip <code>b0fb0ce4</code>.</li>
+<li class="open"><input type="checkbox" disabled> PUT arm STILL LEAKS: bare <code>be put</code> sub recursion (<code>BEActSubsRelay</code>, <code>BE.cli.c:4254</code>) deliberately passes NO <code>-q</code> (comment :4266) and <code>BERelaySub</code>/<code>be_recurse_capture</code> capture stdout ONLY — the clean sub child still prints <code>sniff: put: no changes</code> (<code>sniff/PUT.c:729</code>) + sniff MAIN <code>Error: PUTNONE</code> + be MAIN <code>Error: NONE</code> (<code>abc/PRO.h:384</code>) on inherited stderr.</li>
+<li class="open"><input type="checkbox" disabled> Fix the put arm without losing the NONE-class exit the relay keys on (:4266): e.g. capture/blackhole the child's stderr in <code>be_recurse_capture</code> (<code>SUBS.c:314-341</code>) for the recursion path, or pass <code>-q</code> and detect no-op by empty captured stdout as <code>bepost_bump_sub</code> already does (<code>BE.cli.c:3085</code>).</li>
+<li class="open"><input type="checkbox" disabled> Kill the banner-only <code>put:&lt;sub&gt;</code> relay hunk for a wholly no-op sub (the PUT-003 residual): the non-quiet child still flushes its <code>put:</code> banner with zero rows; needs the defer-banner/HUNKTableAbort change or the <code>-q</code> route.</li>
+<li class="open"><input type="checkbox" disabled> Repro-first (<code>test/put/</code>): parent dirty + unchanged mounted sub, bare <code>be put</code> → assert stderr has no <code>no changes</code>/<code>Error: PUTNONE</code>/<code>Error: NONE</code> and stdout no empty <code>put:&lt;sub&gt;</code> hunk; top-level truly-empty put keeps PUTNONE (guard: <code>test/put/09-sub-only-dirty-exit</code> tail case).</li>
 <li class="open"><input type="checkbox" disabled> Confirm <code>ctest</code> verb-output tests stay green.</li>
 </ul>
 <h3>Blockers and bummers</h3>
@@ -91,10 +67,18 @@ benign skip (silent no-op), not a propagated error — mirrors <a href="../../PO
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>PARTIAL (audit 2026-07-07): <code>be post</code> arm landed (quiet captured gitlink bump<p>
-+ <code>-q</code> sub shards — no cascade); bare <code>be put</code> sub-recursion arm still emits the <code>sniff: put: no changes</code> + <code>Error: PUTNONE</code> + <code>Error: NONE</code> stderr spray for an unchanged sub. Kin <a href="../../POST/POST-019.html">POST-019</a> closed; the put arm stays this ticket.
-</p>
-</li>
+<li>PARTIAL (audit 2026-07-07): <code>be post</code> arm landed (quiet captured gitlink bump + <code>-q</code> sub shards — no cascade); bare <code>be put</code> sub-recursion arm still emits the <code>sniff: put: no changes</code> + <code>Error: PUTNONE</code> + <code>Error: NONE</code> stderr spray for an unchanged sub. Kin <a href="../../POST/POST-019.html">POST-019</a> closed; the put arm stays this ticket.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

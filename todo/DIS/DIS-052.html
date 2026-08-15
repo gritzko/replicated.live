@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DIS/DIS-052.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>DIS-052: verbs disagree on a clean file with a drifted mtime; no path re-stamps it</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 A tracked file whose bytes EQUAL the baseline but whose mtime was changed out-of-band (an external <code>cp</code>, an editor no-op save, a <code>touch</code>) lands in a state where the verbs flatly disagree, and NO documented operation re-stamps it. <code>be status</code>/<code>be diff</code> content-compare → clean (<code>ok</code>, empty diff); <code>be delete</code> mtime-checks → DELDIRTY &quot;unstamped changes&quot; (<a href="DIS-004.html">DIS-004</a>); <code>be put</code> → PUTNONE &quot;no eligible paths&quot; (content == baseline); <code>be get &lt;path&gt;</code> → &quot;overwritten from ? (no staging)&quot; rewrites with a NEW mtime, still unstamped. So the DELDIRTY message's &quot;stage with <code>be put</code> or revert&quot; advice is unachievable. Hit live 2026-06-23 after an out-of-band <code>cp</code> onto <code>bin/lib/store.js</code>. Related <a href="DIS-023.html">DIS-023</a> (status non-idempotent). Method: <a href="../../rule/Issues.html">Issues</a>.
@@ -42,10 +48,10 @@ None; needs the stamp-set write threaded through the scoped <code>be get &lt;pat
 <p>
 Make a content-clean file re-stampable and make the verbs agree.
 </p>
-<ul>
-<li><a href="./v.html">v</a> <code>be get &lt;path&gt;</code> records the overwritten file's mtime into the stamp-set so the documented &quot;revert&quot; actually clears DELDIRTY. Done via SNIFFAtStampPath.</li>
-<li><a href="./v.html">v</a> <a href="DIS-004.html">DIS-004</a>'s content double-check already landed (<code>9718a03a</code>) — delete now agrees with status/diff. This ticket is the residual scoped-get re-stamp.</li>
-<li><a href="./v.html">v</a> Repro test <code>sniff/test/restamp.sh</code> (SNIFFrestamp): edit/out-of-band <code>cp</code> → <code>get &lt;path&gt;</code> re-stamps (mtime == baseline ts) + delete proceeds, no 2nd DELDIRTY.</li>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> <code>be get &lt;path&gt;</code> records the overwritten file's mtime into the stamp-set so the documented &quot;revert&quot; actually clears DELDIRTY. Done via SNIFFAtStampPath.</li>
+<li class="done"><input type="checkbox" checked disabled> <a href="DIS-004.html">DIS-004</a>'s content double-check already landed (<code>9718a03a</code>) — delete now agrees with status/diff. This ticket is the residual scoped-get re-stamp.</li>
+<li class="done"><input type="checkbox" checked disabled> Repro test <code>sniff/test/restamp.sh</code> (SNIFFrestamp): edit/out-of-band <code>cp</code> → <code>get &lt;path&gt;</code> re-stamps (mtime == baseline ts) + delete proceeds, no 2nd DELDIRTY.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
@@ -53,8 +59,8 @@ Make a content-clean file re-stampable and make the verbs agree.
 Mirror PUT.c's content-equal re-stamp: a no-staging <code>be get &lt;path&gt;</code> overwrite stamps the written file to <code>SNIFFAtBaseline</code>'s ts (the latest get/post row, already in the wtlog index) — no new row, just <code>mtime ∈ stamp-set</code> so <code>SNIFFAtKnown</code> fast-paths it.
 </p>
 <h3>TODOs</h3>
-<ul>
-<li><a href="./x.html">x</a> explicit re-stamp verb — not needed; the get path re-stamp suffices.</li>
+<ul class="todo">
+<li class="wontfix"><input type="checkbox" disabled> <del>explicit re-stamp verb — not needed; the get path re-stamp suffices.</del></li>
 </ul>
 <h3>Blockers and bummers</h3>
 <p>

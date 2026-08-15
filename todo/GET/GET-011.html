@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/GET/GET-011.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>GET-011: submodules must inquire the parent beagle remote (the source being cloned), not only the <code>.gitmodules</code> URL</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 When <code>be get</code> clones from a beagle remote (<code>file:///home/gritzko/.be?/dogs</code>, <code>be://host?/proj</code>), each submodule should be fetched from <strong>that same remote — the exact source we are talking to —</strong> as the primary candidate, with the <code>.gitmodules</code> URL only as a last-resort fallback. Today <code>SNIFFSubMount</code> builds parent-source candidates (<code>&lt;loc&gt;?/&lt;url-basename&gt;</code>, <code>&lt;loc&gt;?/&lt;path-basename&gt;</code>) <strong>only</strong> when <code>subs_recover_locator</code> sets <code>src_beagle</code> and recovers a non-empty <code>loc_buf</code>; for a <code>file://…?/&lt;proj&gt;</code> clone that recovery fails, so <code>src_beagle=NO</code>, the candidates at <code>sniff/SUBS.c:534,592</code> are never built, and the fetch loop runs <strong>only</strong> the declared <code>.gitmodules</code> URL (<code>https://github.com/gritzko/libabc.git</code>). With github unreachable/firewalled the whole clone dies <code>WIRECLFL</code>/<code>BEDOGEXIT</code> — even though the sub (<code>abc</code>) is sitting in the very <code>~/.be</code> we just cloned the parent from. Net: you cannot clone a beagle worktree offline/locally, which blocks every file: worktree and the parallel fix-and-land loop. See <a href="../../rule/Issues.html">Issues</a>, <a href="../../CLAUDE.md">CLAUDE</a>, <a href="GET-004.html">GET-004</a>, <a href="../../wiki/Submodules.html">sub-parent-source</a>.

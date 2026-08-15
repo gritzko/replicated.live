@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DIS/DIS-058.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>DIS-058: be/ JS submodule handling vs Submodules.mkd — recursion is READ-ONLY (status/diff/ls/lsr only); get/post/put/delete never descend, never clone/mount/commit a sub, no synthetic branches; the Edited dirty axis is inert (audit/umbrella)</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 The <code>be/</code> JS port treats submodules as a READ-time concern only: the recursing READ views (status, diff, ls/lsr) walk mounted subs in-process (core/recurse.js, views/status/status.js, views/diff/diff.js, views/ls/ls.js) and classify gitlink-vs-tip dirtiness with a full 3-axis SUBSDirty model (shared/subs.js), but the STATE verbs do NOT implement <a href="../../wiki/Submodules.html">Submodules</a>' &quot;seamless recursive experience where clone, checkout, and commit descend into subs by default&quot;. <code>get</code> records a <code>160000</code> leaf and never fetches/mounts/checks-out the child (get.js:607 &quot;gitlink: recorded, not written&quot;; checkout.js:138-140); <code>post</code>/<code>put</code>/<code>delete</code> skip gitlink subtrees and never run a child commit (fold-decide.js:154-201, stage.js:149/261, delete.js:78); there is NO synthetic/dot-branch creation or tracking anywhere; the <a href="../../wiki/Title.html">Title</a>-from-<code>.gitmodules</code>-URL-basename rule and the <code>.gitmodules</code>-URI fallback fetch are absent; and per shared/subs.js the dirty Edited axis (sub-local file edits ≠ R4.base) is INERT, so a parent is NOT marked dirty for an uncommitted edit inside a sub — contradicting <a href="../../wiki/Submodules.html">Submodules</a>' &quot;dirty if contains anything dirty&quot;. This is an AUDIT/umbrella ticket: it inventories the gaps D1..D14 and confirms two REVERSE cases where the JS exceeds the spec (the 3-axis classifier; the behind/diverged stale axes) so <a href="../../wiki/Submodules.html">Submodules</a> is the laggard there. Individual fixes should spawn their own SUBS/DIS sub-tickets. Scope is <code>be/</code> only (not <code>beagle/</code>); sibling get/post audits are <a href="DIS-055.html">DIS-055</a>/<a href="DIS-054.html">DIS-054</a>; the dirty-classifier sibling is <a href="DIS-057.html">DIS-057</a>; method per <a href="../../beagle/CLAUDE.md">CLAUDE</a>. See <a href="../../wiki/Submodules.html">Submodules</a>, <a href="../../wiki/Dirty.html">Dirty</a>, <a href="../../wiki/Store.html">Store</a>, <a href="../../wiki/Title.html">Title</a>, <a href="../SUBS/SUBS-027b.html">SUBS-027b</a>, <a href="../SUBS/SUBS-037.html">SUBS-037</a>.
@@ -50,17 +56,17 @@ The <code>be/</code> JS port treats submodules as a READ-time concern only: the 
 <li>Like <a href="DIS-054.html">DIS-054</a>/<a href="DIS-055.html">DIS-055</a>, the JS throws friendly STRINGS (e.g. &quot;POSTPUSH: …&quot;, &quot;be get: cannot resolve …&quot;) not bare <code>ok64</code> — a UX nicety to PRESERVE in any refuse path added for the unimplemented sub forms.</li>
 </ul>
 <h3>Done so far (in the <code>~/todo/DIS-058</code> changeset, awaiting the commit gate)</h3>
-<ul>
-<li><a href="./v.html">v</a> D1 (get/post) — get &amp; post now recurse into subs BY DEFAULT (put/delete still pending D10).</li>
-<li><a href="./v.html">v</a> D2-D5 GET descend — <code>shared/submount.js mount()</code> + get.js <code>mountGitlink</code>/<code>recurseSubMounts</code>: pre-order child fetch (same-source + <code>.gitmodules</code>-URL fallback, Title from the URL basename), checkout at the parent pin, and the sub wtlog anchor <code>&lt;wt&gt;/&lt;path&gt;/.be</code> written on the synthetic branch <code>/&lt;title&gt;/.&lt;parent&gt;[/&lt;branch&gt;]</code>.</li>
-<li><a href="./v.html">v</a> D6/D7-auto/D9 POST chain — post.js <code>postTree</code>→<code>postSubs</code>→<code>postOne</code>: post-order child commit FIRST, automatic gitlink-bump into the parent, synthetic-branch update; fold-commit.js skips the blob read for a <code>160000</code> add.</li>
-<li><a href="./v.html">v</a> D12 create-path + D13 write-path — Title derived from the <code>.gitmodules</code> URL on clone, flat sibling shard at <code>.be/&lt;title&gt;/</code>, sub wtlog anchor written by get.</li>
-<li><a href="./v.html">v</a> <a href="../GET/GET-037.html">GET-037</a> self-locator — the <code>be</code> self-gitlink (no <code>.gitmodules</code>) materialises <code>be -&gt; .</code> instead of sub-mounting; no partial checkout / raw ENOTDIR on a sub-mount failure.</li>
-<li><a href="./v.html">v</a> <a href="../JS/JS-098.html">JS-098</a> (side-fix) — host-less <code>be:</code> local clone never worked (wire.js <code>classify</code> routed it to ssh); now a local keeper exec, so the local cycle repro is possible.</li>
-<li><a href="./v.html">v</a> Repros green: <code>be-js-sub-cycle</code> (clone→edit→commit→re-clone) + <code>be-js-sub-selflink</code>; ctest otherwise green (2 pre-existing fails).</li>
-<li><a href="./v.html">v</a> <a href="../GET/GET-038.html">GET-038</a> — worktree-source <code>seedLocal</code> now resolves <code>&lt;wt&gt;/.be</code>'s row-0 redirect to the REAL store anchor (friendly <code>GETWTSRC</code> refuse if none, no partial wt); <code>jab status</code> classifies instead of all-<code>unk</code>. Test <code>be-js-sub-wtsrc</code>.</li>
-<li><a href="./v.html">v</a> REGRESSION fixed before merge: the move/pat post goldens live as <code>test/post/move</code> + <code>test/post/patch-pat</code> and the changeset landed (<code>da0c12c3</code>+<code>da7fa5a7</code>, 29Jun); <code>d80bdb5c</code> TEST-003 &quot;js tests pass&quot;.</li>
-<li><a href="./ .html"> </a> STILL OPEN (2026-07-07 audit): D8 (per-sub push — UNBLOCKED, wire push landed GIT-012/013), D11 (HEAD no-descend), D14 (Edited dirty axis, <a href="../SUBS/SUBS-027b.html">SUBS-027b</a>); D15/D16 spec updates to <a href="../../wiki/Submodules.html">Submodules</a>. D10 and D17/D18 landed since — see TODOs.</li>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> D1 (get/post) — get &amp; post now recurse into subs BY DEFAULT (put/delete still pending D10).</li>
+<li class="done"><input type="checkbox" checked disabled> D2-D5 GET descend — <code>shared/submount.js mount()</code> + get.js <code>mountGitlink</code>/<code>recurseSubMounts</code>: pre-order child fetch (same-source + <code>.gitmodules</code>-URL fallback, Title from the URL basename), checkout at the parent pin, and the sub wtlog anchor <code>&lt;wt&gt;/&lt;path&gt;/.be</code> written on the synthetic branch <code>/&lt;title&gt;/.&lt;parent&gt;[/&lt;branch&gt;]</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> D6/D7-auto/D9 POST chain — post.js <code>postTree</code>→<code>postSubs</code>→<code>postOne</code>: post-order child commit FIRST, automatic gitlink-bump into the parent, synthetic-branch update; fold-commit.js skips the blob read for a <code>160000</code> add.</li>
+<li class="done"><input type="checkbox" checked disabled> D12 create-path + D13 write-path — Title derived from the <code>.gitmodules</code> URL on clone, flat sibling shard at <code>.be/&lt;title&gt;/</code>, sub wtlog anchor written by get.</li>
+<li class="done"><input type="checkbox" checked disabled> <a href="../GET/GET-037.html">GET-037</a> self-locator — the <code>be</code> self-gitlink (no <code>.gitmodules</code>) materialises <code>be -&gt; .</code> instead of sub-mounting; no partial checkout / raw ENOTDIR on a sub-mount failure.</li>
+<li class="done"><input type="checkbox" checked disabled> <a href="../JS/JS-098.html">JS-098</a> (side-fix) — host-less <code>be:</code> local clone never worked (wire.js <code>classify</code> routed it to ssh); now a local keeper exec, so the local cycle repro is possible.</li>
+<li class="done"><input type="checkbox" checked disabled> Repros green: <code>be-js-sub-cycle</code> (clone→edit→commit→re-clone) + <code>be-js-sub-selflink</code>; ctest otherwise green (2 pre-existing fails).</li>
+<li class="done"><input type="checkbox" checked disabled> <a href="../GET/GET-038.html">GET-038</a> — worktree-source <code>seedLocal</code> now resolves <code>&lt;wt&gt;/.be</code>'s row-0 redirect to the REAL store anchor (friendly <code>GETWTSRC</code> refuse if none, no partial wt); <code>jab status</code> classifies instead of all-<code>unk</code>. Test <code>be-js-sub-wtsrc</code>.</li>
+<li class="done"><input type="checkbox" checked disabled> REGRESSION fixed before merge: the move/pat post goldens live as <code>test/post/move</code> + <code>test/post/patch-pat</code> and the changeset landed (<code>da0c12c3</code>+<code>da7fa5a7</code>, 29Jun); <code>d80bdb5c</code> TEST-003 &quot;js tests pass&quot;.</li>
+<li class="open"><input type="checkbox" disabled> STILL OPEN (2026-07-07 audit): D8 (per-sub push — UNBLOCKED, wire push landed GIT-012/013), D11 (HEAD no-descend), D14 (Edited dirty axis, <a href="../SUBS/SUBS-027b.html">SUBS-027b</a>); D15/D16 spec updates to <a href="../../wiki/Submodules.html">Submodules</a>. D10 and D17/D18 landed since — see TODOs.</li>
 </ul>
 <h3>Goals</h3>
 <ul>

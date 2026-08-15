@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/POST/POST-023.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>POST-023: <code>be post</code> commits staged MODIFICATIONS but silently DROPS staged ADDITIONS (<code>new</code> rows) — the added files stay staged, never land in the commit</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>be post</code> writes a commit containing only the staged <code>mod</code> rows (modified tracked files) and SILENTLY OMITS the staged <code>new</code> rows (added files). The additions remain staged after the post — the commit is incomplete and no error is raised. (Terminology: in <code>be status</code>, <code>new</code> = a STAGED add, <code>unk</code> = unstaged/untracked, <code>mod</code> = staged modification.) Any commit that introduces new files — a merge that brings them in, or a plain <code>be put &lt;newfile&gt;</code> + <code>be post</code> — loses them from the recorded tree. Live-hit landing the PATCH-003..009 merge. Method <a href="../../meta/work.html">Issues</a>.
@@ -59,7 +65,11 @@ Now: DONE
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>LANDED <code>100cd237</code> (2026-06-27). Root cause: <code>post_classify_step</code>'s &quot;Untracked + selective = ignore&quot; guard (<code>!src_base &amp;&amp; c-&gt;any_pd → return OK</code>, sniff/POST.c:584) fired BEFORE the POST-005 <code>has_thr</code> (absorbed-tree) rescue, so a patch-added <code>new</code> file (on disk, stamped, no put row) was dropped in SELECTIVE mode (any explicit put present). Implicit/mod-only posts were fine (<code>any_pd</code> NO). Fix: <code>&amp;&amp; !has_thr</code> exempts absorbed adds; the in-scope stamp check below still validates them. Repro <code>test/post/56-selective-post-keeps -absorbed-adds</code> (RED→GREEN); full ctest 351/351, ASAN-clean.</li>
+<li>LANDED <code>100cd237</code> (2026-06-27). Root cause: <code>post_classify_step</code>'s &quot;Untracked + selective = ignore&quot; guard (<code>!src_base &amp;&amp; c-&gt;any_pd → return OK</code>, sniff/POST.c:584) fired BEFORE the POST-005 <code>has_thr</code> (absorbed-tree) rescue, so a patch-added <code>new</code> file (on disk, stamped, no put row) was dropped in SELECTIVE mode (any explicit put present). Implicit/mod-only posts were fine (<code>any_pd</code> NO).<dl class="meta"><dt>Fix:</dt><dd>`&amp;&amp; !has_thr` exempts absorbed adds; the in-scope stamp check</dd></dl>
+<p>
+below still validates them. Repro <code>test/post/56-selective-post-keeps -absorbed-adds</code> (RED→GREEN); full ctest 351/351, ASAN-clean.
+</p>
+</li>
 <li>NOTE: an explicit <code>be put &lt;newfile&gt;</code> add was NEVER dropped (the <code>has_put</code> branch handles it); only patch/absorb-introduced adds in selective mode. New ticket <a href="./KEEP-003.html">KEEP-003</a> filed: a <code>keeper post</code> self- deadlock on the libabc <code>.lock</code> (parent holds, its receive-pack child re-acquires) blocked the clone — abc/ sourced from the pinned tree.</li>
 <li>Audit 2026-07-07: also <code>8460c578</code> (&quot;staged-adds dropped fix&quot;, same day) rides this ticket; fix verified in-tree (<code>sniff/POST.c:584/646</code> <code>has_thr</code> guards, <code>test/post/56</code> present). Filed 2026-06-27 from the PATCH-003..009 land, CLOSED.</li>
 </ul>

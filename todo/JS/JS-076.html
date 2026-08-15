@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/JS/JS-076.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>JS-076: <code>wire.fetch</code> leaks the child stdin fd (wfd) on every error path</h1>
 <div>
-<p>
-Now: OPEN Sev: MED
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>MED</dd></dl>
 </div>
 <p>
 <code>wire.fetch</code> spawns <code>upload-pack</code>, holding <code>wfd=child.stdin</code> / <code>rfd=child.stdout</code> / <code>pid</code> (<code>wire.js:136-137</code>).  <code>wfd</code> is closed only at <code>wire.js:170</code>, INSIDE the <code>try</code> after the request is written; the <code>finally</code> (<code>wire.js:188-191</code>) closes <code>rfd</code> and reaps <code>pid</code> but NEVER <code>wfd</code>.  Any throw before :170 — peer advertised no usable ref (:160), a pkt parse error draining the advert, a mid-loop <code>io.writeAll</code> failure — leaks <code>wfd</code>, and reaping with the child's stdin still open can block the peer.  WIRECLI.c closes both fds before reaping.  Method: <a href="../../meta/work.html">Issues</a>.

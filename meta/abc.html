@@ -3,8 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>abc</title>
+<title>ABC refactoring policies</title>
+<meta property="og:title" content="ABC refactoring policies">
+<meta property="og:description" content="Bullet-form one-pager for converting raw C into ABC idioms. Each section states the goal it serves, then the concrete moves. References the canonical docs — read them for full coverage:">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/meta/abc.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -27,99 +39,47 @@ Bullet-form one-pager for converting raw C into ABC idioms. Each section states 
 Goal: express every read and write as a typed slice/buffer op so data consumption is tracked and no pointer ever escapes into arithmetic.
 </p>
 <ul>
-<li><strong>Default writes — <code>sFeed</code> / <code>sFeed1</code></strong> (all-or-nothing, returns<p>
-<code>SNOROOM</code> if input doesn't fit). Examples: <code>u64sFeed1(slice, val)</code>, <code>u8sFeed(into, from)</code>.
-</p>
-</li>
-<li><strong>Chunked / partial writes — <code>sDrain</code> / <code>sDrain1</code></strong> (write what<p>
-fits, advance both sides). Use when input may exceed remaining room and progress matters.
-</p>
-</li>
-<li><strong>Set a slice's range — <code>a_dup(T, name, src)</code></strong> or `*sMv(dst,<p>
-src)<code> (e.g. </code>u8csMv<code>, </code>u8sMv<code>). Never </code>slice<a href="">0</a> = ptr; slice<a href="">1</a> = ptr + len;`.
-</p>
-</li>
+<li><strong>Default writes — <code>sFeed</code> / <code>sFeed1</code></strong> (all-or-nothing, returns <code>SNOROOM</code> if input doesn't fit). Examples: <code>u64sFeed1(slice, val)</code>, <code>u8sFeed(into, from)</code>.</li>
+<li><strong>Chunked / partial writes — <code>sDrain</code> / <code>sDrain1</code></strong> (write what fits, advance both sides). Use when input may exceed remaining room and progress matters.</li>
+<li><strong>Set a slice's range — <code>a_dup(T, name, src)</code></strong> or <code>*sMv(dst, src)</code> (e.g. <code>u8csMv</code>, <code>u8sMv</code>). Never <code>slice[0] = ptr; slice[1] = ptr + len;</code>.</li>
 <li><strong>Stack buffer — <code>a_pad(T, name, len)</code></strong>, not raw <code>T name[len]</code>.</li>
 <li><strong>C-string-literal slice — <code>a_cstr(name, &quot;lit&quot;)</code></strong>.</li>
-<li><strong>Iteration — <code>$for</code> / <code>$rof</code> / <code>$eat</code></strong>, <code>sUsed1</code> / <code>sUsed</code>,<p>
-<code>sShed</code> (S.md). No raw <code>*p++</code>, <code>ptr + N</code>, <code>end - start</code>.
-</p>
-</li>
-<li><strong>Typed &gt; generic</strong> (CLAUDE.md §1, S.md): <code>u8csLen</code> over <code>$len</code>,<p>
-<code>u8bReset</code> over <code>Breset</code>, <code>u8sMv</code> over <code>$mv</code>. Reach for a generic only when the typed form doesn't exist.
-</p>
-</li>
-<li><strong>Reference for boundary movers</strong> (push/feed/used/shed for both<p>
-slices and buffers): <code>abc/INDEX.md</code> §&quot;Slice / buffer boundary movers&quot;.
-</p>
-</li>
-<li>special mention: it is <strong>very very bad</strong> to construct slices using<p>
-pointer arithmetics, pass them to slice based API, then drop or rip apart into pointers. <strong>Never ever do that!</strong> Slice API is nice as long as you dont switch back and forth between modes. Mode switching creates impedance mismatch and <strong>makes things worse</strong>.
-</p>
-</li>
-<li>when buffer/slice <strong>may</strong> potentially turn short, use call(u8bFeed...)<p>
-call(u8sFeed...) etc to prevent garbage/incomplete data. This does not apply with explicit const lengths only, then just u8sFeed()
-</p>
-</li>
+<li><strong>Iteration — <code>$for</code> / <code>$rof</code> / <code>$eat</code></strong>, <code>sUsed1</code> / <code>sUsed</code>, <code>sShed</code> (S.md). No raw <code>*p++</code>, <code>ptr + N</code>, <code>end - start</code>.</li>
+<li><strong>Typed &gt; generic</strong> (CLAUDE.md §1, S.md): <code>u8csLen</code> over <code>$len</code>, <code>u8bReset</code> over <code>Breset</code>, <code>u8sMv</code> over <code>$mv</code>. Reach for a generic only when the typed form doesn't exist.</li>
+<li><strong>Reference for boundary movers</strong> (push/feed/used/shed for both slices and buffers): <code>abc/INDEX.md</code> §&quot;Slice / buffer boundary movers&quot;.</li>
+<li>special mention: it is <strong>very very bad</strong> to construct slices using pointer arithmetics, pass them to slice based API, then drop or rip apart into pointers. <strong>Never ever do that!</strong> Slice API is nice as long as you dont switch back and forth between modes. Mode switching creates impedance mismatch and <strong>makes things worse</strong>.</li>
+<li>when buffer/slice <strong>may</strong> potentially turn short, use call(u8bFeed...) call(u8sFeed...) etc to prevent garbage/incomplete data. This does not apply with explicit const lengths only, then just u8sFeed()</li>
+<li>slices and buffers get instantiated only with types of fixed bit layout, e.g. <code>u64b</code>, <code>u8cs</code>. </li>
+<li>In general, prefer <code>u64</code> to <code>long long</code>, <code>u16</code> to <code>short</code>, <code>i32</code> to <code>int</code> unless mandated by external API.</li>
 </ul>
 <h2>BASS scratch — <code>a_carve</code> and friends</h2>
 <p>
 Goal: take per-call scratch from the BASS arena so it dies at the <code>call()</code>/<code>try()</code> boundary, never leaking via heap or a fixed stack buffer. Prefer BASS over heap <code>u8bAllocate</code> or fixed <code>a_pad()</code> for scratch.
 </p>
 <ul>
-<li><strong><code>a_carve(T, name, cap)</code></strong> — acquire a writable buffer of <code>cap</code><p>
-elements (the workhorse, e.g. <code>a_carve(u8, buf, 1UL&lt;&lt;20)</code>). Use for scratch you feed into.
-</p>
-</li>
-<li><strong><code>a_lign(T, gauge)</code></strong> … <strong><code>a_cquire(T, slice)</code></strong> — open a gauge on<p>
-BASS, fill it, then close it into a slice. The bracketing pair for &quot;build a slice of unknown length in place&quot;.
-</p>
-</li>
-<li><strong><code>a_rent(T, news, src)</code> / <code>a_ren(news, src)</code></strong> — one-shot copy of<p>
-<code>src</code> into a fresh BASS slice <code>news</code> (<code>a_ren</code> = the <code>u8</code> case).
-</p>
-</li>
-<li>Stack-only (no BASS): <strong><code>a_pad(T, name, len)</code></strong> (fixed <code>T name[len]</code><p>
-buffer), <strong><code>a_dup(T, name, src)</code></strong> (alias a slice), <strong><code>a_cstr(name, &quot;lit&quot;)</code></strong> (literal slice), <strong><code>a_path(name, …)</code></strong> (path buffer).
-</p>
-</li>
+<li><strong><code>a_carve(T, name, cap)</code></strong> — acquire a writable buffer of <code>cap</code> elements (the workhorse, e.g. <code>a_carve(u8, buf, 1UL&lt;&lt;20)</code>). Use for scratch you feed into.</li>
+<li><strong><code>a_lign(T, gauge)</code></strong> … <strong><code>a_cquire(T, slice)</code></strong> — open a gauge on BASS, fill it, then close it into a slice. The bracketing pair for &quot;build a slice of unknown length in place&quot;.</li>
+<li><strong><code>a_rent(T, news, src)</code> / <code>a_ren(news, src)</code></strong> — one-shot copy of <code>src</code> into a fresh BASS slice <code>news</code> (<code>a_ren</code> = the <code>u8</code> case).</li>
+<li>Stack-only (no BASS): <strong><code>a_pad(T, name, len)</code></strong> (fixed <code>T name[len]</code> buffer), <strong><code>a_dup(T, name, src)</code></strong> (alias a slice), <strong><code>a_cstr(name, &quot;lit&quot;)</code></strong> (literal slice), <strong><code>a_path(name, …)</code></strong> (path buffer).</li>
 </ul>
 <p>
 Rules (PRO.h §&quot;BASS-implicit arena macros&quot;):
 </p>
 <ul>
-<li>They invoke the underlying op <strong>directly</strong>, not via <code>call()</code> —<p>
-<code>call()</code> snapshots+restores BASS and would undo the acquisition. Acquire in the op's own <code>sane()</code> frame; a <code>call(...)</code> rewinds BASS to its entry, freeing whatever the callee carved (so a per-iteration <code>call</code>/<code>try</code> frees that iteration's carves).
-</p>
-</li>
+<li>They invoke the underlying op <strong>directly</strong>, not via <code>call()</code> — <code>call()</code> snapshots+restores BASS and would undo the acquisition. Acquire in the op's own <code>sane()</code> frame; a <code>call(...)</code> rewinds BASS to its entry, freeing whatever the callee carved (so a per-iteration <code>call</code>/<code>try</code> frees that iteration's carves).</li>
 <li>Errors still propagate via <code>__</code> + <code>return __</code>, exactly like <code>call()</code>.</li>
-<li>Do <strong>not</strong> <code>a_carve</code> / <code>a_rent</code> between an <code>a_lign</code> and its matching<p>
-<code>a_cquire</code> — those advance both DATA and IDLE and corrupt the in-flight gauge (a <code>must()</code> guard enforces DATA-empty at entry).
-</p>
-</li>
-<li>A carve used as a <strong>hash set</strong> (<code>wh128</code> etc.) must <code>zerob(name)</code> after<p>
-acquire — BASS reuses memory that carries leftover bytes from previously-rewound carves (see <code>graf/INDEX.md</code>).
-</p>
-</li>
+<li>Do <strong>not</strong> <code>a_carve</code> / <code>a_rent</code> between an <code>a_lign</code> and its matching <code>a_cquire</code> — those advance both DATA and IDLE and corrupt the in-flight gauge (a <code>must()</code> guard enforces DATA-empty at entry).</li>
+<li>A carve used as a <strong>hash set</strong> (<code>wh128</code> etc.) must <code>zerob(name)</code> after acquire — BASS reuses memory that carries leftover bytes from previously-rewound carves (see <code>graf/INDEX.md</code>).</li>
 </ul>
 <h2>Paths</h2>
 <p>
 Goal: keep paths as owned, NUL-terminated buffers built with the PATH helpers, never a hand-assembled <code>char[N]</code>.
 </p>
 <ul>
-<li><strong><code>path8b</code></strong> — owned path buffer, *NUL-terminated by<p>
-construction*. The right type whenever code currently materialises a <code>char[N]</code> to satisfy a NUL contract.
-</p>
-</li>
-<li><strong><code>a_path(name, base?, seg…)</code></strong> — stack path buffer, optionally<p>
-pre-fed.
-</p>
-</li>
+<li><strong><code>path8b</code></strong> — owned path buffer, <strong>NUL-terminated by construction</strong>. The right type whenever code currently materialises a <code>char[N]</code> to satisfy a NUL contract.</li>
+<li><strong><code>a_path(name, base?, seg…)</code></strong> — stack path buffer, optionally pre-fed.</li>
 <li><strong>Append</strong> with <code>PATHu8bFeed</code>, <code>PATHu8bAdd</code>, <code>PATHu8bPush</code>.</li>
-<li><strong><code>$path(buf)</code></strong> — <code>u8cs</code> view over a path buffer's NUL-terminated<p>
-DATA. Use this when handing a <code>path8b</code> to a function expecting <code>u8cs</code>.
-</p>
-</li>
+<li><strong><code>$path(buf)</code></strong> — <code>u8cs</code> view over a path buffer's NUL-terminated DATA. Use this when handing a <code>path8b</code> to a function expecting <code>u8cs</code>.</li>
 <li><strong>Heap pair</strong> — <code>PATHu8bAlloc</code> / <code>PATHu8bFree</code> (4 KiB).</li>
 </ul>
 <h2>Hashes / hashlets</h2>
@@ -127,14 +87,8 @@ DATA. Use this when handing a <code>path8b</code> to a function expecting <code>
 Goal: carry SHAs in the typed records and accept any 6–40 hex hashlet prefix, never a raw byte array plus a manual length.
 </p>
 <ul>
-<li>Use <strong><code>sha1</code></strong> (20 raw bytes) and <strong><code>sha1hex</code></strong> (40 hex ASCII)<p>
-from <code>dog/WHIFF.h</code>. Conversions: <code>sha1hexFromSha1</code>, <code>sha1FromSha1hex</code>, <code>sha1hexFromHex</code>, <code>sha1hexSlice</code>.
-</p>
-</li>
-<li><strong>Hashlet — 6..40 hex chars.</strong> URI fragments may carry any prefix<p>
-in this range; <code>len != 40</code> is too strict.
-</p>
-</li>
+<li>Use <strong><code>sha1</code></strong> (20 raw bytes) and <strong><code>sha1hex</code></strong> (40 hex ASCII) from <code>dog/WHIFF.h</code>. Conversions: <code>sha1hexFromSha1</code>, <code>sha1FromSha1hex</code>, <code>sha1hexFromHex</code>, <code>sha1hexSlice</code>.</li>
+<li><strong>Hashlet — 6..40 hex chars.</strong> URI fragments may carry any prefix in this range; <code>len != 40</code> is too strict.</li>
 <li>Don't carry SHAs as raw <code>u8[20]</code> / <code>char[40]</code> plus manual length.</li>
 </ul>
 <h2>Zero-init</h2>
@@ -142,24 +96,15 @@ in this range; <code>len != 40</code> is too strict.
 Goal: zero structs with the typed helpers so intent is explicit and never a hand-rolled <code>memset</code>.
 </p>
 <ul>
-<li><strong><code>zero(x)</code></strong> / <strong><code>zerop(p)</code></strong> from <code>abc/S.h</code>. Don't hand-roll<p>
-<code>memset(&amp;x, 0, sizeof(x))</code> or <code>memset(p, 0, sizeof(*p))</code>. Also, typed fns are preferred, e.g. <code>sha1Zero(&amp;hash)</code>
-</p>
-</li>
+<li><strong><code>zero(x)</code></strong> / <strong><code>zerop(p)</code></strong> from <code>abc/S.h</code>. Don't hand-roll <code>memset(&amp;x, 0, sizeof(x))</code> or <code>memset(p, 0, sizeof(*p))</code>. Also, typed fns are preferred, e.g. <code>sha1Zero(&amp;hash)</code></li>
 </ul>
 <h2>Don't copy if you can pass the slice</h2>
 <p>
 Goal: when a callee only reads bytes, change its signature to take a slice and pass it directly, killing the copy-into-scratch dance.
 </p>
 <ul>
-<li>Pattern <code>memcpy(buf, slice[0], len); buf[len]=0; foo(buf)</code> is a<p>
-refactor candidate. Change <code>foo</code>'s signature to take <code>u8csc</code> (or <code>path8sc</code>) and pass the slice directly. The truncate-cap + <code>memcpy</code> + manual NUL goes away — and so does the hidden info loss when paths exceed <code>FILE_PATH_MAX_LEN</code>.
-</p>
-</li>
-<li>For NUL-terminated logging APIs that took <code>const char *line</code>,<p>
-switch to <code>u8csc line</code> and format with <code>U8SFMT</code> / <code>u8sFmt</code>.
-</p>
-</li>
+<li>Pattern <code>memcpy(buf, slice[0], len); buf[len]=0; foo(buf)</code> is a refactor candidate. Change <code>foo</code>'s signature to take <code>u8csc</code> (or <code>path8sc</code>) and pass the slice directly. The truncate-cap + <code>memcpy</code> + manual NUL goes away — and so does the hidden info loss when paths exceed <code>FILE_PATH_MAX_LEN</code>.</li>
+<li>For NUL-terminated logging APIs that took <code>const char *line</code>, switch to <code>u8csc line</code> and format with <code>U8SFMT</code> / <code>u8sFmt</code>.</li>
 </ul>
 <h2>Never ever do manual parsing in C</h2>
 <p>
@@ -173,14 +118,8 @@ Never ever do manual parsing in C Never ever do manual parsing in C Never ever d
 Goal: allocate, map, and open at the top of the call chain; worker functions borrow resources and never own them.
 </p>
 <ul>
-<li><strong>Alloc / mmap / open at the top of the call chain.</strong> Worker<p>
-functions receive resources, never own them.
-</p>
-</li>
-<li>For <code>cli</code>-shaped main entry points the canonical pattern is<p>
-wrapper + worker so a single allocation/free pair covers every exit path the worker takes:
-</p>
-</li>
+<li><strong>Alloc / mmap / open at the top of the call chain.</strong> Worker functions receive resources, never own them.</li>
+<li>For <code>cli</code>-shaped main entry points the canonical pattern is wrapper + worker so a single allocation/free pair covers every exit path the worker takes:</li>
 </ul>
 <pre><code>    static ok64 xxxcli_inner(cli *c) { /* call(...)/done; throughout */ }
 
@@ -194,57 +133,30 @@ wrapper + worker so a single allocation/free pair covers every exit path the wor
     }
 </code></pre>
 <ul>
-<li><code>try</code> runs the worker without short-circuiting; <code>done;</code> returns<p>
-the worker's status after cleanup.
-</p>
-</li>
-<li>Note that a buffer (e.g. u8b or sha1b) implies memory ownership.<p>
-Buffers are not copies (pass a gauge u8g or u8bp instead).
-</p>
-</li>
+<li><code>try</code> runs the worker without short-circuiting; <code>done;</code> returns the worker's status after cleanup.</li>
+<li>Note that a buffer (e.g. u8b or sha1b) implies memory ownership. Buffers are not copies (pass a gauge u8g or u8bp instead).</li>
 </ul>
 <h2>PRO.h flow (CLAUDE.md §1, §16)</h2>
 <p>
 Goal: drive control flow and error propagation through the sane()/call()/try()/done cycle, confined to <code>.c</code> files.
 </p>
 <ul>
-<li>Functions using <code>call</code>/<code>done</code> must start with <strong><code>sane(...)</code></strong> —<p>
-it declares the implicit <code>__</code> carrier. Two <code>sane()</code> calls in the same scope re-declare; combine the conditions.
-</p>
-</li>
+<li>Functions using <code>call</code>/<code>done</code> must start with <strong><code>sane(...)</code></strong> — it declares the implicit <code>__</code> carrier. Two <code>sane()</code> calls in the same scope re-declare; combine the conditions.</li>
 <li><strong><code>call(f, …)</code></strong> — invoke; on non-OK, propagate via early return.</li>
-<li><strong><code>try(f, …)</code></strong> — invoke; capture status without returning. Pair<p>
-with <code>then</code> / <code>nedo</code> / <code>on(code)</code> or proceed to cleanup + <code>done;</code>.
-</p>
-</li>
+<li><strong><code>try(f, …)</code></strong> — invoke; capture status without returning. Pair with <code>then</code> / <code>nedo</code> / <code>on(code)</code> or proceed to cleanup + <code>done;</code>.</li>
 <li><strong><code>fail(code)</code></strong> — return that code with a trace.</li>
-<li><strong><code>MAIN(fn)</code> / <code>TEST(fn)</code> / <code>FUZZ(...)</code></strong> declare PRO.h globals;<p>
-non-MAIN entry points must not use PRO.h macros.
-</p>
-</li>
-<li><strong>PRO.h must not be included by other headers</strong> (CLAUDE.md §6) —<p>
-its macros pollute namespaces. <code>.c</code> files only.
-</p>
-</li>
-<li>error codes are RON base64 constrants, max 60 bits, 10 chars,<p>
-abc/ok64 generates the boilerplate
-</p>
-</li>
+<li><strong><code>MAIN(fn)</code> / <code>TEST(fn)</code> / <code>FUZZ(...)</code></strong> declare PRO.h globals; non-MAIN entry points must not use PRO.h macros.</li>
+<li><strong>PRO.h must not be included by other headers</strong> (CLAUDE.md §6) — its macros pollute namespaces. <code>.c</code> files only.</li>
+<li>error codes are RON base64 constrants, max 60 bits, 10 chars, abc/ok64 generates the boilerplate</li>
 </ul>
 <h2>Naming (CLAUDE.md §2)</h2>
 <p>
 Goal: names follow <code>MOD typ8 VerbStuff</code>, record types end in their bit width, and error codes are RON60-encoded.
 </p>
 <ul>
-<li><code>MOD typ8 VerbStuff</code> — e.g. <code>HEXu8sFeed</code>, <code>KEEPSync</code>,<p>
-<code>URIutf8Drain</code>.
-</p>
-</li>
+<li><code>MOD typ8 VerbStuff</code> — e.g. <code>HEXu8sFeed</code>, <code>KEEPSync</code>, <code>URIutf8Drain</code>.</li>
 <li>ABC record types end with bit width: <code>sha256</code>, <code>u64</code>, <code>tok32</code>.</li>
-<li><code>Stuff</code> is combinatorial flavor (<code>FeedSome</code>, <code>DrainAll</code>,<p>
-<code>FromHex</code>).
-</p>
-</li>
+<li><code>Stuff</code> is combinatorial flavor (<code>FeedSome</code>, <code>DrainAll</code>, <code>FromHex</code>).</li>
 <li>Error codes: uppercase, RON60-encoded — see <code>abc/ok64</code>.</li>
 </ul>
 <h2>When refactoring (workflow)</h2>
@@ -252,22 +164,21 @@ Goal: names follow <code>MOD typ8 VerbStuff</code>, record types end in their bi
 Goal: reuse before you add — check the INDEX.md files first, fix bugs repro-first, and keep the indexes current.
 </p>
 <ul>
-<li><strong>Read <code>INDEX.md</code> files first</strong> (CLAUDE.md §13, §14): a helper<p>
-may already exist. Check <code>abc/INDEX.md</code>, <code>dog/INDEX.md</code>, and the module's own <code>INDEX.md</code> before adding anything.
-</p>
-</li>
-<li><strong>Slice consumption is signalled by type.</strong> <code>u8cs</code> (consumed<p>
-drain target) vs <code>u8csc</code> (immutable input) — choose accordingly.
-</p>
-</li>
-<li><strong>Trace bug fixes back to a repro test</strong> (CLAUDE.md §17): make<p>
-the failing case first, then fix.
-</p>
-</li>
-<li><strong>Update the relevant <code>INDEX.md</code></strong> when you add or rename<p>
-headers (CLAUDE.md §14).
-</p>
-</li>
+<li><strong>Read <code>INDEX.md</code> files first</strong> (CLAUDE.md §13, §14): a helper may already exist. Check <code>abc/INDEX.md</code>, <code>dog/INDEX.md</code>, and the module's own <code>INDEX.md</code> before adding anything.</li>
+<li><strong>Slice consumption is signalled by type.</strong> <code>u8cs</code> (consumed drain target) vs <code>u8csc</code> (immutable input) — choose accordingly.</li>
+<li><strong>Trace bug fixes back to a repro test</strong> (CLAUDE.md §17): make the failing case first, then fix.</li>
+<li><strong>Update the relevant <code>INDEX.md</code></strong> when you add or rename headers (CLAUDE.md §14).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

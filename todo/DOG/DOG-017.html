@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DOG/DOG-017.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>DOG-017: WEAVEMerge global qsort is ~half the merge; bucket by anchor instead</h1>
 <div>
-<p>
-Now: OPEN Sev: MED
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>MED</dd></dl>
 </div>
 <p>
 Retroactive ticket (2026-07-07 libdog WEAVE perf session). After <a href="../DIS/DIS-047.html">DIS-047</a> removed the Pass-2 remover-union quadratic, a three-agent audit + phase profile of <code>WEAVEMerge</code> (libdog <code>WEAVE.c</code>) showed the RGA-linearise <code>$sort(sks, rga_cmp)</code> was still <del>49% of merge wall time (musl smoothsort + an indirect call per compare; 79.9 ms of 164 ms at N=10k lines, -O2), plus </del>19% more in the per-pop <code>gmap</code> hash probe of <code>PUSH_CHILDREN</code>. The emit DFS never needs a global order — only each anchor's sibling group contiguous and internally <code>(cidx DESC, ord ASC)</code>-sorted — so the sort is replaceable by O(nu) bucketing with byte-identical output. Also the n·log n term was the main superlinear creep behind <a href="../DIS/DIS-047.html">DIS-047</a>'s WEAVE04 ratio gate (the gate itself proved VM-flaky on mac CI and was disabled the same session).

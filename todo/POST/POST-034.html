@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/POST/POST-034.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>POST-034: sub gitlink bump flips the parent to selective, dropping its own dirty files</h1>
 <div>
-<p>
-Now: OPEN Sev: HIGH
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
 </div>
 <p>
 A commit-all <code>post '#msg'</code> in a tree with a dirty MOUNTED sub commits the sub and the gitlink but SILENTLY DROPS every dirty file of the parent. <code>postSubs</code> records the bump by appending a real <code>put &lt;sub&gt;#&lt;newtip&gt;</code> row to the PARENT wtlog (<code>post.js:740</code>), then <code>postOne</code> → <code>fold-decide.decide</code> re-derives <code>anyPd</code> from that just-mutated wtlog, reads &quot;something is staged&quot;, and switches the whole parent commit to SELECTIVE — so each dirty tracked file takes the <code>if (anyPd) keep(...)</code> baseline arm (<code>fold-decide.js:158</code>) instead of <code>add</code>. Data loss is silent: the post reports success. Same class as the bug <a href="POST-026.html">POST-026</a> fixed one layer up (mode decided ONCE into <code>ctx._selective</code>, <code>post.js:611-617</code>), which <code>postOne</code> never consults. Contradicts <a href="../../wiki/POST.html">POST</a> (<code>wiki/POST.mkd:64</code>): commit-all is &quot;nothing staged ANYWHERE ⇒ auto-stage all changes, dirty subs bottom-up, the parent last&quot;.

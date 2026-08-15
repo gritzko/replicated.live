@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/JS/JS-073.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>JS-073: <code>ingest.add</code> rewrites the refs ULOG non-atomically + restamps the reflog</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>ingest.add</code> lands a re-get pack into an existing shard and updates <code>refs</code> (<code>ingest.js:108-128</code>).  It drains the old reflog then rewrites the WHOLE file via <code>writeUlog</code>→<code>writeBytes</code>, which does <code>io.resize(fd,0)</code> then <code>io.writeAll(fd,b)</code> IN PLACE (<code>ingest.js:24-32</code>) — no temp file, no sync, no rename.  A crash in that window leaves <code>refs</code> empty, losing every tip; the re-get path reaches it (<code>get.js:126</code>).  The crash-safe <code>ulog.write</code> (temp+sync+rename) exists and is bypassed.  Worse, <code>writeUlog</code> re-feeds rows with NO ts (<code>ingest.js:37</code>), restamping every surviving reflog row.  Method: <a href="../../meta/work.html">Issues</a>.

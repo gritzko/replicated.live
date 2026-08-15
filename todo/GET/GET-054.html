@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/GET/GET-054.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>GET-054: wt→wt clone: reflink (CoW) intact files instead of re-materializing</h1>
 <div>
-<p>
-Now: OPEN Sev: LOW
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>LOW</dd></dl>
 </div>
 <p>
 Small optimization, requested by gritzko in chat 2026-07-24. When <code>get</code> clones from a local WORKTREE source (the <a href="./GET-038.html">GET-038</a> scenario) it decodes every checkout file from the store, though the source wt already holds the exact bytes on disk. On a CoW filesystem (btrfs/XFS/bcachefs/ZFS 2.2+/APFS) an intact source file can be reflinked into the new wt: O(metadata) checkout, shared extents until either side edits, <code>rm -rf</code> of ticket clones stays free. Blobs live inside <code>.keeper</code> TLV segments, not one-file-per-blob, so store→wt reflink is impossible — wt→wt is the only file-level CoW spot.
@@ -50,11 +57,11 @@ When cloning from a wt source, for each checkout file whose source-wt copy is in
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <h3>TODOs</h3>
-<ul>
-<li><a href="./ .html"> </a> Locate the wt-source checkout leg in graf/GET.c / jab get; confirm where source-wt file paths are known.</li>
-<li><a href="./ .html"> </a> Pick the intact-check (diff's clean-check vs hash-verify) — cheap-vs-safe call, ask gritzko if unclear.</li>
-<li><a href="./ .html"> </a> Implement <code>FICLONE</code> attempt + silent per-file fallback.</li>
-<li><a href="./ .html"> </a> Test: clone on a CoW fs shares extents (skip on ext4); clone on ext4 byte-identical to today; dirty source file is NOT reflinked.</li>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Locate the wt-source checkout leg in graf/GET.c / jab get; confirm where source-wt file paths are known.</li>
+<li class="open"><input type="checkbox" disabled> Pick the intact-check (diff's clean-check vs hash-verify) — cheap-vs-safe call, ask gritzko if unclear.</li>
+<li class="open"><input type="checkbox" disabled> Implement <code>FICLONE</code> attempt + silent per-file fallback.</li>
+<li class="open"><input type="checkbox" disabled> Test: clone on a CoW fs shares extents (skip on ext4); clone on ext4 byte-identical to today; dirty source file is NOT reflinked.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <h2>Outcome</h2>

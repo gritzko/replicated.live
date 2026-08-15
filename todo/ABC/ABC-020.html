@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/ABC/ABC-020.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>ABC-020: abc.close releases nothing — add a real unmap binding (munmap + close + fd=-1)</h1>
 <div>
-<p>
-Now: OPEN Sev: HIGH
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
 </div>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -63,16 +70,16 @@ gritzko's ruling: explicit unmap must munmap the region, close the file, and set
 <li>The naive reorder is ruled out empirically: munmap-live-THEN-transfer SIGSEGVs (transfer's copy reads unmapped pages), so stale-view neutralization + fd release need a mechanism other than <code>transfer()</code>. This is the open verdict's crux.</li>
 </ul>
 <h3>TODOs</h3>
-<ul>
-<li><a href="./x.html">x</a> red repro test test/mmapfd.js (JABCmmapfd): loop mmap+close, assert /proc/self/fd flat — RED base=9 after=77 (GC-lagged leak), GREEN base=9 after=9</li>
-<li><a href="./x.html">x</a> io.cpp JABCioMunmap (io._munmap): base ptr → FILEUnMapBase (new FILE.c helper) → FILEFindMap → FILEUnMap; no reimpl of unmap/close</li>
-<li><a href="./x.html">x</a> guard JABCMapFree — BOUNCED v1 (buf<a href="./0.html">0</a>==bytes alone): same fd + same VA base reuse passed the guard, stale husk GC unmapped the LIVE mapping, SIGSEGV</li>
-<li><a href="./x.html">x</a> v2 identity fix: static gen<a href="./FILE_MAX_OPEN.html">FILE_MAX_OPEN</a> in io.cpp, bumped per map; ctx = gen&lt;&lt;FILE_MAX_OPEN_BITS|fd (gritzko: pow2 assumed, bits define is the knob, FILE.h derives FILE_MAX_OPEN=1&lt;&lt;BITS); finalizer unmaps only if gen AND base match</li>
-<li><a href="./x.html">x</a> ABA repro folded into mmapfd.js: close-into-husk + remap same fd/base + GC churn + write-read, 2000x — SIGSEGV (exit 139) pre-fix, green after</li>
-<li><a href="./x.html">x</a> neutralize view: abc.close does b.transfer() FIRST (stale views length-0); double close = transfer throws → early return</li>
-<li><a href="./x.html">x</a> abc.close: transfer BEFORE msync (msync materializes buffer, defeats transfer's move); then msync+trim(msync-first)+io._munmap off the husk</li>
-<li><a href="./x.html">x</a> git.pack/pack/ulog/hash/heap mmap tests all green — release path shared, unchanged</li>
-<li><a href="./x.html">x</a> ctest -j16 100% (104/104); INDEX.md io._munmap entry added</li>
+<ul class="todo">
+<li class="wontfix"><input type="checkbox" disabled> <del>red repro test test/mmapfd.js (JABCmmapfd): loop mmap+close, assert /proc/self/fd flat — RED base=9 after=77 (GC-lagged leak), GREEN base=9 after=9</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>io.cpp JABCioMunmap (io._munmap): base ptr → FILEUnMapBase (new FILE.c helper) → FILEFindMap → FILEUnMap; no reimpl of unmap/close</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>guard JABCMapFree — BOUNCED v1 (buf<a href="./0.html">0</a>==bytes alone): same fd + same VA base reuse passed the guard, stale husk GC unmapped the LIVE mapping, SIGSEGV</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>v2 identity fix: static gen<a href="./FILE_MAX_OPEN.html">FILE_MAX_OPEN</a> in io.cpp, bumped per map; ctx = gen&lt;&lt;FILE_MAX_OPEN_BITS|fd (gritzko: pow2 assumed, bits define is the knob, FILE.h derives FILE_MAX_OPEN=1&lt;&lt;BITS); finalizer unmaps only if gen AND base match</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>ABA repro folded into mmapfd.js: close-into-husk + remap same fd/base + GC churn + write-read, 2000x — SIGSEGV (exit 139) pre-fix, green after</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>neutralize view: abc.close does b.transfer() FIRST (stale views length-0); double close = transfer throws → early return</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>abc.close: transfer BEFORE msync (msync materializes buffer, defeats transfer's move); then msync+trim(msync-first)+io._munmap off the husk</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>git.pack/pack/ulog/hash/heap mmap tests all green — release path shared, unchanged</del></li>
+<li class="wontfix"><input type="checkbox" disabled> <del>ctest -j16 100% (104/104); INDEX.md io._munmap entry added</del></li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>

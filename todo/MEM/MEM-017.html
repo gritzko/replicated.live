@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/MEM/MEM-017.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>MEM-017: DOGRepoFromBe <code>/.be/</code> scan reads one byte past the slice (dog/DOG.h)</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>DOGRepoFromBe</code> sets <code>end = p[1] - u8csLen(be) - 1</code> (= <code>p[1]-4</code>) but probes the 5-byte <code>/.be/</code> pattern via <code>q[0..4]</code>, so on the final iteration <code>q == p[1]-4</code> and <code>q[4]</code> dereferences <code>*p[1]</code> — one byte past the end of <code>[p[0],p[1])</code>. The over-read fires whenever the path ends in <code>/.be</code> (e.g. the documented legacy <code>/abs/path/.be</code> anchor); since these slices come from non-NUL-terminated URI/ULOG fields, it is a real 1-byte OOB read under ASan or at an mmap page edge. The goal is to fix the loop bound (and the two siblings).

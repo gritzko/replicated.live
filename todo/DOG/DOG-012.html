@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DOG/DOG-012.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>DOG-012: BRAM fallback double-counts region; alignment + recursion hardening</h1>
 <div>
-<p>
-Now: OPEN Sev: HIGH
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
 </div>
 <p>
 <code>dog/BRAM.c</code>'s <code>bram_region</code> (<code>BRAM.c:114-131</code>) silently corrupts the edit list on an inner-diff failure. When <code>BRAMu64s</code> fails (NOROOM/budget), it appends a wholesale <code>DEL(olen)+INS(nlen)</code> — but the failed recursion has usually ALREADY appended part of the region into the caller-owned <code>edl</code> (<code>BRAMu64s</code> rewinds BASS, never the <code>edl</code> gauge; failure can hit mid-way through <code>bram_core</code> steps 4/5, <code>:301-311</code>). The region is double-counted, <code>bram_region</code> returns OK, so the edit list no longer sums to the token counts and the weave/merge layer applies a WRONG diff with no error. The rollback is subtle: <code>DIFFu64AddEntry</code> coalesces into the previous entry (<code>abc/DIFFx.h:12-24</code>), so a fix must snapshot BOTH <code>edl[0]</code> and the trailing entry's value before recursing and restore both before the fallback. Method: <a href="../../meta/work.html">Issues</a>.

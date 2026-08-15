@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/CODE/CODE-020.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>CODE-020: be/ JS duplication — extract shared primitives</h1>
 <div>
-<p>
-Now: OPEN Rep: ///be/
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Rep:</dt><dd>///be/</dd></dl>
 </div>
 <p>
 An 8-agent quality review of be/ (JS jab; 61 files, <del>15kloc; 2026-07-03) found pervasive duplication: </del>a dozen low-level primitives re-implemented per file, several with SILENT divergence (hex-length gates in hashlet resolution, three <code>isMeta</code> rule-sets) — a latent-bug surface, not mere untidiness. Tracks behavior-preserving extraction into <code>be/shared/</code> (and <code>be/view/</code>) via the <a href="../../meta/work.html">work</a> loop, one worktree per group, repro-first where reconciling a divergent copy could shift behavior. JS-only; C twin <a href="CODE-017.html">CODE-017</a>/<a href="CODE-010.html">CODE-010</a>, modularity <a href="../JS/JS-090.html">JS-090</a>.
@@ -54,24 +61,24 @@ An 8-agent quality review of be/ (JS jab; 61 files, <del>15kloc; 2026-07-03) fou
 <li>Palette: <code>view/theme.js</code> is the single source (its header already claims to supersede <code>view/bro.js</code> THEME16); derive bro.js ansi64 from it, drop THEME16/cellSGR.</li>
 </ul>
 <h3>TODOs</h3>
-<ul>
-<li><a href="./ .html"> </a> reconcile hashlet→sha resolution into shared/resolve.js (one hex-gate policy); fold diff.js:373 commit.js:110 log.js:110 blob.js:68 tree.js:118 sha1.js:96 size.js:59 type.js:63 — repro-gated.</li>
-<li><a href="./ .html"> </a> unify <code>isMeta</code> onto one predicate (fix divergent empty-input return); fold classify.js:435 stage.js:51 util/ignore.js:143 — repro-gated.</li>
-<li><a href="./ .html"> </a> shared/util/fs.js stat/kind/exists probes; fold discover.js:30 recurse.js:35 classify.js:104 checkout.js:24 subs.js:41 stage.js:321 submount.js:39 store.js:61 delete.js:52 get.js:111.</li>
-<li><a href="./v.html">v</a> wtblob group — LANDED <code>57ff502a</code> as <code>shared/wtread.js readFileBytes</code> (&quot;shared readFileBytes wt read, 5 sites deduped&quot;); verified consumers stage.js:59/74, checkout.js:47-48.</li>
-<li><a href="./ .html"> </a> tok32 codec + TAG_* letters → view/theme.js; 2026-07-07: only diff.js + log.js still define <code>tok32Pack</code> (the JAB-003 hunk-output conversion retired the other copies), but view/theme.js still has NO codec — fold the last two.</li>
-<li><a href="./ .html"> </a> view/hunkbuild.js span accumulator (textParts+spans→row) + concatBytes/writeFd; fold log.js:350 commit.js:181 status.js:140 tree.js:51 ls.js:43 view/render.js:25.</li>
-<li><a href="./ .html"> </a> tree walk / descend-by-path → shared/store.js (treeWalk/descendPath/loadTreeLeaves); fold store.js:500 changedpaths.js:97 classify.js:214 get.js:260 patch.js:59 diff.js:552 log.js:312 cat.js:99.</li>
-<li><a href="./ .html"> </a> shared/uriarg.js parseVerbArg (strip <code>verb:</code> → URI → path/query/frag); fold cat.js:122 blob.js:105 tree.js:167 sha1.js:123 size.js:127 type.js:83.</li>
-<li><a href="./ .html"> </a> path helpers → shared/util/path.js (join/normRel/isMount/extOf/pathExt/trailing-slash-strip); fold put.js:214 delete.js:51 get.js:859 patch.js:82 diff.js:295 view/bro.js:631 ext.js:53 discover.js:39.</li>
-<li><a href="./ .html"> </a> palette single-source: view/theme.js supersedes view/bro.js THEME16/cellSGR; derive ansi64, drop the dead map.</li>
-<li><a href="./v.html">v</a> wire.js internal triples — LANDED <code>69e56b20</code> (&quot;CODE-020 wire dedup&quot;): <code>drainAdvert</code> (shared/wire.js:226), <code>pkt.decodeAt</code> reuse (:211), <code>curlPost</code> (:195); verified in-tree.</li>
-<li><a href="./ .html"> </a> ingest.js refs-ULOG write helper (83/108/134) + origin-normalize; share ron60 pack/unpack+epoch (ulog.js:70/85, post.js:83, dag.js).</li>
-<li><a href="./ .html"> </a> weave-merge + conflict-fence render: one helper for get.js:812 vs patch.js:278 (two whole algorithms) — behavior-sensitive, repro-gated.</li>
-<li><a href="./ .html"> </a> 2026-07-24 re-sweep: <code>warn()</code> stderr shim is a verbatim twin at graf.js:32 &amp; idxmaint.js:30 — one <code>shared/util/warn.js warnFor(prefix)</code> (keep get.js:139 fd-2 variant separate).</li>
-<li><a href="./ .html"> </a> 2026-07-24 re-sweep: URI COMPOSE by concat → <code>URI.make</code> at status.js:411 (regex-strip+re-attach <code>#pin</code> on a live URI), status.js:351, work.js:531 (<code>&quot;//&quot;+d.key</code>, cf. discover.navCwd), put.js:336 (<code>?branch#hashlet</code>, see <a href="./CODE-022.html">CODE-022</a>).</li>
-<li><a href="./ .html"> </a> 2026-07-24 re-sweep: path group — spell.js:16 <code>joinPath</code> reimplements <code>resolveInTree</code> but SILENTLY CLAMPS instead of throwing NAVESCAPE (behavior divergence, repro-gated); fold extOf/basename-by-hand weave.js:74 diff.js:66 view/bro.js:801 get.js:1301 spot/ext.js:46; noSlash twin ls.js:108/list.js:80.</li>
-<li><a href="./ .html"> </a> 2026-07-24 re-sweep: concatBytes additional inline copies view/bro.js:258/512/729/792 + log.js:464/554 (12 sites total) — one home kills all.</li>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> reconcile hashlet→sha resolution into shared/resolve.js (one hex-gate policy); fold diff.js:373 commit.js:110 log.js:110 blob.js:68 tree.js:118 sha1.js:96 size.js:59 type.js:63 — repro-gated.</li>
+<li class="open"><input type="checkbox" disabled> unify <code>isMeta</code> onto one predicate (fix divergent empty-input return); fold classify.js:435 stage.js:51 util/ignore.js:143 — repro-gated.</li>
+<li class="open"><input type="checkbox" disabled> shared/util/fs.js stat/kind/exists probes; fold discover.js:30 recurse.js:35 classify.js:104 checkout.js:24 subs.js:41 stage.js:321 submount.js:39 store.js:61 delete.js:52 get.js:111.</li>
+<li class="done"><input type="checkbox" checked disabled> wtblob group — LANDED <code>57ff502a</code> as <code>shared/wtread.js readFileBytes</code> (&quot;shared readFileBytes wt read, 5 sites deduped&quot;); verified consumers stage.js:59/74, checkout.js:47-48.</li>
+<li class="open"><input type="checkbox" disabled> tok32 codec + TAG_* letters → view/theme.js; 2026-07-07: only diff.js + log.js still define <code>tok32Pack</code> (the JAB-003 hunk-output conversion retired the other copies), but view/theme.js still has NO codec — fold the last two.</li>
+<li class="open"><input type="checkbox" disabled> view/hunkbuild.js span accumulator (textParts+spans→row) + concatBytes/writeFd; fold log.js:350 commit.js:181 status.js:140 tree.js:51 ls.js:43 view/render.js:25.</li>
+<li class="open"><input type="checkbox" disabled> tree walk / descend-by-path → shared/store.js (treeWalk/descendPath/loadTreeLeaves); fold store.js:500 changedpaths.js:97 classify.js:214 get.js:260 patch.js:59 diff.js:552 log.js:312 cat.js:99.</li>
+<li class="open"><input type="checkbox" disabled> shared/uriarg.js parseVerbArg (strip <code>verb:</code> → URI → path/query/frag); fold cat.js:122 blob.js:105 tree.js:167 sha1.js:123 size.js:127 type.js:83.</li>
+<li class="open"><input type="checkbox" disabled> path helpers → shared/util/path.js (join/normRel/isMount/extOf/pathExt/trailing-slash-strip); fold put.js:214 delete.js:51 get.js:859 patch.js:82 diff.js:295 view/bro.js:631 ext.js:53 discover.js:39.</li>
+<li class="open"><input type="checkbox" disabled> palette single-source: view/theme.js supersedes view/bro.js THEME16/cellSGR; derive ansi64, drop the dead map.</li>
+<li class="done"><input type="checkbox" checked disabled> wire.js internal triples — LANDED <code>69e56b20</code> (&quot;CODE-020 wire dedup&quot;): <code>drainAdvert</code> (shared/wire.js:226), <code>pkt.decodeAt</code> reuse (:211), <code>curlPost</code> (:195); verified in-tree.</li>
+<li class="open"><input type="checkbox" disabled> ingest.js refs-ULOG write helper (83/108/134) + origin-normalize; share ron60 pack/unpack+epoch (ulog.js:70/85, post.js:83, dag.js).</li>
+<li class="open"><input type="checkbox" disabled> weave-merge + conflict-fence render: one helper for get.js:812 vs patch.js:278 (two whole algorithms) — behavior-sensitive, repro-gated.</li>
+<li class="open"><input type="checkbox" disabled> 2026-07-24 re-sweep: <code>warn()</code> stderr shim is a verbatim twin at graf.js:32 &amp; idxmaint.js:30 — one <code>shared/util/warn.js warnFor(prefix)</code> (keep get.js:139 fd-2 variant separate).</li>
+<li class="open"><input type="checkbox" disabled> 2026-07-24 re-sweep: URI COMPOSE by concat → <code>URI.make</code> at status.js:411 (regex-strip+re-attach <code>#pin</code> on a live URI), status.js:351, work.js:531 (<code>&quot;//&quot;+d.key</code>, cf. discover.navCwd), put.js:336 (<code>?branch#hashlet</code>, see <a href="./CODE-022.html">CODE-022</a>).</li>
+<li class="open"><input type="checkbox" disabled> 2026-07-24 re-sweep: path group — spell.js:16 <code>joinPath</code> reimplements <code>resolveInTree</code> but SILENTLY CLAMPS instead of throwing NAVESCAPE (behavior divergence, repro-gated); fold extOf/basename-by-hand weave.js:74 diff.js:66 view/bro.js:801 get.js:1301 spot/ext.js:46; noSlash twin ls.js:108/list.js:80.</li>
+<li class="open"><input type="checkbox" disabled> 2026-07-24 re-sweep: concatBytes additional inline copies view/bro.js:258/512/729/792 + log.js:464/554 (12 sites total) — one home kills all.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>

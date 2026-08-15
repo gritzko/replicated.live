@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/JS/JS-092.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>JS-092: <code>hunk.feed</code> writes the TOK TLV at 1/4 the byte length</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>js/hunk.hpp</code> <code>JABChunkFeed</code> sets the toks slice END pointer with token-COUNT byte arithmetic instead of BYTE length: <code>hk.toks[1] = (tok32c*)(toks[0] + $len(toks)/sizeof(tok32))</code>. <code>toks[0]</code> is a <code>u8*</code>, so <code>+ N</code> advances N BYTES, but <code>$len(toks)/sizeof(tok32)</code> is the token COUNT — so the TOK TLV is written with <code>numtokens</code> bytes, a QUARTER of the real <code>numtokens*4</code>. Result: a fed hunk with N tok32 spans drains back only <code>N/4</code> toks (rounded), and <code>HUNKu8sDrain</code> FAILS outright (<code>next()</code> → false, the record vanishes) unless <code>4 | N</code> — because <code>hunk_drain_toks</code> rejects a <code>'K'</code> length not a multiple of <code>sizeof(tok32)</code>. Surfaced fixing <a href="../COMMIT/COMMIT-003.html">COMMIT-003</a>. Method: <a href="../../meta/work.html">Issues</a>.

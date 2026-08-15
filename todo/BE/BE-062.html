@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/BE/BE-062.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>BE-062: every <code>curlRun</code> call loses its first flag — <code>io.spawn</code> consumes argv<a href="./0.html">0</a>, so curl never sees <code>-sSf</code> (no <code>--fail</code>, no silence)</h1>
 <div>
-<p>
-Now: OPEN Sev: MED
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>MED</dd></dl>
 </div>
 <p>
 <code>io.spawn(bin, argv)</code> takes argv WITH argv<a href="./0.html">0</a>: <code>io.spawn(&quot;/bin/echo&quot;, [&quot;AAA&quot;,&quot;BBB&quot;])</code> runs echo with argv0 <code>AAA</code> and prints <code>BBB</code>. Every other spawn site obeys that — <code>classify()</code> builds <code>argv: [keeperBin, verb, sp]</code> and <code>[sshBin, dest, cmd]</code>, bin repeated. <code>curlRun</code> does not: <code>be/shared/wire.js:252</code> calls <code>io.spawn(CURL_BIN, argv)</code> where all four callers pass <code>[&quot;-sSf&quot;, &quot;-A&quot;, &quot;git/2.0&quot;, …]</code>. So <code>-sSf</code> becomes argv0 and is DROPPED. curl therefore runs without <code>-f</code>: an HTTP 404/500 is written to stdout as a body and returned as success, and without <code>-sS</code> its progress meter goes to stderr on every fetch. Visible in any http clone. Found by the <a href="../TEST/TEST-004.html">TEST-004</a> treadmill; method <a href="../../meta/work.html">Issues</a>.
@@ -56,12 +63,12 @@ curl receives every flag its caller passed, and an HTTP error surfaces as an HTT
 <li>One-line fix at the spawn site rather than four caller edits: the callers already follow the documented convention for every other spawn.</li>
 </ul>
 <h3>TODOs</h3>
-<ul>
-<li><a href="./ .html"> </a> Repro test first: a 404-returning stub server; assert today's failure mode, then the fixed one.</li>
-<li><a href="./ .html"> </a> <code>io.spawn(CURL_BIN, [CURL_BIN].concat(argv))</code> in <code>curlRun</code>.</li>
-<li><a href="./ .html"> </a> Check the error message a failed <code>-f</code> produces reads in plain words with the URL and status.</li>
-<li><a href="./ .html"> </a> Grep <code>be/</code> for any other <code>io.spawn</code>/<code>io.spawnFds</code> whose argv omits argv<a href="./0.html">0</a>.</li>
-<li><a href="./ .html"> </a> Confirm the progress meter is gone from an http clone's stderr.</li>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Repro test first: a 404-returning stub server; assert today's failure mode, then the fixed one.</li>
+<li class="open"><input type="checkbox" disabled> <code>io.spawn(CURL_BIN, [CURL_BIN].concat(argv))</code> in <code>curlRun</code>.</li>
+<li class="open"><input type="checkbox" disabled> Check the error message a failed <code>-f</code> produces reads in plain words with the URL and status.</li>
+<li class="open"><input type="checkbox" disabled> Grep <code>be/</code> for any other <code>io.spawn</code>/<code>io.spawnFds</code> whose argv omits argv<a href="./0.html">0</a>.</li>
+<li class="open"><input type="checkbox" disabled> Confirm the progress meter is gone from an http clone's stderr.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>

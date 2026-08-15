@@ -3,8 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>work</title>
+<title>The parallel agent ticket-driven fix-and-land work loop</title>
+<meta property="og:title" content="The parallel agent ticket-driven fix-and-land work loop">
+<meta property="og:description" content="Issues are cleared by a fleet of background agents — one per ticket, each in its own isolated clone. In fact, agents are incredibly dumb and mess things up all the time. Most of the time, they break way more than they fix. For that reason, we use these procedures to discard their bullshit output most of the time, hoping the rest is OK.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/meta/work.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -36,25 +48,35 @@ Issues are cleared by a fleet of background agents — one per ticket, each in i
 </ol>
 <h2>Typical CLI commands</h2>
 <ol>
-<li>Worktree life cycle (in a VM, <code>SRC_ROOT=$HOME</code> normally)<ul>
+<li>Worktree life cycle (in a VM, <code>WORK_ROOT</code> in the <code>work/</code> dir in the <a href="../wiki/Project.html">project</a>)<ul>
 <li><code>be=jab</code> the JavaScript impl (reads js files from <code>be</code>, not <code>node_modules</code>)</li>
-<li><code>mkdir $SRC_ROOT/&lt;TICKET&gt;</code>, then either </li>
-<li><code>cd $SRC_ROOT/&lt;TICKET&gt;</code><ul>
-<li>a <strong>store-backed worktree</strong>: <code>$be get file:/$SRC_ROOT/.be?/project</code></li>
-</ul>
-</li>
+<li><code>mkdir $WORK_ROOT/&lt;TICKET&gt;</code>, then either </li>
+<li><code>cd $WORK_ROOT/&lt;TICKET&gt;</code> (e.g. ticket <code>TKT-123</code>, topic <code>TKT</code>)</li>
 </ul>
 </li>
 </ol>
 <p>
-	  - a <strong>full clone</strong>: <code>$be get be://localhost?/project</code>
+	  - clone options, in the order of preference (asc), assuming we clone <code>be</code> 	      - a <strong>full clone</strong>: <code>$be get be://localhost/project</code> (Victorian stale)
+</p>
+<div>
+<div>
+<ul>
+<li>a <strong>store-backed worktree</strong>: <code>$be get file:/$SRC_ROOT/.be/project</code> (Edwardian)</li>
+</ul>
+</div>
+</div>
+<p>
+		  - a main tree clone: <code>be get ///be/</code> (preferred by default) 		  - a topic tree clone: <code>be get //&lt;TOPIC&gt;/</code> (preferred for interdependent ticket families to minimize main tree disturbance)
 </p>
 <div>
 <ul>
-<li><code>$be put &lt;file&gt;</code> staging</li>
-<li><code>$be post &quot;TICKET-123: comment&quot;</code> committing</li>
+<li><code>$be put &lt;file&gt;</code> staging (when wrapping up the work)</li>
+<li><code>$be post &quot;TKT-123: comment&quot;</code> committing (agents commit only on user's explicit request)</li>
 </ul>
 </div>
+<p>
+	  - <code>$be post</code> push to the upstream (only on explicit request) 	  - for tickets touching several repos, use <code>//&lt;TICKET&gt;-be</code>, <code>//&lt;TICKET&gt;-jab</code>, etc worktrees for different repos
+</p>
 <ol>
 <li>Building<ul>
 <li><code>cmake</code> is used for everything</li>
@@ -66,6 +88,7 @@ Issues are cleared by a fleet of background agents — one per ticket, each in i
 <li><code>$be</code> or <code>$be status</code> see the state of the tree,</li>
 <li><code>$be diff</code> or <code>$be diff path</code> see the changes, including branch ahead/behind,</li>
 <li><code>$be get</code> update from the tracked branch, <code>$be get \?</code> from the trunk.</li>
+<li>Update is recommended before reporting you are done (and rerun the tests).</li>
 </ul>
 </li>
 <li>Relevant projects<ul>
@@ -92,10 +115,18 @@ I repeat: don't do this!
 <ol>
 <li>copying worktrees around with cp -r</li>
 <li>parsing URIs with regexes (or manually in C!) or manually composing them</li>
-<li>do not touch the main tree; certainly do not do any rev control there;<p>
-may only do small edits with <strong>explicit</strong> permission; work in worktrees
-</p>
-</li>
+<li>do not touch the main tree; certainly do not do any rev control there; may only do small edits with <strong>explicit</strong> permission; work in worktrees</li>
 </ol>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

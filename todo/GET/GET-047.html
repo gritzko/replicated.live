@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/GET/GET-047.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>GET-047: get invocation matrix — cover every <a href="../../wiki/GET.html">/wiki/GET</a> patterns cell with tests</h1>
 <div>
-<p>
-Now: OPEN
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
 </div>
 <p>
 Audit + coverage ticket along the lines of <a href="../POST/POST-027.html">POST-027</a>: cross every bullet of <a href="../../wiki/GET.html">/wiki/GET</a> &quot;Summary of invocation patterns&quot; (rewritten by gritzko 2026-07-16) with the section's own axes and verify each meaningful cell has a test in <code>test/</code>; fill the gaps. The axes: FORM 1.1-1.5 (bare/tracked, <code>?branch</code>+relative, <code>#hash</code> detach, <code>#~1</code> rewind, schemed network leg — the only store-writing pattern), MODE 2.0-2.5 (bootstrap clone, normal weave, <code>get!</code> force, narrowed recover, narrowed force, cross-ref cherry-pick), HISTORY 3.1-3.4 (ahead/behind/same/divergent-weave-errs-out), SUBS 4.0-4.2 (<code>--nosub</code>, pin-attached recursion ignoring differently-attached subs, <code>get!</code> recursion). Also the ruled corners: detached bare get = full-tree recovery at BASE (target=base, missing files restored — gritzko 2026-07-16), track/base record semantics (recentmost get = track + base), unweavable divergent leaf errs out loudly (<a href="../PATCH/PATCH-012.html">PATCH-012</a>).
@@ -57,17 +63,23 @@ Every meaningful cell covered; impossible/degenerate cells explicitly marked so.
 <li>Audit method held: 4 parallel workers read all 18 test/get run.sh + test/wire + test/sub* + libs/goldens at tip fe042740; verdicts below. Zero spec-contradicting MISMATCHes found.</li>
 </ul>
 <h3>TODOs</h3>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> audit: FORM axis — covered: bare-branch FF (get/branch-bare), ?branch, //wt operand (wt-operand, gitlink-fork, nav-submod), #hash detach (detach, detach-record — via <code>?&lt;sha&gt;</code> spelling only), #~1 (rewind), file:/ssh:/http:/be: legs incl. golden parity</li>
+<li class="done"><input type="checkbox" checked disabled> audit: MODE axis — covered: bootstrap clone all transports (2.0), dirty weave + loud conflict (2.1: get/dirty A+A2, confdrop), get! whole-tree (2.2 half), narrowed recover (2.3: get/restore)</li>
+<li class="done"><input type="checkbox" checked disabled> audit: HISTORY axis — covered: AHEAD × {bare-branch, bare-remote, ?branch, schemed}; BEHIND via #hash/#~1 (pin, rewind); DIVERGENT-by-dirty weave + conflict refusal (dirty, confdrop)</li>
+<li class="done"><input type="checkbox" checked disabled> audit: SUBS axis — covered: clone recursion depth 1 (sub/cycle) + depth 2 (sub/pinuri-nested), get! into an attached sub (sub/untracked), same-source URIs + .gitmodules fallback units (submount.js), NAVESCAPE guard</li>
+<li class="done"><input type="checkbox" checked disabled> write phase (3 workers, one clone <code>work/GET-047</code>): 10 tests GREEN + registered, suite 256/256 — trunk-switch, tag-local, store-readonly, force-narrow, restore-deleted, behind-branch, behind-remote, noop-same, sub/pin-advance, sub/force-sub-attach</li>
+</ul>
 <ul>
-<li><a href="./v.html">v</a> audit: FORM axis — covered: bare-branch FF (get/branch-bare), ?branch, //wt operand (wt-operand, gitlink-fork, nav-submod), #hash detach (detach, detach-record — via <code>?&lt;sha&gt;</code> spelling only), #~1 (rewind), file:/ssh:/http:/be: legs incl. golden parity</li>
-<li><a href="./v.html">v</a> audit: MODE axis — covered: bootstrap clone all transports (2.0), dirty weave + loud conflict (2.1: get/dirty A+A2, confdrop), get! whole-tree (2.2 half), narrowed recover (2.3: get/restore)</li>
-<li><a href="./v.html">v</a> audit: HISTORY axis — covered: AHEAD × {bare-branch, bare-remote, ?branch, schemed}; BEHIND via #hash/#~1 (pin, rewind); DIVERGENT-by-dirty weave + conflict refusal (dirty, confdrop)</li>
-<li><a href="./v.html">v</a> audit: SUBS axis — covered: clone recursion depth 1 (sub/cycle) + depth 2 (sub/pinuri-nested), get! into an attached sub (sub/untracked), same-source URIs + .gitmodules fallback units (submount.js), NAVESCAPE guard</li>
-<li><a href="./v.html">v</a> write phase (3 workers, one clone <code>work/GET-047</code>): 10 tests GREEN + registered, suite 256/256 — trunk-switch, tag-local, store-readonly, force-narrow, restore-deleted, behind-branch, behind-remote, noop-same, sub/pin-advance, sub/force-sub-attach</li>
 <li>RULED (gritzko 2026-07-16): NO tickets for red cells — fix the impl in place, one worker per cluster; 10 red repros sit unregistered as <code>run.sh.broken</code>:</li>
-<li><a href="./v.html">v</a> FIX FORM cluster: inRepoSeed now consults <code>attachedBranch()</code> — detached bare get recovers at BASE (deleted restored, dirty kept, record stays <code>#&lt;base&gt;</code>); pure <code>#&lt;sha&gt;</code> detaches; <code>?./</code>/<code>?../</code> via new <code>branchlib.resolveRel</code> (post's resolveTarget delegates to it); wt/remote tracks re-resolve/re-fetch on bare get; every append preserves the track (decay gone). Touched get.js, branch.js, store.js (additive origin row on eachRemote), post.js.</li>
-<li><a href="./v.html">v</a> FIX SUBS cluster: <code>nosub</code> gates both gitlink leaf branches (mount + unmount) off be.flags; <code>subAttachedElsewhere</code> (the ONE attach reader vs the ONE track writer, force short-circuit first) gates mountGitlink + recurseSubMounts — differently-attached subs untouched by normal get, <code>get!</code> overrides, fresh/unmounted subs still mount.</li>
-<li><a href="./v.html">v</a> FIX MODE cluster: force-only <code>sweepUntracked</code> (classify.wtScan = status's unk set); <code>cherryPick</code> for blob-rpath <code>//WT/path/file</code> (scoped force-overwrite, NO wtlog record — D4 restore precedent); DAG-diverged get weaves each write leaf off <code>dag.mergeBase</code> (new in shared/dag.js), unweavable stays the PATCH-012 loud refusal. DEVIATION suite-pinned: the diverged DELETE leaf stays tree-driven (branch-relative pins that <code>?../sib</code> removes child-only files); only write leaves weave.</li>
-<li><a href="./ .html"> </a> deferred cells: wire+subs recursion (needs ruling), https:// literal (low risk), over-cap unweavable rides work/PATCH-012</li>
+</ul>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> FIX FORM cluster: inRepoSeed now consults <code>attachedBranch()</code> — detached bare get recovers at BASE (deleted restored, dirty kept, record stays <code>#&lt;base&gt;</code>); pure <code>#&lt;sha&gt;</code> detaches; <code>?./</code>/<code>?../</code> via new <code>branchlib.resolveRel</code> (post's resolveTarget delegates to it); wt/remote tracks re-resolve/re-fetch on bare get; every append preserves the track (decay gone). Touched get.js, branch.js, store.js (additive origin row on eachRemote), post.js.</li>
+<li class="done"><input type="checkbox" checked disabled> FIX SUBS cluster: <code>nosub</code> gates both gitlink leaf branches (mount + unmount) off be.flags; <code>subAttachedElsewhere</code> (the ONE attach reader vs the ONE track writer, force short-circuit first) gates mountGitlink + recurseSubMounts — differently-attached subs untouched by normal get, <code>get!</code> overrides, fresh/unmounted subs still mount.</li>
+<li class="done"><input type="checkbox" checked disabled> FIX MODE cluster: force-only <code>sweepUntracked</code> (classify.wtScan = status's unk set); <code>cherryPick</code> for blob-rpath <code>//WT/path/file</code> (scoped force-overwrite, NO wtlog record — D4 restore precedent); DAG-diverged get weaves each write leaf off <code>dag.mergeBase</code> (new in shared/dag.js), unweavable stays the PATCH-012 loud refusal. DEVIATION suite-pinned: the diverged DELETE leaf stays tree-driven (branch-relative pins that <code>?../sib</code> removes child-only files); only write leaves weave.</li>
+<li class="open"><input type="checkbox" disabled> deferred cells: wire+subs recursion (needs ruling), https:// literal (low risk), over-cap unweavable rides work/PATCH-012</li>
+</ul>
+<ul>
 <li>Decisions to ratify: cherry-pick writes NO record; <code>get!</code> keeps gitignored files (unk-set semantics, no <code>-x</code>); post's <code>//WT</code> advance with force now sweeps untracked in the target; old buggy <code>//X/file#sha</code> track rows now bare-get into a scoped re-pick, not a whole-tree switch; ssh clones still record <code>?master#&lt;sha&gt;</code> (schemed-URI-as-track is plumbed, needs a ruling).</li>
 </ul>
 <h3>Blockers and bummers</h3>

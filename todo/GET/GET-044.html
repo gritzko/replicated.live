@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/GET/GET-044.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>GET-044 <a href="./JS.html">JS</a>: wire.fetch buffers the WHOLE pack in RAM — stream to a tmp file in the shard</h1>
 <div>
-<p>
-Now: OPEN Sev: HIGH
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
 </div>
 <p>
 <code>jab get</code> of a big remote holds the entire packfile in process memory: <code>wire.js fetch</code> reads the raw pack to EOF into a <code>chunks[]</code> array and then CONCATENATES it into one <code>Uint8Array</code> — peak RSS <del>2× pack size — and <code>ingest</code> writes that single buffer out afterwards. Observed live this session: <code>jab get ssh://git@github.com/torvalds/linux.git</code> (pid 14199) at RSS 2.78 GB after 2.7 GB received, fd table shows NO store file open (only the ssh pipe) — a Linux-scale pack (</del>3.5 GB) peaks at ~7 GB and OOMs modest boxes. Fix = git's own model: stream the pack into a <code>tmp_pack_*</code> file INSIDE the destination shard, hash as it streams, index/ingest off mmap, atomically rename into place on a verified trailer. Method: <a href="../../meta/work.html">work</a>.

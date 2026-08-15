@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/MEM/MEM-037.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>MEM-037: abc/FILE.c — FILEMapFD/FILEBookFD leak the opened fd on internal error (root cause)</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 The lowest-level mapping primitives leak the file descriptor their wrappers hand them whenever the map/book itself fails. FILEMapRO/FILEMapRW/FILEMapCreate(At) and FILEBook/FILEBookRO/FILEBookAt/FILEBookCreate all <code>call(FILEOpen)</code> to get an fd, then pass it to FILEMapFD (FILE.c:671) / FILEBookFD (FILE.c:781), whose internal error branches <code>return</code> WITHOUT <code>close()</code>-ing that fd. Every per-dir 'leaks the fd on map failure' finding in the 2026-06-11 sweep traces back here, so this is the highest-leverage fix. abc is core — surface the diff for review. From the <a href="MEM.html">MEM</a> error-path sweep.

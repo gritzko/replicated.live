@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/MEM/MEM-040.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>MEM-040: graf — verb error paths leak the 18 MB owned graf open (be head / be map) and two init mmaps</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 Several graf verbs that open their own graf context (own_open=true, ~18 MB of mmaps: 16 MB GRAF_ARENA + 2×1 MB obj bufs, plus keeper/kv) leak it whenever a post-open call() early-returns. <code>be head ?&lt;branch&gt;</code> (LOG.c:978 graf_head_ahead_behind) and <code>be map:</code> (MAP.c:229 GRAFMap) both own-open then hit fallible GRAFSwitchBranch/other calls that return without GRAFClose. Plus two partial-acquisition mmap leaks: WEAVEDecInit (GET.c:568) leaks 1-6 of its 7 regions on a mid-init map failure, and DAGAncestorsTunable (DAG.c:237) leaks the <code>queue</code> anonymous mmap when the immediately-following a_carve fails. All are reachable real error paths, not OOM-only. From the <a href="MEM.html">MEM</a> sweep.

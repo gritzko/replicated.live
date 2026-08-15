@@ -3,8 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DELETE</title>
+<title>DELETE: remove files, branches, and remote refs</title>
+<meta property="og:title" content="DELETE: remove files, branches, and remote refs">
+<meta property="og:description" content="DELETE is PUT's counterpart: where PUT writes refs and stages files, DELETE removes them — by writing to the same ulogs. DELETE stages a tracked file's removal as a delete row, tombstones a branch label in the reflog, or deletes a remote ref; an in-tree file is also unlinked on disk at once, after a dirty check. DELETE is one of the Verbs.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/wiki/DELETE.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -19,7 +31,7 @@ DELETE is <a href="PUT.html">PUT</a>'s counterpart: where PUT writes refs and st
 <li>Immediate + staged: a file is unlinked at once and a <code>delete</code> row is appended for the next <a href="POST.html">POST</a> (git-rm semantics).</li>
 <li>Dirty-safe: deleting a modified file refuses <code>DELDIRTY</code> (mtime, then a hash double-check); <code>--force</code> removes it anyway.</li>
 <li>A branch removal is a reflog tombstone; it refuses <code>SNIFFFAIL</code> for cur, trunk, or a non-leaf; <code>-r</code>/<code>--force</code> drops a tree.</li>
-<li>The network is touched only to push: <code>be delete //origin</code> drops the local cache; <code>//origin?feat</code> opens the wire to push.</li>
+<li>The network is touched only to push: <code>be delete ssh://origin?feat</code> opens the wire to push-delete a remote ref.</li>
 </ul>
 <h2>CLI use</h2>
 <p>
@@ -29,7 +41,7 @@ The DELETE forms span single files, subtrees, branches, and remote refs; a bare 
 <li>Bare <code>be delete</code> stages every tracked file missing on disk — one <code>delete</code> row each, the mirror of bare PUT.</li>
 <li><code>be delete file.c</code> unlinks and stages the removal; <code>be delete src/</code> pre-flights, then drops a whole clean subtree.</li>
 <li><code>be delete ?feat/fix1</code> tombstones a leaf branch (not cur/trunk); <code>be delete -r ?feat</code> drops the whole subtree, leaves first.</li>
-<li><code>be delete //origin?feat</code> push-deletes the remote ref; <code>be delete //origin</code> drops only the cached remote shard.</li>
+<li><code>be delete ssh://origin?feat</code> push-deletes the remote ref.</li>
 </ul>
 <h2>Errors</h2>
 <p>
@@ -40,5 +52,16 @@ DELETE refuses rather than lose unsaved work or orphan a worktree; a DELETE of a
 <li><code>SNIFFFAIL</code> — branch refusal: cur, trunk, or a non-leaf (so cur's ancestors too); <code>-r</code>/<code>--force</code> drops the subtree.</li>
 <li>An already-absent path is an OK no-op — removing what's already gone is not an error.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

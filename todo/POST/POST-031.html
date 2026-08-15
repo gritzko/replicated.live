@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/POST/POST-031.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>POST-031: dag walks fail on post-Jun-29 commits — false non-FF + false &quot;broken tree&quot; (stale graf.idx suspected)</h1>
 <div>
-<p>
-Now: OPEN Sev: HIGH
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
 </div>
 <h2>Input</h2>
 <h3>Context</h3>
@@ -62,33 +69,37 @@ Repro first, then make <code>post ?</code> FF the trunk in exactly this shape.
 <ul>
 <li>SUSPECT (1) DISPROVEN by forensics on /tmp copies of the live shards: every walk the incidents blamed succeeds on the real bytes.  journal: mergeBase(08e9fdb2,7e68484e)=7e68484e; be: isAncestor(00101ce1,0d47c8ec)=true.  graf.idx is the NATIVE keeper's index; jab reads keeper.idx runs, and those covered every pack (ingest/idxmaint heal on open).  No index miss.</li>
 <li>REAL cause 1 (post <code>?</code> refusal): postSubs fans ctx.args into every mounted sub, so the sub's postOne re-ran the <code>?</code> bare- advance on the SUB's OWN shard.  be/test's shard (beagle-ext- tests) trunk 57b4996a vs pin 30b12f5b genuinely diverged, and that sub-shard refusal bubbled up spelled as the parent's <code>?</code>. POST-030 already rules a recursed sub must not self-advance; it was enforced only for the no-Query form.  Fix: postOne returns early on ctx._sub for the Query bare-advance arm too (verbs/post/post.js:863 arm).  The parent then FFs fine.</li>
-<li>REAL cause 2 (broken-tree throw): journal's html sub was RE- CLONED from github Jul 17 (html/.be is a fresh colocated store); the parent's track-tree pin a63a583c does not exist in it.  quadModel treated the dangling pin as a real tip, mergeBase found no common ancestor, and quad.js:146 killed the WHOLE bare <code>status</code> (and the :post that renders one). Fix: a track pin with no readable commit in the sub's store degrades to the no-track rule (track:=base), per the wiki Status.mkd degenerate-roots family.  The genuine two-real- tips broken-tree refusal STAYS (test/quad/model.js leg 3).</li>
+<li>REAL cause 2 (broken-tree throw): journal's html sub was RE- CLONED from github Jul 17 (html/.be is a fresh colocated store); the parent's track-tree pin a63a583c does not exist in it.  quadModel treated the dangling pin as a real tip, mergeBase found no common ancestor, and quad.js:146 killed the WHOLE bare <code>status</code> (and the :post that renders one).<dl class="meta"><dt>Fix:</dt><dd>a track pin with no readable commit in the sub's store</dd></dl>
+<p>
+degrades to the no-track rule (track:=base), per the wiki Status.mkd degenerate-roots family.  The genuine two-real- tips broken-tree refusal STAYS (test/quad/model.js leg 3).
+</p>
+</li>
 <li>Why log/log: survived: log renders the wtlog/refs rows of its own anchor shard; it never evaluates another shard's verdict.</li>
 <li>Fix is quad/post-seam, not dag: the walks were CORRECT; the verdicts were minted in the wrong shard (1) or from a dangling pin (2).  dag.js untouched.</li>
 </ul>
 <h3>TODOs</h3>
-<ul>
-<li><a href="./v.html">v</a> repro as a test: test/post/sub-diverged (both faces RED<div>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> repro as a test: test/post/sub-diverged (both faces RED<div>
 <p>
 on pre-fix code, exact incident exceptions)
 </p>
 </div>
 </li>
-<li><a href="./v.html">v</a> trace the walk; pinned: NOT graf staleness — sub-shard<div>
+<li class="done"><input type="checkbox" checked disabled> trace the walk; pinned: NOT graf staleness — sub-shard<div>
 <p>
 fan-out (1) + dangling re-clone pin (2), evidence above
 </p>
 </div>
 </li>
-<li><a href="./v.html">v</a> fix; repro GREEN both faces; refuse/adv/quad suites green</li>
-<li><a href="./x.html">x</a> graf.idx staleness — N/A (native index; jab keeper.idx<div>
+<li class="done"><input type="checkbox" checked disabled> fix; repro GREEN both faces; refuse/adv/quad suites green</li>
+<li class="wontfix"><input type="checkbox" disabled> <del>graf.idx staleness — N/A (native index; jab keeper.idx</del><div>
 <p>
 runs were complete; heal-on-open verified on copies)
 </p>
 </div>
 </li>
-<li><a href="./v.html">v</a> dirty-wt leg (unstaged parent edit rides the <code>?</code> advance)</li>
-<li><a href="./v.html">v</a> replayed on a FULL /tmp replica of the live trees: bare<div>
+<li class="done"><input type="checkbox" checked disabled> dirty-wt leg (unstaged parent edit rides the <code>?</code> advance)</li>
+<li class="done"><input type="checkbox" checked disabled> replayed on a FULL /tmp replica of the live trees: bare<div>
 <p>
 status renders all sub hunks; be <code>post ?</code> FFs trunk 00101ce1 -&gt; 0d47c8ec; journal commit lands staged be/html gitlinks.  Live maintrees left untouched — the real <code>:post</code> / <code>post ?</code> re-runs are gritzko's call.
 </p>

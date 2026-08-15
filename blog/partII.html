@@ -3,8 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>partII</title>
+<title>II. Beagle SCM: HTTP/CLI interface</title>
+<meta property="og:title" content="II. Beagle SCM: HTTP/CLI interface">
+<meta property="og:description" content="Part I. SCM as a database for the code">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/blog/partII.html">
+<meta property="og:image" content="https://replicated.live/blog/img/nav.jpg">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -70,14 +83,8 @@ If we want to limit ourselves to 4 basic kinds of <strong>maneuvers</strong>, th
 We assume the current worktree is linked to one fixed place in the repo.  Things look a bit too primitive so far. Then, we chalk the repo into squares:
 </p>
 <ol>
-<li>there are <strong>repos</strong> which have public identity,<p>
-their names are FQDN-like, e.g. <code>main.team.company.com</code> or <code>release.product.entity.org</code>;
-</p>
-</li>
-<li>orthogonally, repos are divided into <strong>projects</strong>, also with public<p>
-identity, e.g. <code>@gritzko/librdx</code> (like a GitHub path). So a full URI is like <code>http://main.replicated.live/@gritzko/librdx</code>
-</p>
-</li>
+<li>there are <strong>repos</strong> which have public identity, their names are FQDN-like, e.g. <code>main.team.company.com</code> or <code>release.product.entity.org</code>;</li>
+<li>orthogonally, repos are divided into <strong>projects</strong>, also with public identity, e.g. <code>@gritzko/librdx</code> (like a GitHub path). So a full URI is like <code>http://main.replicated.live/@gritzko/librdx</code></li>
 </ol>
 <p>
 Here the maneuver #4 gets subdivided into submaneuvers, the most frequent case being changeset exchange between repos. Note that repos are not scoped to a project. When we create a repo, we &quot;fork the world&quot;. That mostly makes sense because projects form their own dependency graphs anyway, so version <strong>alpha</strong> of project <strong>A</strong> needs version <strong>beta</strong> of project <strong>B</strong> and so on. Once we create a repo, we <strong>may</strong> put in all the relevant code. With syntax-aware CRDT merge, we can be a bit bolder in forking things, as we retain enough metadata to ease merges.
@@ -93,16 +100,10 @@ The last caveat for those familiar with <code>git</code> (all of us) is <strong>
 Back to the original question, lets see whether an URI based referencing language and 4 HTTP verbs are sufficient to express the operations we want. GET, POST, PUT and DELETE correspond to maneuvers #2, #1, #4, #4 resp. Maneuver #3 is <code>cp</code>, <code>rm</code>, <code>vim</code>, etc.
 </p>
 <ol>
-<li><code>GET http://repo.team.entity.org/project?branchA</code> simple checkout<p>
-of a particular branch version (may need to clone first);
-</p>
-</li>
+<li><code>GET http://repo.team.entity.org/project?branchA</code> simple checkout of a particular branch version (may need to clone first);</li>
 <li><code>GET //repo2</code> switching the repo;</li>
 <li><code>GET /project/dir/file.txt</code> checkout one file;</li>
-<li><code>POST ./file.txt</code> stage one file (it gets imported into the repo,<p>
-but the branch does not move yet);
-</p>
-</li>
+<li><code>POST ./file.txt</code> stage one file (it gets imported into the repo, but the branch does not move yet);</li>
 <li><code>DELETE somefile.txt</code> delete;</li>
 <li><code>PUT ./file.txt?branchB</code> merge in file changes from other branch;</li>
 <li><code>GET ?branchB</code> switch the branch;</li>
@@ -113,10 +114,7 @@ but the branch does not move yet);
 <li><code>PUT //repo2?branchC</code> merge a branch of another repo;</li>
 <li><code>POST ?stash; GET ?branchA</code> stash the changes;</li>
 <li><code>POST ?branchA</code> commit changes (import, move the branch);</li>
-<li><code>GET ?branchA#has(int,getX)</code> from the branch, list all AST* nodes that<p>
-have children <code>int</code> and <code>getX</code> (likely declaration and definition of <code>int getX()</code>;
-</p>
-</li>
+<li><code>GET ?branchA#has(int,getX)</code> from the branch, list all AST* nodes that have children <code>int</code> and <code>getX</code> (likely declaration and definition of <code>int getX()</code>;</li>
 <li><code>GET //repo/project/dir#has(int,getX)</code> same but fancier;</li>
 <li><code>PUT http://remote.repo.team.entity.org</code> big time pull;</li>
 </ol>
@@ -141,7 +139,7 @@ Code is hypertext, IDE is a browser. Beagle is your curl/wget, a simple reliable
 Same as plumbing, porcelain commands implement three maneuvers:
 </p>
 <p>
-  * <code>get</code> data from repo to worktree,   * <code>post</code> data from worktree to repo,   * <code>put</code> moves data laterally in a repo.
+  * <code>get</code> data from repo to worktree, * <code>post</code> data from worktree to repo, * <code>put</code> moves data laterally in a repo.
 </p>
 <p>
 There are some shortcuts for combos, but most of work is get, post, put. The most straightforward linear workflow looks like:
@@ -199,7 +197,7 @@ There are some shortcuts for combos, but most of work is get, post, put. The mos
 Mixing branches is done by the same <code>get</code> verb but with multiple arguments. Use worktree as a palette where you mix and blend colors. Once satisfied, lay the paint on the canvas (post it back to the repo).
 </p>
 <p>
-  * <code>be get ?branchA ?branchB ?head</code>   * <code>be post ?branchABH</code>
+  * <code>be get ?branchA ?branchB ?head</code> * <code>be post ?branchABH</code>
 </p>
 <p>
 CRDT merge never fails, technically. That does not guarantee that your worktree would build or run correctly. Semantics is entirely your(s LLM's) responsibility. Beagle allows to merge/ undo/ juggle changes quickly. That is the best thing SCM can do.
@@ -209,7 +207,7 @@ CRDT merge never fails, technically. That does not guarantee that your worktree 
 There are aliases/combos for typical cases, e.g.
 </p>
 <p>
-  * <code>be come ?branch</code>              make the worktree version into a branch   * <code>be diff</code>                      diff to the head (default, 3way)   * <code>be lay</code>                       make a waypoint commit   * <code>be mark &quot;Comment&quot; &quot;Story...&quot;</code> make a &quot;classic&quot; verbose commit   * <code>be moan</code>                      rollback one post   * <code>be rate</code>                      mark the current commit   * <code>be fit</code>                       merge into the head (<code>be post ?head</code>)   * <code>be</code>                           overview of the current state (more than <code>status</code>)
+  * <code>be come ?branch</code>              make the worktree version into a branch * <code>be diff</code>                      diff to the head (default, 3way) * <code>be lay</code>                       make a waypoint commit * <code>be mark &quot;Comment&quot; &quot;Story...&quot;</code> make a &quot;classic&quot; verbose commit * <code>be moan</code>                      rollback one post * <code>be rate</code>                      mark the current commit * <code>be fit</code>                       merge into the head (<code>be post ?head</code>) * <code>be</code>                           overview of the current state (more than <code>status</code>)
 </p>
 <p>
 Some shells treat <code>?</code> as a special symbol, we may skip it most of the time.  There is risk of URI <code>?query</code> being confused for a file name and other things, so in this doc <code>?</code> is never skipped. Still, <code>be get ?featureA ?tweakB</code> should be OK (most of the time).
@@ -219,7 +217,7 @@ Some shells treat <code>?</code> as a special symbol, we may skip it most of the
 Beagle is balanced differently than <code>git</code>. There is one Beagle repo per system, Beagle repos are between git branches and git repos, while Beagle branches are lighter than git branches (may see them as patch stacks). Approximate command equivalents:
 </p>
 <p>
-  * <code>git init dir/</code>               <code>be post dir/</code>   * <code>git stash push</code>               there is no difference between stash
+  * <code>git init dir/</code>               <code>be post dir/</code> * <code>git stash push</code>               there is no difference between stash
 </p>
 <div>
 <div>
@@ -230,7 +228,7 @@ Beagle is balanced differently than <code>git</code>. There is one Beagle repo p
 <div>
 <div>
 <p>
-   and any other commit, so <code>be post ?mystash</code>    is enough
+   and any other commit, so <code>be post ?mystash</code> is enough
 </p>
 </div>
 </div>
@@ -241,7 +239,7 @@ Beagle is balanced differently than <code>git</code>. There is one Beagle repo p
 </div>
 </div>
 <p>
-  * <code>git add a.txt b.txt</code>          same, <code>be post a.txt b.txt</code>   * <code>git clone http://uri</code>        <code>be get http://repo.team.entity.org</code>   * <code>git push origin a:b</code>         <code>be post http://repo</code> repo names are FQDNs   * <code>git pull origin b:a</code>         <code>be get http://repo ? &amp;&amp; be post</code> where <code>?</code>
+  * <code>git add a.txt b.txt</code>          same, <code>be post a.txt b.txt</code> * <code>git clone http://uri</code>        <code>be get http://repo.team.entity.org</code> * <code>git push origin a:b</code>         <code>be post http://repo</code> repo names are FQDNs * <code>git pull origin b:a</code>         <code>be get http://repo ? &amp;&amp; be post</code> where <code>?</code>
 </p>
 <div>
 <div>
@@ -263,7 +261,7 @@ Beagle is balanced differently than <code>git</code>. There is one Beagle repo p
 </div>
 </div>
 <p>
-				   repo/branch formula   * <code>git merge xxx</code>               <code>be get ?branchA ?branchB</code>   * <code>git status</code>                  <code>be</code>
+				   repo/branch formula * <code>git merge xxx</code>               <code>be get ?branchA ?branchB</code> * <code>git status</code>                  <code>be</code>
 </p>
 <p>
 Beagle (will) implement combos for key git commands.
@@ -295,7 +293,7 @@ We started with a claim that Beagle is a database, not a filesystem. It stores a
 </div>
 </div>
 <p>
-  * <code>be get ?head ?branch</code>         blend head and branch (no repo changes)   * <code>be put ?branch#DoThing</code>       cherry pick a symbol from a branch
+  * <code>be get ?head ?branch</code>         blend head and branch (no repo changes) * <code>be put ?branch#DoThing</code>       cherry pick a symbol from a branch
 </p>
 <div>
 <div>
@@ -317,7 +315,7 @@ We started with a claim that Beagle is a database, not a filesystem. It stores a
 </div>
 </div>
 <p>
-  * <code>be get ?branch#DoThing</code>       same, but no commit, worktree only   * <code>be put ./file.txt?branch</code>     cherry pick a file from a branch   * <code>be get ./file.txt?branch</code>     get a file from a branch (no commit)   * <code>be get ./file.txt?branch#Some</code>  cherry pick a symbol in a file   * <code>be put ?featureA&amp;featureB</code>    merge in two branches   * <code>be post ?newbranch</code>           fork   * <code>be post //newrepo</code>            big time fork   * <code>be diff ?head#SomeClass</code>      find any changes to SomeClass since <code>head</code>
+  * <code>be get ?branch#DoThing</code>       same, but no commit, worktree only * <code>be put ./file.txt?branch</code>     cherry pick a file from a branch * <code>be get ./file.txt?branch</code>     get a file from a branch (no commit) * <code>be get ./file.txt?branch#Some</code>  cherry pick a symbol in a file * <code>be put ?featureA&amp;featureB</code>    merge in two branches * <code>be post ?newbranch</code>           fork * <code>be post //newrepo</code>            big time fork * <code>be diff ?head#SomeClass</code>      find any changes to SomeClass since <code>head</code>
 </p>
 <div>
 <div>
@@ -339,7 +337,7 @@ We started with a claim that Beagle is a database, not a filesystem. It stores a
 </div>
 </div>
 <p>
-  * <code>be diff ./file.txt?v1.2</code>      find all changes to file.txt since v1.2   * <code>be diff #has(DoThing,int)</code>    diff <code>int DoThing()</code> specifically   * <code>be get ?#todo(asan)</code>          find things to sanitize, any branch
+  * <code>be diff ./file.txt?v1.2</code>      find all changes to file.txt since v1.2 * <code>be diff #has(DoThing,int)</code>    diff <code>int DoThing()</code> specifically * <code>be get ?#todo(asan)</code>          find things to sanitize, any branch
 </p>
 <h3>Verbless syntax</h3>
 <p>
@@ -355,8 +353,12 @@ Overall, verbless use allows non-standard/advanced use patterns.
 <p>
 Beagle's commit model is supposed to resolve git's common pain points and ossified workarounds. git's ideal commit model sees a commit as something eternal; an <a href="https://www.youtube.com/watch?v=tVIM2xLbQBs">unbroken Merkle chain</a> of commits goes back to version 0, blockchain-like. But real life is messy, so we have a number of workarounds to avoid enshrining everyday hacks in project's &quot;blockchain&quot;. Those are rebase,  squash or (my favorite, <code>-m fix</code>) learning to live with disorderly  histories. History rewriting in git is an advanced and extensive topic, a yardstick of developer's expertise. As it often happens, workarounds may need workarounds of their own, and so on.
 </p>
+<figure class="right w40">
+<img src="./img/nav.jpg#rightw40" alt="Navigation">
+<figcaption>Navigation</figcaption>
+</figure>
 <p>
-<img src="./img/nav.jpg#rightw40" alt="Navigation"> Beagle unifies in-repo &quot;buckets&quot;: staging or stashing is done by the same kind of a data container, no different from commit, branch, or tag, except for the labelling. Beagle makes unnamed inter-commit states (waypoints) shareable, and all commits in general aggregatable, so rebasing and squashing become part of the vanilla model, not an override. CRDTs ease that a lot. The idea of Beagle commits is to be &quot;undo-redo, but persistent&quot;. If Ctrl+S triggers a commit, there is nothing wrong about it.
+Beagle unifies in-repo &quot;buckets&quot;: staging or stashing is done by the same kind of a data container, no different from commit, branch, or tag, except for the labelling. Beagle makes unnamed inter-commit states (waypoints) shareable, and all commits in general aggregatable, so rebasing and squashing become part of the vanilla model, not an override. CRDTs ease that a lot. The idea of Beagle commits is to be &quot;undo-redo, but persistent&quot;. If Ctrl+S triggers a commit, there is nothing wrong about it.
 </p>
 <p>
 On the technical side, Beagle's branches are very much like git's tags, just labels for hashes pointing at system states. Here, things do not differ from git that much.  The <code>head</code> branch is the main public version. <code>get ?head</code> or <code>get ?feature</code> switches the worktree to a different branch.
@@ -390,7 +392,7 @@ What Beagle internally processes is not exactly AST but BASON, a binary JSON for
 Based on that rather generic information, we can have 80/20 of your typical code navigation: callers/callees, definitions, todos, and so on. That is way more accurate than <code>grep</code> (how do you grep for a function body?). Still, this may fall short  of full IDE capabilities. For an inquiring agent, that might be just right though. 
 </p>
 <p>
- * <code>be grep &quot;search&quot;</code> trigram-accelerated substring search:    the trigram index narrows candidates to ~1/4096 of files    before reading any content, making search nearly instant    even for large repos  * <code>mdp(worktree)</code> grep for markdown paragraphs (not lines)  * <code>has(int,getLen)</code> find nodes having children <code>int</code> and    <code>getLen</code> (e.g. a typical C function definition)  * <code>fn(int,getLen)</code> find specifically tagged function definitions  * <code>use(getLen)</code> find uses of a symbol  * <code>funcs(use(getLen))</code> find functions using a symbol  * <code>files(use(getLen))</code> find files using a symbol  * <code>todo(fuzz)</code> search for TODOs mentioning fuzzing  * ...and so on
+ * <code>be grep &quot;search&quot;</code> trigram-accelerated substring search: the trigram index narrows candidates to ~1/4096 of files before reading any content, making search nearly instant even for large repos * <code>mdp(worktree)</code> grep for markdown paragraphs (not lines) * <code>has(int,getLen)</code> find nodes having children <code>int</code> and <code>getLen</code> (e.g. a typical C function definition) * <code>fn(int,getLen)</code> find specifically tagged function definitions * <code>use(getLen)</code> find uses of a symbol * <code>funcs(use(getLen))</code> find functions using a symbol * <code>files(use(getLen))</code> find files using a symbol * <code>todo(fuzz)</code> search for TODOs mentioning fuzzing * ...and so on
 </p>
 <p>
 Query notation is RDX, although that hardly matters as it is generic enough. Each query produces a set of document elements (AST* nodes) that a command can be scoped to (diff, get, post, etc). So, for example, we can change signature of a function and commit specifically those hunks by a one-liner.
@@ -414,5 +416,16 @@ Acknowledgements. A.Borzilov, N. Prokopov (aka tonsky), J.Syrowiecki contributed
 <p>
 <strong>Part V. The Vision.</strong>
 </p>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

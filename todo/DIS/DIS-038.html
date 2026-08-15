@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DIS/DIS-038.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>DIS-038: a fetched-but-not-DAG-indexed peer tip makes <code>DAGAncestors</code> bottom out at the tip, so <code>be head</code> reports a bogus huge ahead-count and <code>be patch ?br!</code> absorbs nothing</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>be head be://localhost?/beagle</code> from a full be:// clone reports <code>1317 ahead, 1 behind</code> when the true divergence is <code>1 ahead, 3 behind</code>, and <code>be patch --nosub be://localhost?/beagle!</code> absorbs nothing (<code>noop=11 … nothing absorbed</code>). Root cause: the peer tip and its parent chain ARE fetched into keeper (commit objects intact, parent headers correct, NOT re-rooted), but their <code>(COMMIT,COMMIT)</code> parent edges are NOT ingested into graf's <code>.graf.idx</code> DAG during the <code>be head</code>/<code>be patch</code> fetch. <code>DAGAncestors</code> (<a href="../../wiki/Graf.html">Graf</a>) walks ONLY the DAG index with no keeper-commit-body fallback, so <code>DAGAncestors(peer_tip)</code> returns just <code>{peer_tip}</code> — the shared base is missing from the target set, <code>ahead = anc_cur \ anc_target</code> = nearly all of cur, and <code>get_lca(cur,theirs)</code> collapses to 0 (no common ancestor), making the whole-branch replay see nothing new. <code>graf log</code> already fixed this exact class for its own walk (DAG-miss → parse commit body); the ancestor/LCA walk never got that fallback. Diagnosed live on <code>/home/gritzko/todo/DIS-035</code> (cur <code>54d2eb5b</code> over base <code>479fcc96</code>, peer trunk <code>8d313c50</code>). See <a href="../../wiki/HEAD.html">HEAD</a>, <a href="../../wiki/PATCH.html">PATCH</a>, <a href="../../wiki/Graf.html">Graf</a>, <a href="../../CLAUDE.md">CLAUDE</a>.

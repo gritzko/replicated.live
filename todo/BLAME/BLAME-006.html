@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/BLAME/BLAME-006.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>BLAME-006: <code>be blame:</code> mis-attributes lines to the root commit + slow commit load (research)</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>be blame:ABC.md</code> attributes 5 pieces to <code>c7184818</code> (&quot;initial&quot;, 31Jul24) — the ROOT commit — but ABC.md is a recent doc that almost certainly did NOT exist at that 31Jul24 import. So the line-trace appears to FALL BACK to root when it loses a line's true origin. Separately, clicking/loading <code>c7184818</code> takes SECONDS. Two suspected defects (one correctness, one perf) — research first, then decide fixes. Method: <a href="../../rule/Issues.html">Issues</a>.
@@ -47,7 +53,8 @@ Now: DONE
 <ul>
 <li>Root cause / data: <code>ABC.md</code> was DELETED at <code>006b9039</code> (18Nov24 repo reorg) and RE-ADDED as a different doc at <code>8948262e</code> (22May) — its true add commit, owning 20/28 pieces. The 5 root-pinned pieces (line 1 H1 title + 4 blank lines before <code>##</code> headers) are structural tokens whose content-only RAPHash (BLAME/WEAVE.c :502,510) COLLIDES across the delete/readd.</li>
 <li>CORRECTNESS bug — <code>graf/BLAME.c:480</code> (<code>if (dr==BLAME_DESC_ABSENT) continue;</code>) + the twin at <code>:492</code>: when the file is absent at a commit, <code>GRAFFileWeave</code> SKIPS it instead of folding an empty (delete) layer, so the old root tokens never die; the readd's matching tokens then inherit root's seq via the WEAVE EQ keep-seq branch (<code>WEAVE.c:579-586</code>). Fix: fold a delete as an explicit empty layer (the all-delete path <code>WEAVE.c:534-540</code> already exists) so tokens die at the delete commit → readd is a clean all-INS at <code>8948262e</code>.</li>
-<li>PERF bug — <code>commit:?&lt;root&gt;</code> (<code>BE.cli.c:332</code>/relay <code>:453-459</code>) runs graf <code>diff:?&lt;root&gt;</code>; <code>graf_first_parent_hex</code> GRAFNONEs the parentless root, falling to <code>GRAF.exe.c:505</code> → <code>GRAFDiffTreeRefs</code> (<code>DIFFREF.c:564</code>) which token-diffs the ENTIRE 291-file initial tree as all-INS — O(repo), 4.35s (vs 0.16s typical). Fix: emit raw all-add when one side is empty (skip token-level weave diff).</li>
+<li>PERF bug — <code>commit:?&lt;root&gt;</code> (<code>BE.cli.c:332</code>/relay <code>:453-459</code>) runs graf <code>diff:?&lt;root&gt;</code>; <code>graf_first_parent_hex</code> GRAFNONEs the parentless root, falling to <code>GRAF.exe.c:505</code> → <code>GRAFDiffTreeRefs</code> (<code>DIFFREF.c:564</code>) which token-diffs the ENTIRE 291-file initial tree as all-INS — O(repo), 4.35s (vs 0.16s typical).<dl class="meta"><dt>Fix:</dt><dd>emit raw all-add when one side is empty (skip token-level weave diff).</dd></dl>
+</li>
 <li>SPLIT recommended: <strong>BLAME-006a</strong> (blame delete-fold correctness, <code>BLAME.c</code> 480/492 + WEAVE fold-on-delete) and <strong>BLAME-006b</strong> (root/whole-tree <code>diff:</code> perf, <code>GRAF.exe.c:505</code>/<code>DIFFREF.c:564</code>). Independent; any blame fix keeps <code>GRAFblameident</code> byte-identical.</li>
 </ul>
 <h3>TODOs</h3>

@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/ULOG/ULOG-002.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>ULOG-002: ULOG open must back-scan the zero pad, not forward-scan the whole log</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>ULOGOpenBooked</code> (<code>dog/ULOG.c:494</code>) forward-scans the ENTIRE log on every open via <code>ulog_scan_log</code> (<code>:196</code>, called <code>:537</code>) only to position the buffer's DATA/IDLE division past the last complete row — an O(content) row-by-row walk paid on every <code>be</code>/jab command that touches <code>refs</code>/<code>wtlog</code>. The index that scan builds is then discarded (<code>ulog_idx_free_anon</code>, <code>:538</code>); the real idx is loaded/rebuilt separately by <code>ULOGOpenIdx</code> (<code>:555</code>) against a freshness-checked <code>.idx</code> sidecar. The tail only ever needs finding at the zero pad: a booked file is grown to a page boundary and abnormal termination leaves trailing NULs, so the last row's end is O(page) back from the mapped end. Replace the forward tail-scan with a BACKWARD scan over the zero pad. Surfaced while reviewing <a href="../JS/JS-073.html">JS-073</a> (JS <code>ingest.add</code> crash-safe refs append) and relates to the <a href="ULOG-001.html">ULOG-001</a> torn-log / initial-NUL work. Method: <a href="../../meta/work.html">work</a>.

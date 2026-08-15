@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/ABC/ABC-002.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>ABC-002: unify C errno→ok64 handling (one mapping, not <code>FILEerrno</code> vs <code>FILE_ERR_VOCAB</code>)</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 abc has <strong>two parallel errno→ok64 mechanisms that disagree</strong>. <code>FILEerrno</code> (<code>abc/FILE.h</code>, a <code>switch</code>) maps each errno to the canonical <code>FILE*</code> symbol — e.g. <code>ENOENT</code>→<code>FILENONE</code>. <code>FILEErr</code> / <code>FILE_ERR_VOCAB</code> (<code>abc/FILE.c</code>, a hand-built <code>{errno, raw-hex}</code> table) returns its own <strong>prefix-less ron60 literals that do NOT match the `FILE</strong><code> symbols* and omits several errnos. So </code>FILEErr(ENOENT)<code> = </code>0x39760e5dd<code> ≠ </code>FILEerrno(ENOENT)<code> = </code>FILENONE<code> (</code>0x3d254e5d85ce<code>); </code>FILEErr(EBADF)<code> = </code>0xe2ca34f<code> ≠ </code>FILEBADF<code> (</code>0x3d254e2ca34f<code>); and </code>FILE_ERR_VOCAB<code> omits </code>EEXIST<code> entirely. </code>FILEErr<code> is used by the open-failure paths (</code>FILEOpen<code>/</code>FILECreate<code> do </code>fail(FILEErr(FILENOOPEN))<code>), so a caller comparing the result against a </code>FILE*` symbol can silently never match. Collapse to ONE errno→ok64 mapping. abc/core change — maintainer-reviewed. See <a href="../../rule/Issues.html">Issues</a>, <a href="../../CLAUDE.md">CLAUDE</a>, <a href="ABC-001.html">ABC-001</a>, <a href="../SUBS/SUBS-016.html">SUBS-016</a>.

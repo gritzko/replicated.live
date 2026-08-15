@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DOG/DOG-008.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>DOG-008: <code>WEAVEParse</code>/<code>WEAVEStep</code> trust wire indices — OOB read+write</h1>
 <div>
-<p>
-Now: OPEN Sev: CRIT
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>CRIT</dd></dl>
 </div>
 <p>
 <code>dog/WEAVE.c</code>'s codec is a zero-copy, entirely UNVALIDATED view over a <code>'W'</code> blob the header itself flags as &quot;may be attacker-influenced&quot;, and the merge/next decoders then dereference the parsed inserter/remover indices as raw array subscripts. <code>WEAVEStep</code> reads a token's inserter straight from the <code>'I'</code> column (<code>WEAVE.c:165</code>) and remover ids from <code>'M'</code> (<code>:174-176</code>) with NO bound against the commit-table length; those indices flow into <code>ordp[_ins]++</code> (<code>ADV_IDH</code>, <code>WEAVE.c:410</code>) — a controllable OOB WRITE — and into <code>commits[0][li]</code> / <code>rmap[li]</code> (<code>wmerge_decode</code>, <code>:552,561,564</code>) — OOB reads. Separately <code>WEAVEParse</code> aliases byte-aligned TLV values as <code>tok32c*</code>/<code>u64c*</code> (<code>:55-58</code>) with no length-multiple or alignment check, so a <code>'K'</code>/<code>'C'</code> value of non-multiple length is read 1-3 bytes past its end and mis-aligned loads are UB. The sibling <code>HUNKu8sDrain</code> already does the right thing (validate <code>tok32Offset</code>, length, aligned copy) — this is the precedent to mirror. Method: <a href="../../meta/work.html">Issues</a>.

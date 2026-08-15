@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DIS/DIS-042.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>DIS-042: when cur has its OWN divergent commit, <code>be patch &lt;peer&gt;</code> then <code>be post</code> replays cur's stack ONTO the peer and silently drops cur's own committed bytes from the tree (first parent = peer, not cur — violates Invariant 2)</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 After <a href="DIS-038.html">DIS-038</a> fixed POST-015's silent-collapse, a DISTINCT divergent-case defect remains: when cur carries its own commit <code>C</code> forked off a shared base, absorbing a divergent peer <code>T</code> (<code>be patch file://A?/A</code> OR <code>?A!</code>) then <code>be post '#m'</code> produces a commit whose <strong>single first parent is the peer <code>T</code></strong>, with committer <code>rebase &lt;rebase@dogs&gt;</code> ts 0 — i.e. POST routes the absorb through <code>GRAFRebase</code>, replaying cur's stack onto <code>T</code>. The committed tree carries the peer's bytes but DROPS cur's own committed bytes (<code>C</code>'s edit) even though they are still present on disk, so the <strong>worktree diverges from the committed tree</strong> and <code>C</code>'s work is silently lost from history. This contradicts <a href="../../wiki/Invariants.html">Invariants</a> Invariant 2 (&quot;the new commit's first parent is always cur's prior tip&quot;) and <a href="../../wiki/POST.html">POST</a> §&quot;Commit assembly&quot;. Reproduced live (debug build, <code>$HOME/tmp</code>, hermetic). The non-divergent (FF) and same-base cases are correct; only a genuinely-divergent cur triggers it. See <a href="../../wiki/POST.html">POST</a>, <a href="../../wiki/PATCH.html">PATCH</a>, <a href="../../wiki/Invariants.html">Invariants</a>, <a href="../../wiki/Graf.html">Graf</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
@@ -47,10 +53,10 @@ None for diagnosis; the fix is a POST commit-assembly decision (which is out of 
 <p>
 Repro-first, then make absorb-then-post keep cur as first parent.
 </p>
-<ul>
-<li><a href="./v.html">v</a> Repro-first (<a href="../../CLAUDE.md">CLAUDE</a> §17), hermetic: two <code>be:</code> stores sharing base <code>v0</code>; peer <code>A</code> advances to <code>T</code>; clone <code>B</code> makes its OWN divergent commit <code>C</code>; absorb <code>T</code> then <code>be post '#m'</code>. EXPECT: post commit's first parent == <code>C</code>, the committed tree carries BOTH <code>C</code>'s and <code>T</code>'s bytes (a real merge), matching the worktree. VERIFIED FIXED on the current tree (see Outcome): first parent == <code>C</code>, no <code>rebase@dogs</code>, tree carries both.</li>
-<li><a href="./v.html">v</a> Add a regression under <code>test/post</code> — <code>test/post/53-divergent-absorb-keeps-cur-parent</code> (asserts first-parent == cur, no <code>rebase@dogs</code>, fresh re-checkout carries cur's own committed bytes). Companion <code>test/post/40-absorb-no-silent-collapse</code> locks the NON-divergent silent-collapse half; its stale &quot;still-open DIS-042&quot; note updated to point at post/53.</li>
-<li><a href="./v.html">v</a> Fix in <code>sniff/POST.c</code> commit assembly (LANDED before this session): the absorb is NOT routed through the same-branch non-ff rebase-onto-peer path; <code>parent &lt;cur&gt;</code> is written first (POST.c <del>2826), the absorbed peer rides as a 2nd <code>parent</code>/<code>foster</code>/<code>picked</code> from the patch-row loop (</del>2861/2898/2914). <code>needs_rebase</code> stays NO for a divergent-cur absorb (cur's REFS tip == wt parent ⇒ ff_ok).</li>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Repro-first (<a href="../../CLAUDE.md">CLAUDE</a> §17), hermetic: two <code>be:</code> stores sharing base <code>v0</code>; peer <code>A</code> advances to <code>T</code>; clone <code>B</code> makes its OWN divergent commit <code>C</code>; absorb <code>T</code> then <code>be post '#m'</code>. EXPECT: post commit's first parent == <code>C</code>, the committed tree carries BOTH <code>C</code>'s and <code>T</code>'s bytes (a real merge), matching the worktree. VERIFIED FIXED on the current tree (see Outcome): first parent == <code>C</code>, no <code>rebase@dogs</code>, tree carries both.</li>
+<li class="done"><input type="checkbox" checked disabled> Add a regression under <code>test/post</code> — <code>test/post/53-divergent-absorb-keeps-cur-parent</code> (asserts first-parent == cur, no <code>rebase@dogs</code>, fresh re-checkout carries cur's own committed bytes). Companion <code>test/post/40-absorb-no-silent-collapse</code> locks the NON-divergent silent-collapse half; its stale &quot;still-open DIS-042&quot; note updated to point at post/53.</li>
+<li class="done"><input type="checkbox" checked disabled> Fix in <code>sniff/POST.c</code> commit assembly (LANDED before this session): the absorb is NOT routed through the same-branch non-ff rebase-onto-peer path; <code>parent &lt;cur&gt;</code> is written first (POST.c <del>2826), the absorbed peer rides as a 2nd <code>parent</code>/<code>foster</code>/<code>picked</code> from the patch-row loop (</del>2861/2898/2914). <code>needs_rebase</code> stays NO for a divergent-cur absorb (cur's REFS tip == wt parent ⇒ ff_ok).</li>
 </ul>
 <h2>Evidence (live, debug build, hermetic <code>$HOME/tmp</code>)</h2>
 <p>

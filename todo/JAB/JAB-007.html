@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/JAB/JAB-007.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>JAB-007 <a href="./C/JS.html">JS</a>: Buf cursor <code>| 0</code> int32 coercion caps every mapped view at 2^31-1 — io.mmap of a &gt;2GB file returns a silently WRONG view, git.pack.mmap ABORTS on multi-GB keeper logs</h1>
 <div>
-<p>
-Now: OPEN Sev: HIGH
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
 </div>
 <p>
 jab's JS <code>Buf</code> class (the buf.cpp prelude) coerces its <code>_data</code>/<code>_idle</code> cursors with <code>| 0</code> (signed int32).  <code>io.mmap</code> wraps every file mapping in <code>Buf.over(u8)</code> which seeds <code>_idle = u8.length | 0</code> — for any file ≥ 2 GiB that wraps NEGATIVE, and <code>.data()</code>'s <code>subarray(0, _idle)</code> then reinterprets the negative end END-RELATIVE, silently returning a short/garbled view (no throw).  <code>git.pack.mmap</code> rides the same wrapper, so scanning a multi-GB keeper log feeds nonsense windows to the native pack scanner and the (ASAN) process ABORTS.  This is the wall that blocks <a href="../GET/GET-044.html">GET-044</a>'s linux-scale clone AFTER the streamed pack lands: a 6.4 GB <code>0000000001.keeper</code> is durable on disk but can be neither indexed nor read.  The C and JSC layers are NOT at fault (verified — see Context).  Method: <a href="../../meta/work.html">work</a>.

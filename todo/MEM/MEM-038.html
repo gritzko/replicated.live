@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/MEM/MEM-038.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>MEM-038: woof — POL callbacks run outside a call()/try() frame, so the HUNK BASS toks-carve is never rewound (unbounded server leak)</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 A long-running woof server leaks BASS arena on EVERY syntax-highlighted response. abc/POL.c POLLoop invokes <code>at-&gt;callback(fd,at)</code> directly (POL.c:248 timeout, :314 poll) with NO enclosing call()/try() frame — and only call/try/then snapshot+rewind ABC_BASS (PRO.h:73-83). woof's read_cb/pipe_cb/write_cb are plain <code>static short</code> functions never invoked via call(), and they reach render_hunks → HUNKu8sDrain → hunk_drain_toks, which a_cquire's a BASS region into hk-&gt;toks (HUNK.c:199-264) INTENTIONALLY without a call() wrapper so the toks outlive the drain for the renderer. With no frame to rewind it, every token-bearing hunk permanently consumes ABC_BASS until a_carve/a_lign hit NOROOM and rendering (and in-process dog Exec carves on --api) fail — a self-inflicted DoS. Tests/fuzz miss it: the fuzz harness wraps inputs in a rewinding try() and never loops the live callback path. The one HIGH-severity finding of the <a href="MEM.html">MEM</a> sweep.

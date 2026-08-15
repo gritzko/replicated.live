@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/JAB/JAB-032.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,12 +25,10 @@
 </a>
 <h1>JAB-032: fsw drops the wd, swallows queue overflow</h1>
 <div>
-<p>
-Now: OPEN Sev: HIGH
-</p>
-<p>
-Ask: gritzko Env: Linux (inotify); kqueue path untested
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
+<dl class="meta"><dt>Ask:</dt><dd>gritzko</dd></dl>
+<dl class="meta"><dt>Env:</dt><dd>Linux (inotify); kqueue path untested</dd></dl>
 </div>
 <p>
 <code>FSWDir</code> throws away <code>inotify_add_watch</code>'s return and <code>FSWDrain</code> never reports <code>ev-&gt;wd</code>, so every event reaches JS as <code>{wd: 0, name}</code> and the watcher fd is the only dir identity left — <a href="JAB-031.html">JAB-031</a> shipped one wfd + one pol handler + one drain Buf PER DIR, which its own Goals said it would not do. <code>FSWDrain</code> also skips every <code>ev-&gt;len == 0</code> record, and that is exactly <code>IN_Q_OVERFLOW</code>: a burst past <code>max_queued_events</code> drops events silently, so a consumer cannot tell &quot;nothing changed&quot; from &quot;I lost your changes&quot;. Both block the per-repo cache, <a href="../BRO/BRO-043.html">BRO-043</a>.

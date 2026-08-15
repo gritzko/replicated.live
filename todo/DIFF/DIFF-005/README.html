@@ -3,8 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>README</title>
+<title>DIFF-005: be diff:&lt;file&gt; emits enormous (whole-file) context</title>
+<meta property="og:title" content="DIFF-005: be diff:&lt;file&gt; emits enormous (whole-file) context">
+<meta property="og:description" content="be diff:dog/INDEX.md returns 110 lines for a 2-line edit — a single hunk @@ -1,106 +1,106 @@ spanning the ENTIRE file (2 added, 2 removed, 105 context). For a tiny change in a large doc this is &quot;enormous context for no obvious reason.&quot; Likely DIFF-003's landed file-scoped full-file diff showing for a single-file diff:; research whether that is intended/acceptable or should be bounded. Evidence: evidence. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIFF/DIFF-005/README.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -12,90 +24,62 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>DIFF-005: <code>be diff:&lt;file&gt;</code> emits enormous (whole-file) context</h1>
+<div>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+</div>
 <p>
 <code>be diff:dog/INDEX.md</code> returns 110 lines for a 2-line edit — a single hunk <code>@@ -1,106 +1,106 @@</code> spanning the ENTIRE file (2 added, 2 removed, <strong>105 context</strong>). For a tiny change in a large doc this is &quot;enormous context for no obvious reason.&quot; Likely DIFF-003's landed file-scoped full-file diff showing for a single-file <code>diff:</code>; research whether that is intended/acceptable or should be bounded. Evidence: <a href="diff-evidence.txt">evidence</a>. Method: <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li><code>be diff:dog/INDEX.md</code> (106-line file, +1 row edited) → 110 output lines, ONE<p>
-hunk <code>@@ -1,106 +1,106 @@</code>, 2 <code>+</code> / 2 <code>-</code> / <strong>105 context</strong>. The whole file is emitted as context for a 2-line change. Full capture + repro: <a href="diff-evidence.txt">evidence</a>.
-</p>
-</li>
-<li>DIFF-003 (&quot;file-scoped diff: whole file, changes hilited&quot;) landed <code>eaa75793</code>, so<p>
-a single-file <code>diff:&lt;path&gt;</code> plausibly renders the WHOLE file BY DESIGN. But the maintainer didn't expect/recognize it (&quot;no idea why&quot;) — so either it's the intended file-scoped mode (and needs documenting / a bound for large files), or a context-sizing regression.
-</p>
-</li>
+<li><code>be diff:dog/INDEX.md</code> (106-line file, +1 row edited) → 110 output lines, ONE hunk <code>@@ -1,106 +1,106 @@</code>, 2 <code>+</code> / 2 <code>-</code> / <strong>105 context</strong>. The whole file is emitted as context for a 2-line change. Full capture + repro: <a href="diff-evidence.txt">evidence</a>.</li>
+<li>DIFF-003 (&quot;file-scoped diff: whole file, changes hilited&quot;) landed <code>eaa75793</code>, so a single-file <code>diff:&lt;path&gt;</code> plausibly renders the WHOLE file BY DESIGN. But the maintainer didn't expect/recognize it (&quot;no idea why&quot;) — so either it's the intended file-scoped mode (and needs documenting / a bound for large files), or a context-sizing regression.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Determine: is the full-file context for <code>be diff:&lt;file&gt;</code> INTENDED (DIFF-003<p>
-file-scoped) or a context-sizing bug? Cite the code path.
-</p>
-</li>
-<li>Decide the right UX: if intended, bound it for large files and/or offer a<p>
-git-style ~N-line-context mode, and DOCUMENT it so it stops surprising; if a bug, fix the context window.
-</p>
-</li>
+<li>Determine: is the full-file context for <code>be diff:&lt;file&gt;</code> INTENDED (DIFF-003 file-scoped) or a context-sizing bug? Cite the code path.</li>
+<li>Decide the right UX: if intended, bound it for large files and/or offer a git-style ~N-line-context mode, and DOCUMENT it so it stops surprising; if a bug, fix the context window.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Don't regress DIFF-003's deliberate full-file-with-highlight view where that is<p>
-wanted (e.g. the pager); the concern is the plain <code>be diff:&lt;file&gt;</code> text output.
-</p>
-</li>
-<li>Behaviour change to diff context gates for review; add a test pinning the chosen<p>
-context size for a small-edit-in-large-file case.
-</p>
-</li>
+<li>Don't regress DIFF-003's deliberate full-file-with-highlight view where that is wanted (e.g. the pager); the concern is the plain <code>be diff:&lt;file&gt;</code> text output.</li>
+<li>Behaviour change to diff context gates for review; add a test pinning the chosen context size for a small-edit-in-large-file case.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions (scan done 2026-06-16 — INTENDED, not a bug)</h3>
 <ul>
-<li>PREMISE CORRECTED (bare-<code>be diff</code> re-investigation): the bare aggregate<p>
-<code>be diff:</code> is ALREADY bounded — every hunk is 3-line context (<code>GRAFDiffWtTree</code>→<code>GRAFDiffWtFile(full=NO)</code>→<code>WEAVEEmitDiff</code>). The whole-file inflation is ONLY the single-file <code>diff:&lt;file&gt;</code> projector (<code>full=YES</code>). So this ticket stays a single-file-projector concern; do NOT add bare-diff handling, and drop the &quot;bare diff is whole-file&quot; framing.
-</p>
-</li>
-<li>The re-investigation surfaced two ADJACENT defects, now their own tickets:<p>
-<a href="./DIFF-006.html">DIFF-006</a> (cosmetic: per-hunk <code>--- a/</code>/<code>+++ b/</code> repeated, not coalesced per file — the &quot;62 headers vs 17 files&quot; artifact, <code>dog/HUNK.c:1242</code>) and <a href="./DIFF-007.html">DIFF-007</a> (REAL bug: <code>diff:&lt;largefile&gt;</code> silently EMPTY — <code>WEAVEEmitFull</code>'s 65536-token <code>outtoks</code> carve overflows on big files, NOROOM swallowed; <code>WEAVE.c:1030/1099</code>). Note: option-a here (bound large files → <code>WEAVEEmitDiff</code>) would INCIDENTALLY mask DIFF-007, a strong extra argument for it.
-</p>
-</li>
-<li>VERDICT: the whole-file context is DELIBERATE DIFF-003 design, hard-wired<p>
-<code>full=YES</code> for single-file <code>diff:</code> shapes. Decision site <code>GRAFDiff2Layer</code> (<code>graf/DIFFREF.c:163</code>): <code>if (full) WEAVEEmitFull</code> (no windowing, <code>WEAVE.c:1015</code>) else <code>WEAVEEmitDiff</code> (3-line <code>WEAVE_CTX_LINES</code>, <code>WEAVE.c:802/850</code>). Intent documented verbatim at <code>DIFFREF.c:108-117</code> + <code>GRAF.h:315-317</code>. No context knob.
-</p>
-</li>
-<li>Only the single-file <code>diff:&lt;file&gt;</code> projector is unbounded (<code>GRAF.exe.c:512</code><p>
-wt-vs-base, <code>:502</code> ref, <code>:438</code> range). Tree-scope (<code>DIFFREF.c:377</code>) and the <code>weave</code> verb (<code>GRAF.exe.c:567</code>) ALREADY use the bounded 3-line path — so the machinery for git-style context exists.
-</p>
-</li>
-<li>UX options (maintainer call — see Outcome): (a) BOUND LARGE FILES — at<p>
-<code>DIFFREF.c:163</code>, when <code>full &amp;&amp; line_count &gt; N</code> (~200) demote to <code>WEAVEEmitDiff</code>; small files keep the full read (one-site, no API churn — worker's preferred). (b) SPLIT pager-vs-text — tty/<code>HUNKMode</code> → full, non-tty → 3-line (touches the 3 dispatch sites). (c) KEEP + DOCUMENT only (it self-documents already).
-</p>
-</li>
+<li>PREMISE CORRECTED (bare-<code>be diff</code> re-investigation): the bare aggregate <code>be diff:</code> is ALREADY bounded — every hunk is 3-line context (<code>GRAFDiffWtTree</code>→<code>GRAFDiffWtFile(full=NO)</code>→<code>WEAVEEmitDiff</code>). The whole-file inflation is ONLY the single-file <code>diff:&lt;file&gt;</code> projector (<code>full=YES</code>). So this ticket stays a single-file-projector concern; do NOT add bare-diff handling, and drop the &quot;bare diff is whole-file&quot; framing.</li>
+<li>The re-investigation surfaced two ADJACENT defects, now their own tickets: <a href="./DIFF-006.html">DIFF-006</a> (cosmetic: per-hunk <code>--- a/</code>/<code>+++ b/</code> repeated, not coalesced per file — the &quot;62 headers vs 17 files&quot; artifact, <code>dog/HUNK.c:1242</code>) and <a href="./DIFF-007.html">DIFF-007</a> (REAL bug: <code>diff:&lt;largefile&gt;</code> silently EMPTY — <code>WEAVEEmitFull</code>'s 65536-token <code>outtoks</code> carve overflows on big files, NOROOM swallowed; <code>WEAVE.c:1030/1099</code>). Note: option-a here (bound large files → <code>WEAVEEmitDiff</code>) would INCIDENTALLY mask DIFF-007, a strong extra argument for it.</li>
+<li>VERDICT: the whole-file context is DELIBERATE DIFF-003 design, hard-wired <code>full=YES</code> for single-file <code>diff:</code> shapes. Decision site <code>GRAFDiff2Layer</code> (<code>graf/DIFFREF.c:163</code>): <code>if (full) WEAVEEmitFull</code> (no windowing, <code>WEAVE.c:1015</code>) else <code>WEAVEEmitDiff</code> (3-line <code>WEAVE_CTX_LINES</code>, <code>WEAVE.c:802/850</code>). Intent documented verbatim at <code>DIFFREF.c:108-117</code> + <code>GRAF.h:315-317</code>. No context knob.</li>
+<li>Only the single-file <code>diff:&lt;file&gt;</code> projector is unbounded (<code>GRAF.exe.c:512</code> wt-vs-base, <code>:502</code> ref, <code>:438</code> range). Tree-scope (<code>DIFFREF.c:377</code>) and the <code>weave</code> verb (<code>GRAF.exe.c:567</code>) ALREADY use the bounded 3-line path — so the machinery for git-style context exists.</li>
+<li>UX options (maintainer call — see Outcome): (a) BOUND LARGE FILES — at <code>DIFFREF.c:163</code>, when <code>full &amp;&amp; line_count &gt; N</code> (~200) demote to <code>WEAVEEmitDiff</code>; small files keep the full read (one-site, no API churn — worker's preferred). (b) SPLIT pager-vs-text — tty/<code>HUNKMode</code> → full, non-tty → 3-line (touches the 3 dispatch sites). (c) KEEP + DOCUMENT only (it self-documents already).</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
-<li class="done"><input type="checkbox" checked disabled> Scanned: full-file is DIFF-003-intended; window site <code>DIFFREF.c:163</code>; only<p>
-  single-file <code>diff:&lt;file&gt;</code> unbounded; tree/weave already 3-line.
-</p>
-</li>
+<li class="done"><input type="checkbox" checked disabled> Scanned: full-file is DIFF-003-intended; window site <code>DIFFREF.c:163</code>; only single-file <code>diff:&lt;file&gt;</code> unbounded; tree/weave already 3-line.</li>
 <li class="blocked"><input type="checkbox" disabled> BLOCKED-ON-USER: maintainer picks UX (a) bound-large-files / (b) pager-vs-text / (c) document-only; then implement at the <code>if (full)</code> dispatch (now <code>graf/DIFFREF.c:188-201</code> after drift) or just document.</li>
 <li class="open"><input type="checkbox" disabled> Test: small edit in a &gt;N-line file → bounded context (alongside WEAVE2/01).</li>
 <li class="done"><input type="checkbox" checked disabled> Re-verified 2026-07-07 (ticket audit): still unbounded — <code>GRAFDiff2Layer</code> hard-wires <code>WEAVEEmitFull</code> on <code>full</code> (<code>DIFFREF.c:188-196</code>), no context knob; no landing commit in be log.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
-<li>May be working-as-DIFF-003-intended — confirm before &quot;fixing&quot;; the deliverable<p>
-might be a bound + docs, not a behaviour reversal.
-</p>
-</li>
+<li>May be working-as-DIFF-003-intended — confirm before &quot;fixing&quot;; the deliverable might be a bound + docs, not a behaviour reversal.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
-<li>Scan complete: INTENDED DIFF-003 behaviour (not a bug); window site<p>
-<code>graf/DIFFREF.c:163</code> (2026-07-07: drifted to <code>:188-196</code>). STILL awaiting the maintainer UX ruling (bound-large-files / pager-vs-text / document-only), then a one-site implementation. OPEN, blocked-on-user.
-</p>
-</li>
+<li>Scan complete: INTENDED DIFF-003 behaviour (not a bug); window site <code>graf/DIFFREF.c:163</code> (2026-07-07: drifted to <code>:188-196</code>). STILL awaiting the maintainer UX ruling (bound-large-files / pager-vs-text / document-only), then a one-site implementation. OPEN, blocked-on-user.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

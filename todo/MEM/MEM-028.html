@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/MEM/MEM-028.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>MEM-028: post_cascade_walk reads recs<a href="./-1.html">-1</a> after skip-without-append (sniff/POST.c)</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>post_cascade_one</code> returns OK without incrementing <code>cc-&gt;n</code> on its REFSNONE skip (<code>POST.c:1308</code>), but <code>post_cascade_walk</code> then unconditionally reads <code>cc-&gt;recs[cc-&gt;n-1].new_tip</code> (<code>POST.c:1461</code>) to drive recursion. When the skipped child is the first at its level, <code>cc-&gt;n</code> is still 0, so <code>recs[-1]</code> reads out of bounds across the preceding field into adjacent stack memory; the garbage sha becomes <code>branch_new_tip</code> for the descent. Reachable if a branch resolves OK at the pre-check (:1448) but REFSNONE inside <code>post_cascade_one</code> (:1307) — a REFS mutation in that window. A leaf flock serializes writers, narrowing reachability, but the index itself is unguarded. The goal is to index <code>recs</code> only after a record was actually appended.

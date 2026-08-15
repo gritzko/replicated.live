@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DOG/DOG-011.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>DOG-011: HUNK BASS arena-lifetime + region-cap defects</h1>
 <div>
-<p>
-Now: OPEN Sev: HIGH
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
 </div>
 <p>
 <code>dog/HUNK.c</code> violates the codebase's own <code>call()</code>-rewinds-BASS rule. <code>HUNKu8sRelay</code> invokes <code>call(hunk_rebase_body, &amp;hk, prefix)</code> (<code>HUNK.c:386</code>), but <code>hunk_rebase_body</code> carves <code>nt</code>(8 MiB)/<code>nk</code>(1 MiB) on BASS and points <code>hk-&gt;text</code>/<code>hk-&gt;toks</code> into them — and <code>call()</code> UNCONDITIONALLY rewinds the BASS data+idle heads on return (<code>abc/PRO.h:75-90</code>), so those slices dangle the instant line 386 returns. The next <code>call(HUNKu8sFeedOut, into, &amp;hk)</code> (<code>:388</code>) hands the dangling slices to renderers whose own carves land on the same bytes: Color mode <code>bro_walk_hunk</code> carves ~192 KB over the rebased text (<code>:769</code>) → garbage output. Plain/HTML/TLV survive only by not carving before reading — one refactor from breaking. The in-function comment &quot;caller's call() frame owns them&quot; (<code>:293-296</code>) is wrong; <code>hunk_drain_toks</code> is deliberately called DIRECTLY at <code>:216</code> for exactly this reason. Method: <a href="../../meta/work.html">Issues</a>.

@@ -3,8 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>StrictMark</title>
+<title>StrictMark: rational Markdown</title>
+<meta property="og:title" content="StrictMark: rational Markdown">
+<meta property="og:description" content="Markdown is a wonderful lightweight markup — minimal, easy to read and write, widely supported — but precedent-based: it codified diverse practices, so it is messy and inconsistent. StrictMark is Markdown refactored: a rational subset that keeps every feature while shrinking the grammar to its shortest formal form, for a uniform, unambiguous syntax. It reuses existing Markdown tooling without legacy weight, and is the markup every Beagle wiki page uses, from the Home overview to the Verbs vocabulary.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/wiki/StrictMark.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -40,60 +52,62 @@ StrictMark makes a Markdown subset a proper markup language by formalizing its g
 <li>Backwards compatible: a CommonMark subset, so existing tooling renders it; a StrictMark parser need not read all Markdown.</li>
 <li>When StrictMark contradicts CommonMark, or CommonMark is ambiguous, StrictMark wins.</li>
 </ul>
-<h2>Inline markup</h2>
+<h2>The block layer</h2>
 <p>
-Markdown inline markup looks easy but is not: ambiguity makes it hard to implement. StrictMark treats it all as bracketing — brackets matched by regex, effective only when they satisfy precedence. The cuts are deliberate; inline formatting is secondary.
+Every line carries its markup at line start, in 4-char quads — the block stack — as <code>(INDENT|QUOTE)* (LIST|LEAF)?</code>; absent a leaf, a paragraph is implied. One line, one classification: a line whose prefix is off-grammar is a paragraph, and nothing later can reinterpret it.
+</p>
+<ul>
+<li>A marker is ONE self-delimiting 4-char quad: its chars padded with spaces in any of the four columns, no gap space after it.</li>
+<li>Content begins at the quad's end (<code>depth*4+4</code>); a space sitting there is content, which the renderer trims.</li>
+<li>One tab is one indent quad; a tab pads no marker — it fills a whole quad or nothing.</li>
+<li>The one continuation law: a block's content sits one quad deeper on the following lines; a drop in indent ends the block.</li>
+<li>A continuation line repeats its block's whole prefix, quote quads included; extra indent under 4 chars is meaningless.</li>
+<li>A blank line continues open containers but never a paragraph; a paragraph joins same-depth lines until a blank or a marker.</li>
+<li>Markers differ only in their content mode — child blocks, joined text, verbatim bytes, or none; the table below has them all.</li>
+<li>Canonical markers are 4 chars wide; the legacy 3-char short forms (3-backtick fence, 3-dash ruler) are read, never written.</li>
+</ul>
+<h2>The inline layer</h2>
+<p>
+Markdown inline markup looks easy but is not: ambiguity makes it hard to implement. StrictMark treats it all as bracketing — brackets matched by regex, effective only when they satisfy precedence. The cuts are deliberate; inline formatting is secondary by design.
 </p>
 <ul>
 <li>All inline markup is bracketing; matched by regex — <code>(?&lt;=\s)[*](?=\S)</code> opens STRONG — live only if precedence allows.</li>
-<li>Precedence, low to high: <code>_emphasized_</code>, <code>[link][1]</code>, <code>*strong*</code>, <code>\*</code> escapes, `<code> </code>code<code> </code>`.</li>
+<li>Precedence, low to high: <code>_emphasized_</code> and <code>~struck~</code>, <code>[link][1]</code>, <code>*strong*</code>, <code>\*</code> escapes, `<code> </code>code<code> </code>`.</li>
 <li>An open bracket pairs with any later close of its kind; a new open bracket cancels a preceding unmatched one.</li>
 <li>On overlap the higher-precedence range wins; on equal precedence the earlier range wins.</li>
 <li>Higher-precedence brackets may nest inside lower, never the reverse — the lower one is cancelled.</li>
 <li>No double symbols: <code>*strong*</code>, never <code>**strong**</code>.</li>
+<li>The paragraph is the inline unit — broken by a blank line, not a line end — so a span may cross the wrap.</li>
 <li>Cuts vs CommonMark: no double symbols, no arbitrary nesting, one-symbol explicit labels, no backticks inside code.</li>
 </ul>
-<h2>Links, images, transclusion</h2>
+<h2>Block elements</h2>
 <p>
-StrictMark links come in exactly two cases, both defined out of line: an explicit <code>[text text][l]</code> pairing any display text with a one-symbol label <code>l</code>, and a shortcut <code>[page]</code> that keys on the bracket text, so a page name is its own key.
+Every block element in three aspects: its quad shape, its same-line content, and its deeper-line content mode. Every block ends at a dedent — the one law needs no column; the paragraph is the exception, joining same-depth lines until a blank or a marker. The div and the quote are prefix quads — repeatable, nesting containers; the rest are markers, plus the markerless paragraph.
 </p>
-<ul>
-<li>Explicit: <code>[text text][l]</code> with <code>[l]: url &quot;title&quot;</code> — any display text, one-symbol label <code>l</code> (digits, then letters).</li>
-<li>Shortcut: <code>[page]</code> keys on the bracket text — <code>[StrictMark]</code> resolves <code>[StrictMark]: url</code>; the key may be multi-char.</li>
-<li>Implicit: <code>[StrictMark]</code> becomes a link to <code>./StrictMark.mkd</code></li>
-<li>Definitions sit anywhere, the foot idiomatic; an external URL or <code>#anchor</code> rides on an explicit label.</li>
-<li>Images and transclusions are the explicit form with a leading <code>!</code> — <code>![alt][t]</code>; the renderer handles the foreign type.</li>
-</ul>
-<pre><code>    see [Replicated Object Notation][1]
-    [1]: http://doc.replicated.cc/ron.sm &quot;What is RON&quot;
-
-    a bare [StrictMark] link, defined below
-    [StrictMark]: StrictMark.mkd &quot;the markup&quot;
-
-    ![here is the table][T]
-    [T]: /table?@tab &quot;this might be any object&quot;
+<pre><code>    element    quad shape        same line          one quad deeper
+    ---------  ----------------  -----------------  ----------------
+    div        4 sp / one tab    rest of the stack  child blocks
+    quote      '&gt;' + 3 sp        rest of the stack  child blocks
+    bullet     '-' + 3 sp        item text          child blocks
+    numbered   1-3 digits, '.'   item text          child blocks
+    todo       '-[' state ']'    item text          child blocks
+    header     1-4 '#', padded   header text        header text
+    fence      4 backticks       info string        verbatim bytes
+    ref def    '[x]:'            url &quot;title&quot;        url/title text
+    meta pair  Key + ':'         verbatim value     more value text
+    ruler      4 dashes          caption text       caption text
+    paragraph  (none)            inline text        (same-depth join)
 </code></pre>
-<h2>Block markup</h2>
-<p>
-Blocks are containers (lists, blockquotes, divs) or leaves (paragraphs, headers, …); containers nest, leaves do not. Markup sits at line start in 4-char groups — the block stack — as <code>(INDENT|QUOTE)* LIST? LEAF?</code>; absent a leaf, a paragraph is implied.
-</p>
-<ul>
-<li>A block continues on later lines via a 4-space indent; a blank line continues open containers but not a leaf block.</li>
-<li>Block-stack depth changes drive nesting; extra indent under 4 spaces is meaningless, keeping interpretation line-by-line.</li>
-<li>A bare indent opens a generic container (a div) where CommonMark would start a code block — a slight generalization.</li>
-<li>If a marker ends in a non-space char, the next char must be whitespace (the gap space); e.g. <code>####</code> needs a following space.</li>
-<li>Block markers: <code>&gt;   </code> quote, <code> -  </code> bullet, <code> 1. </code> numbered, four spaces a div, <code>##  </code> header (4 levels).</li>
-<li>More markers: 3–4 backticks a code fence, <code>[x]:</code> a reference def, <code>---</code>/<code>--- </code>/<code>----</code> a ruler, <code>-[ ]</code> a TODO.</li>
-<li>Structural markup is 4-char-wide, except two shorter cases: a 3-backtick code fence and a 3-dash <code>---</code> ruler.</li>
-</ul>
 <h2>Headers</h2>
 <p>
-StrictMark allows four header levels, ATX only, and a header may span lines. Markings appear only at the line start and, like all block markup, are padded to four chars; when the last char is not a space, the text must begin with a gap space.
+StrictMark allows four header levels, ATX only. The marker is a run of 1-4 <code>#</code> filling one quad, padded with spaces in any column; the level is the COUNT of <code>#</code>, and a full quad needs no gap space. A header may span lines: its text continues one quad deeper, joined into one heading.
 </p>
 <pre><code>    #   Top header
     ##  Subheader
     ### Small header
     #### Smallest header
+      # padding sits in any column
+    ####Smallest, gapless
 </code></pre>
 <h2>Lists</h2>
 <p>
@@ -101,7 +115,7 @@ The unordered marker is the dash <code>-</code>; <code>*</code> is dropped as am
 </p>
 <ul>
 <li>TODO states: <code>-[ ]</code> not started, <code>-[v]</code> done/closed, <code>-[-]</code> blocked, <code>-[x]</code> wontfix/moot — uppercase <code>V</code>/<code>X</code> also accepted.</li>
-<li>Marker padding is the author's taste, but a non-space final char needs a following gap space.</li>
+<li>Marker padding is the author's taste; the quad self-delimits, so <code>-[v]New</code> is a TODO item whose content is <code>New</code>.</li>
 <li>Numbered lists cap at 999 numbered entries; writing every entry <code>1.</code> renders fine but the raw markup is then mis-numbered.</li>
 <li>Separate two adjacent same-kind lists with an empty <code>&lt;!-- --&gt;</code> comment — better still, put real text between them.</li>
 </ul>
@@ -114,27 +128,102 @@ The unordered marker is the dash <code>-</code>; <code>*</code> is dropped as am
 </code></pre>
 <h2>Blockquotes</h2>
 <p>
-Blockquote markup is one <code>&gt;</code> and three spaces, in any order. The blockquote is the only block whose continuation line may carry the quotation marker instead of a bare indent — an exception kept for historical reasons; using indents is still highly advised.
+Blockquote markup is one <code>&gt;</code> and three spaces, in any order — a prefix quad like the indent, so quotes nest and any block sits inside one (<code>&gt;    1. x</code> is a numbered item in a quote). A quoted block's continuation lines repeat the same quote prefix; there is no indent-only continuation for quotes.
 </p>
 <pre><code>    &gt;   #   Quoted header
     &gt;   Quoted paragraph text.
 </code></pre>
 <h2>Code blocks</h2>
 <p>
-Code blocks use the fenced syntax with three or four backticks; the opening fence may name the language. The code is indented four chars and follows the same continuation rules as any container, so the closing fence is optional — a drop in indent ends it.
+A code block opens with a fence — four backticks, then optionally the info string naming the language. The body is verbatim, one quad deeper; the continuation law applies as everywhere, so a dedent ends the block and the closing fence is optional.
 </p>
 <ul>
-<li>A StrictMark code block can safely contain backtick runs of its own, since its body is indented and the fence is not.</li>
+<li>The body may contain any backtick runs: a fence run indented deeper than its opener is body, never a closer.</li>
+<li>The closer is a no-op: an opener-wide bare fence at the opener's depth, blank rest; the dedent already closed the block.</li>
+<li>A dedented fence with an info string ends one block and opens the next, so back-to-back snippets need no closer between them.</li>
+<li>The legacy 3-backtick fence is accepted on read; write four.</li>
 </ul>
 <pre><code>    console.log(&quot;JavaScript is the best worst lang ever&quot;);
 </code></pre>
-<h2>Grammar</h2>
+<h2>Rulers</h2>
 <p>
-The structural layer is a regular language and the inline layer is regex-matched brackets, so the whole parser stays compact. The canonical grammar lives in the Beagle source, not in prose — the block lexer and the inline Ragel machine below.
+The ruler is a quad of four dashes, optionally followed by a caption — <code>---- cut at this line</code> — that continues one quad deeper like header text. The dash run stops at four: a fifth dash makes the line a paragraph, never a ruler captioned with dashes. The legacy 3-dash form is accepted on read.
 </p>
 <ul>
-<li>Block lexer <code>MKDTLexer</code> in <code>dog/tok/MKDT.c</code> scans by line: fences, rulers, ref defs, headings, then the block stack.</li>
-<li>Inline lexer <code>MKDTInlineLexer</code> (Ragel, <code>MKDT.c.rl</code>) matches code, strong, emph, strike, links, transclusions as regexes.</li>
+<li>A captionless ruler renders as a plain <code>&lt;hr&gt;</code>; a captioned one as a labeled divider — the caption centered in the rule line.</li>
 </ul>
+<h2>Meta pairs</h2>
+<p>
+A meta pair is a leaf block carrying machine-readable page metadata: a capitalized three-letter key, a colon, the gap space, then the value — <code>Who: gritzko</code>. Key plus colon is exactly four chars, a native-width marker. The grammar fixes only the shape; each pocket registers the keys it recognizes (<a href="/meta/todo.html">todo</a> lists the ticket keys) and unknown keys are legal markup with no semantics.
+</p>
+<ul>
+<li>Shape: <code>KEY ':' GAP VALUE</code>, <code>KEY := [A-Z][a-z][a-z0-9]</code> — matched by regex at line start, like every leaf block.</li>
+<li>A line matching the shape is a meta pair, never a paragraph — StrictMark wins; escape a literal key with <code>Due\:</code>.</li>
+<li>The value runs verbatim to the end of line; the inline layer does not run inside a meta pair.</li>
+<li>A long value may continue one quad deeper; keep a pair one-line when it fits, so the value greps whole.</li>
+<li>Meta pairs grep clean — <code>rg '^Who: gritzko' todo/</code> — the filename supplies the page context.</li>
+<li>Renderers show a meta pair as a key–value row, unlike ref defs, which stay hidden.</li>
+</ul>
+<h2>Spans</h2>
+<p>
+The emphasis family is one bracket template: a single-character symmetric pair whose opener touches the following non-space. Code spans and escapes are the two degenerate brackets — one with a verbatim body, one with a one-char body.
+</p>
+<ul>
+<li>Strong <code>*x*</code>, emphasis <code>_x_</code>, strikethrough <code>~x~</code>: the same shape, one delimiter char each; bodies may carry escapes (<code>\*</code>).</li>
+<li>Code `<code> </code>x<code> </code>`: verbatim body, first closer wins, no escapes and no backticks inside; the body is never re-lexed.</li>
+<li>Escape <code>\c</code>: the next char is literal; an escaped opener never opens, an escaped closer never closes.</li>
+</ul>
+<h2>Links, images, transclusion</h2>
+<p>
+StrictMark links come in exactly two cases, both defined out of line: an explicit <code>[text text][l]</code> pairing any display text with a one-symbol label <code>l</code>, and a shortcut <code>[page]</code> that keys on the bracket text, so a page name is its own key.
+</p>
+<ul>
+<li>Explicit: <code>[text text][l]</code> with <code>[l]: url &quot;title&quot;</code> — any display text, one-symbol label <code>l</code> (digits, then letters).</li>
+<li>Shortcut: <code>[page]</code> keys on the bracket text — <code>[StrictMark]</code> resolves <code>[StrictMark]: url</code>; the key may be multi-char.</li>
+<li>Implicit: <code>[StrictMark]</code> becomes a link to <code>./StrictMark.mkd</code></li>
+<li>Definitions sit anywhere, the foot idiomatic; an external URL or <code>#anchor</code> rides on an explicit label.</li>
+<li>A definition may continue one quad deeper — the url, then the optional <code>&quot;title&quot;</code> — for URIs longer than a line.</li>
+<li>Images and transclusions are the explicit form with a leading <code>!</code> — <code>![alt][t]</code>; the renderer handles the foreign type.</li>
+</ul>
+<pre><code>    see [Replicated Object Notation][1]
+    [1]: http://doc.replicated.cc/ron.sm &quot;What is RON&quot;
+
+    a bare [StrictMark] link, defined below
+    [StrictMark]: StrictMark.mkd &quot;the markup&quot;
+
+    ![here is the table][T]
+    [T]: /table?@tab &quot;this might be any object&quot;
+</code></pre>
+<h2>CommonMark compatibility</h2>
+<p>
+StrictMark is a CommonMark subset in spirit and most pages render fine on GitHub raw; the divergences below are declared, and a few writing conventions keep the rendered output aligned. When the two disagree, StrictMark wins.
+</p>
+<ul>
+<li>Write the gap space after a full quad (<code>#### x</code>, <code>-[v] x</code>, <code>12. x</code>) — the renderer trims it, and CommonMark requires it.</li>
+<li>Write the closing fence on pages meant for raw browsing: GitHub runs an unclosed fence to the end of the document.</li>
+<li>Put a blank line before a ruler: CommonMark reads a dash run under a paragraph as a setext heading underline; a ruler caption shows on GitHub as plain paragraph text.</li>
+<li>A bare indent opens a div; CommonMark renders an indented block as code.</li>
+<li>The todo marker has no CommonMark meaning (task lists are a GFM extension); GitHub shows <code>-[v]</code> as plain text.</li>
+<li>Meta pairs render on GitHub as ordinary paragraphs; multiline headers, ref defs and meta values ride lazy continuation.</li>
+</ul>
+<h2>Grammar</h2>
+<p>
+The structural layer is a regular language and the inline layer is regex-matched brackets, so the whole parser stays compact. The canonical grammar lives in the Beagle source, not in prose — the block machine and the inline Ragel machine below.
+</p>
+<ul>
+<li>Block machine <code>mkdtb</code> (<code>dog/tok/MKDTB.c.rl</code>) splits each line into quads / mark / rest; <code>MKDTLexer</code> in <code>dog/tok/MKDT.c</code> drives it.</li>
+<li>Inline lexer <code>MKDTInlineLexer</code> (Ragel, <code>dog/tok/MKDT.c.rl</code>) matches code, strong, emph, strike, links, transclusions as regexes.</li>
+</ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

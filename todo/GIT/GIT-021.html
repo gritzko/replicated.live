@@ -3,23 +3,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GIT-021 DONE: linux-scale checkout dies mid-reconcile with git.tree: bad tree entry + a 1.7 GB anon spike — store content verifies CLEAN post-hoc (stateful read bug, pre-existing)</title>
-<meta property="og:title" content="GIT-021 DONE: linux-scale checkout dies mid-reconcile with git.tree: bad tree entry + a 1.7 GB anon spike — store content verifies CLEAN post-hoc (stateful read bug, pre-existing)">
+<title>GIT-021: linux-scale checkout dies mid-reconcile with git.tree: bad tree entry + a 1.7 GB anon spike — store content verifies CLEAN post-hoc (stateful read bug, pre-existing)</title>
+<meta property="og:title" content="GIT-021: linux-scale checkout dies mid-reconcile with git.tree: bad tree entry + a 1.7 GB anon spike — store content verifies CLEAN post-hoc (stateful read bug, pre-existing)">
 <meta property="og:description" content="A jab get clone of a linux-v3.0-scale repo (698 MB pack, 2.06 M objects) lands + indexes the pack fine and STARTS the checkout, then dies in reconcileDir → treeMap → readTree with Error: git.tree: bad tree entry (gittreenext@native code) — and the process' ANONYMOUS RSS explodes from ~48 MB to 1.75 GB in the final ~5 s before the throw (a garbage size feeding a giant alloc, then the bad parse). The landed store is NOT corrupt: a FRESH process walks the same baseline tree completely (2265 trees, every readTree OK). So the bug is STATE accumulated inside the long-running get process (a shared/reused Buf or resolve window poisoned after ~10^5 interleaved getObject/materialise calls), not the pack, not the index, not GET-044 streaming. Method: work.">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/GIT/GIT-021.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>GIT-021 <a href="./DONE.html">DONE</a>: linux-scale checkout dies mid-reconcile with <code>git.tree: bad tree entry</code> + a 1.7 GB anon spike — store content verifies CLEAN post-hoc (stateful read bug, pre-existing)</h1>
+<h1>GIT-021: linux-scale checkout dies mid-reconcile with <code>git.tree: bad tree entry</code> + a 1.7 GB anon spike — store content verifies CLEAN post-hoc (stateful read bug, pre-existing)</h1>
 <div>
-<p>
-Now: DONE Sev: HIGH
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
 </div>
 <p>
 A <code>jab get</code> clone of a linux-v3.0-scale repo (698 MB pack, 2.06 M objects) lands + indexes the pack fine and STARTS the checkout, then dies in <code>reconcileDir → treeMap → readTree</code> with <code>Error: git.tree: bad tree entry</code> (<code>_git_tree_next@[native code]</code>) — and the process' ANONYMOUS RSS explodes from <del>48 MB to 1.75 GB in the final </del>5 s before the throw (a garbage size feeding a giant alloc, then the bad parse).  The landed store is NOT corrupt: a FRESH process walks the same baseline tree completely (2265 trees, every <code>readTree</code> OK).  So the bug is STATE accumulated inside the long-running get process (a shared/reused Buf or resolve window poisoned after ~10^5 interleaved <code>getObject</code>/materialise calls), not the pack, not the index, not <a href="../GET/GET-044.html">GET-044</a> streaming.  Method: <a href="../../meta/work.html">work</a>.

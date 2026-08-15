@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DIS/DIS-043.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>DIS-043: dog/WEAVE merge — concurrent-insert order is path-dependent</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 The new identity-keyed <code>dog/WEAVE</code> <code>WEAVEMerge</code> (the <a href="DIS-003.html">DIS-003</a> robust fix, built in <a href="../DOG/DOG-003.html">DOG-003</a>) recovers every revision correctly for linear and simple-fork histories, but a criss-cross / repeated merge still duplicates tokens: recovering an ancestor yields extra, doubled tokens (e.g. <code>aae</code> → <code>a/aa/e</code>, root <code>r</code> → <code>rr</code>). The DWEAVE fuzzer (below) finds these in seconds. Root cause is the ordering of <strong>concurrent</strong> inserts, not identity matching — two sibling tokens get ordered oppositely on two merge paths, so a later merge of those weaves desyncs the two-pointer and cascades into duplication. The real fix is a stable, path-independent order key per token (causal position + commit-id tiebreak, CRDT/RGA-style), not a counter recomputed in weave order. Links: <a href="DIS-003.html">DIS-003</a> (parent), <a href="../DOG/DOG-003.html">DOG-003</a> (engine).

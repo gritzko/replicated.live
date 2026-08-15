@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/GET/GET-055.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>GET-055: a clone into a wt that already has an EMPTY <code>.be</code> DIR dies with a raw <code>ToBigInt</code> TypeError after the pack has landed</h1>
 <div>
-<p>
-Now: OPEN Sev: MED
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>MED</dd></dl>
 </div>
 <p>
 <code>mkdir .be</code> in an otherwise green-field worktree is enough: <code>jab get &lt;remote&gt;</code> fetches, lands the pack, writes <code>refs</code> and <code>wtlog</code> — and then throws <code>TypeError: Invalid argument type in ToBigInt operation</code>, checking out ZERO files. Remove the empty <code>.be</code> and the identical clone succeeds. The store is left complete-but-unchecked-out, so a retry in the same dir now takes the update path over a wtlog it never finished. Found while converting the clone path to <a href="../KEEP/KEEP-006.html">KEEP-006</a>'s repack (<a href="../JAB/JAB-020.html">JAB-020</a>); NOT caused by it — baseline <code>be/</code> sources on the tmp-pack path fail identically, so the bug predates the conversion and is transport- and repo-independent. Also breaks the plain-words rule: a raw JSC TypeError is not a user-facing error (<a href="../DIS/DIS-079.html">Errors</a>). Method <a href="../../meta/work.html">Issues</a>.
@@ -54,11 +61,11 @@ A clone into a wt carrying an empty (or otherwise unusable) <code>.be</code> eit
 Nothing ruled yet. The suspicion — unverified, stated as such — is the branch pick in <code>verbs/get/get.js</code> <code>seedRemote</code>: <code>be.treeAt(wt)</code> sees a <code>.be</code> and yields an anchor with no usable baseline, so the UPDATE leg runs (<code>oldTipOf(info.bePath)</code> over an absent wtlog) instead of the green-field one. The <code>ToBigInt</code> is then a <code>BigInt(undefined)</code> downstream of that. NOT confirmed — no stack is available (the release build deliberately does not read <code>.stack</code>), so the first task is to localise it.
 </p>
 <h3>TODOs</h3>
-<ul>
-<li><a href="./ .html"> </a> Localise the throw (debug build / bisect <code>seedRemote</code>), then write the repro as a test.</li>
-<li><a href="./ .html"> </a> Get the ruling: adopt an empty <code>.be</code> as green-field, or refuse the wt.</li>
-<li><a href="./ .html"> </a> Make the failure path leave nothing behind (no landed pack, no wtlog).</li>
-<li><a href="./ .html"> </a> Check the sibling case: <code>.be</code> present with a <code>&lt;proj&gt;</code> dir but no wtlog (what a failed fetch leaves once <a href="../KEEP/KEEP-006.html">KEEP-006</a>'s repack pre-creates the shard).</li>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Localise the throw (debug build / bisect <code>seedRemote</code>), then write the repro as a test.</li>
+<li class="open"><input type="checkbox" disabled> Get the ruling: adopt an empty <code>.be</code> as green-field, or refuse the wt.</li>
+<li class="open"><input type="checkbox" disabled> Make the failure path leave nothing behind (no landed pack, no wtlog).</li>
+<li class="open"><input type="checkbox" disabled> Check the sibling case: <code>.be</code> present with a <code>&lt;proj&gt;</code> dir but no wtlog (what a failed fetch leaves once <a href="../KEEP/KEEP-006.html">KEEP-006</a>'s repack pre-creates the shard).</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>

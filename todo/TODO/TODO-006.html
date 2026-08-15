@@ -3,23 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TODO-006 DONE: cache the rendered wt status frames in the pager</title>
-<meta property="og:title" content="TODO-006 DONE: cache the rendered wt status frames in the pager">
+<title>TODO-006: cache the rendered wt status frames in the pager</title>
+<meta property="og:title" content="TODO-006: cache the rendered wt status frames in the pager">
 <meta property="og:description" content="The todo board renders slow: ~2.6 s of a 3.0 s tty render is the per-wt status work behind the TODO-005 button frames (classifyMerge top ~0.9 s + mounted subs 1.7 s over 88 wts + 81 subs; profile 2026-08-04). Ruling gritzko 2026-08-04 (r3, supersedes r2's rendered-line splice): in the PAGER, cache STRUCTURED per-row data — just the NUMBERS and head fields — and render the tok/TLV array EVERY time from it; native JS values only, never an io.buf/mmap handle. Each row block carries its OWN witness, so a post to the main tree (the upstream most wts track) refreshes only the COMMIT block's ahbeh numbers per wt while the expensive file counts and titles stay cached — never a full rerender. The STATUS-019 rev tree decides the drops: wt changed → file block, ticket changed → title/head, tips moved → commit block. A hit splices stored bytes and touches no classify, no graf, no keeper.">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/TODO/TODO-006.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>TODO-006 <a href="./DONE.html">DONE</a>: cache the rendered wt status frames in the pager</h1>
+<h1>TODO-006: cache the rendered wt status frames in the pager</h1>
 <div>
-<p>
-Now: DONE Sev: MED Ask: gritzko Rep: ///be/ On1: STATUS-019 See: TODO-005
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>MED</dd></dl>
+<dl class="meta"><dt>Ask:</dt><dd>gritzko</dd></dl>
+<dl class="meta"><dt>Rep:</dt><dd>///be/</dd></dl>
+<dl class="meta"><dt>On1:</dt><dd><a href="/todo/STATUS/STATUS-019.html">STATUS-019</a></dd></dl>
+<dl class="meta"><dt>See:</dt><dd><a href="/todo/TODO/TODO-005.html">TODO-005</a></dd></dl>
 </div>
 <p>
 The todo board renders slow: <del>2.6 s of a 3.0 s tty render is the per-wt status work behind the TODO-005 button frames (classifyMerge top </del>0.9 s + mounted subs 1.7 s over 88 wts + 81 subs; profile 2026-08-04). Ruling gritzko 2026-08-04 (r3, supersedes r2's rendered-line splice): in the PAGER, cache STRUCTURED per-row data — just the NUMBERS and head fields — and render the tok/TLV array EVERY time from it; native JS values only, never an io.buf/mmap handle.  Each row block carries its OWN witness, so a post to the main tree (the upstream most wts track) refreshes only the COMMIT block's ahbeh numbers per wt while the expensive file counts and titles stay cached — never a full rerender.  The <a href="./STATUS-019.html">STATUS-019</a> rev tree decides the drops: wt changed → file block, ticket changed → title/head, tips moved → commit block. A hit splices stored bytes and touches no classify, no graf, no keeper.
@@ -68,15 +79,15 @@ One cached artifact per board row: the WHOLE LINE as emitted, dropped by revs, f
 <li>wtStat's STATUS-019 rev memo now carries the tips fingerprint too — a rev-only layer underneath would hand the line memo stale ahbeh counts on a fingerprint miss.</li>
 </ul>
 <h3>TODOs</h3>
-<ul>
-<li><a href="./x.html">x</a> relative-offset line capture + splice helper around titleRow — SUPERSEDED by r3 (structured cache, render every time)</li>
-<li><a href="./v.html">v</a> the one-shot rev(todoRoot) board check gating all page-side work</li>
-<li><a href="./v.html">v</a> tips fingerprint via work.trackTip; measure its per-board cost</li>
-<li><a href="./ .html"> </a> r3: per-row STRUCTURED entry { head, fileCounts, ahbeh, patch, tips }, one witness per block (wt rev / topic rev / tips); titleRow renders from it every time</li>
-<li><a href="./ .html"> </a> FIX the first-refire miss: the ARMING rev() query must return the spot's real rev, not a token — arm-before-compute is what makes the first stored value valid (field repro 2026-08-04: warm1 misses wholesale at 7.7 s with drops=1, warm2 hits at 0.05 s)</li>
-<li><a href="./ .html"> </a> arming cost: cold pays a SECOND full walk to arm (21247 dirs, 10.5 s cold) — arm off the walk the miss path already does, never a walk of its own</li>
-<li><a href="./ .html"> </a> main-tree post leg: a commit to the upstream refreshes ahbeh numbers only — no classify, no file reads, board re-renders from cached blocks</li>
-<li><a href="./ .html"> </a> pty repro MUST include the field gesture: click a ticket, BACKSPACE back — the FIRST re-fire hits</li>
+<ul class="todo">
+<li class="wontfix"><input type="checkbox" disabled> <del>relative-offset line capture + splice helper around titleRow — SUPERSEDED by r3 (structured cache, render every time)</del></li>
+<li class="done"><input type="checkbox" checked disabled> the one-shot rev(todoRoot) board check gating all page-side work</li>
+<li class="done"><input type="checkbox" checked disabled> tips fingerprint via work.trackTip; measure its per-board cost</li>
+<li class="open"><input type="checkbox" disabled> r3: per-row STRUCTURED entry { head, fileCounts, ahbeh, patch, tips }, one witness per block (wt rev / topic rev / tips); titleRow renders from it every time</li>
+<li class="open"><input type="checkbox" disabled> FIX the first-refire miss: the ARMING rev() query must return the spot's real rev, not a token — arm-before-compute is what makes the first stored value valid (field repro 2026-08-04: warm1 misses wholesale at 7.7 s with drops=1, warm2 hits at 0.05 s)</li>
+<li class="open"><input type="checkbox" disabled> arming cost: cold pays a SECOND full walk to arm (21247 dirs, 10.5 s cold) — arm off the walk the miss path already does, never a walk of its own</li>
+<li class="open"><input type="checkbox" disabled> main-tree post leg: a commit to the upstream refreshes ahbeh numbers only — no classify, no file reads, board re-renders from cached blocks</li>
+<li class="open"><input type="checkbox" disabled> pty repro MUST include the field gesture: click a ticket, BACKSPACE back — the FIRST re-fire hits</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>

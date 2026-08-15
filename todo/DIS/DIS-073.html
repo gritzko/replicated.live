@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DIS/DIS-073.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>DIS-073: bare <code>be get</code> fast-forwards the worktree to the TRUNK tip while recording the current branch</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 inRepoSeed's D3' arm resolves the tip from the RAW query, not from the branch it is about to record: <code>branch = query</code> is <code>&quot;&quot;</code> for a bare <code>get</code> (also for <code>!</code> and <code>?</code>), so <code>tip = k.resolveRef(branch || &quot;&quot;)</code> returns the TRUNK tip (store.js:420-442 keys <code>&quot;&quot;</code> to the trunk and has no &quot;current branch&quot; key), while <code>wantBranch = branch || curBranch</code> — and the appended row is <code>get ?&lt;curBranch&gt;#&lt;trunk-tip&gt;</code> (get.js:514-520). On any non-trunk worktree a bare <code>be get</code> therefore checks out the TRUNK and mislabels the base as the branch's, silently: post then takes its parent from that base (post.js:581), status computes divergence against it, and the classifier reads it as the ours baseline (classify.js:226). The comment two lines above states the intended behavior (&quot;an empty/absent query folds to the current branch&quot;, get.js:511-513) and <a href="../../blog/worktree.html">worktree</a>:44-48 + <a href="../../wiki/GET.html">GET</a>:32 agree (&quot;bare: FF the wt to cur's branch tip&quot;) — a plain defect, not a spec gap. Invisible on a trunk wt (curBranch <code>&quot;&quot;</code> → the trunk IS correct), which is why the test set misses it.
@@ -61,11 +67,11 @@ Minimal fix, D3' only — this arm is load-bearing for every other verb's baseli
 <li>(none yet)</li>
 </ul>
 <h3>TODOs</h3>
-<ul>
-<li><a href="./v.html">v</a> repro: non-trunk wt + bare <code>be get</code> → trunk contamination (track/base disagree in the recorded row)</li>
-<li><a href="./v.html">v</a> fix the D3' resolve; preserve absent-vs-empty so <code>?</code> still switches to the trunk</li>
-<li><a href="./v.html">v</a> leg: <code>!</code> (force) FFs the tracked branch too, not the trunk</li>
-<li><a href="./ .html"> </a> audit restorePath's <code>?br</code> source resolve (get.js:540-543) for the same read-one-write-another class</li>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> repro: non-trunk wt + bare <code>be get</code> → trunk contamination (track/base disagree in the recorded row)</li>
+<li class="done"><input type="checkbox" checked disabled> fix the D3' resolve; preserve absent-vs-empty so <code>?</code> still switches to the trunk</li>
+<li class="done"><input type="checkbox" checked disabled> leg: <code>!</code> (force) FFs the tracked branch too, not the trunk</li>
+<li class="open"><input type="checkbox" disabled> audit restorePath's <code>?br</code> source resolve (get.js:540-543) for the same read-one-write-another class</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>

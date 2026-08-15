@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/BRO/BRO-011.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>BRO-011: the jab bro-pager double-encodes multibyte UTF-8 (— renders as â…) — the frame is a JS string then utf8.Encode'd a 2nd time</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 The interactive bro pager (<code>views/bro/pager.js</code>) renders non-ASCII text as mojibake on a TTY: an em-dash <code>—</code> (UTF-8 <code>E2 80 94</code>) shows as <code>â…</code>. Root cause: <code>render()</code> assembles the frame as a JS STRING where each text byte becomes a code unit via <code>String.fromCharCode(text[pos])</code> (<code>paintRow</code> / <code>paintDiffRowStr</code>), then <code>ttyWrite</code> runs the whole frame through <code>utf8.Encode</code> a SECOND time — so <code>E2</code>→<code>C3 A2</code>, <code>80</code>→<code>C2 80</code>, <code>94</code>→<code>C2 94</code> (double-encoded). The piped <code>--plain</code>/<code>--color</code> paths are byte-correct (<code>renderHunkLog</code>→C <code>.plain</code>/<code>.color</code>, and <code>colorDiffHunk</code>'s enc/raw byte split); only the pager's string-frame path re-encodes. Scope: <code>be/</code> JS pager. See <a href="../../wiki/Bro.html">Bro</a>; method <a href="../../rule/Issues.html">Issues</a>.

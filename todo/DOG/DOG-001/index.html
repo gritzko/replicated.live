@@ -3,8 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>README</title>
+<title>DOG-001: rewrite WEAVE as a columnar, HUNK-compliant dog/WEAVE (umbrella)</title>
+<meta property="og:title" content="DOG-001: rewrite WEAVE as a columnar, HUNK-compliant dog/WEAVE (umbrella)">
+<meta property="og:description" content="graf/WEAVE is the token-level file-history engine (SCCS-weave: one interleaved-delta TLV per file, birth-id (seq,pos) per token). It is graf-only, its on-disk form needs a 7-buffer BASS decode on every op, and its merge aligns POSITIONALLY (the DIS-003 root cause). Rework it as a columnar, HUNK-compliant dog/WEAVE — weave{text,toks,ins,rms,commits} — reusable by every dog and keyed on real commit ids. Full API + wire form in api. This is the umbrella; work lands via DOG-002..DOG-005.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DOG/DOG-001/README.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -12,88 +24,43 @@
 <span class="banner-title">Beagle SCM</span>
 </a>
 <h1>DOG-001: rewrite WEAVE as a columnar, HUNK-compliant <code>dog/WEAVE</code> (umbrella)</h1>
+<div>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+</div>
 <p>
 <code>graf/WEAVE</code> is the token-level file-history engine (SCCS-weave: one interleaved-delta TLV per file, birth-id <code>(seq,pos)</code> per token). It is graf-only, its on-disk form needs a 7-buffer BASS decode on every op, and its merge aligns POSITIONALLY (the <a href="../../DIS/DIS-003.html">DIS-003</a> root cause). Rework it as a columnar, <a href="../../../wiki/Dog.html">HUNK</a>-compliant <code>dog/WEAVE</code> — <code>weave{text,toks,ins,rms,commits}</code> — reusable by every dog and keyed on real commit ids. Full API + wire form in <a href="api.html">api</a>. This is the umbrella; work lands via <a href="../DOG-002.html">DOG-002</a>..<a href="../DOG-005.html">DOG-005</a>.
 </p>
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Today: <code>graf/WEAVE.{c,h}</code> (~1300 LoC) — interleaved <code>T</code>/<code>R</code> TLV, decoded<p>
-into 7 parallel BASS arrays (<code>WEAVE_DECODE</code>/<code>wdec</code>) on every op.
-</p>
-</li>
-<li>Identity is a GLOBAL topo <code>seq</code> the caller must assign equally on both<p>
-merge sides; the SHA-keyed topo-sort is non-total → the <a href="../../DIS/DIS-003.html">DIS-003</a> flake.
-</p>
-</li>
-<li>Consumed only by graf (GET/REBASE/BLAME/DIFFREF/LOG); nothing else can<p>
-weave, though the wire form is already HUNK-adjacent (<code>text</code>+<code>tok32</code>).
-</p>
-</li>
-<li>The runtime decode (<code>wdec</code>: text + tok end-offsets + seq/pos + R-set pool)<p>
-is ALREADY the columnar shape this rework makes canonical.
-</p>
-</li>
+<li>Today: <code>graf/WEAVE.{c,h}</code> (~1300 LoC) — interleaved <code>T</code>/<code>R</code> TLV, decoded into 7 parallel BASS arrays (<code>WEAVE_DECODE</code>/<code>wdec</code>) on every op.</li>
+<li>Identity is a GLOBAL topo <code>seq</code> the caller must assign equally on both merge sides; the SHA-keyed topo-sort is non-total → the <a href="../../DIS/DIS-003.html">DIS-003</a> flake.</li>
+<li>Consumed only by graf (GET/REBASE/BLAME/DIFFREF/LOG); nothing else can weave, though the wire form is already HUNK-adjacent (<code>text</code>+<code>tok32</code>).</li>
+<li>The runtime decode (<code>wdec</code>: text + tok end-offsets + seq/pos + R-set pool) is ALREADY the columnar shape this rework makes canonical.</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>One <code>dog/WEAVE</code>: parsed view <code>weave{text,toks,ins,rms,commits}</code> over a<p>
-HUNK-compliant blob; zero-copy <code>WEAVEParse</code>, no per-call decode.
-</p>
-</li>
-<li>Identity = <code>(commits[ins], per-commit ordinal)</code>, <code>commits[i]</code> a stable<p>
-<code>u64</code> = high 64 bits of the commit sha1 — the <a href="../../DIS/DIS-003.html">DIS-003</a> robust fix.
-</p>
-</li>
-<li>Builders <code>WEAVENext</code> (linear fold) + <code>WEAVEMerge</code> (identity interleave);<p>
-<code>WEAVEProduce</code> reproduces ANY past rev as scoped-alive bytes.
-</p>
-</li>
+<li>One <code>dog/WEAVE</code>: parsed view <code>weave{text,toks,ins,rms,commits}</code> over a HUNK-compliant blob; zero-copy <code>WEAVEParse</code>, no per-call decode.</li>
+<li>Identity = <code>(commits[ins], per-commit ordinal)</code>, <code>commits[i]</code> a stable <code>u64</code> = high 64 bits of the commit sha1 — the <a href="../../DIS/DIS-003.html">DIS-003</a> robust fix.</li>
+<li>Builders <code>WEAVENext</code> (linear fold) + <code>WEAVEMerge</code> (identity interleave); <code>WEAVEProduce</code> reproduces ANY past rev as scoped-alive bytes.</li>
 <li><code>dog/</code>-layer so sniff/keeper/spot/bro can weave too, not just graf.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li><code>tok32</code> offset is 24-bit → 16 MiB cap on a weave's cumulative text; files<p>
-over it drop to a coarse blob-level fallback (shared with <a href="../../DIFF/DIFF-007.html">DIFF-007</a>).
-</p>
-</li>
-<li><code>commits[0]</code> = spine/root; reserved high <code>u64</code>s replace the old<p>
-<code>WEAVE_WT_SRC</code>/<code>WEAVE_CFLCT_SRC</code> sentinels.
-</p>
-</li>
-<li>Parent edges are NOT stored: a rev's <code>scope</code> (ancestor closure) is supplied<p>
-by graf's DAG, mapped through <code>commits[]</code> — same split as today.
-</p>
-</li>
+<li><code>tok32</code> offset is 24-bit → 16 MiB cap on a weave's cumulative text; files over it drop to a coarse blob-level fallback (shared with <a href="../../DIFF/DIFF-007.html">DIFF-007</a>).</li>
+<li><code>commits[0]</code> = spine/root; reserved high <code>u64</code>s replace the old <code>WEAVE_WT_SRC</code>/<code>WEAVE_CFLCT_SRC</code> sentinels.</li>
+<li>Parent edges are NOT stored: a rev's <code>scope</code> (ancestor closure) is supplied by graf's DAG, mapped through <code>commits[]</code> — same split as today.</li>
 <li>No <code>abc/</code> API change without review; the diff core relocates via <a href="../DOG-002.html">DOG-002</a>.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>SoA columnar IS the format (drop interleaved TLV + the 7-buffer decode);<p>
-<code>'X'</code>/<code>'K'</code> sub-records stay byte-identical to HUNK so a weave projects to a hunk for free. Outer <code>'W'</code> container adds <code>'I'</code>/<code>'M'</code>/<code>'C'</code>.
-</p>
-</li>
-<li><code>pos</code> dropped, recomputed as the per-commit ordinal in weave order (both<p>
-merge sides enumerate a shared commit's tokens identically — keeps &quot;two a's of aa&quot; distinct).
-</p>
-</li>
-<li><code>tok32</code> side reused as two bits {in,rm}; <code>custom</code> bit = multi-remover flag.<p>
-<code>in</code>-off ⇒ spine inserter; <code>rm</code> reads 1 (or count+N if custom) from <code>rms</code>.
-</p>
-</li>
-<li>Scope (active-commit set) is a BITMAP over <code>commits[]</code> (bit i = slot i<p>
-active, bit 0 = spine always set) — classification is a bit-test, no <code>WEAVEsetfn</code>. Built once per op from a <code>u64cs</code> of active hashlets at the DAG boundary (<code>WEAVEScope</code>). <code>WEAVEMerge</code> replaces <code>WEAVEApply</code>.
-</p>
-</li>
-<li>Replay is sequential (topo order): <code>WEAVENext</code> diffs the new blob against<p>
-the running weave's alive view — NO <code>base_scope</code> arg. Forks fold via <code>WEAVEMerge</code>; an &quot;evil merge&quot; is <code>WEAVEMerge</code> then <code>WEAVENext</code>.
-</p>
-</li>
-<li>The chain DOG-002..005 lands SEQUENTIALLY in one worktree (each gates the<p>
-next), not as parallel isolated clones.
-</p>
-</li>
+<li>SoA columnar IS the format (drop interleaved TLV + the 7-buffer decode); <code>'X'</code>/<code>'K'</code> sub-records stay byte-identical to HUNK so a weave projects to a hunk for free. Outer <code>'W'</code> container adds <code>'I'</code>/<code>'M'</code>/<code>'C'</code>.</li>
+<li><code>pos</code> dropped, recomputed as the per-commit ordinal in weave order (both merge sides enumerate a shared commit's tokens identically — keeps &quot;two a's of aa&quot; distinct).</li>
+<li><code>tok32</code> side reused as two bits {in,rm}; <code>custom</code> bit = multi-remover flag. <code>in</code>-off ⇒ spine inserter; <code>rm</code> reads 1 (or count+N if custom) from <code>rms</code>.</li>
+<li>Scope (active-commit set) is a BITMAP over <code>commits[]</code> (bit i = slot i active, bit 0 = spine always set) — classification is a bit-test, no <code>WEAVEsetfn</code>. Built once per op from a <code>u64cs</code> of active hashlets at the DAG boundary (<code>WEAVEScope</code>). <code>WEAVEMerge</code> replaces <code>WEAVEApply</code>.</li>
+<li>Replay is sequential (topo order): <code>WEAVENext</code> diffs the new blob against the running weave's alive view — NO <code>base_scope</code> arg. Forks fold via <code>WEAVEMerge</code>; an &quot;evil merge&quot; is <code>WEAVEMerge</code> then <code>WEAVENext</code>.</li>
+<li>The chain DOG-002..005 lands SEQUENTIALLY in one worktree (each gates the next), not as parallel isolated clones.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -101,22 +68,27 @@ next), not as parallel isolated clones.
 <li class="done"><input type="checkbox" checked disabled> <a href="../DOG-003.html">DOG-003</a> core: format + <code>Parse/Next/Merge/Produce</code> + cursor + tests — landed <code>489865d8</code> (libdog).</li>
 <li class="done"><input type="checkbox" checked disabled> <a href="../DOG-004.html">DOG-004</a> emit: <code>Emit{Diff,Full,Merged}</code>+<code>Alive</code>/<code>Produce</code> + cap fallback — landed <code>cba618d4</code> (libdog).</li>
 <li class="open"><input type="checkbox" disabled> <a href="../DOG-005.html">DOG-005</a> graf cut-over; delete <code>graf/WEAVE</code>; update both INDEX.md.</li>
-<li class="open"><input type="checkbox" disabled> Retire-on-land: <a href="../../GET/GET-001.html">GET-001</a> (decode-per-call), <a href="../../DIS/DIS-003.html">DIS-003</a> (positional merge),<p>
-  <a href="../../DIFF/DIFF-007.html">DIFF-007</a> (outtoks overflow), <a href="../../MEM/MEM-036.html">MEM-036</a>/<a href="../../MEM/MEM-040.html">MEM-040</a> (TLV-builder OOB/leak).
-</p>
-</li>
+<li class="open"><input type="checkbox" disabled> Retire-on-land: <a href="../../GET/GET-001.html">GET-001</a> (decode-per-call), <a href="../../DIS/DIS-003.html">DIS-003</a> (positional merge), <a href="../../DIFF/DIFF-007.html">DIFF-007</a> (outtoks overflow), <a href="../../MEM/MEM-036.html">MEM-036</a>/<a href="../../MEM/MEM-040.html">MEM-040</a> (TLV-builder OOB/leak).</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>
 <li><a href="../DOG-003.html">DOG-003</a>..<a href="../DOG-005.html">DOG-005</a> gate on <a href="../DOG-002.html">DOG-002</a> (layering) landing first.</li>
-<li>Cross-weave <code>u64</code> identity assumes no high-64-bit sha collision within one<p>
-file's commit set; guard with a <code>must()</code> on table insert.
-</p>
-</li>
+<li>Cross-weave <code>u64</code> identity assumes no high-64-bit sha collision within one file's commit set; guard with a <code>must()</code> on table insert.</li>
 </ul>
 <h2>Outcome</h2>
 <ul>
 <li>(open)</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

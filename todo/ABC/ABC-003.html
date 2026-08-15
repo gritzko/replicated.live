@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/ABC/ABC-003.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>ABC-003: <code>UTF8_LEN[byte&gt;&gt;4]</code> byte-length table is shifted (multibyte over-counts)</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>abc/UTF8.h</code> line 47's <code>static u8 UTF8_LEN[16]</code> — the byte-length lookup indexed by <code>lead &gt;&gt; 4</code>, used by <code>utf8sDrain1utf8</code> and by <strong>every bro renderer</strong> (<code>bro/BRO.c</code> has five <code>n[ch&gt;&gt;4]</code> call sites for row width / wrap) — is <strong>off by one slot</strong>, so every multibyte lead byte reports the WRONG length. A 3-byte UTF-8 char (em-dash <code>—</code> = <code>e2 80 94</code>, lead <code>&gt;&gt;4</code> = <code>0xE</code>) returns <strong>4</strong> not 3, so a renderer walking bytes over-consumes the following byte. In <code>bro_row_end_pass</code> that byte is the line's <code>\n</code>: the row never breaks there, so the multibyte-ending line and the NEXT line render as ONE row, and the next line ALSO gets its own index row — a <strong>duplicated line</strong> in colour mode. This is the root cause of <a href="../BRO/BRO-004.html">BRO-004</a>'s CLI repro (<code>be --color diff:ABC.md | cat</code> duplicated 4 lines that each ended a paragraph with <code>—</code>). abc/core change — maintainer-reviewed. See <a href="../../rule/Issues.html">Issues</a>, <a href="../../CLAUDE.md">CLAUDE</a>, <a href="../BRO/BRO-004.html">BRO-004</a>.

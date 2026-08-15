@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/MEM/MEM-025.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>MEM-025 <a href="./DONT.html">DONT</a>: first_name slice dangles into compacted advert buffer (keeper/WIRECLI.c)</h1>
 <div>
-<p>
-Now: DONT
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONT</dd></dl>
 </div>
 <p>
 <code>wcli_match_advert</code> captures <code>first_name</code> as a pointer-pair slice into the advert <code>buf</code>, then holds it across the rest of the drain loop; <code>wcli_read_pkt</code> compacts the same buffer when IDLE runs out (<code>u8bUsed</code>+<code>u8bShift</code> memmove of surviving DATA to <code>buf[0]</code>, then <code>FILEDrain</code> overwrites), so <code>first_name</code>'s bytes are relocated/clobbered. The legacy first-ref fallback then does <code>a_dup(u8c, fn, first_name)</code> (a pointer copy, not a byte copy) and records the stale/overwritten region as a corrupt ref name. The slice stays within the BASS-carved <code>buf</code>, so this is a stale-memory read (corrupt name), not OOB. The goal is to snapshot the first ref name into stable storage at capture time.

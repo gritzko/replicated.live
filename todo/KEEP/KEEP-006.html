@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/KEEP/KEEP-006.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>KEEP-006: cap a <code>NNNNN.keeper</code> log at 2 GiB — past that the log is unmappable, and the cap is unenforceable without also capping the fetch</h1>
 <div>
-<p>
-Now: OPEN Sev: HIGH
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
 </div>
 <p>
 <a href="../../wiki/PackLog.html">PackLog</a> says &quot;a new log starts only past a size threshold&quot; but never bounds that threshold, so a single landed pack can make one log arbitrarily large. <a href="../GET/GET-044.html">GET-044</a> T4 proved it: a <code>linux.git</code> clone streamed 6.45 GB and atomically landed a durable *<strong>6.0 GB</strong>* <code>0000000001.keeper</code> — bytes on disk that no reader can open. RULING 2026-07-27 (gritzko): *<strong>cap at 2 GB</strong><strong>, not at the engine's ceiling. The engine numbers, all measured this session on sparse files: JSC allocates a typed array up to 4 GiB inclusive, but only <code>2^32-1</code> of it is addressable (<code>a[2^32-1]</code> reads <code>undefined</code>, JS's canonical not-an-index sentinel), and the <a href="../JAB/JAB-007.html">JAB-007</a> Buf <code>| 0</code> cursor wraps NEGATIVE at <code>2^31</code> exactly, so <code>io.mmap</code> yields an empty or garbled view from there up. <code>2^31-1</code> is the only bound that survives the whole path, and <code>ingest.js</code> already refuses at exactly that (<code>MMAP_CAP</code>). <code>jab/io.cpp</code> <code>JABC_MAP_MAX</code> now enforces it in the mapper (this session). The sting in the tail: <a href="../../wiki/PackLog.html">PackLog</a> §Delta-dependency pins OFS_DELTA bases </strong>inside one pack*, so a received pack cannot be split across logs — meaning a 2 GB log cap is only achievable if no single fetched pack exceeds 2 GB. Scope: keeper log rotation + the fetch that feeds it. See <a href="../../wiki/PackLog.html">PackLog</a>, <a href="../../wiki/Keeper.html">Keeper</a>; method <a href="../../rule/Issues.html">Issues</a>.
@@ -237,18 +244,18 @@ Buffer plumbing needs NO new primitive: <code>abc/Bx.h</code> already has it. PA
 Both depend on REF_DELTA resolution, which is a RESTORE not a build — <code>dog/git/PACK.c:252</code> returns <code>PACKREF</code> as a deliberate backstop (&quot;Foreign REF packs go through UNPK&quot;), and <code>dog/git/PIDX.c:4</code> records that this leaner scanner DROPPED &quot;the REF_DELTA waiter&quot; the keeper had.
 </p>
 <h3>TODOs</h3>
-<ul>
-<li><a href="./ .html"> </a> <code>KEEP_LOG_MAX = 2^31-1</code> at the append/rotate site; an append that would cross it starts the next log. Cut wherever the cap falls — the flat crossing curve makes cut-point optimisation not worth building.</li>
-<li><a href="./ .html"> </a> Stream https as a stream: <code>curlRun</code> buffers the whole body in the JS heap — port <a href="../GET/GET-044.html">GET-044</a>'s streaming to the curl path. Blocks everything else.</li>
-<li><a href="./v.html">v</a> Restore REF_DELTA resolution — <code>PACKResolve</code>/<code>PIDXScanRef</code> take a caller finder (sha → base pack + offset), so a rotated log's cross-log bases resolve; no waiter forest needed, bases always land earlier.</li>
-<li><a href="./ .html"> </a> Stream-ingest in <a href="./libdog.html">libdog</a> as &quot;repack a git pack&quot;: fd + destination shard in, counts + refs out; forward-only, never stored; pack-offset → log-offset map as wh128b (full map first, drift table if it bites). NO curl/HTTP/pkt-line knowledge below the JS routing layer.</li>
-<li><a href="./ .html"> </a> Re-anchor crossing deltas as REF_DELTA at the rotate boundary; base shas are already known from the on-the-fly indexing.</li>
-<li><a href="./ .html"> </a> Write the orphaned-records rule into <a href="../../wiki/PackLog.html">PackLog</a> explicitly (bad trailer = refs unpublished, records collected at the next epoch) — it is what makes not-storing safe.</li>
-<li><a href="./ .html"> </a> Do NOT build: <code>io._pread</code>, windowed <code>io._mmap</code>, dependency-ordered resolution. Superseded by stream-ingest; recorded so nobody re-derives them.</li>
-<li><a href="./ .html"> </a> Diagnosis for existing oversized logs (the 6.0 GB one): name the file and its size instead of truncating or throwing from the mapper.</li>
-<li><a href="./ .html"> </a> Sparse-file regression pinning the rotate boundary (cheap — no multi-GB fixture needed).</li>
-<li><a href="./ .html"> </a> Get the ruling on the fetch-side rule (a)/(b)/(c) and record it here before coding the fetch half.</li>
-<li><a href="./ .html"> </a> Verify end-to-end through a real <code>jab get</code>, not a unit probe.</li>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> <code>KEEP_LOG_MAX = 2^31-1</code> at the append/rotate site; an append that would cross it starts the next log. Cut wherever the cap falls — the flat crossing curve makes cut-point optimisation not worth building.</li>
+<li class="open"><input type="checkbox" disabled> Stream https as a stream: <code>curlRun</code> buffers the whole body in the JS heap — port <a href="../GET/GET-044.html">GET-044</a>'s streaming to the curl path. Blocks everything else.</li>
+<li class="done"><input type="checkbox" checked disabled> Restore REF_DELTA resolution — <code>PACKResolve</code>/<code>PIDXScanRef</code> take a caller finder (sha → base pack + offset), so a rotated log's cross-log bases resolve; no waiter forest needed, bases always land earlier.</li>
+<li class="open"><input type="checkbox" disabled> Stream-ingest in <a href="./libdog.html">libdog</a> as &quot;repack a git pack&quot;: fd + destination shard in, counts + refs out; forward-only, never stored; pack-offset → log-offset map as wh128b (full map first, drift table if it bites). NO curl/HTTP/pkt-line knowledge below the JS routing layer.</li>
+<li class="open"><input type="checkbox" disabled> Re-anchor crossing deltas as REF_DELTA at the rotate boundary; base shas are already known from the on-the-fly indexing.</li>
+<li class="open"><input type="checkbox" disabled> Write the orphaned-records rule into <a href="../../wiki/PackLog.html">PackLog</a> explicitly (bad trailer = refs unpublished, records collected at the next epoch) — it is what makes not-storing safe.</li>
+<li class="open"><input type="checkbox" disabled> Do NOT build: <code>io._pread</code>, windowed <code>io._mmap</code>, dependency-ordered resolution. Superseded by stream-ingest; recorded so nobody re-derives them.</li>
+<li class="open"><input type="checkbox" disabled> Diagnosis for existing oversized logs (the 6.0 GB one): name the file and its size instead of truncating or throwing from the mapper.</li>
+<li class="open"><input type="checkbox" disabled> Sparse-file regression pinning the rotate boundary (cheap — no multi-GB fixture needed).</li>
+<li class="open"><input type="checkbox" disabled> Get the ruling on the fetch-side rule (a)/(b)/(c) and record it here before coding the fetch half.</li>
+<li class="open"><input type="checkbox" disabled> Verify end-to-end through a real <code>jab get</code>, not a unit probe.</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <p>

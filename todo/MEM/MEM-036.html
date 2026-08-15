@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/MEM/MEM-036.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>MEM-036: WEAVE EDL fallback raw writes can overflow on BRAM NOROOM (graf/WEAVE.c)</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>weave_diff_core</code>'s BRAM-failure fallback does <code>edlg[1]=edlg[0]</code> then two raw <code>*edlg[1]++</code> writes with no capacity check. The gauge convention (<code>DIFFx.h:14-22</code>) is <code>[0]</code>=write cursor, <code>[1]</code>=cap end, <code>[2]</code>=base; <code>BRAMu64s</code> shares the same gauge and advances <code>edl[0]</code> via <code>DIFFu64AddEntry</code>, leaving <code>edl[0]==edl[1]==edlbuf[3]</code> on DIFFNOROOM. The fallback then writes AT <code>edlbuf[3]</code> = heap OOB. The <code>olen&gt;0</code>/<code>nlen&gt;0</code> early-returns only ensure cap≥2 from base, not that BRAM left 2 free slots. The goal is to make the fallback use the checked DIFF path so it cannot overflow, and to fix the dropped-write logic bug.

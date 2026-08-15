@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DIFF/DIFF-011.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>DIFF-011: <code>diff:&lt;sub&gt;/&lt;file&gt;</code> renders the file WHOLLY-ADDED — the single-file (scoped) diff branch isn't submodule-mount-aware</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>be diff:&lt;sub&gt;/&lt;file&gt;</code> (a wt-vs-base or range diff of a file UNDER a mounted submodule) reads the from/baseline side from the PARENT's baseline tree, where <code>&lt;sub&gt;</code> is a <code>160000</code> gitlink. <code>blobAtTree</code> walks the path segments via <code>readTree</code> and at the gitlink it cannot descend the commit-sha → returns <code>undefined</code> → an EMPTY from-side → <code>diffFile</code>'s <code>f.length === 0</code> &quot;Addition&quot; branch fires, so the file renders WHOLLY-ADDED (<code>@@ -1,0 +1,N @@</code>, every line <code>+</code>) instead of the real wt-vs-base inline diff. The whole-tree wt path (<code>diffWtTree</code>) and the range path already recurse mounts via <code>recurseSubPins</code>/<code>recurse.isMount</code> (open the sub's shard, read the sub's own tree), but the single-file SCOPED branches (<code>views/diff/diff.js:437-441</code> range+path, <code>449-451</code> wt+path) have NO mount awareness — they walk the parent tree straight through the gitlink. PRE-EXISTING (diff.js byte-identical to trunk; independent of the DIS-058 sub-recursion work), surfaced by <code>be-js-diff-14-sub-file-baseline</code>. Scope <code>be/</code> JS. See <a href="../../wiki/Store.html">Store</a>, <a href="../../wiki/Submodules.html">Submodules</a>; method <a href="../../rule/Issues.html">Issues</a>.

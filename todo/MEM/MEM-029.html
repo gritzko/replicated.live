@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/MEM/MEM-029.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>MEM-029: LESSDefer leaks mmap+tokens when map table full (spot/LESS.c)</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>LESSDefer</code> is documented to take single-owner ownership of the per-file mmap (<code>mapped</code>) and token buffer (<code>toks</code>) so <code>LESSArenaCleanup</code> can unmap them. When <code>less_nmaps &gt;= LESS_MAX_MAPS</code> (1024) it returns early WITHOUT storing the descriptors and WITHOUT unmapping them; the dropped pointers are never recorded in <code>less_maps[]</code>/<code>less_toks[]</code>, so cleanup cannot reclaim them either. All three callers invoke the void-returning <code>LESSDefer</code> in their <code>mapped != NULL</code> branch and do nothing else, assuming transfer. <code>less_nmaps</code> grows monotonically within a scan. The goal is to unmap on the full path so a scan matching &gt;1024 files stops leaking one whole-file mmap plus a ~4×filesize token buffer per file.

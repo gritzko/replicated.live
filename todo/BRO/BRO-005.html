@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/BRO/BRO-005.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>BRO-005: the jab/JS pager has NO mouse navigation — add SGR mouse tracking + <code>U</code>-tag click-to-navigate (parity with C bro MAUS)</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 The C <a href="../../wiki/Bro.html">Bro</a> pager supports the mouse: SGR mouse tracking (<code>bro/MAUS.{h,c}</code> — <code>MAUSEnable</code>/<code>MAUSDisable</code>/<code>MAUSParse</code>), a left-click on a <code>U</code>-tagged token navigates to that token's URI, the wheel scrolls, and <code>m</code> toggles mouse on/off. The JS (jab) pager (<code>be/view/bro.js</code>, <code>be/views/bro/{bro,pager}.js</code>) renders the very same hunks — including the <code>U</code> click-target tags — but has NO mouse handling at all (no SGR mouse mode, no click/wheel/button parse; confirmed by grep 2026-06-26: only SGR <strong>colour</strong> code is present). So the links the hunks already carry are dead in jab. Goal: bring the jab pager to mouse-nav parity with C bro. Method: <a href="../../meta/work.html">Issues</a>.
@@ -70,7 +76,11 @@ The C <a href="../../wiki/Bro.html">Bro</a> pager supports the mouse: SGR mouse 
 <li>be/ suite: 64/65 green; the lone red is the pre-existing <code>be-js-bro-universal</code> stale WILL_FAIL xfail (test prints PASS, exit 0 — flipped by ctest; not my files, not a regression). STOPPED before commit per the gate.</li>
 <li>(LANDED be <code>579b251f</code>) FOLLOW-UP: pager hunk-header had NO pale-yellow band (only <code>[1m</code> bold) while core/emit.js + C bro draw every header with it. Fix: <code>be/views/bro/pager.js</code> <code>_banner</code> (:189) now opens <code>theme.bannerOpen()</code> (BANNER_SGR <code>48;5;230</code> bg), space-FILLS to <code>cols</code>, closes <code>theme.bannerClose()</code> (ESC[0m); imports the theme (:16). Plain (non-tty) path unchanged; mouse-nav (<code>_mouse</code>/<code>_uriAt</code>/<code>_screenToByte</code>/<code>m</code>) preserved.</li>
 <li>Verified: pty drive asserts the header row carries <code>48;5;230</code> + space-fill to width 40 + ESC[0m close, body row unbanded (<code>band-*</code> checks); RED before (no bg, no fill), GREEN after. Test <code>be/test/bro/pager/pty.js</code>; ctest <code>be-js-bro-pager</code> Passed. STOPPED before commit.</li>
-<li>(LANDED be <code>4febec96</code> + be/test <code>80906f7a</code>) FOLLOW-UP: MULTI-ROW clickability — in <code>jab log:</code> only the 8-char sha (the one token before its <code>U</code>) navigated; a click on the row's date/summary/author or its soft-wrap tail returned null → the bulk of every commit row read as a dead link (&lt;50% of cells clickable). Producer is FINE (<code>jab log: --tlv</code>: each sha8 L-token is followed by its <code>U</code> commit:?&lt;sha&gt;); the bug was the CONSUMER <code>_uriAt</code>. Root cause: it only tested <code>toks[ti+1]==U</code>. Fix: <code>be/views/bro/pager.js</code> <code>_uriAt</code> (:414) keeps the token-precise check, then falls back to the line's lone U via new <code>_lineUri</code> (:432) — the WHOLE logical line (incl. wrap rows) is clickable iff the line has exactly ONE U (log/ls/commit/diff); cat's many-U-per-line word links stay token-precise.</li>
+<li>(LANDED be <code>4febec96</code> + be/test <code>80906f7a</code>) FOLLOW-UP: MULTI-ROW clickability — in <code>jab log:</code> only the 8-char sha (the one token before its <code>U</code>) navigated; a click on the row's date/summary/author or its soft-wrap tail returned null → the bulk of every commit row read as a dead link (&lt;50% of cells clickable). Producer is FINE (<code>jab log: --tlv</code>: each sha8 L-token is followed by its <code>U</code> commit:?&lt;sha&gt;); the bug was the CONSUMER <code>_uriAt</code>. Root cause: it only tested <code>toks[ti+1]==U</code>.<dl class="meta"><dt>Fix:</dt><dd>`be/views/bro/pager.js` `_uriAt` (:414) keeps the token-precise check,</dd></dl>
+<p>
+then falls back to the line's lone U via new <code>_lineUri</code> (:432) — the WHOLE logical line (incl. wrap rows) is clickable iff the line has exactly ONE U (log/ls/commit/diff); cat's many-U-per-line word links stay token-precise.
+</p>
+</li>
 <li>Verified: new pty/headless test <code>be/test/bro/rowclick/</code> builds a 3-commit log, clicks rows 1/2/3 at the sha AND non-sha columns + a wrap-tail — each resolves to its <code>commit:?&lt;sha&gt;</code>; RED before (<code>screenRow 2 col 9 … null</code>), GREEN after. Drove the real <code>jab log:</code> binary over a pty: sha/summary/author/tail all open the commit. <code>driver.js</code>+<code>pty.js</code> (BRO-005 mouse-nav + band) still green. be/ ctest: 73/74 (only the pre-existing <code>be-js-bro-universal</code> stale xfail red). STOPPED before commit.</li>
 </ul>
 <div class="footer">

@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/MEM/MEM-016.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>MEM-016: ULOGOpen* leak the booked log map on scratch-alloc failure (dog/ULOG.c)</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>ULOGOpenBooked</code> and <code>ULOGOpenRO</code> first <code>FILEBook</code>/<code>FILEBookRO</code> the log into <code>*data</code> (mmap + fd held), then <code>call(ulog_idx_alloc_anon, &amp;tmp, 1024)</code>; the <code>call()</code> macro returns immediately on failure <strong>without</strong> <code>FILEUnBook(*data)</code>, so when the 16 KB anon mmap (or 32-byte calloc) inside fails under memory pressure the booked map and its fd leak for the process lifetime. Every other error path in both functions unbooks <code>*data</code> — only the <code>call()</code> skips it. The goal is to unbook before returning on that path.

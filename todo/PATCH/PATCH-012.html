@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/PATCH/PATCH-012.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>PATCH-012: <code>get</code>'s 3-way weave has NO grow-on-<code>out full</code> retry (the only weave without it) — a big file throws, silently stays at OURS, and the next commit REVERTS the incoming side</h1>
 <div>
-<p>
-Now: DONE
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
 </div>
 <p>
 <code>verbs/get/get.js:926-943</code> hand-rolls <code>weave3</code> with FIXED caps — <code>abc.ram(&quot;WEAVE&quot;, 1&lt;&lt;18)</code> for each of the four folds, <code>1&lt;&lt;19</code> for the merge, <code>io.buf(1&lt;&lt;20)</code> for the render — and never catches the binding's <code>out full</code> throw. Every OTHER weave in the tree grows and replays (<a href="../DIFF/DIFF-010.html">DIFF-010</a>): <code>core/loop.js:71-85</code> doubles the cap and re-feeds the held records, <code>shared/weave.js</code> carries that retry for <a href="../../wiki/PATCH.html">PATCH</a>'s per-file merge (patch.js:44-46), and <code>views/diff/diff.js:29-30</code> mirrors it. So a <code>be get</code> that must 3-way merge a large dirty file throws <code>out full</code> mid-reconcile and the leaf is LEFT AT OURS — the update reports done, the incoming side is silently absent, and a <code>post</code> on top records a commit whose parent claims the incoming changes while its trees revert them. Hit live 2026-07-16: updating <code>work/DIS-072</code> from <code>af94f0ea</code> to <code>fec59ed5</code> left <code>verbs/post/post.js</code> (~35KB), <code>verbs/get/get.js</code>, <code>views/refs/refs.js</code> and <code>views/status/status.js</code> at ours; the resulting <code>e74ae263</code> (parent <code>fec59ed5</code>) carried DIS-074:0/DIS-075:0 markers where its own parent has 5/2 — it REVERTED two landed tickets while the log claimed them. gritzko rolled it back. Same failure CLASS as <a href="../DIS/DIS-041.html">DIS-041</a> (a weave that bails leaves the file UNMERGED); that one fixed the graf-index path, this one is the cap path.
@@ -63,12 +69,12 @@ The cap must not become a silent truncation, and the retry must stay in one plac
 <li>Unweavable leaf (over-cap, or residual <code>out full</code>) → <code>merged=null</code> → <code>con</code> row + durable wtlog <code>con</code> + <code>g.conf++</code> → existing GETCONF throw → non-zero exit. Never silent-ours+0.</li>
 </ul>
 <h3>TODOs</h3>
-<ul>
-<li><a href="./v.html">v</a> repro: <code>test/get/dirty-big/run.sh</code> (<code>be-js-get-dirty-big</code>) — A: <del>600KB dirty 3-way lands both sides; B: </del>4.5MB refuses loudly (non-zero, ours intact, durable <code>con</code> row); pre-fix code fails A with <code>weave.fold: failed (out full?)</code></li>
-<li><a href="./v.html">v</a> weave3 routed through shared/weave.js <code>fold</code>/<code>merge</code>; render via <code>io.ram(MAX_SOURCE_MARKED_UP)</code> (patch.js:198's sink); all <code>abc.ram(&quot;WEAVE&quot;,…)</code> + <code>io.buf(1&lt;&lt;20)</code> caps deleted</li>
-<li><a href="./v.html">v</a> over-cap/still-full weave refuses LOUDLY (see design decisions)</li>
-<li><a href="./v.html">v</a> audit: get's render cap fixed by the fix itself; <code>verbs/patch/patch.js:366</code> <code>outBuf/aliveBuf io.buf(1&lt;&lt;20)</code> are DEAD (never referenced) — delete-worthy, own ticket; pack.scan (<code>jab.be/pack.hpp:289</code>) is a count-trusting class, <code>shared/ingest.js</code> buildIndex/indexAppended do NOT catch it — ticketed as <a href="/todo/PACK/PACK-003.html">PACK-003</a></li>
-<li><a href="./v.html">v</a> native <code>be get</code>: no fixed-cap defect (dynamic WEAVEInit + growable u8b) BUT shares the OUTCOME class — <code>sniff/GET.c:816-821</code> merge failure → stderr + <code>failed</code> count, leaf at ours, <code>:860</code> returns OK → exit 0, no con row (DIS-041 class, live natively) — needs own ticket</li>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> repro: <code>test/get/dirty-big/run.sh</code> (<code>be-js-get-dirty-big</code>) — A: <del>600KB dirty 3-way lands both sides; B: </del>4.5MB refuses loudly (non-zero, ours intact, durable <code>con</code> row); pre-fix code fails A with <code>weave.fold: failed (out full?)</code></li>
+<li class="done"><input type="checkbox" checked disabled> weave3 routed through shared/weave.js <code>fold</code>/<code>merge</code>; render via <code>io.ram(MAX_SOURCE_MARKED_UP)</code> (patch.js:198's sink); all <code>abc.ram(&quot;WEAVE&quot;,…)</code> + <code>io.buf(1&lt;&lt;20)</code> caps deleted</li>
+<li class="done"><input type="checkbox" checked disabled> over-cap/still-full weave refuses LOUDLY (see design decisions)</li>
+<li class="done"><input type="checkbox" checked disabled> audit: get's render cap fixed by the fix itself; <code>verbs/patch/patch.js:366</code> <code>outBuf/aliveBuf io.buf(1&lt;&lt;20)</code> are DEAD (never referenced) — delete-worthy, own ticket; pack.scan (<code>jab.be/pack.hpp:289</code>) is a count-trusting class, <code>shared/ingest.js</code> buildIndex/indexAppended do NOT catch it — ticketed as <a href="/todo/PACK/PACK-003.html">PACK-003</a></li>
+<li class="done"><input type="checkbox" checked disabled> native <code>be get</code>: no fixed-cap defect (dynamic WEAVEInit + growable u8b) BUT shares the OUTCOME class — <code>sniff/GET.c:816-821</code> merge failure → stderr + <code>failed</code> count, leaf at ours, <code>:860</code> returns OK → exit 0, no con row (DIS-041 class, live natively) — needs own ticket</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>

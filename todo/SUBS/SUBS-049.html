@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/SUBS/SUBS-049.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>SUBS-049: put/status treat a primary-anchored nested wt (<code>.be</code> DIR) as parent files — the <code>.gitmodules</code> sub boundary is missed</h1>
 <div>
-<p>
-Now: OPEN Sev: HIGH
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
 </div>
 <p>
 Report (gritzko, 2026-07-10): <code>jab get</code> into a subdir + listing it in <code>.gitmodules</code> — <code>jab put &lt;subdir&gt;</code> recurs into it like new files instead of recognizing a submodule boundary.  Root cause: BOTH boundary probes only accept the SECONDARY anchor form (<code>.be</code> regular FILE = the wtlog): <code>classify.js::wtScan</code> nested-repo detect (<code>be/shared/classify.js:77-79</code>) and <code>recurse.js::isMount</code> (<code>be/core/recurse.js:36-44</code>).  But a green-field <code>jab get</code> of a remote plants the PRIMARY form — a <code>.be</code> DIR holding <code>wtlog</code> + the shard (<code>be/verbs/get/get.js:217-228</code> seedRemote → <code>ingest.clone</code> + <code>writeWtlog(join(beDir,&quot;wtlog&quot;))</code>) — which <code>be.find</code> anchors on (<code>core/discover.js:128-134</code>) yet neither probe recognizes. So the sub's interior rides the parent's wtScan and <code>put &lt;dir&gt;</code> stages it as parent <code>put</code> rows; <code>status</code> floods <code>unk</code> the same way.  The <code>.gitmodules</code> declaration never enters this path (expandDir is gitmodules-blind; recurse.walk consults it but gates on isMount). Siblings <a href="SUBS-039.html">SUBS-039</a> <a href="SUBS-044.html">SUBS-044</a> <a href="SUBS-045.html">SUBS-045</a>; umbrella <a href="../DIS/DIS-058.html">DIS-058</a>.

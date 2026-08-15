@@ -3,8 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Store</title>
+<title>Store: one flat object pool per project, branches as refs</title>
+<meta property="og:title" content="Store: one flat object pool per project, branches as refs">
+<meta property="og:description" content="A store is a directory (.be/) holding one or more project shards; each shard is one flat object pool for all of a project's branches, tags, and remotes. The goal is a repo almost impossible to break — your own little GitHub in ~/.be — with cheap parallel worktrees and submodules. The method: multi-project shards, one flat object pool per project, branches and tags as pure ref rows (no per-branch object dirs), and ff-only branch trees that keep trunk linear while mess sinks into leaves.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/wiki/Store.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -22,7 +34,7 @@ A store hosts many projects, so the idiomatic setup is one <code>~/.be</code> Gi
 <ul>
 <li>Multi-project: one store hosts many projects, each its own shard, making submodules and parallel worktrees the default.</li>
 <li>Don't copy the repo: a worktree breaks a hundred ways, a store almost none — secondary worktrees share one store.</li>
-<li>Coordinates are a <a href="URI.html">URI</a> resolving to a sha: <code>ssh://host/beagle.git?v0.0.3</code> → <code>b8caa674…</code>, relayed to each dog as <code>--at</code>.</li>
+<li>Coordinates are a <a href="URI.html">URI</a> resolving to a sha: <code>ssh://host/beagle.git?v0.0.3</code> → <code>b8caa674…</code>.</li>
 </ul>
 <h2>Branch-tree model</h2>
 <p>
@@ -47,12 +59,12 @@ Each project is one flat object pool: a single shard dir holds the packs, indexe
 </ul>
 <h2>Remote resolution by reverse reflog grep</h2>
 <p>
-A short <code>//host</code> ref resolves with no ALIAS file and no registration step: every remote <a href="URI.html">URI</a> touched is logged to the project reflog on first contact, and a later short form reverse-greps that log newest-first for the most recent matching row.
+A shorthand remote (<code>ssh://host</code>, transport but no full path) resolves with no ALIAS file and no registration step: every remote <a href="URI.html">URI</a> touched is logged to the project reflog on first contact, and a later shorthand reverse-greps that log newest-first for the most recent matching row.
 </p>
 <ul>
-<li><code>//host</code> matches the newest reflog row with that authority; <code>//host?branch</code> also matches the branch, <code>//host/path</code> the path.</li>
-<li>The matched row supplies the full transport URL (<code>ssh:</code>/<code>be:</code>) for a follow-up wire call; bare <code>//host</code> reads cache only.</li>
-<li>No registration: first contact with <code>ssh://origin?feat</code> appends the URL as a normal reflog row, so a later <code>//origin</code> finds it.</li>
+<li><code>ssh://host</code> matches the newest reflog row with that authority; a <code>?branch</code> also matches the branch, a <code>/path</code> the path.</li>
+<li>The matched row supplies the full remote URL (<code>ssh:</code>/<code>be:</code>) for the wire call; a scheme-less <code>//name</code> is never a remote — it names a worktree (see <a href="URI.html">URI</a>).</li>
+<li>No registration: first contact with <code>ssh://origin?feat</code> appends the URL as a normal reflog row, so a later <code>ssh://origin</code> finds it.</li>
 </ul>
 <h2>Worktrees and the anchor</h2>
 <p>
@@ -73,5 +85,16 @@ GC is epoch-based and out of band: a dropped branch's objects simply linger, and
 <li>Epoch recompaction: a release copies the reachable closure to a new project id (<code>beagle</code>→<code>beagle2</code>), leaving dead objects.</li>
 <li>Cross-project REF_DELTA bases are forbidden, so every shard stays droppable and movable in isolation (see <a href="Keeper.html">Keeper</a>).</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

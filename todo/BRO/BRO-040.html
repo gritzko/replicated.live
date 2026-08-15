@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/BRO/BRO-040.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>BRO-040: warm pager session degrades after clicks — context/replay state corrupts, errors mutate per click</h1>
 <div>
-<p>
-Now: OPEN Sev: HIGH
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
 </div>
 <p>
 Live (gritzko, 2026-07-20, main tree): after a few clicks in ONE pager session, spells that worked start erring, and the error KIND changes as you keep clicking — <code>no hunks</code>, <code>NAVNONE: no worktree</code>, <code>err: loop: the verb 'commit' has no plain-args handler</code>. &quot;The actual path does not seem to matter. Just click around.&quot; Cold headless dispatch is fine (<code>jab commit '?hl'</code> from journal root reaches the verb — COMMITNONE from inside, NOT a dispatch miss), so the disease is accumulated SESSION STATE, not module conversion or cwd (the live pager never chdirs — grep io.chdir = 0; <a href="/todo/JS/JS-119.html">JS-119</a> premise holds).
@@ -67,12 +74,14 @@ Live (gritzko, 2026-07-20, main tree): after a few clicks in ONE pager session, 
 <ul class="todo">
 <li class="done"><input type="checkbox" checked disabled> pty repro red: real-UI main-tree driver, <code>err: TREENONE</code> on the why-token click, then the cascade (<code>no hunks: why</code>, <code>(no URI here)</code>)</li>
 <li class="done"><input type="checkbox" checked disabled> instrument: per-step context/view.call dump — NOTHING rots; the context is correct at the failing step (premise disproven)</li>
+<li class="open"><input type="checkbox" disabled> (a) THE LEAK — needs a gritzko RULING: close/open-once the per-object store mappings the why/blame walk leaks; this is <a href="/todo/ABC/ABC-014.html">ABC-014</a> territory and the mmap-close design is OPEN (the ABC-020 &quot;rework 2&quot; is disavowed), so it is NOT a worker's call.  <code>ulog.each</code> never closes its map even on success.</li>
+<li class="open"><input type="checkbox" disabled> (b) THE MASK — in scope here, independent of (a): ulog.each must distinguish absent/empty from a resource error and surface the latter in plain words, so exhaustion can never again pose as &quot;no worktree&quot; and silently corrupt the context.</li>
 </ul>
 <ul>
-<li><a href="./ .html"> </a> (a) THE LEAK — needs a gritzko RULING: close/open-once the per-object store mappings the why/blame walk leaks; this is <a href="/todo/ABC/ABC-014.html">ABC-014</a> territory and the mmap-close design is OPEN (the ABC-020 &quot;rework 2&quot; is disavowed), so it is NOT a worker's call.  <code>ulog.each</code> never closes its map even on success.</li>
-<li><a href="./ .html"> </a> (b) THE MASK — in scope here, independent of (a): ulog.each must distinguish absent/empty from a resource error and surface the latter in plain words, so exhaustion can never again pose as &quot;no worktree&quot; and silently corrupt the context.</li>
 <li>note: (b) ALONE cannot green the dance — the session is still out of fds, so step 4 would fail honestly instead of corrupting.</li>
-<li><a href="./ .html"> </a> latent, does NOT fire in the UI: <code>_runSpell</code>/<code>_ctxFrom</code>/ <code>_fillAuth</code> (pager.js:740/744/827) inherit authority from <code>cur</code> / scavenged <code>prev</code> for a rooted-but-authority-less target (probe: follow <code>/x</code> at <code>//WT-1</code> → <code>//WT-1/x</code>); real navLink never mints that shape — a <a href="/todo/BRO/BRO-024.html">BRO-024</a>-law violation, no repro</li>
+</ul>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> latent, does NOT fire in the UI: <code>_runSpell</code>/<code>_ctxFrom</code>/ <code>_fillAuth</code> (pager.js:740/744/827) inherit authority from <code>cur</code> / scavenged <code>prev</code> for a rooted-but-authority-less target (probe: follow <code>/x</code> at <code>//WT-1</code> → <code>//WT-1/x</code>); real navLink never mints that shape — a <a href="/todo/BRO/BRO-024.html">BRO-024</a>-law violation, no repro</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>

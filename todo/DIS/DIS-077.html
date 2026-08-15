@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DIS/DIS-077.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>DIS-077: <code>put ?&lt;40hex&gt;</code> writes a ref keyed off cur's query — a sha-named branch when detached, silently TRUNK after <a href="DIS-075.html">DIS-075</a>; RULED: <code>put #hex</code> sets the BASE</h1>
 <div>
-<p>
-Now: OPEN Sev: MED
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>MED</dd></dl>
 </div>
 <p>
 <code>put ?&lt;40hex&gt;</code> (put.js:656, the set-cur arm) is a REF WRITE: it calls <code>store.set(k.shard, branch, sha)</code> (put.js:110) with the ref key taken from cur's recorded query (<code>curQuery</code>, put.js:697 — &quot;Only curQuery is needed — it pins <code>?&lt;40hex&gt;</code>'s target branch&quot;). So its target is whatever cur happens to track, which breaks at both ends. On a DETACHED wt the old record was <code>?&lt;sha&gt;</code> — the query held the sha, so the key WAS a 40-hex string and <code>put ?&lt;newsha&gt;</code> minted a ref literally named <code>&lt;40hex&gt;</code>. After <a href="DIS-075.html">DIS-075</a> the detached record is <code>#&lt;sha&gt;</code> (query ABSENT), so <code>curQuery</code> reads <code>&quot;&quot;</code> and the SAME command silently advances TRUNK while the wt is detached. RULED 2026-07-15 (gritzko): &quot;<code>put #hex</code> should probably set the base commit to that hex&quot; — the sha belongs in the FRAGMENT (<a href="DIS-071.html">DIS-071</a> law #3: the fragment carries the base), never in the query. Found by the <a href="DIS-075.html">DIS-075</a> worker, which refused to pick a side (correctly — both behaviors are wrong).
@@ -63,12 +70,12 @@ The base is a recorded row, not a ref — and <code>#hex</code> must not become 
 <li>RULED 2026-07-15 (gritzko): <code>put #hex</code> sets the base commit. The sha lives in the fragment; the query names a ref.</li>
 </ul>
 <h3>TODOs</h3>
-<ul>
-<li><a href="./ .html"> </a> repro: detached wt + <code>put ?&lt;40hex&gt;</code> → today mints a sha-named ref (pre-075) / moves trunk (post-075)</li>
-<li><a href="./ .html"> </a> implement <code>put #&lt;hex&gt;</code> → sets the base; no ref written</li>
-<li><a href="./ .html"> </a> rule + implement <code>put ?&lt;40hex&gt;</code>'s fate (error pointing at <code>#hex</code>, or detach)</li>
-<li><a href="./ .html"> </a> <a href="../../wiki/PUT.html">PUT</a> spec: the fragment/query split for the set-cur arm</li>
-<li><a href="./ .html"> </a> audit the other <code>cur.query</code>-keyed writers for the same &quot;key off whatever cur tracks&quot; class</li>
+<ul class="todo">
+<li class="open"><input type="checkbox" disabled> repro: detached wt + <code>put ?&lt;40hex&gt;</code> → today mints a sha-named ref (pre-075) / moves trunk (post-075)</li>
+<li class="open"><input type="checkbox" disabled> implement <code>put #&lt;hex&gt;</code> → sets the base; no ref written</li>
+<li class="open"><input type="checkbox" disabled> rule + implement <code>put ?&lt;40hex&gt;</code>'s fate (error pointing at <code>#hex</code>, or detach)</li>
+<li class="open"><input type="checkbox" disabled> <a href="../../wiki/PUT.html">PUT</a> spec: the fragment/query split for the set-cur arm</li>
+<li class="open"><input type="checkbox" disabled> audit the other <code>cur.query</code>-keyed writers for the same &quot;key off whatever cur tracks&quot; class</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>

@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DIS/DIS-082.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>DIS-082: append-only weave — body + tok32-pair index, tombs as entries</h1>
 <div>
-<p>
-Now: OPEN
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
 <p>
 -- design settled with gritzko, 2026-07-30
 </p>
@@ -119,57 +125,57 @@ Settled in conversation; the rest is Blockers.
 <p>
 Spec first, then reader, then writer, then callers, then cutover. Nothing lands before the parity harness exists.
 </p>
-<ul>
-<li><a href="./v.html">v</a> STAGE 0 — spec and oracle, no production code<ul>
-<li><a href="./ .html"> </a> Write the format up as a <a href="/wiki">wiki</a> page; this ticket is the sketch, the wiki page is the spec</li>
-<li><a href="./v.html">v</a> Pin the TLV tag letters and the tomb/terminator type letters against the existing <code>'W'</code> tags — <code>'V'</code> outer, <code>'B'/'E'/'C'/'G'</code> subs, tags <code>'A'/'B'/'E'/'T'</code></li>
-<li><a href="./ .html"> </a> Decide the right-origin question WITH the conflict rule (<a href="/wiki/Dirty.html">Dirty</a>), not after it — see Blockers</li>
-<li><a href="./v.html">v</a> Build a parity harness: same commit DAG through old and new, compare materialized bytes per rev — was test/AWEAVE02; old engine deleted 2026-07-31, harness now oracle-only (test/CFOLD02)</li>
-<li><a href="./v.html">v</a> Extend the fuzzer beyond monotonic commit ids — SplitMix ids in tests + fuzz/CFOLD.c; 10 min x 8 workers clean, corpus kept at fuzz/CFOLD.corpus/</li>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> STAGE 0 — spec and oracle, no production code<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Write the format up as a <a href="/wiki">wiki</a> page; this ticket is the sketch, the wiki page is the spec</li>
+<li class="done"><input type="checkbox" checked disabled> Pin the TLV tag letters and the tomb/terminator type letters against the existing <code>'W'</code> tags — <code>'V'</code> outer, <code>'B'/'E'/'C'/'G'</code> subs, tags <code>'A'/'B'/'E'/'T'</code></li>
+<li class="open"><input type="checkbox" disabled> Decide the right-origin question WITH the conflict rule (<a href="/wiki/Dirty.html">Dirty</a>), not after it — see Blockers</li>
+<li class="done"><input type="checkbox" checked disabled> Build a parity harness: same commit DAG through old and new, compare materialized bytes per rev — was test/AWEAVE02; old engine deleted 2026-07-31, harness now oracle-only (test/CFOLD02)</li>
+<li class="done"><input type="checkbox" checked disabled> Extend the fuzzer beyond monotonic commit ids — SplitMix ids in tests + fuzz/CFOLD.c; 10 min x 8 workers clean, corpus kept at fuzz/CFOLD.corpus/</li>
 </ul>
 </li>
-<li><a href="./v.html">v</a> STAGE 1 — reader against a hand-built fixture<ul>
-<li><a href="./v.html">v</a> Parse the three streams; reject malformed entries with a named error, not a bare code</li>
-<li><a href="./v.html">v</a> DFS materialize at tip; byte-parity against <code>WEAVEAlive</code> on the fixture</li>
-<li><a href="./v.html">v</a> Visibility predicate <code>(L, ignore-set, tombs)</code>; byte-parity against <code>WEAVEProduce</code> per rev</li>
-<li><a href="./v.html">v</a> Blame by range binary search; parity against <code>why:</code> output on the fixture</li>
-<li><a href="./v.html">v</a> Measure the walk: confirm fork-free chains stay a linear scan — <code>cfstat.bsearch == 0</code> asserted</li>
+<li class="done"><input type="checkbox" checked disabled> STAGE 1 — reader against a hand-built fixture<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Parse the three streams; reject malformed entries with a named error, not a bare code</li>
+<li class="done"><input type="checkbox" checked disabled> DFS materialize at tip; byte-parity against <code>WEAVEAlive</code> on the fixture</li>
+<li class="done"><input type="checkbox" checked disabled> Visibility predicate <code>(L, ignore-set, tombs)</code>; byte-parity against <code>WEAVEProduce</code> per rev</li>
+<li class="done"><input type="checkbox" checked disabled> Blame by range binary search; parity against <code>why:</code> output on the fixture</li>
+<li class="done"><input type="checkbox" checked disabled> Measure the walk: confirm fork-free chains stay a linear scan — <code>cfstat.bsearch == 0</code> asserted</li>
 </ul>
 </li>
-<li><a href="./v.html">v</a> STAGE 2 — writer<ul>
-<li><a href="./v.html">v</a> Fold: append body bytes, append insert entries, append the chain terminator</li>
-<li><a href="./v.html">v</a> Tomb append; confirm the pre-existing prefix is byte-identical after a delete</li>
-<li><a href="./v.html">v</a> Merge: ignore-set from the caller-supplied closure; assert no body byte before the merge changed</li>
-<li><a href="./v.html">v</a> Assert BODY append-only in a test, not by inspection — hash the prefix before and after every fold</li>
-<li><a href="./v.html">v</a> Assert the INDEX stays parent-sorted after every commit's merge; it is rewritten, so a prefix-stability test would be wrong</li>
+<li class="done"><input type="checkbox" checked disabled> STAGE 2 — writer<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> Fold: append body bytes, append insert entries, append the chain terminator</li>
+<li class="done"><input type="checkbox" checked disabled> Tomb append; confirm the pre-existing prefix is byte-identical after a delete</li>
+<li class="done"><input type="checkbox" checked disabled> Merge: ignore-set from the caller-supplied closure; assert no body byte before the merge changed</li>
+<li class="done"><input type="checkbox" checked disabled> Assert BODY append-only in a test, not by inspection — hash the prefix before and after every fold</li>
+<li class="done"><input type="checkbox" checked disabled> Assert the INDEX stays parent-sorted after every commit's merge; it is rewritten, so a prefix-stability test would be wrong</li>
 </ul>
 </li>
-<li><a href="./v.html">v</a> STAGE 2.5 — CFOLD cutover in dog (2026-07-31, //DIS-082 wt)<ul>
-<li><a href="./v.html">v</a> AWEAVE renamed CFOLD (files, symbols, ok64 codes regenerated); WEAVE.{c,h} + tests deleted</li>
-<li><a href="./v.html">v</a> WEAVE03/04 salvaged as CFOLD03 (DIS-045 blank-EOL merge, real C) and CFOLD04 (DIS-047 scaling bench: fold 2.05x, produce 1.99x doubling)</li>
-<li><a href="./v.html">v</a> Emit port: <code>CFOLDEmitDiff</code>/<code>CFOLDEmitFull</code> over (from,to) COMMIT INDICES on a multi-scope walk; test/CFOLD05 asserts BYTE-PARITY with the WEAVE02 hunk expectations</li>
-<li><a href="./v.html">v</a> No fenced EmitMerged (<a href="./DIS-080.html">DIS-080</a>: markerless): merged bytes = <code>CFOLDProduce</code> at the merge commit</li>
-<li><a href="./v.html">v</a> No DIFF-007 coarse fallback: a &gt;16 MiB body is refused at FOLD time (<code>CFOLDBIG</code>, test/CFOLD05)</li>
+<li class="done"><input type="checkbox" checked disabled> STAGE 2.5 — CFOLD cutover in dog (2026-07-31, //DIS-082 wt)<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> AWEAVE renamed CFOLD (files, symbols, ok64 codes regenerated); WEAVE.{c,h} + tests deleted</li>
+<li class="done"><input type="checkbox" checked disabled> WEAVE03/04 salvaged as CFOLD03 (DIS-045 blank-EOL merge, real C) and CFOLD04 (DIS-047 scaling bench: fold 2.05x, produce 1.99x doubling)</li>
+<li class="done"><input type="checkbox" checked disabled> Emit port: <code>CFOLDEmitDiff</code>/<code>CFOLDEmitFull</code> over (from,to) COMMIT INDICES on a multi-scope walk; test/CFOLD05 asserts BYTE-PARITY with the WEAVE02 hunk expectations</li>
+<li class="done"><input type="checkbox" checked disabled> No fenced EmitMerged (<a href="./DIS-080.html">DIS-080</a>: markerless): merged bytes = <code>CFOLDProduce</code> at the merge commit</li>
+<li class="done"><input type="checkbox" checked disabled> No DIFF-007 coarse fallback: a &gt;16 MiB body is refused at FOLD time (<code>CFOLDBIG</code>, test/CFOLD05)</li>
 </ul>
 </li>
-<li><a href="./ .html"> </a> STAGE 3 — callers, one at a time, each parity-checked before the next (plan below)<ul>
-<li><a href="./v.html">v</a> jab C++ binding (2026-07-31, //DIS-082-jab wt): <code>weave.hpp</code> -&gt; <code>cfold.hpp</code>, 11 <code>_cfold_*</code> leaves; <code>cont.cpp</code> <code>PROTO[&quot;CFOLD&quot;]</code>; <code>test/weave.js</code> rewritten; 104/105 ctest + <code>weave.js OK</code></li>
-<li><a href="./v.html">v</a> ITERATION API (ruling: iteration, not flat dumps): <code>CFOLDIterNext</code>/<code>cfoldtok</code>/<code>CFOLDIterMem</code> — one DFS step per call, state in a caller-owned zeroed u32 area; produce/emit/walk are loops over it; yields BODY offsets so <code>CFOLDBlame</code> composes; a first-cut <code>CFOLDTokens</code> array dump was built and REMOVED</li>
-<li><a href="./v.html">v</a> binding cursor restored on it: stateless <code>_cfold_step</code> + <code>_cfold_itermem</code>, JS <code>rewind(rev)</code>/<code>next()</code>/<code>tok{text,tag,off,end,alive}</code> — the <code>_weave_step</code> pattern, so <code>why.js</code> keeps its loop shape; both wts identical, dog 73/73</li>
-<li><a href="./v.html">v</a> <code>test/bass.js</code> (JABCbass, JAB-008 canary) ported to the CFOLD family; probe re-sized 1500 -&gt; 1200 folds per its own sizing rule (<del>7s under the hard 10s cap, still 25% over the </del>960 pre-fix exhaustion point); jab wt 105/105</li>
-<li><a href="./v.html">v</a> <code>be/shared/weave.js</code> (2026-07-31, //DIS-082-be): ONE weave per file — <code>build()</code> -&gt; <code>{weave, rev, ids}</code>, commits record only on change/delete/join, carries are free; <code>fold</code>/<code>merge</code> take ancestors; <code>foldWt(w, rev, ids, bytes, ext)</code>; <code>weave3</code> folds base once; <code>JOIN_ID</code> exported</li>
-<li><a href="./v.html">v</a> <code>be/views/why/why.js</code> onto blame: origin = <code>blame(tok.off)</code> per cursor token; <code>?a..b</code> deletes surface by from/to diff (wash = range head, see Blockers)</li>
-<li><a href="./v.html">v</a> <code>patch</code>/<code>expected</code>/<code>classify</code> onto the one-weave join (<code>ctx.w</code> is the only stable ref — fold/merge return fresh containers); <code>diff.js</code>+links.js onto rev-hashlet emits; parity: 27/27 patch, 15/15 status, 17/17 non-skip diff, why suite green</li>
-<li><a href="./v.html">v</a> be suite 327 cases: the 4 weave-relevant baseline failures fixed; ALL remaining failures are the <a href="./JAB-020.html">JAB-020</a> <code>git.pack</code> namespace drift in the fresh jab binary (<code>shared/wire.js:269</code> still calls the old function form) — seed-path only, zero weave involvement, set flaps with scratch reuse</li>
-<li><a href="./ .html"> </a> Retire <code>mergedLive</code> onto the C emit — now cursor+blame based in JS, still a mirror of the conflict rule; the C span API (freed class bits) subsumes it</li>
-<li><a href="./ .html"> </a> <code>bro.js</code> consumes the class bits instead of re-deriving them from hunk adjacency</li>
+<li class="open"><input type="checkbox" disabled> STAGE 3 — callers, one at a time, each parity-checked before the next (plan below)<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> jab C++ binding (2026-07-31, //DIS-082-jab wt): <code>weave.hpp</code> -&gt; <code>cfold.hpp</code>, 11 <code>_cfold_*</code> leaves; <code>cont.cpp</code> <code>PROTO[&quot;CFOLD&quot;]</code>; <code>test/weave.js</code> rewritten; 104/105 ctest + <code>weave.js OK</code></li>
+<li class="done"><input type="checkbox" checked disabled> ITERATION API (ruling: iteration, not flat dumps): <code>CFOLDIterNext</code>/<code>cfoldtok</code>/<code>CFOLDIterMem</code> — one DFS step per call, state in a caller-owned zeroed u32 area; produce/emit/walk are loops over it; yields BODY offsets so <code>CFOLDBlame</code> composes; a first-cut <code>CFOLDTokens</code> array dump was built and REMOVED</li>
+<li class="done"><input type="checkbox" checked disabled> binding cursor restored on it: stateless <code>_cfold_step</code> + <code>_cfold_itermem</code>, JS <code>rewind(rev)</code>/<code>next()</code>/<code>tok{text,tag,off,end,alive}</code> — the <code>_weave_step</code> pattern, so <code>why.js</code> keeps its loop shape; both wts identical, dog 73/73</li>
+<li class="done"><input type="checkbox" checked disabled> <code>test/bass.js</code> (JABCbass, JAB-008 canary) ported to the CFOLD family; probe re-sized 1500 -&gt; 1200 folds per its own sizing rule (<del>7s under the hard 10s cap, still 25% over the </del>960 pre-fix exhaustion point); jab wt 105/105</li>
+<li class="done"><input type="checkbox" checked disabled> <code>be/shared/weave.js</code> (2026-07-31, //DIS-082-be): ONE weave per file — <code>build()</code> -&gt; <code>{weave, rev, ids}</code>, commits record only on change/delete/join, carries are free; <code>fold</code>/<code>merge</code> take ancestors; <code>foldWt(w, rev, ids, bytes, ext)</code>; <code>weave3</code> folds base once; <code>JOIN_ID</code> exported</li>
+<li class="done"><input type="checkbox" checked disabled> <code>be/views/why/why.js</code> onto blame: origin = <code>blame(tok.off)</code> per cursor token; <code>?a..b</code> deletes surface by from/to diff (wash = range head, see Blockers)</li>
+<li class="done"><input type="checkbox" checked disabled> <code>patch</code>/<code>expected</code>/<code>classify</code> onto the one-weave join (<code>ctx.w</code> is the only stable ref — fold/merge return fresh containers); <code>diff.js</code>+links.js onto rev-hashlet emits; parity: 27/27 patch, 15/15 status, 17/17 non-skip diff, why suite green</li>
+<li class="done"><input type="checkbox" checked disabled> be suite 327 cases: the 4 weave-relevant baseline failures fixed; ALL remaining failures are the <a href="./JAB-020.html">JAB-020</a> <code>git.pack</code> namespace drift in the fresh jab binary (<code>shared/wire.js:269</code> still calls the old function form) — seed-path only, zero weave involvement, set flaps with scratch reuse</li>
+<li class="open"><input type="checkbox" disabled> Retire <code>mergedLive</code> onto the C emit — now cursor+blame based in JS, still a mirror of the conflict rule; the C span API (freed class bits) subsumes it</li>
+<li class="open"><input type="checkbox" disabled> <code>bro.js</code> consumes the class bits instead of re-deriving them from hunk adjacency</li>
 </ul>
 </li>
-<li><a href="./ .html"> </a> STAGE 4 — cutover<ul>
-<li><a href="./ .html"> </a> Measure on a real repo: body size, index size, fold time, render time, all vs. the current format</li>
-<li><a href="./ .html"> </a> Confirm the ignore-set stays small on branchy history — the scope story rests on it</li>
-<li><a href="./ .html"> </a> Version-gate or rebuild: weaves are derived, so rebuilding is legitimate if the cost is measured</li>
-<li><a href="./ .html"> </a> Delete <code>wmerge_commits</code>, the <code>ra</code>/<code>rb</code> remap, and the old columns; re-scope <a href="./DIS-081.html">DIS-081</a> as subsumed — old columns/remap went with WEAVE.c 2026-07-31; DIS-081 re-scope still open</li>
+<li class="open"><input type="checkbox" disabled> STAGE 4 — cutover<ul class="todo">
+<li class="open"><input type="checkbox" disabled> Measure on a real repo: body size, index size, fold time, render time, all vs. the current format</li>
+<li class="open"><input type="checkbox" disabled> Confirm the ignore-set stays small on branchy history — the scope story rests on it</li>
+<li class="open"><input type="checkbox" disabled> Version-gate or rebuild: weaves are derived, so rebuilding is legitimate if the cost is measured</li>
+<li class="open"><input type="checkbox" disabled> Delete <code>wmerge_commits</code>, the <code>ra</code>/<code>rb</code> remap, and the old columns; re-scope <a href="./DIS-081.html">DIS-081</a> as subsumed — old columns/remap went with WEAVE.c 2026-07-31; DIS-081 re-scope still open</li>
 </ul>
 </li>
 </ul>

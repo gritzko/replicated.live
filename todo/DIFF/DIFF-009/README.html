@@ -3,8 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>README</title>
+<title>DIFF-009: be-diff-17 drops 2 file headers on Ubuntu CI only</title>
+<meta property="og:title" content="DIFF-009: be-diff-17 drops 2 file headers on Ubuntu CI only">
+<meta property="og:description" content="be-diff-17-tree-no-truncate fails on the Ubuntu runner (78 / 80 file headers present) yet passes 0/55 locally (25 plain + 30 under 8× CPU stress), same Release build. Two CI runs hours apart are byte-identical (ci-fail.log) — DETERMINISTIC, not a flake. NOT the DIFF-008 tail truncation this test guards: the last file f079 is present, be exits 0, empty stderr, no BASS NOROOM. Two MID-LIST files lose their --- a/fNNN header — likely --- /dev/null adds the grep '^--- a/f' misses. Method: Issues.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/DIFF/DIFF-009/README.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -18,45 +30,24 @@
 <h2>Input</h2>
 <h3>Context</h3>
 <ul>
-<li>Test <code>test/diff/17-tree-no-truncate</code>: seeds 80 tiny files, posts <code>?v1</code> (ORIGINAL)<p>
-then <code>?v2</code> (MODIFIED), runs <code>be diff:?v1..v2</code>, asserts 80 <code>^--- a/f</code> headers.
-</p>
-</li>
-<li>CI (<code>ctest --parallel 4</code>, <code>BUILD_TYPE=Release</code>) fails twice, identical: 78/80,<p>
-<code>highest header: --- a/f079.txt</code>, last-12-lines show f078+f079 — evidence <a href="/todo/DIFF/DIFF-009/ci-fail.log">ci-fail.log</a>.
-</p>
-</li>
+<li>Test <code>test/diff/17-tree-no-truncate</code>: seeds 80 tiny files, posts <code>?v1</code> (ORIGINAL) then <code>?v2</code> (MODIFIED), runs <code>be diff:?v1..v2</code>, asserts 80 <code>^--- a/f</code> headers.</li>
+<li>CI (<code>ctest --parallel 4</code>, <code>BUILD_TYPE=Release</code>) fails twice, identical: 78/80, <code>highest header: --- a/f079.txt</code>, last-12-lines show f078+f079 — evidence <a href="/todo/DIFF/DIFF-009/ci-fail.log">ci-fail.log</a>.</li>
 <li>Local: 0/55 fails (25 plain + 30 under 8× <code>yes</code>), same Release build → CI-only.</li>
-<li>Path: <code>graf/DIFFREF.c::graf_diff_tree_refs_inner</code> (<code>:513</code>); per-to-entry loop (<code>:554-601</code>)<p>
-skips a file iff <code>f &amp;&amp; sha1Eq(&amp;f-&gt;sha, …)</code> (<code>:560</code>); <code>diffref_set_find</code> is a linear scan (<code>:92</code>).
-</p>
-</li>
+<li>Path: <code>graf/DIFFREF.c::graf_diff_tree_refs_inner</code> (<code>:513</code>); per-to-entry loop (<code>:554-601</code>) skips a file iff <code>f &amp;&amp; sha1Eq(&amp;f-&gt;sha, …)</code> (<code>:560</code>); <code>diffref_set_find</code> is a linear scan (<code>:92</code>).</li>
 </ul>
 <h3>Goals</h3>
 <ul>
-<li>Determine WHICH 2 files and WHY they lose the <code>--- a/f</code> header on the runner; make the<p>
-tree diff emit all N file headers deterministically across platforms/filesystems.
-</p>
-</li>
-<li>If they render as <code>--- /dev/null</code> adds → <code>from_set</code> missed them (collection/order bug);<p>
-if absent → skipped sha-equal at <code>:560</code> (v2 staged stale blobs). Pin which.
-</p>
-</li>
+<li>Determine WHICH 2 files and WHY they lose the <code>--- a/f</code> header on the runner; make the tree diff emit all N file headers deterministically across platforms/filesystems.</li>
+<li>If they render as <code>--- /dev/null</code> adds → <code>from_set</code> missed them (collection/order bug); if absent → skipped sha-equal at <code>:560</code> (v2 staged stale blobs). Pin which.</li>
 </ul>
 <h3>Constraints</h3>
 <ul>
-<li>Reproduces only on the runner; needs the CI-kept scratch (<code>…/diff/17-tree-no-truncate</code>,<p>
-<code>tree.got.out</code>). graf change gates for review; keep small-set output byte-identical.
-</p>
-</li>
+<li>Reproduces only on the runner; needs the CI-kept scratch (<code>…/diff/17-tree-no-truncate</code>, <code>tree.got.out</code>). graf change gates for review; keep small-set output byte-identical.</li>
 </ul>
 <h2>WIP</h2>
 <h3>Design decisions</h3>
 <ul>
-<li>(open) Leading hypothesis: order-dependent collection — <code>KEEPLsFiles</code> returns entries in<p>
-filesystem readdir order, which differs CI-vs-local, exposing a set add/find miss for 2 paths. Alternatives: <code>be put</code> racy/stale staging of 2 files in v2; an uninitialized read (per-binary deterministic). The kept <code>tree.got.out</code> (adds vs absent) decides between them.
-</p>
-</li>
+<li>(open) Leading hypothesis: order-dependent collection — <code>KEEPLsFiles</code> returns entries in filesystem readdir order, which differs CI-vs-local, exposing a set add/find miss for 2 paths. Alternatives: <code>be put</code> racy/stale staging of 2 files in v2; an uninitialized read (per-binary deterministic). The kept <code>tree.got.out</code> (adds vs absent) decides between them.</li>
 </ul>
 <h3>TODOs</h3>
 <ul class="todo">
@@ -73,5 +64,16 @@ filesystem readdir order, which differs CI-vs-local, exposing a set add/find mis
 <ul>
 <li>(open) Filed from CI evidence; no fix yet.</li>
 </ul>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
 </body>
 </html>

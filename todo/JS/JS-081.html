@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/JS/JS-081.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>JS-081: <code>views/bro/bro.js</code> fd-1 capture monkey-patch is re-entry-fragile</h1>
 <div>
-<p>
-Now: OPEN Sev: MED
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>MED</dd></dl>
 </div>
 <p>
 <code>driveSpell</code> captures the re-entrant <code>loop.cli</code>'s fd-1 'H'-record stream by swapping the GLOBAL <code>io.writeAll</code> for the duration of the call (restored in a <code>finally</code>). The loop EDGE is correctly gated (<code>core/loop.js:318</code> checks both <code>mode!==&quot;tlv&quot;</code> AND <code>!opts2.queuePath</code>), but the bro VERB handler's <code>wantPager</code> check (<code>bro.js:130</code>) is NOT gated on <code>mode===&quot;tlv&quot;</code>. So a <code>:bro:foo</code> spell re-enters the handler, which re-evaluates <code>wantPager</code> true, re-patches the already-patched <code>io.writeAll</code>, and tries to launch a NESTED pager; under a <code>/dev/tty</code>-open failure fallthrough (<code>:143-145</code> falls to fd 1) this can pollute the outer capture. Self-flagged interim (JAB-029). Method: <a href="../../meta/work.html">Issues</a>.

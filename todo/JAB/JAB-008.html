@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/JAB/JAB-008.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,8 @@
 </a>
 <h1>JAB-008: binding calls C ops raw, skipping <code>call()</code> — BASS scratch never rewinds, the 1GB arena drains, everything dies as &quot;out full?&quot;</h1>
 <div>
-<p>
-Now: OPEN Sev: HIGH
-</p>
+<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
+<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
 </div>
 <p>
 PRO.h's contract (<code>dog/abc/PRO.h:20-40,73-83</code>): a callee's <code>a_carve</code> scratch dies when the CALLER's <code>call()</code>/<code>try()</code> rewinds ABC_BASS; <code>sane()</code> alone rewinds nothing. The jab binding breaks the contract at the C++/C boundary: every <code>JABC_FN</code> (weave.hpp <code>WEAVENext</code>/<code>WEAVEMerge</code>/<code>WEAVEAlive</code>…, pack.hpp, hunk.hpp) invokes the C op RAW — no <code>call()</code> equivalent — and <code>ABC_BASS</code> is mapped ONCE in <code>main.cpp:281</code> and never rewound for the process lifetime. So every binding invocation leaks its whole carve set into the arena. Probe 2026-07-16 (in <code>work/PATCH-012</code>): fold the SAME 1MB blob from scratch in one process → DIED at iteration 240, <code>weave.fold: failed (out full?)</code> — ~4.3MB/fold (<code>WEAVEFromBlob</code>'s <code>a_carve(u32, toks, len+16)</code> ≈4MB + anchors), 1GB/4.3MB ≈ 240. The C op's internal SNOROOM surfaces under the SAME &quot;out full?&quot; message as a dest overflow, so the leak masquerades as <a href="../PATCH/PATCH-012.html">PATCH-012</a>'s cap bug. Hypothesis credit: gritzko.
@@ -64,12 +71,12 @@ The guard is the binding's job; the C ops and the JS layer stay untouched.
 <li>Audit found NO leaf returning BASS-resident memory to JS (hunk toks copy out in-call; io ram/mmap own their maps; ulog handles live in file/heap maps; POL queue is heap) — no copy-outs needed.</li>
 </ul>
 <h3>TODOs</h3>
-<ul>
-<li><a href="./v.html">v</a> repro test <code>test/bass.js</code> (<code>JABCbass</code>): fold ×2000 + fork/merge ×2000; pre-fix DIED at iter 240, post-fix passes</li>
-<li><a href="./v.html">v</a> RAII BASS guard + audit (see design decisions)</li>
-<li><a href="./v.html">v</a> sweep: one trampoline covers the whole JABC_FN surface (verified no other registration path exists)</li>
-<li><a href="./v.html">v</a> suites: jab 96/96 post-fix; probe SURVIVED 2000 on the new binary (orchestrator re-ran); beagle-ext smoke = zero delta pre/post-fix (172-name failure sets byte-identical — vintage mismatch, see bummers)</li>
-<li><a href="./ .html"> </a> link back: amend <a href="../PATCH/PATCH-012.html">PATCH-012</a> incident analysis (leak vs caps) once this lands; recheck pack.scan on a big clone with the fixed binary</li>
+<ul class="todo">
+<li class="done"><input type="checkbox" checked disabled> repro test <code>test/bass.js</code> (<code>JABCbass</code>): fold ×2000 + fork/merge ×2000; pre-fix DIED at iter 240, post-fix passes</li>
+<li class="done"><input type="checkbox" checked disabled> RAII BASS guard + audit (see design decisions)</li>
+<li class="done"><input type="checkbox" checked disabled> sweep: one trampoline covers the whole JABC_FN surface (verified no other registration path exists)</li>
+<li class="done"><input type="checkbox" checked disabled> suites: jab 96/96 post-fix; probe SURVIVED 2000 on the new binary (orchestrator re-ran); beagle-ext smoke = zero delta pre/post-fix (172-name failure sets byte-identical — vintage mismatch, see bummers)</li>
+<li class="open"><input type="checkbox" disabled> link back: amend <a href="../PATCH/PATCH-012.html">PATCH-012</a> incident analysis (leak vs caps) once this lands; recheck pack.scan on a big clone with the fixed binary</li>
 </ul>
 <h3>Blockers and bummers</h3>
 <ul>

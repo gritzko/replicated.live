@@ -9,6 +9,14 @@
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://replicated.live/todo/DIS/DIS-029.html">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/assets/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/assets/js/asciicast.js"></script>
 </head>
 <body>
 <a class="banner" href="/">
@@ -17,9 +25,7 @@
 </a>
 <h1>DIS-029 <a href="./DONT.html">DONT</a>: MARK renders bare-indent divs as raw <code>&lt;p&gt;</code> text and merges across the depth boundary</h1>
 <div>
-<p>
-Now: DONT
-</p>
+<dl class="meta"><dt>Now:</dt><dd>DONT</dd></dl>
 </div>
 <p>
 The <a href="../../wiki/StrictMark.html">StrictMark</a> block model is <code>(INDENT|QUOTE)* LIST? LEAF?</code> and &quot;absent a leaf, a paragraph is implied&quot; (<a href="../../wiki/StrictMark.html">StrictMark</a> §Block markup); a bare 4-space indent &quot;opens a generic container (a div)&quot; (§Block markup), and &quot;block-stack depth changes drive nesting&quot;. The <code>MARK</code> HTML renderer honors none of this for plain indented text. In <code>mark_blocks</code> (<code>mark/MARK.c:281</code>) the paragraph branch (<code>:393-404</code>) computes <code>depth = MKDTIndentDepth(linef)</code> (<code>:360</code>) and the marker end <code>mend</code> (<code>:362</code>) but then ignores both: it never emits a <code>&lt;div&gt;</code> wrapper, and it feeds the FULL line <code>linec</code> — leading spaces included — to <code>mark_inline</code>, so the indent reaches HTML as literal gutter spaces inside a paragraph. Worse, <code>in_para</code> persists across a depth drop, so an indented line and the following non-indented line collapse into ONE <code>&lt;p&gt;</code>, erasing the structural boundary the depth change is supposed to enforce. <code>depth</code>/<code>mend</code> are consumed only for ULIST/QUOTE markers (<code>:364-391</code>), never for the INDENT (div) container. See <a href="./DIS-001.html">DIS-001</a> (the other open StrictMark/store-layout gap), <a href="../../wiki/GET.html">GET</a>.
