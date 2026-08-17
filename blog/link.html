@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>link</title><link rel="stylesheet" href="/assets/css/style.css"></head><body>
+<h1 id="git-links">Git Links</h1>
+<p>Git Links is an unbelievably simple format for permalinks in the code.
+Imagine a file in your repo refers to <code>mydoc.md:32</code>.
+You specified the line because files can be large.
+But an edit to <code>mydoc.md</code> can ruin your link; it becomes misleading.
+GitHub links, in particular, have always had that problem.
+Git Links adds a hashlet to the line number, e.g. <code>mydoc.md:32:eZ</code>.
+That is a prefix of the git blob hash of that particular version of the file, in Base64.
+Now, any program can double-check whether the file has changed and what the link pointed at.</p>
+<p><img src="./img/permalink.png#rightw40" alt="permalinks in code comments" title="permalinks in code comments" /></p>
+<p>The most basic implementation of Git Links can just parse <code>git</code> output.
+Some basic string matching and regexes can get you 80% there.
+To make things snappy in bigger repos, an implementation has to level up.
+<a href="https://github.com/gritzko/bee">Beagle Bee</a> employs <a href="https://github.com/gritzko/libdog">libdog</a> and search indexes to cross-link arbitrary repos.</p>
+<p>Either way, line-precise links become usable and useful.</p>
+<h2 id="faq">FAQ</h2>
+<ol>
+<li>So <code>:eZ</code> is two symbols? Is that enough of a hash prefix?
+<ul>
+<li>Surprisingly, yes.
+That is 12 bits, which is enough to disambiguate revisions for most files.
+There is no birthday paradox: we pick the earliest match in the file's history.
+If 2 is not enough, use more symbols, 3 or 4.</li>
+</ul>
+</li>
+<li>Which tools support it?
+<ul>
+<li>Today, <a href="https://github.com/gritzko/bee">bee</a>. Tomorrow, who knows?</li>
+</ul>
+</li>
+<li>Would it work with <code>jj</code>?
+<ul>
+<li>Sure, if someone implements it. <code>jj</code> is git-compatible.</li>
+</ul>
+</li>
+<li>Can it reference a file in a different repo?
+<ul>
+<li><code>bee</code> does that, just index that other repo.</li>
+</ul>
+</li>
+<li>LLMs will have infinite context, there is no need to point at a line.
+<ul>
+<li>We have 1M context window LLMs, but practitioners suggest using &lt;250K.
+Everything above is what they call the &quot;dumb zone&quot;.
+The more stuff you have in the context, the less control you have over it,
+the more unpredictable the outcome is.
+In any case, it is useful to know which part of the file we refer to.</li>
+</ul>
+</li>
+<li>Why don't we use section numbers? That works.
+<ul>
+<li>Sections get reordered and renumbered, same as lines.</li>
+</ul>
+</li>
+<li>We can use small Markdown files for everything, no need to mention the line.
+<ul>
+<li>In my experience, even Claude-generated ticket files are pretty long.
+Once all the context is in, they have tons of claims, facts and requirements.
+Those may contradict or mislead if the context is wrong.
+So, it makes sense to be more specific.
+That makes the outcomes less random.</li>
+</ul>
+</li>
+<li>Obsidian/OKF/Markdown-base solves that somehow.
+<ul>
+<li>Once you have a big dir of Markdown files, it gets even worse.
+Suppose you changed some decision and now you have contradictory
+claims in your knowledge base.
+Which one an LLMs sides with is random, every time.
+Links help to expose such broken connections.</li>
+</ul>
+</li>
+<li>Should I write these two symbols each time?
+<ul>
+<li>Nope. <code>bee</code> installs a <a href="https://github.com/gritzko/bee">git hook</a> to perma-safe all new links.</li>
+</ul>
+</li>
+</ol>
+</body></html>
