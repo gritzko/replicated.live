@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-037: an empty file opens as &quot;not found&quot; — unguarded mmap in view/fs.js</title>
+<meta property="og:title" content="CODE-037: an empty file opens as &quot;not found&quot; — unguarded mmap in view/fs.js">
+<meta property="og:description" content="view/fs.js:29 calls io.mmap(path, &quot;r&quot;).data() with no zero-size gate; view/cat.js:23 states the house rule (&quot;an mmap of zero bytes has nothing to map&quot;) and gates on st.size === 0. The door wraps the open in a catch that returns null (door.js:23-24), so bee &lt;empty-file&gt; reports a miss instead of an empty page. Empty files are ordinary repo citizens (.gitkeep, fresh tickets). Found in the 2026-08-21 review.">
+<meta property="og:type" content="article">
+<link rel="stylesheet" href="/blob/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/blob/js/asciicast.js"></script>
+<a class="banner" href="/">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1 id="code-037-an-empty-file-opens-as-not-found-—-unguarded-mmap-in-viewfsjs"><span id="b0"><span id="b4">CODE-037</span><span id="b12">:</span><span id="b13"> </span><span id="b14">an</span><span id="b16"> </span><span id="b17">empty</span><span id="b22"> </span><span id="b23">file</span><span id="b27"> </span><span id="b28">opens</span><span id="b33"> </span><span id="b34">as</span><span id="b36"> </span><span id="b37">&quot;</span><span id="b38">not</span><span id="b41"> </span><span id="b42">found</span><span id="b47">&quot;</span><span id="b48"> </span><span id="b49">—</span><span id="b52"> </span><span id="b53">unguarded</span><span id="b62"> </span><span id="b63">mmap</span><span id="b67"> </span><span id="b68">in</span><span id="b70"> </span><span id="b71">view/fs.js</span></span></h1>
+<dl class="meta">
+<dt id="b83"><span>Now</span></dt>
+<dd><span id="b87">DONT</span></dd>
+<dt id="b93"><span>Sev</span></dt>
+<dd><span id="b97">MED</span></dd>
+<dt id="b102"><span>Rep</span></dt>
+<dd><span id="b106">///bee</span></dd>
+<dt id="b114"><span>Ask</span></dt>
+<dd><span id="b118">gritzko</span></dd>
+<dt id="b127"><span>Rev</span></dt>
+<dd><span id="b131">///bee#184fddf</span></dd>
+</dl>
+<h2 id="input"><span id="b148"><span id="b152">Input</span></span></h2>
+<h3 id="context"><span id="b159"><span id="b163">Context</span></span></h3>
+<p id="b171"><span>view/fs.js:29</span><span id="b184"> </span><span id="b185">calls</span><span id="b190"> </span><code id="b191">io.mmap(path, &quot;r&quot;).data()</code><span id="b218"> </span><span id="b219">with</span><span id="b223"> </span><span id="b224">no</span><span id="b226"> </span><span id="b227">zero</span><span id="b231">-</span><span id="b232">size</span><span id="b236"> </span><span id="b237">gate</span><span id="b241">;</span>
+<span id="b243">view/cat.js:23</span><span id="b257"> </span><span id="b258">states</span><span id="b264"> </span><span id="b265">the</span><span id="b268"> </span><span id="b269">house</span><span id="b274"> </span><span id="b275">rule</span><span id="b279"> </span><span id="b280">(</span><span id="b281">&quot;</span><span id="b282">an</span><span id="b284"> </span><span id="b285">mmap</span><span id="b289"> </span><span id="b290">of</span><span id="b292"> </span><span id="b293">zero</span><span id="b297"> </span><span id="b298">bytes</span><span id="b303"> </span><span id="b304">has</span><span id="b307"> </span><span id="b308">nothing</span><span id="b315"> </span><span id="b316">to</span>
+<span id="b319">map</span><span id="b322">&quot;</span><span id="b323">)</span><span id="b324"> </span><span id="b325">and</span><span id="b328"> </span><span id="b329">gates</span><span id="b334"> </span><span id="b335">on</span><span id="b337"> </span><code id="b338">st.size === 0</code><span id="b353">.</span><span id="b354"> </span><span id="b355">The</span><span id="b358"> </span><span id="b359">door</span><span id="b363"> </span><span id="b364">wraps</span><span id="b369"> </span><span id="b370">the</span><span id="b373"> </span><span id="b374">open</span><span id="b378"> </span><span id="b379">in</span><span id="b381"> </span><span id="b382">a</span><span id="b383"> </span><span id="b384">catch</span><span id="b389"> </span><span id="b390">that</span>
+<span id="b395">returns</span><span id="b402"> </span><span id="b403">null</span><span id="b407"> </span><span id="b408">(</span><span id="b409">door.js:23</span><span id="b419">-</span><span id="b420">24</span><span id="b422">)</span><span id="b423">,</span><span id="b424"> </span><span id="b425">so</span><span id="b427"> </span><code id="b428">bee &lt;empty-file&gt;</code><span id="b446"> </span><span id="b447">reports</span><span id="b454"> </span><span id="b455">a</span><span id="b456"> </span><span id="b457">miss</span><span id="b461"> </span><span id="b462">instead</span><span id="b469"> </span><span id="b470">of</span>
+<span id="b473">an</span><span id="b475"> </span><span id="b476">empty</span><span id="b481"> </span><span id="b482">page</span><span id="b486">.</span><span id="b487"> </span><span id="b488">Empty</span><span id="b493"> </span><span id="b494">files</span><span id="b499"> </span><span id="b500">are</span><span id="b503"> </span><span id="b504">ordinary</span><span id="b512"> </span><span id="b513">repo</span><span id="b517"> </span><span id="b518">citizens</span><span id="b526"> </span><span id="b527">(</span><span id="b528">.</span><span id="b529">gitkeep</span><span id="b536">,</span><span id="b537"> </span><span id="b538">fresh</span>
+<span id="b544">tickets</span><span id="b551">)</span><span id="b552">.</span><span id="b553"> </span><span id="b554">Found</span><span id="b559"> </span><span id="b560">in</span><span id="b562"> </span><span id="b563">the</span><span id="b566"> </span><span id="b567">2026</span><span id="b571">-</span><span id="b572">08</span><span id="b574">-</span><span id="b575">21</span><span id="b577"> </span><span id="b578">review</span><span id="b584">.</span></p>
+<h3 id="goals"><span id="b587"><span id="b591">Goals</span></span></h3>
+<p id="b597"><span>Repro</span><span id="b602">:</span><span id="b603"> </span><code id="b604">bee</code><span id="b609"> </span><span id="b610">on</span><span id="b612"> </span><span id="b613">a</span><span id="b614"> </span><span id="b615">zero</span><span id="b619">-</span><span id="b620">byte</span><span id="b624"> </span><span id="b625">file</span><span id="b629"> </span><span id="b630">shows</span><span id="b635"> </span><span id="b636">an</span><span id="b638"> </span><span id="b639">empty</span><span id="b644"> </span><span id="b645">page</span><span id="b649">,</span><span id="b650"> </span><span id="b651">not</span><span id="b654"> </span><span id="b655">&quot;</span><span id="b656">not</span><span id="b659"> </span><span id="b660">found</span><span id="b665">&quot;</span><span id="b666">.</span><span id="b667"> </span><span id="b668">Add</span>
+<span id="b672">the</span><span id="b675"> </span><span id="b676">size</span><span id="b680"> </span><span id="b681">gate</span><span id="b685"> </span><span id="b686">cat.js</span><span id="b692"> </span><span id="b693">already</span><span id="b700"> </span><span id="b701">spells</span><span id="b707">.</span></p>
+<h2 id="wip"><span id="b710"><span id="b714">WIP</span></span></h2>
+<h3 id="todos"><span id="b719"><span id="b723">TODOs</span></span></h3>
+<ul>
+<li id="b729"><span id="b733">[ ]</span><span id="b736"> </span><span id="b737">repro</span><span id="b742"> </span><span id="b743">test</span><span id="b747">:</span><span id="b748"> </span><span id="b749">zero</span><span id="b753">-</span><span id="b754">byte</span><span id="b758"> </span><span id="b759">file</span><span id="b763"> </span><span id="b764">opens</span><span id="b769"> </span><span id="b770">as</span><span id="b772"> </span><span id="b773">an</span><span id="b775"> </span><span id="b776">empty</span><span id="b781"> </span><span id="b782">hunk</span></li>
+<li id="b787"><span id="b791">[ ]</span><span id="b794"> </span><span id="b795">size</span><span id="b799">-</span><span id="b800">0</span><span id="b801"> </span><span id="b802">gate</span><span id="b806"> </span><span id="b807">in</span><span id="b809"> </span><span id="b810">view/fs.js</span><span id="b820"> </span><span id="b821">buildFileHunk</span></li>
+</ul>
+<h2 id="outcome"><span id="b836"><span id="b840">Outcome</span></span></h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

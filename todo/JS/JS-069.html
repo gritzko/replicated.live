@@ -7,68 +7,77 @@
 <meta property="og:title" content="JS-069: diff follows tracked symlinks via io.mmap (info leak)">
 <meta property="og:description" content="be diff's wt-vs-base path reads symlink leaves by dereferencing the link, so a TRACKED symlink to /etc/passwd leaks that file into the wt side of the diff. Symlink leaves wrongly land in the files map and get io.mmap'd. Reachable once an attacker tree is checked out. Masked today by DIFF handler unreachability (JS-071). Method: Issues.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/JS/JS-069.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-069: diff follows tracked symlinks via io.mmap (info leak)</h1>
+<h1 id="js-069-diff-follows-tracked-symlinks-via-iommap-info-leak"><span id="b0"><span id="b4">JS-069</span><span id="b10">:</span><span id="b11"> </span><span id="b12">diff</span><span id="b16"> </span><span id="b17">follows</span><span id="b24"> </span><span id="b25">tracked</span><span id="b32"> </span><span id="b33">symlinks</span><span id="b41"> </span><span id="b42">via</span><span id="b45"> </span><span id="b46">io</span><span id="b48">.</span><span id="b49">mmap</span><span id="b53"> </span><span id="b54">(</span><span id="b55">info</span><span id="b59"> </span><span id="b60">leak</span><span id="b64">)</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+<dl class="meta">
+<dt id="b66"><span>Now</span></dt>
+<dd><span id="b74">DONE</span></dd>
+</dl>
 </div>
-<p>
-<code>be diff</code>'s wt-vs-base path reads symlink leaves by dereferencing the link, so a TRACKED symlink to <code>/etc/passwd</code> leaks that file into the wt side of the diff.  Symlink leaves wrongly land in the <code>files</code> map and get <code>io.mmap</code>'d.  Reachable once an attacker tree is checked out. Masked today by <a href="./DIFF.html">DIFF</a> handler unreachability (<a href="./JS-071.html">JS-071</a>).  Method: <a href="../../meta/work.html">Issues</a>.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b81"><code>be diff</code><span id="b90">'</span><span id="b91">s</span><span id="b92"> </span><span id="b93">wt</span><span id="b95">-</span><span id="b96">vs</span><span id="b98">-</span><span id="b99">base</span><span id="b103"> </span><span id="b104">path</span><span id="b108"> </span><span id="b109">reads</span><span id="b114"> </span><span id="b115">symlink</span><span id="b122"> </span><span id="b123">leaves</span><span id="b129"> </span><span id="b130">by</span><span id="b132"> </span><span id="b133">dereferencing</span><span id="b146"> </span><span id="b147">the</span>
+<span id="b151">link</span><span id="b155">,</span><span id="b156"> </span><span id="b157">so</span><span id="b159"> </span><span id="b160">a</span><span id="b161"> </span><span id="b162">TRACKED</span><span id="b169"> </span><span id="b170">symlink</span><span id="b177"> </span><span id="b178">to</span><span id="b180"> </span><code id="b181">/etc/passwd</code><span id="b194"> </span><span id="b195">leaks</span><span id="b200"> </span><span id="b201">that</span><span id="b205"> </span><span id="b206">file</span><span id="b210"> </span><span id="b211">into</span><span id="b215"> </span><span id="b216">the</span>
+<span id="b220">wt</span><span id="b222"> </span><span id="b223">side</span><span id="b227"> </span><span id="b228">of</span><span id="b230"> </span><span id="b231">the</span><span id="b234"> </span><span id="b235">diff</span><span id="b239">.</span><span id="b240">  </span><span id="b242">Symlink</span><span id="b249"> </span><span id="b250">leaves</span><span id="b256"> </span><span id="b257">wrongly</span><span id="b264"> </span><span id="b265">land</span><span id="b269"> </span><span id="b270">in</span><span id="b272"> </span><span id="b273">the</span><span id="b276"> </span><code id="b277">files</code><span id="b284"> </span><span id="b285">map</span>
+<span id="b289">and</span><span id="b292"> </span><span id="b293">get</span><span id="b296"> </span><code id="b297">io.mmap</code><span id="b306">'</span><span id="b307">d</span><span id="b308">.</span><span id="b309">  </span><span id="b311">Reachable</span><span id="b320"> </span><span id="b321">once</span><span id="b325"> </span><span id="b326">an</span><span id="b328"> </span><span id="b329">attacker</span><span id="b337"> </span><span id="b338">tree</span><span id="b342"> </span><span id="b343">is</span><span id="b345"> </span><span id="b346">checked</span><span id="b353"> </span><span id="b354">out</span><span id="b357">.</span>
+<span id="b359">Masked</span><span id="b365"> </span><span id="b366">today</span><span id="b371"> </span><span id="b372">by</span><span id="b374"> </span><a href="DIFF"><span id="b376">DIFF</span></a><span id="b381"> </span><span id="b382">handler</span><span id="b389"> </span><span id="b390">unreachability</span><span id="b404"> </span><span id="b405">(</span><a href="./JS-071.html" title="diff handler reachability"><span id="b407">JS-071</span></a><span id="b414">)</span><span id="b415">.</span><span id="b416">  </span><span id="b418">Method</span><span id="b424">:</span><span id="b425"> </span><a href="../../meta/work.html" title="the parallel fix-and-land loop"><span id="b427">Issues</span></a><span id="b434">.</span></p>
+<h2 id="input"><span id="b437"><span id="b441">Input</span></span></h2>
+<h3 id="context"><span id="b447"><span id="b451">Context</span></span></h3>
 <ul>
-<li><code>views/diff/diff.js:134-135</code> <code>treeMap</code> routes only <code>kind === &quot;s&quot;</code> to <code>subs</code>; symlink leaves (<code>kind === &quot;l&quot;</code>) fall into <code>files</code>.</li>
-<li><code>views/diff/diff.js:201-211</code> per base file: <code>join(repo.wt,p)</code> then <code>readWtFile(wtPath)</code> — no lstat, no symlink kind branch.</li>
-<li><code>views/diff/diff.js:216-218</code> <code>readWtFile</code> does <code>io.mmap(path,&quot;r&quot;).data().slice()</code> — FOLLOWS the link, reads target.</li>
-<li>A tracked symlink <code>link -&gt; /etc/passwd</code> thus emits the TARGET's bytes as the wt-side blob, not the link target string.</li>
-<li>Read sink is real now; the diff handler is just currently unreachable (see <a href="./JS-071.html">JS-071</a>) so it is not yet exploitable end-to-end.</li>
+<li id="b459"><code id="b463">views/diff/diff.js:134-135</code><span id="b491"> </span><code id="b492">treeMap</code><span id="b501"> </span><span id="b502">routes</span><span id="b508"> </span><span id="b509">only</span><span id="b513"> </span><code id="b514">kind === &quot;s&quot;</code>
+<span id="b533">to</span><span id="b535"> </span><code id="b536">subs</code><span id="b542">;</span><span id="b543"> </span><span id="b544">symlink</span><span id="b551"> </span><span id="b552">leaves</span><span id="b558"> </span><span id="b559">(</span><code id="b560">kind === &quot;l&quot;</code><span id="b574">)</span><span id="b575"> </span><span id="b576">fall</span><span id="b580"> </span><span id="b581">into</span><span id="b585"> </span><code id="b586">files</code><span id="b593">.</span></li>
+<li id="b595"><code id="b599">views/diff/diff.js:201-211</code><span id="b627"> </span><span id="b628">per</span><span id="b631"> </span><span id="b632">base</span><span id="b636"> </span><span id="b637">file</span><span id="b641">:</span><span id="b642"> </span><code id="b643">join(repo.wt,p)</code><span id="b660"> </span><span id="b661">then</span>
+<code id="b670">readWtFile(wtPath)</code><span id="b690"> </span><span id="b691">—</span><span id="b694"> </span><span id="b695">no</span><span id="b697"> </span><span id="b698">lstat</span><span id="b703">,</span><span id="b704"> </span><span id="b705">no</span><span id="b707"> </span><span id="b708">symlink</span><span id="b715"> </span><span id="b716">kind</span><span id="b720"> </span><span id="b721">branch</span><span id="b727">.</span></li>
+<li id="b729"><code id="b733">views/diff/diff.js:216-218</code><span id="b761"> </span><code id="b762">readWtFile</code><span id="b774"> </span><span id="b775">does</span>
+<code id="b784">io.mmap(path,&quot;r&quot;).data().slice()</code><span id="b818"> </span><span id="b819">—</span><span id="b822"> </span><span id="b823">FOLLOWS</span><span id="b830"> </span><span id="b831">the</span><span id="b834"> </span><span id="b835">link</span><span id="b839">,</span><span id="b840"> </span><span id="b841">reads</span><span id="b846"> </span><span id="b847">target</span><span id="b853">.</span></li>
+<li id="b855"><span id="b859">A</span><span id="b860"> </span><span id="b861">tracked</span><span id="b868"> </span><span id="b869">symlink</span><span id="b876"> </span><code id="b877">link -&gt; /etc/passwd</code><span id="b898"> </span><span id="b899">thus</span><span id="b903"> </span><span id="b904">emits</span><span id="b909"> </span><span id="b910">the</span><span id="b913"> </span><span id="b914">TARGET</span><span id="b920">'</span><span id="b921">s</span>
+<span id="b927">bytes</span><span id="b932"> </span><span id="b933">as</span><span id="b935"> </span><span id="b936">the</span><span id="b939"> </span><span id="b940">wt</span><span id="b942">-</span><span id="b943">side</span><span id="b947"> </span><span id="b948">blob</span><span id="b952">,</span><span id="b953"> </span><span id="b954">not</span><span id="b957"> </span><span id="b958">the</span><span id="b961"> </span><span id="b962">link</span><span id="b966"> </span><span id="b967">target</span><span id="b973"> </span><span id="b974">string</span><span id="b980">.</span></li>
+<li id="b982"><span id="b986">Read</span><span id="b990"> </span><span id="b991">sink</span><span id="b995"> </span><span id="b996">is</span><span id="b998"> </span><span id="b999">real</span><span id="b1003"> </span><span id="b1004">now</span><span id="b1007">;</span><span id="b1008"> </span><span id="b1009">the</span><span id="b1012"> </span><span id="b1013">diff</span><span id="b1017"> </span><span id="b1018">handler</span><span id="b1025"> </span><span id="b1026">is</span><span id="b1028"> </span><span id="b1029">just</span><span id="b1033"> </span><span id="b1034">currently</span>
+<span id="b1048">unreachable</span><span id="b1059"> </span><span id="b1060">(</span><span id="b1061">see</span><span id="b1064"> </span><a href="./JS-071.html" title="diff handler reachability"><span id="b1066">JS-071</span></a><span id="b1073">)</span><span id="b1074"> </span><span id="b1075">so</span><span id="b1077"> </span><span id="b1078">it</span><span id="b1080"> </span><span id="b1081">is</span><span id="b1083"> </span><span id="b1084">not</span><span id="b1087"> </span><span id="b1088">yet</span><span id="b1091"> </span><span id="b1092">exploitable</span><span id="b1103"> </span><span id="b1104">end</span><span id="b1107">-</span><span id="b1108">to</span><span id="b1110">-</span><span id="b1111">end</span><span id="b1114">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b1116"><span id="b1120">Goals</span></span></h3>
 <ul>
-<li>Diff symlink leaves as the stored link-target blob body, not contents.</li>
-<li>wt-side symlink read uses <code>lstat</code>+<code>readlink</code> (or <code>O_NOFOLLOW</code>).</li>
-<li>Repro: tracked symlink to an outside file leaks nothing into diff.</li>
+<li id="b1126"><span id="b1130">Diff</span><span id="b1134"> </span><span id="b1135">symlink</span><span id="b1142"> </span><span id="b1143">leaves</span><span id="b1149"> </span><span id="b1150">as</span><span id="b1152"> </span><span id="b1153">the</span><span id="b1156"> </span><span id="b1157">stored</span><span id="b1163"> </span><span id="b1164">link</span><span id="b1168">-</span><span id="b1169">target</span><span id="b1175"> </span><span id="b1176">blob</span><span id="b1180"> </span><span id="b1181">body</span><span id="b1185">,</span><span id="b1186"> </span><span id="b1187">not</span><span id="b1190"> </span><span id="b1191">contents</span><span id="b1199">.</span></li>
+<li id="b1201"><span id="b1205">wt</span><span id="b1207">-</span><span id="b1208">side</span><span id="b1212"> </span><span id="b1213">symlink</span><span id="b1220"> </span><span id="b1221">read</span><span id="b1225"> </span><span id="b1226">uses</span><span id="b1230"> </span><code id="b1231">lstat</code><span id="b1238">+</span><code id="b1239">readlink</code><span id="b1249"> </span><span id="b1250">(</span><span id="b1251">or</span><span id="b1253"> </span><code id="b1254">O_NOFOLLOW</code><span id="b1266">)</span><span id="b1267">.</span></li>
+<li id="b1269"><span id="b1273">Repro</span><span id="b1278">:</span><span id="b1279"> </span><span id="b1280">tracked</span><span id="b1287"> </span><span id="b1288">symlink</span><span id="b1295"> </span><span id="b1296">to</span><span id="b1298"> </span><span id="b1299">an</span><span id="b1301"> </span><span id="b1302">outside</span><span id="b1309"> </span><span id="b1310">file</span><span id="b1314"> </span><span id="b1315">leaks</span><span id="b1320"> </span><span id="b1321">nothing</span><span id="b1328"> </span><span id="b1329">into</span><span id="b1333"> </span><span id="b1334">diff</span><span id="b1338">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b1340"><span id="b1344">Constraints</span></span></h3>
 <ul>
-<li>Keep <code>diffWtTree</code>/<code>diffTreeRefs</code> lex order + sha-skip parity.</li>
-<li>No new follows in <code>readWtFile</code>; gate by leaf kind upstream.</li>
-<li>Pairs with <a href="./JS-071.html">JS-071</a> (reachability) — land together.</li>
+<li id="b1356"><span id="b1360">Keep</span><span id="b1364"> </span><code id="b1365">diffWtTree</code><span id="b1377">/</span><code id="b1378">diffTreeRefs</code><span id="b1392"> </span><span id="b1393">lex</span><span id="b1396"> </span><span id="b1397">order</span><span id="b1402"> </span><span id="b1403">+</span><span id="b1404"> </span><span id="b1405">sha</span><span id="b1408">-</span><span id="b1409">skip</span><span id="b1413"> </span><span id="b1414">parity</span><span id="b1420">.</span></li>
+<li id="b1422"><span id="b1426">No</span><span id="b1428"> </span><span id="b1429">new</span><span id="b1432"> </span><span id="b1433">follows</span><span id="b1440"> </span><span id="b1441">in</span><span id="b1443"> </span><code id="b1444">readWtFile</code><span id="b1456">;</span><span id="b1457"> </span><span id="b1458">gate</span><span id="b1462"> </span><span id="b1463">by</span><span id="b1465"> </span><span id="b1466">leaf</span><span id="b1470"> </span><span id="b1471">kind</span><span id="b1475"> </span><span id="b1476">upstream</span><span id="b1484">.</span></li>
+<li id="b1486"><span id="b1490">Pairs</span><span id="b1495"> </span><span id="b1496">with</span><span id="b1500"> </span><a href="./JS-071.html" title="diff handler reachability"><span id="b1502">JS-071</span></a><span id="b1509"> </span><span id="b1510">(</span><span id="b1511">reachability</span><span id="b1523">)</span><span id="b1524"> </span><span id="b1525">—</span><span id="b1528"> </span><span id="b1529">land</span><span id="b1533"> </span><span id="b1534">together</span><span id="b1542">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>Design decisions</h3>
+<h2 id="wip"><span id="b1545"><span id="b1549">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b1553"><span id="b1557">Design</span><span id="b1563"> </span><span id="b1564">decisions</span></span></h3>
 <ul>
-<li>Split symlinks out of <code>files</code> into a <code>links</code> map (like <code>subs</code>); diff their target-string blobs, never <code>mmap</code> the wt path.</li>
-<li>For wt side, <code>io.lstat</code> kind==&quot;lnk&quot; → <code>io.readlink</code>, else mmap.</li>
+<li id="b1574"><span id="b1578">Split</span><span id="b1583"> </span><span id="b1584">symlinks</span><span id="b1592"> </span><span id="b1593">out</span><span id="b1596"> </span><span id="b1597">of</span><span id="b1599"> </span><code id="b1600">files</code><span id="b1607"> </span><span id="b1608">into</span><span id="b1612"> </span><span id="b1613">a</span><span id="b1614"> </span><code id="b1615">links</code><span id="b1622"> </span><span id="b1623">map</span><span id="b1626"> </span><span id="b1627">(</span><span id="b1628">like</span><span id="b1632"> </span><code id="b1633">subs</code><span id="b1639">)</span><span id="b1640">;</span>
+<span id="b1646">diff</span><span id="b1650"> </span><span id="b1651">their</span><span id="b1656"> </span><span id="b1657">target</span><span id="b1663">-</span><span id="b1664">string</span><span id="b1670"> </span><span id="b1671">blobs</span><span id="b1676">,</span><span id="b1677"> </span><span id="b1678">never</span><span id="b1683"> </span><code id="b1684">mmap</code><span id="b1690"> </span><span id="b1691">the</span><span id="b1694"> </span><span id="b1695">wt</span><span id="b1697"> </span><span id="b1698">path</span><span id="b1702">.</span></li>
+<li id="b1704"><span id="b1708">For</span><span id="b1711"> </span><span id="b1712">wt</span><span id="b1714"> </span><span id="b1715">side</span><span id="b1719">,</span><span id="b1720"> </span><code id="b1721">io.lstat</code><span id="b1731"> </span><span id="b1732">kind</span><span id="b1736">=</span><span id="b1737">=</span><span id="b1738">&quot;</span><span id="b1739">lnk</span><span id="b1742">&quot;</span><span id="b1743"> </span><span id="b1744">→</span><span id="b1747"> </span><code id="b1748">io.readlink</code><span id="b1761">,</span><span id="b1762"> </span><span id="b1763">else</span><span id="b1767"> </span><span id="b1768">mmap</span><span id="b1772">.</span></li>
 </ul>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: tracked symlink → outside file; assert diff body shows only the link target string (test/js/diff/symlink-leak).</li>
-<li class="open"><input type="checkbox" disabled> Route <code>kind === &quot;l&quot;</code> to a links map; readlink wt side.</li>
-</ul>
-<h3>Blockers and bummers</h3>
-<ul class="todo">
-<li class="blocked"><input type="checkbox" disabled> ← <a href="./JS-071.html">JS-071</a> (diff handler currently unreachable).</li>
-</ul>
-<h2>Outcome</h2>
+<h3 id="todos"><span id="b1774"><span id="b1778">TODOs</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li class="task" id="b1784"><input type="checkbox" disabled="" /> <span id="b1789">Repro</span><span id="b1794">-</span><span id="b1795">first</span><span id="b1800">:</span><span id="b1801"> </span><span id="b1802">tracked</span><span id="b1809"> </span><span id="b1810">symlink</span><span id="b1817"> </span><span id="b1818">→</span><span id="b1821"> </span><span id="b1822">outside</span><span id="b1829"> </span><span id="b1830">file</span><span id="b1834">;</span><span id="b1835"> </span><span id="b1836">assert</span><span id="b1842"> </span><span id="b1843">diff</span><span id="b1847"> </span><span id="b1848">body</span>
+<span id="b1857"> </span><span id="b1858">shows</span><span id="b1863"> </span><span id="b1864">only</span><span id="b1868"> </span><span id="b1869">the</span><span id="b1872"> </span><span id="b1873">link</span><span id="b1877"> </span><span id="b1878">target</span><span id="b1884"> </span><span id="b1885">string</span><span id="b1891"> </span><span id="b1892">(</span><span id="b1893">test</span><span id="b1897">/</span><span id="b1898">js</span><span id="b1900">/</span><span id="b1901">diff</span><span id="b1905">/</span><span id="b1906">symlink</span><span id="b1913">-</span><span id="b1914">leak</span><span id="b1918">)</span><span id="b1919">.</span></li>
+<li class="task" id="b1921"><input type="checkbox" disabled="" /> <span id="b1926">Route</span><span id="b1931"> </span><code id="b1932">kind === &quot;l&quot;</code><span id="b1946"> </span><span id="b1947">to</span><span id="b1949"> </span><span id="b1950">a</span><span id="b1951"> </span><span id="b1952">links</span><span id="b1957"> </span><span id="b1958">map</span><span id="b1961">;</span><span id="b1962"> </span><span id="b1963">readlink</span><span id="b1971"> </span><span id="b1972">wt</span><span id="b1974"> </span><span id="b1975">side</span><span id="b1979">.</span></li>
+</ul>
+<h3 id="blockers-and-bummers"><span id="b1981"><span id="b1985">Blockers</span><span id="b1993"> </span><span id="b1994">and</span><span id="b1997"> </span><span id="b1998">bummers</span></span></h3>
+<ul>
+<li class="task" id="b2006"><input type="checkbox" disabled="" /> <span id="b2011">←</span><span id="b2014"> </span><a href="./JS-071.html" title="diff handler reachability"><span id="b2016">JS-071</span></a><span id="b2023"> </span><span id="b2024">(</span><span id="b2025">diff</span><span id="b2029"> </span><span id="b2030">handler</span><span id="b2037"> </span><span id="b2038">currently</span><span id="b2047"> </span><span id="b2048">unreachable</span><span id="b2059">)</span><span id="b2060">.</span></li>
+</ul>
+<h2 id="outcome"><span id="b2063"><span id="b2067">Outcome</span></span></h2>
+<ul>
+<li id="b2075"><span id="b2079">(</span><span id="b2080">pending</span><span id="b2087">)</span></li>
 </ul>
 <div class="footer">
 ❧

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TODO-018: worktree status survives the run — persist the wtstat memo</title>
+<meta property="og:title" content="TODO-018: worktree status survives the run — persist the wtstat memo">
+<meta property="og:description" content="Every ticket worktree row runs a FULL st.status walk plus foldSubs per board (view/wtstat.js stat()) — the bee-*/test/ open storms in the 2026-08-21 profile, one whole-tree scan per worktree per run. The MEMO there is process-lifetime, so a one-shot CLI hits it never; only the resident pager benefits, and TODO-006 (be/) showed the counts are the expensive block. The entry already computes its witness — cache.rev(root) plus the tips fingerprint — and then throws the pair away at exit.">
+<meta property="og:type" content="article">
+<link rel="stylesheet" href="/blob/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/blob/js/asciicast.js"></script>
+<a class="banner" href="/">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1 id="todo-018-worktree-status-survives-the-run-—-persist-the-wtstat-memo"><span id="b0"><span id="b4">TODO-018</span><span id="b12">:</span><span id="b13"> </span><span id="b14">worktree</span><span id="b22"> </span><span id="b23">status</span><span id="b29"> </span><span id="b30">survives</span><span id="b38"> </span><span id="b39">the</span><span id="b42"> </span><span id="b43">run</span><span id="b46"> </span><span id="b47">—</span><span id="b50"> </span><span id="b51">persist</span><span id="b58"> </span><span id="b59">the</span><span id="b62"> </span><span id="b63">wtstat</span><span id="b69"> </span><span id="b70">memo</span></span></h1>
+<dl class="meta">
+<dt id="b76"><span>Now</span></dt>
+<dd><span id="b80">OPEN</span></dd>
+<dt id="b86"><span>Sev</span></dt>
+<dd><span id="b90">MED</span></dd>
+<dt id="b95"><span>Rep</span></dt>
+<dd><span id="b99">///bee</span></dd>
+<dt id="b107"><span>Ask</span></dt>
+<dd><span id="b111">gritzko</span></dd>
+<dt id="b120"><span>Sub</span></dt>
+<dd><span id="b124">TODO-015</span></dd>
+<dt id="b134"><span>See</span></dt>
+<dd><span id="b138">TODO-006</span></dd>
+</dl>
+<h2 id="input"><span id="b149"><span id="b153">Input</span></span></h2>
+<h3 id="context"><span id="b160"><span id="b164">Context</span></span></h3>
+<p id="b172"><span>Every</span><span id="b177"> </span><span id="b178">ticket</span><span id="b184"> </span><span id="b185">worktree</span><span id="b193"> </span><span id="b194">row</span><span id="b197"> </span><span id="b198">runs</span><span id="b202"> </span><span id="b203">a</span><span id="b204"> </span><span id="b205">FULL</span><span id="b209"> </span><code id="b210">st.status</code><span id="b221"> </span><span id="b222">walk</span><span id="b226"> </span><span id="b227">plus</span><span id="b231"> </span><span id="b232">foldSubs</span><span id="b240"> </span><span id="b241">per</span>
+<span id="b245">board</span><span id="b250"> </span><span id="b251">(</span><span id="b252">view/wtstat.js</span><span id="b266"> </span><span id="b267">stat</span><span id="b271">(</span><span id="b272">)</span><span id="b273">)</span><span id="b274"> </span><span id="b275">—</span><span id="b278"> </span><span id="b279">the</span><span id="b282"> </span><code id="b283">bee-*/test/</code><span id="b296"> </span><span id="b297">open</span><span id="b301"> </span><span id="b302">storms</span><span id="b308"> </span><span id="b309">in</span><span id="b311"> </span><span id="b312">the</span>
+<span id="b316">2026</span><span id="b320">-</span><span id="b321">08</span><span id="b323">-</span><span id="b324">21</span><span id="b326"> </span><span id="b327">profile</span><span id="b334">,</span><span id="b335"> </span><span id="b336">one</span><span id="b339"> </span><span id="b340">whole</span><span id="b345">-</span><span id="b346">tree</span><span id="b350"> </span><span id="b351">scan</span><span id="b355"> </span><span id="b356">per</span><span id="b359"> </span><span id="b360">worktree</span><span id="b368"> </span><span id="b369">per</span><span id="b372"> </span><span id="b373">run</span><span id="b376">.</span><span id="b377"> </span><span id="b378">The</span><span id="b381"> </span><span id="b382">MEMO</span>
+<span id="b387">there</span><span id="b392"> </span><span id="b393">is</span><span id="b395"> </span><span id="b396">process</span><span id="b403">-</span><span id="b404">lifetime</span><span id="b412">,</span><span id="b413"> </span><span id="b414">so</span><span id="b416"> </span><span id="b417">a</span><span id="b418"> </span><span id="b419">one</span><span id="b422">-</span><span id="b423">shot</span><span id="b427"> </span><span id="b428">CLI</span><span id="b431"> </span><span id="b432">hits</span><span id="b436"> </span><span id="b437">it</span><span id="b439"> </span><span id="b440">never</span><span id="b445">;</span><span id="b446"> </span><span id="b447">only</span><span id="b451"> </span><span id="b452">the</span>
+<span id="b456">resident</span><span id="b464"> </span><span id="b465">pager</span><span id="b470"> </span><span id="b471">benefits</span><span id="b479">,</span><span id="b480"> </span><span id="b481">and</span><span id="b484"> </span><span id="b485">TODO-006</span><span id="b493"> </span><span id="b494">(</span><span id="b495">be</span><span id="b497">/</span><span id="b498">)</span><span id="b499"> </span><span id="b500">showed</span><span id="b506"> </span><span id="b507">the</span><span id="b510"> </span><span id="b511">counts</span><span id="b517"> </span><span id="b518">are</span><span id="b521"> </span><span id="b522">the</span>
+<span id="b526">expensive</span><span id="b535"> </span><span id="b536">block</span><span id="b541">.</span><span id="b542"> </span><span id="b543">The</span><span id="b546"> </span><span id="b547">entry</span><span id="b552"> </span><span id="b553">already</span><span id="b560"> </span><span id="b561">computes</span><span id="b569"> </span><span id="b570">its</span><span id="b573"> </span><span id="b574">witness</span><span id="b581"> </span><span id="b582">—</span><span id="b585"> </span><span id="b586">cache</span><span id="b591">.</span><span id="b592">rev</span><span id="b595">(</span><span id="b596">root</span><span id="b600">)</span>
+<span id="b602">plus</span><span id="b606"> </span><span id="b607">the</span><span id="b610"> </span><span id="b611">tips</span><span id="b615"> </span><span id="b616">fingerprint</span><span id="b627"> </span><span id="b628">—</span><span id="b631"> </span><span id="b632">and</span><span id="b635"> </span><span id="b636">then</span><span id="b640"> </span><span id="b641">throws</span><span id="b647"> </span><span id="b648">the</span><span id="b651"> </span><span id="b652">pair</span><span id="b656"> </span><span id="b657">away</span><span id="b661"> </span><span id="b662">at</span><span id="b664"> </span><span id="b665">exit</span><span id="b669">.</span></p>
+<h3 id="goals"><span id="b672"><span id="b676">Goals</span></span></h3>
+<p id="b682"><span>The</span><span id="b685"> </span><code id="b686">{ counts, tips }</code><span id="b704"> </span><span id="b705">block</span><span id="b710"> </span><span id="b711">persists</span><span id="b719"> </span><span id="b720">in</span><span id="b722"> </span><span id="b723">the</span><span id="b726"> </span><span id="b727">worktree</span><span id="b735"> </span><span id="b736">repo</span><span id="b740">'</span><span id="b741">s</span><span id="b742"> </span><span id="b743">TODO-015</span>
+<span id="b752">lane</span><span id="b756"> </span><span id="b757">keyed</span><span id="b762"> </span><span id="b763">by</span><span id="b765"> </span><span id="b766">its</span><span id="b769"> </span><span id="b770">existing</span><span id="b778"> </span><span id="b779">witness</span><span id="b786">:</span><span id="b787"> </span><span id="b788">a</span><span id="b789"> </span><span id="b790">board</span><span id="b795"> </span><span id="b796">run</span><span id="b799"> </span><span id="b800">whose</span><span id="b805"> </span><span id="b806">dirs</span><span id="b810"> </span><span id="b811">stand</span><span id="b816"> </span><span id="b817">still</span>
+<span id="b823">answers</span><span id="b830"> </span><span id="b831">every</span><span id="b836"> </span><span id="b837">frame</span><span id="b842"> </span><span id="b843">from</span><span id="b847"> </span><span id="b848">the</span><span id="b851"> </span><span id="b852">lane</span><span id="b856"> </span><span id="b857">with</span><span id="b861"> </span><span id="b862">a</span><span id="b863"> </span><span id="b864">few</span><span id="b867"> </span><span id="b868">stats</span><span id="b873"> </span><span id="b874">and</span><span id="b877"> </span><span id="b878">no</span><span id="b880"> </span><span id="b881">walk</span><span id="b885">.</span><span id="b886"> </span><span id="b887">Resident</span>
+<span id="b896">processes</span><span id="b905"> </span><span id="b906">keep</span><span id="b910"> </span><span id="b911">dropping</span><span id="b919"> </span><span id="b920">by</span><span id="b922"> </span><span id="b923">rev</span><span id="b926">(</span><span id="b927">dir</span><span id="b930">)</span><span id="b931"> </span><span id="b932">exactly</span><span id="b939"> </span><span id="b940">as</span><span id="b942"> </span><span id="b943">today</span><span id="b948">.</span></p>
+<h3 id="constraints"><span id="b951"><span id="b955">Constraints</span></span></h3>
+<p id="b967"><span>TODO-006</span><span id="b975">'</span><span id="b976">s</span><span id="b977"> </span><span id="b978">rulings</span><span id="b985"> </span><span id="b986">hold</span><span id="b990">:</span><span id="b991"> </span><span id="b992">structured</span><span id="b1002"> </span><span id="b1003">values</span><span id="b1009"> </span><span id="b1010">only</span><span id="b1014"> </span><span id="b1015">(</span><span id="b1016">numbers</span><span id="b1023"> </span><span id="b1024">and</span><span id="b1027"> </span><span id="b1028">heads</span><span id="b1033">,</span><span id="b1034"> </span><span id="b1035">never</span>
+<span id="b1041">rendered</span><span id="b1049"> </span><span id="b1050">bytes</span><span id="b1055"> </span><span id="b1056">or</span><span id="b1058"> </span><span id="b1059">io</span><span id="b1061"> </span><span id="b1062">handles</span><span id="b1069">)</span><span id="b1070">;</span><span id="b1071"> </span><span id="b1072">the</span><span id="b1075"> </span><span id="b1076">stale</span><span id="b1081">-</span><span id="b1082">ahbeh</span><span id="b1087"> </span><span id="b1088">hole</span><span id="b1092"> </span><span id="b1093">means</span><span id="b1098"> </span><span id="b1099">TIPS</span><span id="b1103"> </span><span id="b1104">are</span><span id="b1107"> </span><span id="b1108">part</span><span id="b1112"> </span><span id="b1113">of</span>
+<span id="b1116">the</span><span id="b1119"> </span><span id="b1120">witness</span><span id="b1127">,</span><span id="b1128"> </span><span id="b1129">never</span><span id="b1134"> </span><span id="b1135">assumed</span><span id="b1142"> </span><span id="b1143">fresh</span><span id="b1148">.</span></p>
+<h2 id="wip"><span id="b1151"><span id="b1155">WIP</span></span></h2>
+<h3 id="todos"><span id="b1160"><span id="b1164">TODOs</span></span></h3>
+<ul>
+<li id="b1170"><span id="b1174">[ ]</span><span id="b1177"> </span><span id="b1178">repro</span><span id="b1183">:</span><span id="b1184"> </span><span id="b1185">per</span><span id="b1188">-</span><span id="b1189">board</span><span id="b1194"> </span><span id="b1195">status</span><span id="b1201"> </span><span id="b1202">walks</span><span id="b1207"> </span><span id="b1208">before</span><span id="b1214"> </span><span id="b1215">and</span><span id="b1218"> </span><span id="b1219">after</span><span id="b1224"> </span><span id="b1225">(</span><span id="b1226">strace</span><span id="b1232"> </span><span id="b1233">opens</span><span id="b1238">)</span></li>
+<li id="b1240"><span id="b1244">[ ]</span><span id="b1247"> </span><span id="b1248">persisted</span><span id="b1257"> </span><span id="b1258">stat</span><span id="b1262">(</span><span id="b1263">)</span><span id="b1264"> </span><span id="b1265">block</span><span id="b1270"> </span><span id="b1271">+</span><span id="b1272"> </span><span id="b1273">witness</span><span id="b1280"> </span><span id="b1281">in</span><span id="b1283"> </span><span id="b1284">the</span><span id="b1287"> </span><span id="b1288">shared</span><span id="b1294"> </span><span id="b1295">lane</span></li>
+</ul>
+<h2 id="outcome"><span id="b1301"><span id="b1305">Outcome</span></span></h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

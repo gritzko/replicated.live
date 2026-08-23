@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-044: mounts() SUBS memo never invalidates — stale submodule map</title>
+<meta property="og:title" content="CODE-044: mounts() SUBS memo never invalidates — stale submodule map">
+<meta property="og:description" content="index/mount.js:175-190 memoizes subsOf per root in a process-lifetime SUBS map. Every neighbouring cache (TIPS, LANES, index/index.js:828) keys on the BEE-048 fsw rev and drops on change; this one does not, and its comment gives no reason for the exemption. In bee http or a resident pager a submodule added or removed after the first mounts() stays invisible until restart. Found in the 2026-08-21 review.">
+<meta property="og:type" content="article">
+<link rel="stylesheet" href="/blob/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/blob/js/asciicast.js"></script>
+<a class="banner" href="/">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1 id="code-044-mounts-subs-memo-never-invalidates-—-stale-submodule-map"><span id="b0"><span id="b4">CODE-044</span><span id="b12">:</span><span id="b13"> </span><span id="b14">mounts</span><span id="b20">(</span><span id="b21">)</span><span id="b22"> </span><span id="b23">SUBS</span><span id="b27"> </span><span id="b28">memo</span><span id="b32"> </span><span id="b33">never</span><span id="b38"> </span><span id="b39">invalidates</span><span id="b50"> </span><span id="b51">—</span><span id="b54"> </span><span id="b55">stale</span><span id="b60"> </span><span id="b61">submodule</span><span id="b70"> </span><span id="b71">map</span></span></h1>
+<dl class="meta">
+<dt id="b76"><span>Now</span></dt>
+<dd><span id="b80">DONE</span></dd>
+<dt id="b86"><span>Sev</span></dt>
+<dd><span id="b90">MED</span></dd>
+<dt id="b95"><span>Rep</span></dt>
+<dd><span id="b99">///bee</span></dd>
+<dt id="b107"><span>Ask</span></dt>
+<dd><span id="b111">gritzko</span></dd>
+<dt id="b120"><span>Rev</span></dt>
+<dd><span id="b124">///bee#184fddf</span></dd>
+<dt id="b140"><span>See</span></dt>
+<dd><span id="b144">BEE-048</span></dd>
+</dl>
+<h2 id="input"><span id="b154"><span id="b158">Input</span></span></h2>
+<h3 id="context"><span id="b165"><span id="b169">Context</span></span></h3>
+<p id="b177"><span>index/mount.js:175</span><span id="b195">-</span><span id="b196">190</span><span id="b199"> </span><span id="b200">memoizes</span><span id="b208"> </span><code id="b209">subsOf</code><span id="b217"> </span><span id="b218">per</span><span id="b221"> </span><span id="b222">root</span><span id="b226"> </span><span id="b227">in</span><span id="b229"> </span><span id="b230">a</span><span id="b231"> </span><span id="b232">process</span><span id="b239">-</span><span id="b240">lifetime</span>
+<code id="b249">SUBS</code><span id="b255"> </span><span id="b256">map</span><span id="b259">.</span><span id="b260"> </span><span id="b261">Every</span><span id="b266"> </span><span id="b267">neighbouring</span><span id="b279"> </span><span id="b280">cache</span><span id="b285"> </span><span id="b286">(</span><code id="b287">TIPS</code><span id="b293">,</span><span id="b294"> </span><code id="b295">LANES</code><span id="b302">,</span><span id="b303"> </span><span id="b304">index/index.js:828</span><span id="b322">)</span>
+<span id="b324">keys</span><span id="b328"> </span><span id="b329">on</span><span id="b331"> </span><span id="b332">the</span><span id="b335"> </span><span id="b336">BEE-048</span><span id="b343"> </span><span id="b344">fsw</span><span id="b347"> </span><span id="b348">rev</span><span id="b351"> </span><span id="b352">and</span><span id="b355"> </span><span id="b356">drops</span><span id="b361"> </span><span id="b362">on</span><span id="b364"> </span><span id="b365">change</span><span id="b371">;</span><span id="b372"> </span><span id="b373">this</span><span id="b377"> </span><span id="b378">one</span><span id="b381"> </span><span id="b382">does</span><span id="b386"> </span><span id="b387">not</span><span id="b390">,</span><span id="b391"> </span><span id="b392">and</span><span id="b395"> </span><span id="b396">its</span>
+<span id="b400">comment</span><span id="b407"> </span><span id="b408">gives</span><span id="b413"> </span><span id="b414">no</span><span id="b416"> </span><span id="b417">reason</span><span id="b423"> </span><span id="b424">for</span><span id="b427"> </span><span id="b428">the</span><span id="b431"> </span><span id="b432">exemption</span><span id="b441">.</span><span id="b442"> </span><span id="b443">In</span><span id="b445"> </span><code id="b446">bee http</code><span id="b456"> </span><span id="b457">or</span><span id="b459"> </span><span id="b460">a</span><span id="b461"> </span><span id="b462">resident</span><span id="b470"> </span><span id="b471">pager</span>
+<span id="b477">a</span><span id="b478"> </span><span id="b479">submodule</span><span id="b488"> </span><span id="b489">added</span><span id="b494"> </span><span id="b495">or</span><span id="b497"> </span><span id="b498">removed</span><span id="b505"> </span><span id="b506">after</span><span id="b511"> </span><span id="b512">the</span><span id="b515"> </span><span id="b516">first</span><span id="b521"> </span><code id="b522">mounts()</code><span id="b532"> </span><span id="b533">stays</span><span id="b538"> </span><span id="b539">invisible</span><span id="b548"> </span><span id="b549">until</span>
+<span id="b555">restart</span><span id="b562">.</span><span id="b563"> </span><span id="b564">Found</span><span id="b569"> </span><span id="b570">in</span><span id="b572"> </span><span id="b573">the</span><span id="b576"> </span><span id="b577">2026</span><span id="b581">-</span><span id="b582">08</span><span id="b584">-</span><span id="b585">21</span><span id="b587"> </span><span id="b588">review</span><span id="b594">.</span></p>
+<h3 id="goals"><span id="b597"><span id="b601">Goals</span></span></h3>
+<p id="b607"><span>Key</span><span id="b610"> </span><span id="b611">the</span><span id="b614"> </span><span id="b615">memo</span><span id="b619"> </span><span id="b620">on</span><span id="b622"> </span><span id="b623">the</span><span id="b626"> </span><span id="b627">rev</span><span id="b630"> </span><span id="b631">like</span><span id="b635"> </span><span id="b636">its</span><span id="b639"> </span><span id="b640">neighbours</span><span id="b650">.</span><span id="b651"> </span><span id="b652">Repro</span><span id="b657">:</span><span id="b658"> </span><span id="b659">register</span><span id="b667"> </span><span id="b668">a</span><span id="b669"> </span><span id="b670">submodule</span>
+<span id="b680">under</span><span id="b685"> </span><span id="b686">a</span><span id="b687"> </span><span id="b688">live</span><span id="b692"> </span><span id="b693">server</span><span id="b699">;</span><span id="b700"> </span><span id="b701">the</span><span id="b704"> </span><span id="b705">mount</span><span id="b710"> </span><span id="b711">map</span><span id="b714"> </span><span id="b715">follows</span><span id="b722"> </span><span id="b723">without</span><span id="b730"> </span><span id="b731">a</span><span id="b732"> </span><span id="b733">restart</span><span id="b740">.</span></p>
+<h2 id="wip"><span id="b743"><span id="b747">WIP</span></span></h2>
+<h3 id="todos"><span id="b752"><span id="b756">TODOs</span></span></h3>
+<ul>
+<li id="b762"><span id="b766">[ ]</span><span id="b769"> </span><span id="b770">repro</span><span id="b775">:</span><span id="b776"> </span><span id="b777">submodule</span><span id="b786"> </span><span id="b787">add</span><span id="b790">/</span><span id="b791">remove</span><span id="b797"> </span><span id="b798">reflected</span><span id="b807"> </span><span id="b808">on</span><span id="b810"> </span><span id="b811">a</span><span id="b812"> </span><span id="b813">live</span><span id="b817"> </span><span id="b818">server</span></li>
+<li id="b825"><span id="b829">[ ]</span><span id="b832"> </span><span id="b833">SUBS</span><span id="b837"> </span><span id="b838">keyed</span><span id="b843"> </span><span id="b844">on</span><span id="b846"> </span><span id="b847">the</span><span id="b850"> </span><span id="b851">fsw</span><span id="b854"> </span><span id="b855">rev</span></li>
+</ul>
+<h2 id="outcome"><span id="b860"><span id="b864">Outcome</span></span></h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

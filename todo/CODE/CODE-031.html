@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-031: resolve.js rides the prefix read the index calls a known trap</title>
+<meta property="og:title" content="CODE-031: resolve.js rides the prefix read the index calls a known trap">
+<meta property="og:description" content="INDEXES.mkd rules that every index read rides the SEEK cursor: range/ prefix answer NOTHING for a key a seek finds at a 2^64 bound (the KNOWN TRAP index/index.js:440 restates). Yet index/resolve.js:38 and :42 — candidates() — do ix.prefix(q.fn &lt;&lt; 24n, 24, ...); fn is a 40-bit text hashlet, so any filename hashing into the top of that space forms the bound query and answers zero rows. These are the only two prefix/range reads in the package. Effect: the partial-path resolve (LITE-011 FSEG) silently misses — links and permalinks to such files do not open. Found in the 2026-08-21 review.">
+<meta property="og:type" content="article">
+<link rel="stylesheet" href="/blob/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/blob/js/asciicast.js"></script>
+<a class="banner" href="/">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1 id="code-031-resolvejs-rides-the-prefix-read-the-index-calls-a-known-trap"><span id="b0"><span id="b4">CODE-031</span><span id="b12">:</span><span id="b13"> </span><span id="b14">resolve.js</span><span id="b24"> </span><span id="b25">rides</span><span id="b30"> </span><span id="b31">the</span><span id="b34"> </span><span id="b35">prefix</span><span id="b41"> </span><span id="b42">read</span><span id="b46"> </span><span id="b47">the</span><span id="b50"> </span><span id="b51">index</span><span id="b56"> </span><span id="b57">calls</span><span id="b62"> </span><span id="b63">a</span><span id="b64"> </span><span id="b65">known</span><span id="b70"> </span><span id="b71">trap</span></span></h1>
+<dl class="meta">
+<dt id="b77"><span>Now</span></dt>
+<dd><span id="b81">OPEN</span></dd>
+<dt id="b87"><span>Sev</span></dt>
+<dd><span id="b91">HIGH</span></dd>
+<dt id="b97"><span>Rep</span></dt>
+<dd><span id="b101">///bee</span></dd>
+<dt id="b109"><span>Ask</span></dt>
+<dd><span id="b113">gritzko</span></dd>
+<dt id="b122"><span>Rev</span></dt>
+<dd><span id="b126">///bee#184fddf</span></dd>
+</dl>
+<h2 id="input"><span id="b143"><span id="b147">Input</span></span></h2>
+<h3 id="context"><span id="b154"><span id="b158">Context</span></span></h3>
+<p id="b166"><span>INDEXES.mkd</span><span id="b177"> </span><span id="b178">rules</span><span id="b183"> </span><span id="b184">that</span><span id="b188"> </span><span id="b189">every</span><span id="b194"> </span><span id="b195">index</span><span id="b200"> </span><span id="b201">read</span><span id="b205"> </span><span id="b206">rides</span><span id="b211"> </span><span id="b212">the</span><span id="b215"> </span><span id="b216">SEEK</span><span id="b220"> </span><span id="b221">cursor</span><span id="b227">:</span><span id="b228"> </span><code id="b229">range</code><span id="b236">/</span>
+<code id="b238">prefix</code><span id="b246"> </span><span id="b247">answer</span><span id="b253"> </span><span id="b254">NOTHING</span><span id="b261"> </span><span id="b262">for</span><span id="b265"> </span><span id="b266">a</span><span id="b267"> </span><span id="b268">key</span><span id="b271"> </span><span id="b272">a</span><span id="b273"> </span><code id="b274">seek</code><span id="b280"> </span><span id="b281">finds</span><span id="b286"> </span><span id="b287">at</span><span id="b289"> </span><span id="b290">a</span><span id="b291"> </span><span id="b292">2</span><span id="b293">^</span><span id="b294">64</span><span id="b296"> </span><span id="b297">bound</span><span id="b302"> </span><span id="b303">(</span><span id="b304">the</span><span id="b307"> </span><span id="b308">KNOWN</span>
+<span id="b314">TRAP</span><span id="b318"> </span><span id="b319">index/index.js:440</span><span id="b337"> </span><span id="b338">restates</span><span id="b346">)</span><span id="b347">.</span><span id="b348"> </span><span id="b349">Yet</span><span id="b352"> </span><span id="b353">index/resolve.js:38</span><span id="b372"> </span><span id="b373">and</span><span id="b376"> </span><span id="b377">:</span><span id="b378">42</span><span id="b380"> </span><span id="b381">—</span>
+<code id="b385">candidates()</code><span id="b399"> </span><span id="b400">—</span><span id="b403"> </span><span id="b404">do</span><span id="b406"> </span><code id="b407">ix.prefix(q.fn &lt;&lt; 24n, 24, ...)</code><span id="b440">;</span><span id="b441"> </span><code id="b442">fn</code><span id="b446"> </span><span id="b447">is</span><span id="b449"> </span><span id="b450">a</span><span id="b451"> </span><span id="b452">40</span><span id="b454">-</span><span id="b455">bit</span><span id="b458"> </span><span id="b459">text</span>
+<span id="b464">hashlet</span><span id="b471">,</span><span id="b472"> </span><span id="b473">so</span><span id="b475"> </span><span id="b476">any</span><span id="b479"> </span><span id="b480">filename</span><span id="b488"> </span><span id="b489">hashing</span><span id="b496"> </span><span id="b497">into</span><span id="b501"> </span><span id="b502">the</span><span id="b505"> </span><span id="b506">top</span><span id="b509"> </span><span id="b510">of</span><span id="b512"> </span><span id="b513">that</span><span id="b517"> </span><span id="b518">space</span><span id="b523"> </span><span id="b524">forms</span><span id="b529"> </span><span id="b530">the</span><span id="b533"> </span><span id="b534">bound</span>
+<span id="b540">query</span><span id="b545"> </span><span id="b546">and</span><span id="b549"> </span><span id="b550">answers</span><span id="b557"> </span><span id="b558">zero</span><span id="b562"> </span><span id="b563">rows</span><span id="b567">.</span><span id="b568"> </span><span id="b569">These</span><span id="b574"> </span><span id="b575">are</span><span id="b578"> </span><span id="b579">the</span><span id="b582"> </span><span id="b583">only</span><span id="b587"> </span><span id="b588">two</span><span id="b591"> </span><span id="b592">prefix</span><span id="b598">/</span><span id="b599">range</span><span id="b604"> </span><span id="b605">reads</span><span id="b610"> </span><span id="b611">in</span><span id="b613"> </span><span id="b614">the</span>
+<span id="b618">package</span><span id="b625">.</span><span id="b626"> </span><span id="b627">Effect</span><span id="b633">:</span><span id="b634"> </span><span id="b635">the</span><span id="b638"> </span><span id="b639">partial</span><span id="b646">-</span><span id="b647">path</span><span id="b651"> </span><span id="b652">resolve</span><span id="b659"> </span><span id="b660">(</span><span id="b661">LITE-011</span><span id="b669"> </span><span id="b670">FSEG</span><span id="b674">)</span><span id="b675"> </span><span id="b676">silently</span><span id="b684"> </span><span id="b685">misses</span><span id="b691"> </span><span id="b692">—</span>
+<span id="b696">links</span><span id="b701"> </span><span id="b702">and</span><span id="b705"> </span><span id="b706">permalinks</span><span id="b716"> </span><span id="b717">to</span><span id="b719"> </span><span id="b720">such</span><span id="b724"> </span><span id="b725">files</span><span id="b730"> </span><span id="b731">do</span><span id="b733"> </span><span id="b734">not</span><span id="b737"> </span><span id="b738">open</span><span id="b742">.</span><span id="b743"> </span><span id="b744">Found</span><span id="b749"> </span><span id="b750">in</span><span id="b752"> </span><span id="b753">the</span><span id="b756"> </span><span id="b757">2026</span><span id="b761">-</span><span id="b762">08</span><span id="b764">-</span><span id="b765">21</span><span id="b767"> </span><span id="b768">review</span><span id="b774">.</span></p>
+<h3 id="goals"><span id="b777"><span id="b781">Goals</span></span></h3>
+<p id="b787"><span>Repro</span><span id="b792"> </span><span id="b793">first</span><span id="b798">:</span><span id="b799"> </span><span id="b800">a</span><span id="b801"> </span><span id="b802">fixture</span><span id="b809"> </span><span id="b810">filename</span><span id="b818"> </span><span id="b819">whose</span><span id="b824"> </span><code id="b825">fnHl</code><span id="b831"> </span><span id="b832">top</span><span id="b835"> </span><span id="b836">bits</span><span id="b840"> </span><span id="b841">are</span><span id="b844"> </span><span id="b845">all</span><span id="b848"> </span><span id="b849">ones</span><span id="b853"> </span><span id="b854">(</span><span id="b855">brute</span><span id="b860">-</span><span id="b861">force</span>
+<span id="b867">a</span><span id="b868"> </span><span id="b869">short</span><span id="b874"> </span><span id="b875">name</span><span id="b879">)</span><span id="b880">,</span><span id="b881"> </span><span id="b882">indexed</span><span id="b889">,</span><span id="b890"> </span><span id="b891">then</span><span id="b895"> </span><span id="b896">resolved</span><span id="b904"> </span><span id="b905">—</span><span id="b908"> </span><span id="b909">the</span><span id="b912"> </span><span id="b913">test</span><span id="b917"> </span><span id="b918">shows</span><span id="b923"> </span><span id="b924">the</span><span id="b927"> </span><span id="b928">miss</span><span id="b932">.</span><span id="b933"> </span><span id="b934">Rewrite</span>
+<code id="b942">candidates()</code><span id="b956"> </span><span id="b957">on</span><span id="b959"> </span><span id="b960">the</span><span id="b963"> </span><span id="b964">seek</span><span id="b968"> </span><span id="b969">cursor</span><span id="b975">,</span><span id="b976"> </span><span id="b977">galloping</span><span id="b986"> </span><span id="b987">as</span><span id="b989"> </span><span id="b990">the</span><span id="b993"> </span><span id="b994">sibling</span><span id="b1001"> </span><span id="b1002">scans</span><span id="b1007"> </span><span id="b1008">do</span><span id="b1010">.</span></p>
+<h3 id="constraints"><span id="b1013"><span id="b1017">Constraints</span></span></h3>
+<p id="b1029"><span>No</span><span id="b1031"> </span><span id="b1032">index</span><span id="b1037"> </span><span id="b1038">format</span><span id="b1044"> </span><span id="b1045">change</span><span id="b1051">;</span><span id="b1052"> </span><span id="b1053">resolve</span><span id="b1060"> </span><span id="b1061">output</span><span id="b1067"> </span><span id="b1068">stays</span><span id="b1073"> </span><span id="b1074">identical</span><span id="b1083"> </span><span id="b1084">for</span><span id="b1087"> </span><span id="b1088">all</span><span id="b1091"> </span><span id="b1092">passing</span><span id="b1099"> </span><span id="b1100">names</span><span id="b1105">.</span></p>
+<h2 id="wip"><span id="b1108"><span id="b1112">WIP</span></span></h2>
+<h3 id="todos"><span id="b1117"><span id="b1121">TODOs</span></span></h3>
+<ul>
+<li id="b1127"><span id="b1131">[ ]</span><span id="b1134"> </span><span id="b1135">repro</span><span id="b1140"> </span><span id="b1141">test</span><span id="b1145">:</span><span id="b1146"> </span><span id="b1147">high</span><span id="b1151">-</span><span id="b1152">fnHl</span><span id="b1156"> </span><span id="b1157">filename</span><span id="b1165"> </span><span id="b1166">resolves</span><span id="b1174"> </span><span id="b1175">to</span><span id="b1177"> </span><span id="b1178">nothing</span></li>
+<li id="b1186"><span id="b1190">[ ]</span><span id="b1193"> </span><span id="b1194">seek</span><span id="b1198">-</span><span id="b1199">cursor</span><span id="b1205"> </span><span id="b1206">rewrite</span><span id="b1213"> </span><span id="b1214">of</span><span id="b1216"> </span><span id="b1217">candidates</span><span id="b1227">(</span><span id="b1228">)</span></li>
+</ul>
+<h2 id="outcome"><span id="b1231"><span id="b1235">Outcome</span></span></h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

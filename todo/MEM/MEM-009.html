@@ -7,48 +7,40 @@
 <meta property="og:title" content="MEM-009: TCP/UDP socket fd leaked on bind failure (abc/TCP.c, abc/UDP.c)">
 <meta property="og:description" content="In both TCPListen and UDPBind the resolve loop opens a socket, then on a failing bind() the error branch traces, frees the addrinfo, and returns the failure code without close(sfd); the loop's normal close(sfd) is unreachable past the early return, so every bind failure (port in use, permission denied) leaks a descriptor. The goal is to close the socket on the failure path.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-009.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>MEM-009: TCP/UDP socket fd leaked on bind failure (abc/TCP.c, abc/UDP.c)</h1>
+<h1 id="mem-009-tcpudp-socket-fd-leaked-on-bind-failure-abctcpc-abcudpc"><span id="b0"><span id="b4">MEM-009</span><span id="b11">:</span><span id="b12"> </span><span id="b13">TCP</span><span id="b16">/</span><span id="b17">UDP</span><span id="b20"> </span><span id="b21">socket</span><span id="b27"> </span><span id="b28">fd</span><span id="b30"> </span><span id="b31">leaked</span><span id="b37"> </span><span id="b38">on</span><span id="b40"> </span><span id="b41">bind</span><span id="b45"> </span><span id="b46">failure</span><span id="b53"> </span><span id="b54">(</span><span id="b55">abc/TCP.c</span><span id="b64">,</span><span id="b65"> </span><span id="b66">abc/UDP.c</span><span id="b75">)</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+<dl class="meta">
+<dt id="b77"><span>Now</span></dt>
+<dd><span id="b85">DONE</span></dd>
+</dl>
 </div>
-<p>
-In both <code>TCPListen</code> and <code>UDPBind</code> the resolve loop opens a socket, then on a failing <code>bind()</code> the error branch traces, frees the addrinfo, and returns the failure code without <code>close(sfd)</code>; the loop's normal <code>close(sfd)</code> is unreachable past the early return, so every bind failure (port in use, permission denied) leaks a descriptor. The goal is to close the socket on the failure path.
-</p>
-<h2>Issues</h2>
-<p>
-Identical leak in two siblings.
-</p>
+<p id="b92"><span>In</span><span id="b94"> </span><span id="b95">both</span><span id="b99"> </span><code id="b100">TCPListen</code><span id="b111"> </span><span id="b112">and</span><span id="b115"> </span><code id="b116">UDPBind</code><span id="b125"> </span><span id="b126">the</span><span id="b129"> </span><span id="b130">resolve</span><span id="b137"> </span><span id="b138">loop</span><span id="b142"> </span><span id="b143">opens</span><span id="b148"> </span><span id="b149">a</span><span id="b150"> </span><span id="b151">socket</span><span id="b157">,</span><span id="b158"> </span><span id="b159">then</span><span id="b163"> </span><span id="b164">on</span><span id="b166"> </span><span id="b167">a</span><span id="b168"> </span><span id="b169">failing</span><span id="b176"> </span><code id="b177">bind()</code><span id="b185"> </span><span id="b186">the</span><span id="b189"> </span><span id="b190">error</span><span id="b195"> </span><span id="b196">branch</span><span id="b202"> </span><span id="b203">traces</span><span id="b209">,</span><span id="b210"> </span><span id="b211">frees</span><span id="b216"> </span><span id="b217">the</span><span id="b220"> </span><span id="b221">addrinfo</span><span id="b229">,</span><span id="b230"> </span><span id="b231">and</span><span id="b234"> </span><span id="b235">returns</span><span id="b242"> </span><span id="b243">the</span><span id="b246"> </span><span id="b247">failure</span><span id="b254"> </span><span id="b255">code</span><span id="b259"> </span><span id="b260">without</span><span id="b267"> </span><code id="b268">close(sfd)</code><span id="b280">;</span><span id="b281"> </span><span id="b282">the</span><span id="b285"> </span><span id="b286">loop</span><span id="b290">'</span><span id="b291">s</span><span id="b292"> </span><span id="b293">normal</span><span id="b299"> </span><code id="b300">close(sfd)</code><span id="b312"> </span><span id="b313">is</span><span id="b315"> </span><span id="b316">unreachable</span><span id="b327"> </span><span id="b328">past</span><span id="b332"> </span><span id="b333">the</span><span id="b336"> </span><span id="b337">early</span><span id="b342"> </span><span id="b343">return</span><span id="b349">,</span><span id="b350"> </span><span id="b351">so</span><span id="b353"> </span><span id="b354">every</span><span id="b359"> </span><span id="b360">bind</span><span id="b364"> </span><span id="b365">failure</span><span id="b372"> </span><span id="b373">(</span><span id="b374">port</span><span id="b378"> </span><span id="b379">in</span><span id="b381"> </span><span id="b382">use</span><span id="b385">,</span><span id="b386"> </span><span id="b387">permission</span><span id="b397"> </span><span id="b398">denied</span><span id="b404">)</span><span id="b405"> </span><span id="b406">leaks</span><span id="b411"> </span><span id="b412">a</span><span id="b413"> </span><span id="b414">descriptor</span><span id="b424">.</span><span id="b425"> </span><span id="b426">The</span><span id="b429"> </span><span id="b430">goal</span><span id="b434"> </span><span id="b435">is</span><span id="b437"> </span><span id="b438">to</span><span id="b440"> </span><span id="b441">close</span><span id="b446"> </span><span id="b447">the</span><span id="b450"> </span><span id="b451">socket</span><span id="b457"> </span><span id="b458">on</span><span id="b460"> </span><span id="b461">the</span><span id="b464"> </span><span id="b465">failure</span><span id="b472"> </span><span id="b473">path</span><span id="b477">.</span></p>
+<h2 id="issues"><span id="b480"><span id="b484">Issues</span></span></h2>
+<p id="b491"><span>Identical</span><span id="b500"> </span><span id="b501">leak</span><span id="b505"> </span><span id="b506">in</span><span id="b508"> </span><span id="b509">two</span><span id="b512"> </span><span id="b513">siblings</span><span id="b521">.</span></p>
 <ul>
-<li><code>abc/TCP.c:50-55</code> — <code>bind()</code> fails → return <code>TCPFAIL</code> with <code>sfd</code> still open; <code>close(sfd)</code> at :58 never reached.</li>
-<li><code>abc/UDP.c:19-24</code> — same shape: <code>bind()</code> fails → return <code>UDPFAIL</code>, <code>close(sfd)</code> at :27 never reached.</li>
+<li id="b524"><code id="b528">abc/TCP.c:50-55</code><span id="b545"> </span><span id="b546">—</span><span id="b549"> </span><code id="b550">bind()</code><span id="b558"> </span><span id="b559">fails</span><span id="b564"> </span><span id="b565">→</span><span id="b568"> </span><span id="b569">return</span><span id="b575"> </span><code id="b576">TCPFAIL</code><span id="b585"> </span><span id="b586">with</span><span id="b590"> </span><code id="b591">sfd</code><span id="b596"> </span><span id="b597">still</span><span id="b602"> </span><span id="b603">open</span><span id="b607">;</span><span id="b608"> </span><code id="b609">close(sfd)</code><span id="b621"> </span><span id="b622">at</span><span id="b624"> </span><span id="b625">:</span><span id="b626">58</span><span id="b628"> </span><span id="b629">never</span><span id="b634"> </span><span id="b635">reached</span><span id="b642">.</span></li>
+<li id="b644"><code id="b648">abc/UDP.c:19-24</code><span id="b665"> </span><span id="b666">—</span><span id="b669"> </span><span id="b670">same</span><span id="b674"> </span><span id="b675">shape</span><span id="b680">:</span><span id="b681"> </span><code id="b682">bind()</code><span id="b690"> </span><span id="b691">fails</span><span id="b696"> </span><span id="b697">→</span><span id="b700"> </span><span id="b701">return</span><span id="b707"> </span><code id="b708">UDPFAIL</code><span id="b717">,</span><span id="b718"> </span><code id="b719">close(sfd)</code><span id="b731"> </span><span id="b732">at</span><span id="b734"> </span><span id="b735">:</span><span id="b736">27</span><span id="b738"> </span><span id="b739">never</span><span id="b744"> </span><span id="b745">reached</span><span id="b752">.</span></li>
 </ul>
-<h2>Blockers</h2>
-<p>
-None.
-</p>
-<h2>Planned</h2>
-<p>
-Close before failing.
-</p>
+<h2 id="blockers"><span id="b755"><span id="b759">Blockers</span></span></h2>
+<p id="b768"><span>None</span><span id="b772">.</span></p>
+<h2 id="planned"><span id="b775"><span id="b779">Planned</span></span></h2>
+<p id="b787"><span>Close</span><span id="b792"> </span><span id="b793">before</span><span id="b799"> </span><span id="b800">failing</span><span id="b807">.</span></p>
 <ul>
-<li>Repro first: bind to an in-use port and assert the fd count does not grow across calls.</li>
-<li><code>close(sfd)</code> before the early return in each bind-failure branch (or <code>close(sfd); continue;</code> and fail only after the loop).</li>
+<li id="b810"><span id="b814">Repro</span><span id="b819"> </span><span id="b820">first</span><span id="b825">:</span><span id="b826"> </span><span id="b827">bind</span><span id="b831"> </span><span id="b832">to</span><span id="b834"> </span><span id="b835">an</span><span id="b837"> </span><span id="b838">in</span><span id="b840">-</span><span id="b841">use</span><span id="b844"> </span><span id="b845">port</span><span id="b849"> </span><span id="b850">and</span><span id="b853"> </span><span id="b854">assert</span><span id="b860"> </span><span id="b861">the</span><span id="b864"> </span><span id="b865">fd</span><span id="b867"> </span><span id="b868">count</span><span id="b873"> </span><span id="b874">does</span><span id="b878"> </span><span id="b879">not</span><span id="b882"> </span><span id="b883">grow</span><span id="b887"> </span><span id="b888">across</span><span id="b894"> </span><span id="b895">calls</span><span id="b900">.</span></li>
+<li id="b902"><code id="b906">close(sfd)</code><span id="b918"> </span><span id="b919">before</span><span id="b925"> </span><span id="b926">the</span><span id="b929"> </span><span id="b930">early</span><span id="b935"> </span><span id="b936">return</span><span id="b942"> </span><span id="b943">in</span><span id="b945"> </span><span id="b946">each</span><span id="b950"> </span><span id="b951">bind</span><span id="b955">-</span><span id="b956">failure</span><span id="b963"> </span><span id="b964">branch</span><span id="b970"> </span><span id="b971">(</span><span id="b972">or</span><span id="b974"> </span><code id="b975">close(sfd); continue;</code><span id="b998"> </span><span id="b999">and</span><span id="b1002"> </span><span id="b1003">fail</span><span id="b1007"> </span><span id="b1008">only</span><span id="b1012"> </span><span id="b1013">after</span><span id="b1018"> </span><span id="b1019">the</span><span id="b1022"> </span><span id="b1023">loop</span><span id="b1027">)</span><span id="b1028">.</span></li>
 </ul>
 <div class="footer">
 ❧

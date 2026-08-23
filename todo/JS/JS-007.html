@@ -5,64 +5,70 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>JS-007: main() script load — wrong file, ftell -1 → malloc(0) OOB, ignored fread</title>
 <meta property="og:title" content="JS-007: main() script load — wrong file, ftell -1 → malloc(0) OOB, ignored fread">
-<meta property="og:description" content="main() opens argv1 instead of the parsed scriptfile, trusts ftell unchecked, and ignores the fread count. Method: Issues.">
+<meta property="og:description" content="main() opens argv[1] instead of the parsed script_file, trusts ftell unchecked, and ignores the fread count. Method: Issues.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/JS/JS-007.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-007: <code>main()</code> script load — wrong file, <code>ftell</code> -1 → <code>malloc(0)</code> OOB, ignored <code>fread</code></h1>
+<h1 id="js-007-main-script-load-—-wrong-file-ftell--1-→-malloc0-oob-ignored-fread"><span id="b0"><span id="b4">JS-007</span><span id="b10">:</span><span id="b11"> </span><code id="b12">main()</code><span id="b20"> </span><span id="b21">script</span><span id="b27"> </span><span id="b28">load</span><span id="b32"> </span><span id="b33">—</span><span id="b36"> </span><span id="b37">wrong</span><span id="b42"> </span><span id="b43">file</span><span id="b47">,</span><span id="b48"> </span><code id="b49">ftell</code><span id="b56"> </span><span id="b57">-</span><span id="b58">1</span><span id="b59"> </span><span id="b60">→</span><span id="b63"> </span><code id="b64">malloc(0)</code><span id="b75"> </span><span id="b76">OOB</span><span id="b79">,</span><span id="b80"> </span><span id="b81">ignored</span><span id="b88"> </span><code id="b89">fread</code></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+<dl class="meta">
+<dt id="b97"><span>Now</span></dt>
+<dd><span id="b105">DONE</span></dd>
+</dl>
 </div>
-<p>
-<code>main()</code> opens <code>argv[1]</code> instead of the parsed <code>script_file</code>, trusts <code>ftell</code> unchecked, and ignores the <code>fread</code> count. Method: <a href="../../rule/Issues.html">Issues</a>.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b112"><code>main()</code><span id="b120"> </span><span id="b121">opens</span><span id="b126"> </span><code id="b127">argv[1]</code><span id="b136"> </span><span id="b137">instead</span><span id="b144"> </span><span id="b145">of</span><span id="b147"> </span><span id="b148">the</span><span id="b151"> </span><span id="b152">parsed</span><span id="b158"> </span><code id="b159">script_file</code><span id="b172">,</span><span id="b173"> </span><span id="b174">trusts</span><span id="b180"> </span><code id="b181">ftell</code>
+<span id="b189">unchecked</span><span id="b198">,</span><span id="b199"> </span><span id="b200">and</span><span id="b203"> </span><span id="b204">ignores</span><span id="b211"> </span><span id="b212">the</span><span id="b215"> </span><code id="b216">fread</code><span id="b223"> </span><span id="b224">count</span><span id="b229">.</span><span id="b230"> </span><span id="b231">Method</span><span id="b237">:</span><span id="b238"> </span><a href="../../rule/Issues.html" title="the parallel fix-and-land loop"><span id="b240">Issues</span></a><span id="b247">.</span></p>
+<h2 id="input"><span id="b250"><span id="b254">Input</span></span></h2>
+<h3 id="context"><span id="b261"><span id="b265">Context</span></span></h3>
 <ul>
-<li><code>main.cpp:212-222</code> opens <code>argv[1]</code> instead of the parsed <code>script_file</code> → wrong file with <code>--eval X file.js</code>.</li>
-<li><code>ftell</code> can return -1 → <code>malloc(0)</code> then <code>script[-1]</code> OOB.</li>
-<li>The <code>fread</code> return is ignored → a short read leaves uninitialised script bytes before the NUL.</li>
-<li><code>WITH_JS</code>-gated WIP.</li>
+<li id="b273"><code id="b277">main.cpp:212-222</code><span id="b295"> </span><span id="b296">opens</span><span id="b301"> </span><code id="b302">argv[1]</code><span id="b311"> </span><span id="b312">instead</span><span id="b319"> </span><span id="b320">of</span><span id="b322"> </span><span id="b323">the</span><span id="b326"> </span><span id="b327">parsed</span><span id="b333"> </span><code id="b334">script_file</code><span id="b347"> </span><span id="b348">→</span><span id="b351"> </span><span id="b352">wrong</span>
+<span id="b362">file</span><span id="b366"> </span><span id="b367">with</span><span id="b371"> </span><code id="b372">--eval X file.js</code><span id="b390">.</span></li>
+<li id="b392"><code id="b396">ftell</code><span id="b403"> </span><span id="b404">can</span><span id="b407"> </span><span id="b408">return</span><span id="b414"> </span><span id="b415">-</span><span id="b416">1</span><span id="b417"> </span><span id="b418">→</span><span id="b421"> </span><code id="b422">malloc(0)</code><span id="b433"> </span><span id="b434">then</span><span id="b438"> </span><code id="b439">script[-1]</code><span id="b451"> </span><span id="b452">OOB</span><span id="b455">.</span></li>
+<li id="b457"><span id="b461">The</span><span id="b464"> </span><code id="b465">fread</code><span id="b472"> </span><span id="b473">return</span><span id="b479"> </span><span id="b480">is</span><span id="b482"> </span><span id="b483">ignored</span><span id="b490"> </span><span id="b491">→</span><span id="b494"> </span><span id="b495">a</span><span id="b496"> </span><span id="b497">short</span><span id="b502"> </span><span id="b503">read</span><span id="b507"> </span><span id="b508">leaves</span><span id="b514"> </span><span id="b515">uninitialised</span><span id="b528"> </span><span id="b529">script</span><span id="b535"> </span><span id="b536">bytes</span>
+<span id="b546">before</span><span id="b552"> </span><span id="b553">the</span><span id="b556"> </span><span id="b557">NUL</span><span id="b560">.</span></li>
+<li id="b562"><code id="b566">WITH_JS</code><span id="b575">-</span><span id="b576">gated</span><span id="b581"> </span><span id="b582">WIP</span><span id="b585">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b588"><span id="b592">Goals</span></span></h3>
 <ul>
-<li>The parsed <code>script_file</code> is loaded; a failed <code>ftell</code> / short <code>fread</code> is detected, not silently mis-handled.</li>
+<li id="b598"><span id="b602">The</span><span id="b605"> </span><span id="b606">parsed</span><span id="b612"> </span><code id="b613">script_file</code><span id="b626"> </span><span id="b627">is</span><span id="b629"> </span><span id="b630">loaded</span><span id="b636">;</span><span id="b637"> </span><span id="b638">a</span><span id="b639"> </span><span id="b640">failed</span><span id="b646"> </span><code id="b647">ftell</code><span id="b654"> </span><span id="b655">/</span><span id="b656"> </span><span id="b657">short</span><span id="b662"> </span><code id="b663">fread</code><span id="b670"> </span><span id="b671">is</span><span id="b673"> </span><span id="b674">detected</span><span id="b682">,</span>
+<span id="b688">not</span><span id="b691"> </span><span id="b692">silently</span><span id="b700"> </span><span id="b701">mis</span><span id="b704">-</span><span id="b705">handled</span><span id="b712">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b715"><span id="b719">Constraints</span></span></h3>
 <ul>
-<li>Use <code>script_file</code>; check <code>len &gt;= 0</code>; check the <code>fread</code> count.</li>
+<li id="b731"><span id="b735">Use</span><span id="b738"> </span><code id="b739">script_file</code><span id="b752">;</span><span id="b753"> </span><span id="b754">check</span><span id="b759"> </span><code id="b760">len &gt;= 0</code><span id="b770">;</span><span id="b771"> </span><span id="b772">check</span><span id="b777"> </span><span id="b778">the</span><span id="b781"> </span><code id="b782">fread</code><span id="b789"> </span><span id="b790">count</span><span id="b795">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>Design decisions</h3>
+<h2 id="wip"><span id="b798"><span id="b802">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b807"><span id="b811">Design</span><span id="b817"> </span><span id="b818">decisions</span></span></h3>
 <ul>
-<li>(open) Replace <code>argv[1]</code> with <code>script_file</code>; guard <code>ftell</code> and <code>fread</code>.</li>
+<li id="b828"><span id="b832">(</span><span id="b833">open</span><span id="b837">)</span><span id="b838"> </span><span id="b839">Replace</span><span id="b846"> </span><code id="b847">argv[1]</code><span id="b856"> </span><span id="b857">with</span><span id="b861"> </span><code id="b862">script_file</code><span id="b875">;</span><span id="b876"> </span><span id="b877">guard</span><span id="b882"> </span><code id="b883">ftell</code><span id="b890"> </span><span id="b891">and</span><span id="b894"> </span><code id="b895">fread</code><span id="b902">.</span></li>
 </ul>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: <code>--eval X file.js</code> runs <code>file.js</code>; an empty/unreadable file does not crash.</li>
-<li class="open"><input type="checkbox" disabled> Apply the three guards.</li>
-</ul>
-<h3>Blockers</h3>
+<h3 id="todos"><span id="b905"><span id="b909">TODOs</span></span></h3>
 <ul>
-<li>None.</li>
+<li class="task" id="b915"><input type="checkbox" disabled="" /> <span id="b920">Repro</span><span id="b925">-</span><span id="b926">first</span><span id="b931">:</span><span id="b932"> </span><code id="b933">--eval X file.js</code><span id="b951"> </span><span id="b952">runs</span><span id="b956"> </span><code id="b957">file.js</code><span id="b966">;</span><span id="b967"> </span><span id="b968">an</span><span id="b970"> </span><span id="b971">empty</span><span id="b976">/</span><span id="b977">unreadable</span><span id="b987"> </span><span id="b988">file</span><span id="b992"> </span><span id="b993">does</span>
+<span id="b1002">  </span><span id="b1004">not</span><span id="b1007"> </span><span id="b1008">crash</span><span id="b1013">.</span></li>
+<li class="task" id="b1015"><input type="checkbox" disabled="" /> <span id="b1020">Apply</span><span id="b1025"> </span><span id="b1026">the</span><span id="b1029"> </span><span id="b1030">three</span><span id="b1035"> </span><span id="b1036">guards</span><span id="b1042">.</span></li>
 </ul>
-<h2>Outcome</h2>
+<h3 id="blockers"><span id="b1045"><span id="b1049">Blockers</span></span></h3>
 <ul>
-<li><strong>LANDED <code>24f890ed</code></strong> (2026-06-16): <code>main()</code> opens the parsed <code>script_file</code> (not <code>argv[1]</code>), errors on <code>ftell</code> &lt; 0, checks <code>malloc</code>, and NUL-terminates at the actual <code>fread</code> count; new <code>JABCscriptFile</code> ctest (<code>test/run-007.sh</code>) is red-before/green-after on the wrong-file open.</li>
+<li id="b1058"><span id="b1062">None</span><span id="b1066">.</span></li>
+</ul>
+<h2 id="outcome"><span id="b1069"><span id="b1073">Outcome</span></span></h2>
+<ul>
+<li id="b1081"><strong id="b1085"><span id="b1086">LANDED</span><span id="b1092"> </span><code id="b1093">24f890ed</code></strong><span id="b1104"> </span><span id="b1105">(</span><span id="b1106">2026</span><span id="b1110">-</span><span id="b1111">06</span><span id="b1113">-</span><span id="b1114">16</span><span id="b1116">)</span><span id="b1117">:</span><span id="b1118"> </span><code id="b1119">main()</code><span id="b1127"> </span><span id="b1128">opens</span><span id="b1133"> </span><span id="b1134">the</span><span id="b1137"> </span><span id="b1138">parsed</span><span id="b1144"> </span><code id="b1145">script_file</code>
+<span id="b1163">(</span><span id="b1164">not</span><span id="b1167"> </span><code id="b1168">argv[1]</code><span id="b1177">)</span><span id="b1178">,</span><span id="b1179"> </span><span id="b1180">errors</span><span id="b1186"> </span><span id="b1187">on</span><span id="b1189"> </span><code id="b1190">ftell</code><span id="b1197"> </span><span id="b1198">&lt;</span><span id="b1199"> </span><span id="b1200">0</span><span id="b1201">,</span><span id="b1202"> </span><span id="b1203">checks</span><span id="b1209"> </span><code id="b1210">malloc</code><span id="b1218">,</span><span id="b1219"> </span><span id="b1220">and</span><span id="b1223"> </span><span id="b1224">NUL</span><span id="b1227">-</span><span id="b1228">terminates</span>
+<span id="b1243">at</span><span id="b1245"> </span><span id="b1246">the</span><span id="b1249"> </span><span id="b1250">actual</span><span id="b1256"> </span><code id="b1257">fread</code><span id="b1264"> </span><span id="b1265">count</span><span id="b1270">;</span><span id="b1271"> </span><span id="b1272">new</span><span id="b1275"> </span><code id="b1276">JABCscriptFile</code><span id="b1292"> </span><span id="b1293">ctest</span><span id="b1298"> </span><span id="b1299">(</span><code id="b1300">test/run-007.sh</code><span id="b1317">)</span>
+<span id="b1323">is</span><span id="b1325"> </span><span id="b1326">red</span><span id="b1329">-</span><span id="b1330">before</span><span id="b1336">/</span><span id="b1337">green</span><span id="b1342">-</span><span id="b1343">after</span><span id="b1348"> </span><span id="b1349">on</span><span id="b1351"> </span><span id="b1352">the</span><span id="b1355"> </span><span id="b1356">wrong</span><span id="b1361">-</span><span id="b1362">file</span><span id="b1366"> </span><span id="b1367">open</span><span id="b1371">.</span></li>
 </ul>
 <div class="footer">
 ❧

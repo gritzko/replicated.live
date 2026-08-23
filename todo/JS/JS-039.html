@@ -7,61 +7,71 @@
 <meta property="og:title" content="JS-039: bin/lib/pkt.js + wire.js — git fetch conversation">
 <meta property="og:description" content="The pure-JS git-wire CLIENT (fetch direction): pkt-line framing + transport spawn + refs-advert parse + want/have/done negotiate + side-band-64k demux, yielding the received packfile bytes. Mirrors keeper/WIRECLI.c (unlinkable). Part of JS-038.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/JS/JS-039.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-039: <code>bin/lib/pkt.js</code> + <code>wire.js</code> — git fetch conversation</h1>
+<h1 id="js-039-binlibpktjs-wirejs-—-git-fetch-conversation"><span id="b0"><span id="b4">JS-039</span><span id="b10">:</span><span id="b11"> </span><code id="b12">bin/lib/pkt.js</code><span id="b28"> </span><span id="b29">+</span><span id="b30"> </span><code id="b31">wire.js</code><span id="b40"> </span><span id="b41">—</span><span id="b44"> </span><span id="b45">git</span><span id="b48"> </span><span id="b49">fetch</span><span id="b54"> </span><span id="b55">conversation</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+<dl class="meta">
+<dt id="b68"><span>Now</span></dt>
+<dd><span id="b76">DONE</span></dd>
+</dl>
 </div>
-<p>
-The pure-JS git-wire CLIENT (fetch direction): pkt-line framing + transport spawn + refs-advert parse + want/have/done negotiate + side-band-64k demux, yielding the received packfile bytes. Mirrors <code>keeper/WIRECLI.c</code> (unlinkable). Part of <a href="JS-038.html">JS-038</a>.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b83"><span>The</span><span id="b86"> </span><span id="b87">pure</span><span id="b91">-</span><span id="b92">JS</span><span id="b94"> </span><span id="b95">git</span><span id="b98">-</span><span id="b99">wire</span><span id="b103"> </span><span id="b104">CLIENT</span><span id="b110"> </span><span id="b111">(</span><span id="b112">fetch</span><span id="b117"> </span><span id="b118">direction</span><span id="b127">)</span><span id="b128">:</span><span id="b129"> </span><span id="b130">pkt</span><span id="b133">-</span><span id="b134">line</span><span id="b138"> </span><span id="b139">framing</span><span id="b146"> </span><span id="b147">+</span><span id="b148"> </span><span id="b149">transport</span><span id="b158"> </span><span id="b159">spawn</span>
+<span id="b165">+</span><span id="b166"> </span><span id="b167">refs</span><span id="b171">-</span><span id="b172">advert</span><span id="b178"> </span><span id="b179">parse</span><span id="b184"> </span><span id="b185">+</span><span id="b186"> </span><span id="b187">want</span><span id="b191">/</span><span id="b192">have</span><span id="b196">/</span><span id="b197">done</span><span id="b201"> </span><span id="b202">negotiate</span><span id="b211"> </span><span id="b212">+</span><span id="b213"> </span><span id="b214">side</span><span id="b218">-</span><span id="b219">band</span><span id="b223">-</span><span id="b224">64</span><span id="b226">k</span><span id="b227"> </span><span id="b228">demux</span><span id="b233">,</span><span id="b234"> </span><span id="b235">yielding</span><span id="b243"> </span><span id="b244">the</span>
+<span id="b248">received</span><span id="b256"> </span><span id="b257">packfile</span><span id="b265"> </span><span id="b266">bytes</span><span id="b271">.</span><span id="b272"> </span><span id="b273">Mirrors</span><span id="b280"> </span><code id="b281">keeper/WIRECLI.c</code><span id="b299"> </span><span id="b300">(</span><span id="b301">unlinkable</span><span id="b311">)</span><span id="b312">.</span><span id="b313"> </span><span id="b314">Part</span><span id="b318"> </span><span id="b319">of</span><span id="b321"> </span><a href="JS-038.html" title="umbrella: be get as bin/get.js"><span id="b323">JS-038</span></a><span id="b330">.</span></p>
+<h2 id="input"><span id="b333"><span id="b337">Input</span></span></h2>
+<h3 id="context"><span id="b344"><span id="b348">Context</span></span></h3>
 <ul>
-<li><code>be get</code> over the wire spawns a peer (<code>ssh host keeper upload-pack</code>, <code>file://</code> local exec, <code>be://</code>/<code>git://</code> TCP) and runs the v0/v1 upload-pack convo. JABC already has the transport: <code>io.spawn → {pid,stdin,stdout}</code> + <code>io.reap</code>; <code>net.connect</code> + <code>pol</code> for TCP. The convo logic is pure JS.</li>
+<li id="b356"><code id="b360">be get</code><span id="b368"> </span><span id="b369">over</span><span id="b373"> </span><span id="b374">the</span><span id="b377"> </span><span id="b378">wire</span><span id="b382"> </span><span id="b383">spawns</span><span id="b389"> </span><span id="b390">a</span><span id="b391"> </span><span id="b392">peer</span><span id="b396"> </span><span id="b397">(</span><code id="b398">ssh host keeper upload-pack</code><span id="b427">,</span>
+<code id="b433">file://</code><span id="b442"> </span><span id="b443">local</span><span id="b448"> </span><span id="b449">exec</span><span id="b453">,</span><span id="b454"> </span><code id="b455">be://</code><span id="b462">/</span><code id="b463">git://</code><span id="b471"> </span><span id="b472">TCP</span><span id="b475">)</span><span id="b476"> </span><span id="b477">and</span><span id="b480"> </span><span id="b481">runs</span><span id="b485"> </span><span id="b486">the</span><span id="b489"> </span><span id="b490">v0</span><span id="b492">/</span><span id="b493">v1</span><span id="b495"> </span><span id="b496">upload</span><span id="b502">-</span><span id="b503">pack</span>
+<span id="b512">convo</span><span id="b517">.</span><span id="b518"> </span><span id="b519">JABC</span><span id="b523"> </span><span id="b524">already</span><span id="b531"> </span><span id="b532">has</span><span id="b535"> </span><span id="b536">the</span><span id="b539"> </span><span id="b540">transport</span><span id="b549">:</span><span id="b550"> </span><code id="b551">io.spawn → {pid,stdin,stdout}</code><span id="b584"> </span><span id="b585">+</span>
+<code id="b591">io.reap</code><span id="b600">;</span><span id="b601"> </span><code id="b602">net.connect</code><span id="b615"> </span><span id="b616">+</span><span id="b617"> </span><code id="b618">pol</code><span id="b623"> </span><span id="b624">for</span><span id="b627"> </span><span id="b628">TCP</span><span id="b631">.</span><span id="b632"> </span><span id="b633">The</span><span id="b636"> </span><span id="b637">convo</span><span id="b642"> </span><span id="b643">logic</span><span id="b648"> </span><span id="b649">is</span><span id="b651"> </span><span id="b652">pure</span><span id="b656"> </span><span id="b657">JS</span><span id="b659">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b662"><span id="b666">Goals</span></span></h3>
 <ul>
-<li><code>pkt.js</code>: drain/feed/flush pkt-lines (<code>4-hex len + payload</code>); pure JS over <code>hex</code> (no native leaf — trivial, like status.js text parsing).</li>
-<li><code>wire.js</code>: <code>fetch(remoteUri, wantRef?) -&gt; {pack:Uint8Array, refs:[...]}</code> — spawn, drain advert (sha SP refname <a href="./0caps.html">0caps</a>), send <code>want</code>/<code>have</code>/<code>done</code>, NAK, demux side-band band1 pack / band2,3 → stderr.</li>
+<li id="b672"><code id="b676">pkt.js</code><span id="b684">:</span><span id="b685"> </span><span id="b686">drain</span><span id="b691">/</span><span id="b692">feed</span><span id="b696">/</span><span id="b697">flush</span><span id="b702"> </span><span id="b703">pkt</span><span id="b706">-</span><span id="b707">lines</span><span id="b712"> </span><span id="b713">(</span><code id="b714">4-hex len + payload</code><span id="b735">)</span><span id="b736">;</span><span id="b737"> </span><span id="b738">pure</span><span id="b742"> </span><span id="b743">JS</span><span id="b745"> </span><span id="b746">over</span>
+<code id="b755">hex</code><span id="b760"> </span><span id="b761">(</span><span id="b762">no</span><span id="b764"> </span><span id="b765">native</span><span id="b771"> </span><span id="b772">leaf</span><span id="b776"> </span><span id="b777">—</span><span id="b780"> </span><span id="b781">trivial</span><span id="b788">,</span><span id="b789"> </span><span id="b790">like</span><span id="b794"> </span><span id="b795">status.js</span><span id="b804"> </span><span id="b805">text</span><span id="b809"> </span><span id="b810">parsing</span><span id="b817">)</span><span id="b818">.</span></li>
+<li id="b820"><code id="b824">wire.js</code><span id="b833">:</span><span id="b834"> </span><code id="b835">fetch(remoteUri, wantRef?) -&gt; {pack:Uint8Array, refs:[...]}</code><span id="b896"> </span><span id="b897">—</span>
+<span id="b905">spawn</span><span id="b910">,</span><span id="b911"> </span><span id="b912">drain</span><span id="b917"> </span><span id="b918">advert</span><span id="b924"> </span><span id="b925">(</span><span id="b926">sha</span><span id="b929"> </span><span id="b930">SP</span><span id="b932"> </span><span id="b933">refname</span><span id="b940"> </span><a href="\0caps"><span id="b942">\0caps</span></a><span id="b949">)</span><span id="b950">,</span><span id="b951"> </span><span id="b952">send</span><span id="b956"> </span><code id="b957">want</code><span id="b963">/</span><code id="b964">have</code><span id="b970">/</span><code id="b971">done</code><span id="b977">,</span>
+<span id="b983">NAK</span><span id="b986">,</span><span id="b987"> </span><span id="b988">demux</span><span id="b993"> </span><span id="b994">side</span><span id="b998">-</span><span id="b999">band</span><span id="b1003"> </span><span id="b1004">band1</span><span id="b1009"> </span><span id="b1010">pack</span><span id="b1014"> </span><span id="b1015">/</span><span id="b1016"> </span><span id="b1017">band2</span><span id="b1022">,</span><span id="b1023">3</span><span id="b1024"> </span><span id="b1025">→</span><span id="b1028"> </span><span id="b1029">stderr</span><span id="b1035">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b1038"><span id="b1042">Constraints</span></span></h3>
 <ul>
-<li>libdog+<code>abc</code> ONLY. Transport classify like <code>WIRECLI.c::wcli_spawn</code> (file/ssh/be/git). No ingest here (→ <a href="JS-040.html">JS-040</a>); return raw pack bytes.</li>
+<li id="b1054"><span id="b1058">libdog</span><span id="b1064">+</span><code id="b1065">abc</code><span id="b1070"> </span><span id="b1071">ONLY</span><span id="b1075">.</span><span id="b1076"> </span><span id="b1077">Transport</span><span id="b1086"> </span><span id="b1087">classify</span><span id="b1095"> </span><span id="b1096">like</span><span id="b1100"> </span><code id="b1101">WIRECLI.c::wcli_spawn</code>
+<span id="b1129">(</span><span id="b1130">file</span><span id="b1134">/</span><span id="b1135">ssh</span><span id="b1138">/</span><span id="b1139">be</span><span id="b1141">/</span><span id="b1142">git</span><span id="b1145">)</span><span id="b1146">.</span><span id="b1147"> </span><span id="b1148">No</span><span id="b1150"> </span><span id="b1151">ingest</span><span id="b1157"> </span><span id="b1158">here</span><span id="b1162"> </span><span id="b1163">(</span><span id="b1164">→</span><span id="b1167"> </span><a href="JS-040.html" title="pack ingest (keeper write side)"><span id="b1169">JS-040</span></a><span id="b1176">)</span><span id="b1177">;</span><span id="b1178"> </span><span id="b1179">return</span><span id="b1185"> </span><span id="b1186">raw</span><span id="b1189"> </span><span id="b1190">pack</span><span id="b1194"> </span><span id="b1195">bytes</span><span id="b1200">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>Design decisions</h3>
+<h2 id="wip"><span id="b1203"><span id="b1207">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b1212"><span id="b1216">Design</span><span id="b1222"> </span><span id="b1223">decisions</span></span></h3>
 <ul>
-<li>Bidirectional via <code>io.spawn</code> (ssh/exec) or <code>net.connect</code> (be/git TCP); avoid write/read deadlock with <code>pol</code> non-blocking interleave (WIRECLI poll loop).</li>
-<li><code>WIREClassify</code>-equivalent line tokenizer in JS (want/have/advert/ack lines).</li>
+<li id="b1233"><span id="b1237">Bidirectional</span><span id="b1250"> </span><span id="b1251">via</span><span id="b1254"> </span><code id="b1255">io.spawn</code><span id="b1265"> </span><span id="b1266">(</span><span id="b1267">ssh</span><span id="b1270">/</span><span id="b1271">exec</span><span id="b1275">)</span><span id="b1276"> </span><span id="b1277">or</span><span id="b1279"> </span><code id="b1280">net.connect</code><span id="b1293"> </span><span id="b1294">(</span><span id="b1295">be</span><span id="b1297">/</span><span id="b1298">git</span><span id="b1301"> </span><span id="b1302">TCP</span><span id="b1305">)</span><span id="b1306">;</span><span id="b1307"> </span><span id="b1308">avoid</span>
+<span id="b1318">write</span><span id="b1323">/</span><span id="b1324">read</span><span id="b1328"> </span><span id="b1329">deadlock</span><span id="b1337"> </span><span id="b1338">with</span><span id="b1342"> </span><code id="b1343">pol</code><span id="b1348"> </span><span id="b1349">non</span><span id="b1352">-</span><span id="b1353">blocking</span><span id="b1361"> </span><span id="b1362">interleave</span><span id="b1372"> </span><span id="b1373">(</span><span id="b1374">WIRECLI</span><span id="b1381"> </span><span id="b1382">poll</span><span id="b1386"> </span><span id="b1387">loop</span><span id="b1391">)</span><span id="b1392">.</span></li>
+<li id="b1394"><code id="b1398">WIREClassify</code><span id="b1412">-</span><span id="b1413">equivalent</span><span id="b1423"> </span><span id="b1424">line</span><span id="b1428"> </span><span id="b1429">tokenizer</span><span id="b1438"> </span><span id="b1439">in</span><span id="b1441"> </span><span id="b1442">JS</span><span id="b1444"> </span><span id="b1445">(</span><span id="b1446">want</span><span id="b1450">/</span><span id="b1451">have</span><span id="b1455">/</span><span id="b1456">advert</span><span id="b1462">/</span><span id="b1463">ack</span><span id="b1466"> </span><span id="b1467">lines</span><span id="b1472">)</span><span id="b1473">.</span></li>
 </ul>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/get/wire.js</code> (helpers <code>test/js/lib/</code>): against a local <code>keeper upload-pack</code> (file://) + a real git <code>file://x.git</code>, fetch trunk → assert advert parsed, pack header (<code>PACK</code>,count) parses via <code>git.pack</code>.</li>
-<li class="open"><input type="checkbox" disabled> Implement <code>bin/lib/pkt.js</code> + <code>bin/lib/wire.js</code>; smoke ssh + be transports.</li>
-</ul>
-<h3>Blockers</h3>
+<h3 id="todos"><span id="b1476"><span id="b1480">TODOs</span></span></h3>
 <ul>
-<li>None (independent of the native leaves; produces bytes <a href="JS-040.html">JS-040</a> ingests).</li>
+<li class="task" id="b1486"><input type="checkbox" disabled="" /> <span id="b1491">Repro</span><span id="b1496">-</span><span id="b1497">first</span><span id="b1502"> </span><code id="b1503">test/js/get/wire.js</code><span id="b1524"> </span><span id="b1525">(</span><span id="b1526">helpers</span><span id="b1533"> </span><code id="b1534">test/js/lib/</code><span id="b1548">)</span><span id="b1549">:</span><span id="b1550"> </span><span id="b1551">against</span><span id="b1558"> </span><span id="b1559">a</span><span id="b1560"> </span><span id="b1561">local</span>
+<span id="b1571">  </span><code id="b1573">keeper upload-pack</code><span id="b1593"> </span><span id="b1594">(</span><span id="b1595">file</span><span id="b1599">:</span><span id="b1600">/</span><span id="b1601">/</span><span id="b1602">)</span><span id="b1603"> </span><span id="b1604">+</span><span id="b1605"> </span><span id="b1606">a</span><span id="b1607"> </span><span id="b1608">real</span><span id="b1612"> </span><span id="b1613">git</span><span id="b1616"> </span><code id="b1617">file://x.git</code><span id="b1631">,</span><span id="b1632"> </span><span id="b1633">fetch</span><span id="b1638"> </span><span id="b1639">trunk</span><span id="b1644"> </span><span id="b1645">→</span>
+<span id="b1653">  </span><span id="b1655">assert</span><span id="b1661"> </span><span id="b1662">advert</span><span id="b1668"> </span><span id="b1669">parsed</span><span id="b1675">,</span><span id="b1676"> </span><span id="b1677">pack</span><span id="b1681"> </span><span id="b1682">header</span><span id="b1688"> </span><span id="b1689">(</span><code id="b1690">PACK</code><span id="b1696">,</span><span id="b1697">count</span><span id="b1702">)</span><span id="b1703"> </span><span id="b1704">parses</span><span id="b1710"> </span><span id="b1711">via</span><span id="b1714"> </span><code id="b1715">git.pack</code><span id="b1725">.</span></li>
+<li class="task" id="b1727"><input type="checkbox" disabled="" /> <span id="b1732">Implement</span><span id="b1741"> </span><code id="b1742">bin/lib/pkt.js</code><span id="b1758"> </span><span id="b1759">+</span><span id="b1760"> </span><code id="b1761">bin/lib/wire.js</code><span id="b1778">;</span><span id="b1779"> </span><span id="b1780">smoke</span><span id="b1785"> </span><span id="b1786">ssh</span><span id="b1789"> </span><span id="b1790">+</span><span id="b1791"> </span><span id="b1792">be</span><span id="b1794"> </span><span id="b1795">transports</span><span id="b1805">.</span></li>
 </ul>
-<h2>Outcome</h2>
+<h3 id="blockers"><span id="b1808"><span id="b1812">Blockers</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li id="b1821"><span id="b1825">None</span><span id="b1829"> </span><span id="b1830">(</span><span id="b1831">independent</span><span id="b1842"> </span><span id="b1843">of</span><span id="b1845"> </span><span id="b1846">the</span><span id="b1849"> </span><span id="b1850">native</span><span id="b1856"> </span><span id="b1857">leaves</span><span id="b1863">;</span><span id="b1864"> </span><span id="b1865">produces</span><span id="b1873"> </span><span id="b1874">bytes</span><span id="b1879"> </span><a href="JS-040.html" title="pack ingest (keeper write side)"><span id="b1881">JS-040</span></a><span id="b1888"> </span><span id="b1889">ingests</span><span id="b1896">)</span><span id="b1897">.</span></li>
+</ul>
+<h2 id="outcome"><span id="b1900"><span id="b1904">Outcome</span></span></h2>
+<ul>
+<li id="b1912"><span id="b1916">(</span><span id="b1917">pending</span><span id="b1924">)</span></li>
 </ul>
 <div class="footer">
 ❧

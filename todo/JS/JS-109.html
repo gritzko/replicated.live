@@ -7,51 +7,49 @@
 <meta property="og:title" content="JS-109: gitParseCommit leaks a JSStringRef on empty-tree and default-body paths">
 <meta property="og:description" content="Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers. Two call sites create a JSStringRef and never release it — masked only because the LSan suppression covers all of libjavascriptcoregtk.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/JS/JS-109.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-109: gitParseCommit leaks a JSStringRef on empty-tree and default-body paths</h1>
+<h1 id="js-109-gitparsecommit-leaks-a-jsstringref-on-empty-tree-and-default-body-paths"><span id="b0"><span id="b4">JS-109</span><span id="b10">:</span><span id="b11"> </span><span id="b12">gitParseCommit</span><span id="b26"> </span><span id="b27">leaks</span><span id="b32"> </span><span id="b33">a</span><span id="b34"> </span><span id="b35">JSStringRef</span><span id="b46"> </span><span id="b47">on</span><span id="b49"> </span><span id="b50">empty</span><span id="b55">-</span><span id="b56">tree</span><span id="b60"> </span><span id="b61">and</span><span id="b64"> </span><span id="b65">default</span><span id="b72">-</span><span id="b73">body</span><span id="b77"> </span><span id="b78">paths</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+<dl class="meta">
+<dt id="b84"><span>Now</span></dt>
+<dd><span id="b92">DONE</span></dd>
+</dl>
 </div>
-<p>
-Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers. Two call sites create a JSStringRef and never release it — masked only because the LSan suppression covers all of libjavascriptcoregtk.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b99"><span>Proposed</span><span id="b107"> </span><span id="b108">by</span><span id="b110"> </span><span id="b111">the</span><span id="b114"> </span><span id="b115">2026</span><span id="b119">-</span><span id="b120">07</span><span id="b122">-</span><span id="b123">07</span><span id="b125"> </span><span id="b126">jab</span><span id="b129"> </span><span id="b130">multi</span><span id="b135">-</span><span id="b136">agent</span><span id="b141"> </span><span id="b142">review</span><span id="b148">;</span><span id="b149"> </span><span id="b150">confirmed</span><span id="b159"> </span><span id="b160">by</span><span id="b162"> </span><span id="b163">both</span><span id="b167"> </span><span id="b168">skeptic</span><span id="b175"> </span><span id="b176">verifiers</span><span id="b185">.</span><span id="b186"> </span><span id="b187">Two</span><span id="b190"> </span><span id="b191">call</span><span id="b195"> </span><span id="b196">sites</span><span id="b201"> </span><span id="b202">create</span><span id="b208"> </span><span id="b209">a</span><span id="b210"> </span><span id="b211">JSStringRef</span><span id="b222"> </span><span id="b223">and</span><span id="b226"> </span><span id="b227">never</span><span id="b232"> </span><span id="b233">release</span><span id="b240"> </span><span id="b241">it</span><span id="b243"> </span><span id="b244">—</span><span id="b247"> </span><span id="b248">masked</span><span id="b254"> </span><span id="b255">only</span><span id="b259"> </span><span id="b260">because</span><span id="b267"> </span><span id="b268">the</span><span id="b271"> </span><span id="b272">LSan</span><span id="b276"> </span><span id="b277">suppression</span><span id="b288"> </span><span id="b289">covers</span><span id="b295"> </span><span id="b296">all</span><span id="b299"> </span><span id="b300">of</span><span id="b302"> </span><span id="b303">libjavascriptcoregtk</span><span id="b323">.</span></p>
+<h2 id="input"><span id="b326"><span id="b330">Input</span></span></h2>
+<h3 id="context"><span id="b337"><span id="b341">Context</span></span></h3>
 <ul>
-<li><code>JABCSet(ctx, o, &quot;tree&quot;, JSValueMakeString(ctx, JSStringCreateWithUTF8CString(&quot;&quot;)))</code> (jab pack.hpp:370) and the default-body <code>JSValueRef body = JSValueMakeString(ctx, JSStringCreateWithUTF8CString(&quot;&quot;))</code> (pack.hpp:378) never JSStringRelease the +1 ref; JSValueMakeString retains its own.</li>
-<li>Every parsed commit leaks one OpaqueJSString (two without a tree header); every other call site in the repo releases.</li>
-<li>The leak hides behind main.cpp's blanket <code>leak:libjavascriptcoregtk</code> suppression (JS-064) — exactly the class that suppression was not meant to cover.</li>
+<li id="b349"><code id="b353">JABCSet(ctx, o, &quot;tree&quot;, JSValueMakeString(ctx, JSStringCreateWithUTF8CString(&quot;&quot;)))</code><span id="b437"> </span><span id="b438">(</span><span id="b439">jab</span><span id="b442"> </span><span id="b443">pack.hpp:370</span><span id="b455">)</span><span id="b456"> </span><span id="b457">and</span><span id="b460"> </span><span id="b461">the</span><span id="b464"> </span><span id="b465">default</span><span id="b472">-</span><span id="b473">body</span><span id="b477"> </span><code id="b478">JSValueRef body = JSValueMakeString(ctx, JSStringCreateWithUTF8CString(&quot;&quot;))</code><span id="b555"> </span><span id="b556">(</span><span id="b557">pack.hpp:378</span><span id="b569">)</span><span id="b570"> </span><span id="b571">never</span><span id="b576"> </span><span id="b577">JSStringRelease</span><span id="b592"> </span><span id="b593">the</span><span id="b596"> </span><span id="b597">+</span><span id="b598">1</span><span id="b599"> </span><span id="b600">ref</span><span id="b603">;</span><span id="b604"> </span><span id="b605">JSValueMakeString</span><span id="b622"> </span><span id="b623">retains</span><span id="b630"> </span><span id="b631">its</span><span id="b634"> </span><span id="b635">own</span><span id="b638">.</span></li>
+<li id="b640"><span id="b644">Every</span><span id="b649"> </span><span id="b650">parsed</span><span id="b656"> </span><span id="b657">commit</span><span id="b663"> </span><span id="b664">leaks</span><span id="b669"> </span><span id="b670">one</span><span id="b673"> </span><span id="b674">OpaqueJSString</span><span id="b688"> </span><span id="b689">(</span><span id="b690">two</span><span id="b693"> </span><span id="b694">without</span><span id="b701"> </span><span id="b702">a</span><span id="b703"> </span><span id="b704">tree</span><span id="b708"> </span><span id="b709">header</span><span id="b715">)</span><span id="b716">;</span><span id="b717"> </span><span id="b718">every</span><span id="b723"> </span><span id="b724">other</span><span id="b729"> </span><span id="b730">call</span><span id="b734"> </span><span id="b735">site</span><span id="b739"> </span><span id="b740">in</span><span id="b742"> </span><span id="b743">the</span><span id="b746"> </span><span id="b747">repo</span><span id="b751"> </span><span id="b752">releases</span><span id="b760">.</span></li>
+<li id="b762"><span id="b766">The</span><span id="b769"> </span><span id="b770">leak</span><span id="b774"> </span><span id="b775">hides</span><span id="b780"> </span><span id="b781">behind</span><span id="b787"> </span><span id="b788">main.cpp</span><span id="b796">'</span><span id="b797">s</span><span id="b798"> </span><span id="b799">blanket</span><span id="b806"> </span><code id="b807">leak:libjavascriptcoregtk</code><span id="b834"> </span><span id="b835">suppression</span><span id="b846"> </span><span id="b847">(</span><span id="b848">JS-064</span><span id="b854">)</span><span id="b855"> </span><span id="b856">—</span><span id="b859"> </span><span id="b860">exactly</span><span id="b867"> </span><span id="b868">the</span><span id="b871"> </span><span id="b872">class</span><span id="b877"> </span><span id="b878">that</span><span id="b882"> </span><span id="b883">suppression</span><span id="b894"> </span><span id="b895">was</span><span id="b898"> </span><span id="b899">not</span><span id="b902"> </span><span id="b903">meant</span><span id="b908"> </span><span id="b909">to</span><span id="b911"> </span><span id="b912">cover</span><span id="b917">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b920"><span id="b924">Goals</span></span></h3>
 <ul>
-<li>Create-once + JSStringRelease after JSValueMakeString (or a shared JSOfCString(&quot;&quot;)); git.js parse test stays green.</li>
+<li id="b930"><span id="b934">Create</span><span id="b940">-</span><span id="b941">once</span><span id="b945"> </span><span id="b946">+</span><span id="b947"> </span><span id="b948">JSStringRelease</span><span id="b963"> </span><span id="b964">after</span><span id="b969"> </span><span id="b970">JSValueMakeString</span><span id="b987"> </span><span id="b988">(</span><span id="b989">or</span><span id="b991"> </span><span id="b992">a</span><span id="b993"> </span><span id="b994">shared</span><span id="b1000"> </span><span id="b1001">JSOfCString</span><span id="b1012">(</span><span id="b1013">&quot;</span><span id="b1014">&quot;</span><span id="b1015">)</span><span id="b1016">)</span><span id="b1017">;</span><span id="b1018"> </span><span id="b1019">git.js</span><span id="b1025"> </span><span id="b1026">parse</span><span id="b1031"> </span><span id="b1032">test</span><span id="b1036"> </span><span id="b1037">stays</span><span id="b1042"> </span><span id="b1043">green</span><span id="b1048">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b1051"><span id="b1055">Constraints</span></span></h3>
 <ul>
-<li>Two-line fix; do not touch the LSan suppression setup.</li>
+<li id="b1067"><span id="b1071">Two</span><span id="b1074">-</span><span id="b1075">line</span><span id="b1079"> </span><span id="b1080">fix</span><span id="b1083">;</span><span id="b1084"> </span><span id="b1085">do</span><span id="b1087"> </span><span id="b1088">not</span><span id="b1091"> </span><span id="b1092">touch</span><span id="b1097"> </span><span id="b1098">the</span><span id="b1101"> </span><span id="b1102">LSan</span><span id="b1106"> </span><span id="b1107">suppression</span><span id="b1118"> </span><span id="b1119">setup</span><span id="b1124">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> release the two refs; eyeball pack.hpp for further unreleased creates</li>
+<h2 id="wip"><span id="b1127"><span id="b1131">WIP</span></span></h2>
+<h3 id="todos"><span id="b1136"><span id="b1140">TODOs</span></span></h3>
+<ul>
+<li class="task" id="b1146"><input type="checkbox" disabled="" /> <span id="b1151">release</span><span id="b1158"> </span><span id="b1159">the</span><span id="b1162"> </span><span id="b1163">two</span><span id="b1166"> </span><span id="b1167">refs</span><span id="b1171">;</span><span id="b1172"> </span><span id="b1173">eyeball</span><span id="b1180"> </span><span id="b1181">pack.hpp</span><span id="b1189"> </span><span id="b1190">for</span><span id="b1193"> </span><span id="b1194">further</span><span id="b1201"> </span><span id="b1202">unreleased</span><span id="b1212"> </span><span id="b1213">creates</span></li>
 </ul>
 <ul>
-<li>2026-07-10 revision: still OPEN — both leaks live: pack.hpp:370 (tree) + pack.hpp:378 (body) JSStringCreateWithUTF8CString(&quot;&quot;) never JSStringRelease'd</li>
+<li id="b1221"><span id="b1225">2026</span><span id="b1229">-</span><span id="b1230">07</span><span id="b1232">-</span><span id="b1233">10</span><span id="b1235"> </span><span id="b1236">revision</span><span id="b1244">:</span><span id="b1245"> </span><span id="b1246">still</span><span id="b1251"> </span><span id="b1252">OPEN</span><span id="b1256"> </span><span id="b1257">—</span><span id="b1260"> </span><span id="b1261">both</span><span id="b1265"> </span><span id="b1266">leaks</span><span id="b1271"> </span><span id="b1272">live</span><span id="b1276">:</span><span id="b1277"> </span><span id="b1278">pack.hpp:370</span><span id="b1290"> </span><span id="b1291">(</span><span id="b1292">tree</span><span id="b1296">)</span><span id="b1297"> </span><span id="b1298">+</span><span id="b1299"> </span><span id="b1300">pack.hpp:378</span><span id="b1312"> </span><span id="b1313">(</span><span id="b1314">body</span><span id="b1318">)</span><span id="b1319"> </span><span id="b1320">JSStringCreateWithUTF8CString</span><span id="b1349">(</span><span id="b1350">&quot;</span><span id="b1351">&quot;</span><span id="b1352">)</span><span id="b1353"> </span><span id="b1354">never</span><span id="b1359"> </span><span id="b1360">JSStringRelease</span><span id="b1375">'</span><span id="b1376">d</span></li>
 </ul>
 <div class="footer">
 ❧

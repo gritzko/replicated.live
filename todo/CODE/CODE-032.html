@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-032: stage.js feed() can deadlock against a chatty git add</title>
+<meta property="og:title" content="CODE-032: stage.js feed() can deadlock against a chatty git add">
+<meta property="og:description" content="stage.js:73-83 writes the whole NUL-framed path list into git add's stdin (io.writeAll) and only then reads stdout (slurp). git emits per-file warnings (CRLF, ignored adds); once those fill the 64K pipe git blocks on write while bee still blocks on writeAll — both sides stall forever. The comment on the drain (&quot;never block a chatty git&quot;) claims the opposite of what the ordering delivers. Found in the 2026-08-21 review.">
+<meta property="og:type" content="article">
+<link rel="stylesheet" href="/blob/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/blob/js/asciicast.js"></script>
+<a class="banner" href="/">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1 id="code-032-stagejs-feed-can-deadlock-against-a-chatty-git-add"><span id="b0"><span id="b4">CODE-032</span><span id="b12">:</span><span id="b13"> </span><span id="b14">stage.js</span><span id="b22"> </span><span id="b23">feed</span><span id="b27">(</span><span id="b28">)</span><span id="b29"> </span><span id="b30">can</span><span id="b33"> </span><span id="b34">deadlock</span><span id="b42"> </span><span id="b43">against</span><span id="b50"> </span><span id="b51">a</span><span id="b52"> </span><span id="b53">chatty</span><span id="b59"> </span><span id="b60">git</span><span id="b63"> </span><span id="b64">add</span></span></h1>
+<dl class="meta">
+<dt id="b69"><span>Now</span></dt>
+<dd><span id="b73">DONE</span></dd>
+<dt id="b79"><span>Sev</span></dt>
+<dd><span id="b83">HIGH</span></dd>
+<dt id="b89"><span>Rep</span></dt>
+<dd><span id="b93">///bee</span></dd>
+<dt id="b101"><span>Ask</span></dt>
+<dd><span id="b105">gritzko</span></dd>
+<dt id="b114"><span>Rev</span></dt>
+<dd><span id="b118">///bee#184fddf</span></dd>
+</dl>
+<h2 id="input"><span id="b135"><span id="b139">Input</span></span></h2>
+<h3 id="context"><span id="b146"><span id="b150">Context</span></span></h3>
+<p id="b158"><span>stage.js:73</span><span id="b169">-</span><span id="b170">83</span><span id="b172"> </span><span id="b173">writes</span><span id="b179"> </span><span id="b180">the</span><span id="b183"> </span><span id="b184">whole</span><span id="b189"> </span><span id="b190">NUL</span><span id="b193">-</span><span id="b194">framed</span><span id="b200"> </span><span id="b201">path</span><span id="b205"> </span><span id="b206">list</span><span id="b210"> </span><span id="b211">into</span><span id="b215"> </span><code id="b216">git add</code><span id="b225">'</span><span id="b226">s</span><span id="b227"> </span><span id="b228">stdin</span>
+<span id="b234">(</span><code id="b235">io.writeAll</code><span id="b248">)</span><span id="b249"> </span><span id="b250">and</span><span id="b253"> </span><span id="b254">only</span><span id="b258"> </span><span id="b259">then</span><span id="b263"> </span><span id="b264">reads</span><span id="b269"> </span><span id="b270">stdout</span><span id="b276"> </span><span id="b277">(</span><code id="b278">slurp</code><span id="b285">)</span><span id="b286">.</span><span id="b287"> </span><span id="b288">git</span><span id="b291"> </span><span id="b292">emits</span><span id="b297"> </span><span id="b298">per</span><span id="b301">-</span><span id="b302">file</span>
+<span id="b307">warnings</span><span id="b315"> </span><span id="b316">(</span><span id="b317">CRLF</span><span id="b321">,</span><span id="b322"> </span><span id="b323">ignored</span><span id="b330"> </span><span id="b331">adds</span><span id="b335">)</span><span id="b336">;</span><span id="b337"> </span><span id="b338">once</span><span id="b342"> </span><span id="b343">those</span><span id="b348"> </span><span id="b349">fill</span><span id="b353"> </span><span id="b354">the</span><span id="b357"> </span><span id="b358">64</span><span id="b360">K</span><span id="b361"> </span><span id="b362">pipe</span><span id="b366"> </span><span id="b367">git</span><span id="b370"> </span><span id="b371">blocks</span><span id="b377"> </span><span id="b378">on</span>
+<span id="b381">write</span><span id="b386"> </span><span id="b387">while</span><span id="b392"> </span><span id="b393">bee</span><span id="b396"> </span><span id="b397">still</span><span id="b402"> </span><span id="b403">blocks</span><span id="b409"> </span><span id="b410">on</span><span id="b412"> </span><span id="b413">writeAll</span><span id="b421"> </span><span id="b422">—</span><span id="b425"> </span><span id="b426">both</span><span id="b430"> </span><span id="b431">sides</span><span id="b436"> </span><span id="b437">stall</span><span id="b442"> </span><span id="b443">forever</span><span id="b450">.</span><span id="b451"> </span><span id="b452">The</span>
+<span id="b456">comment</span><span id="b463"> </span><span id="b464">on</span><span id="b466"> </span><span id="b467">the</span><span id="b470"> </span><span id="b471">drain</span><span id="b476"> </span><span id="b477">(</span><span id="b478">&quot;</span><span id="b479">never</span><span id="b484"> </span><span id="b485">block</span><span id="b490"> </span><span id="b491">a</span><span id="b492"> </span><span id="b493">chatty</span><span id="b499"> </span><span id="b500">git</span><span id="b503">&quot;</span><span id="b504">)</span><span id="b505"> </span><span id="b506">claims</span><span id="b512"> </span><span id="b513">the</span><span id="b516"> </span><span id="b517">opposite</span><span id="b525"> </span><span id="b526">of</span><span id="b528"> </span><span id="b529">what</span>
+<span id="b534">the</span><span id="b537"> </span><span id="b538">ordering</span><span id="b546"> </span><span id="b547">delivers</span><span id="b555">.</span><span id="b556"> </span><span id="b557">Found</span><span id="b562"> </span><span id="b563">in</span><span id="b565"> </span><span id="b566">the</span><span id="b569"> </span><span id="b570">2026</span><span id="b574">-</span><span id="b575">08</span><span id="b577">-</span><span id="b578">21</span><span id="b580"> </span><span id="b581">review</span><span id="b587">.</span></p>
+<h3 id="goals"><span id="b590"><span id="b594">Goals</span></span></h3>
+<p id="b600"><span>Repro</span><span id="b605"> </span><span id="b606">first</span><span id="b611">:</span><span id="b612"> </span><span id="b613">stage</span><span id="b618"> </span><span id="b619">a</span><span id="b620"> </span><span id="b621">few</span><span id="b624"> </span><span id="b625">thousand</span><span id="b633"> </span><span id="b634">files</span><span id="b639"> </span><span id="b640">whose</span><span id="b645"> </span><span id="b646">content</span><span id="b653"> </span><span id="b654">trips</span><span id="b659"> </span><span id="b660">the</span><span id="b663"> </span><span id="b664">CRLF</span><span id="b668"> </span><span id="b669">warning</span><span id="b676">;</span>
+<span id="b678">the</span><span id="b681"> </span><span id="b682">test</span><span id="b686"> </span><span id="b687">must</span><span id="b691"> </span><span id="b692">hang</span><span id="b696"> </span><span id="b697">without</span><span id="b704"> </span><span id="b705">the</span><span id="b708"> </span><span id="b709">fix</span><span id="b712"> </span><span id="b713">and</span><span id="b716"> </span><span id="b717">pass</span><span id="b721"> </span><span id="b722">with</span><span id="b726"> </span><span id="b727">it</span><span id="b729">.</span><span id="b730"> </span><span id="b731">Then</span><span id="b735"> </span><span id="b736">fix</span><span id="b739"> </span><span id="b740">the</span><span id="b743"> </span><span id="b744">ordering</span><span id="b752">:</span>
+<span id="b754">interleave</span><span id="b764"> </span><span id="b765">write</span><span id="b770"> </span><span id="b771">and</span><span id="b774"> </span><span id="b775">drain</span><span id="b780">,</span><span id="b781"> </span><span id="b782">or</span><span id="b784"> </span><span id="b785">point</span><span id="b790"> </span><span id="b791">the</span><span id="b794"> </span><span id="b795">child</span><span id="b800">'</span><span id="b801">s</span><span id="b802"> </span><span id="b803">stdout</span><span id="b809">/</span><span id="b810">stderr</span><span id="b816"> </span><span id="b817">at</span><span id="b819"> </span><span id="b820">a</span><span id="b821"> </span><span id="b822">file</span><span id="b826"> </span><span id="b827">and</span>
+<span id="b831">slurp</span><span id="b836"> </span><span id="b837">after</span><span id="b842"> </span><span id="b843">reaping</span><span id="b850">.</span></p>
+<h3 id="constraints"><span id="b853"><span id="b857">Constraints</span></span></h3>
+<p id="b869"><span>Keep</span><span id="b873"> </span><span id="b874">the</span><span id="b877"> </span><span id="b878">NUL</span><span id="b881"> </span><span id="b882">framing</span><span id="b889"> </span><span id="b890">and</span><span id="b893"> </span><span id="b894">the</span><span id="b897"> </span><span id="b898">one</span><span id="b901">-</span><span id="b902">child</span><span id="b907">-</span><span id="b908">per</span><span id="b911">-</span><span id="b912">batch</span><span id="b917"> </span><span id="b918">shape</span><span id="b923"> </span><span id="b924">(</span><span id="b925">stage.js:203</span><span id="b937"> </span><span id="b938">notes</span><span id="b943">)</span><span id="b944">.</span></p>
+<h2 id="wip"><span id="b947"><span id="b951">WIP</span></span></h2>
+<h3 id="todos"><span id="b956"><span id="b960">TODOs</span></span></h3>
+<ul>
+<li id="b966"><span id="b970">[ ]</span><span id="b973"> </span><span id="b974">repro</span><span id="b979">:</span><span id="b980"> </span><span id="b981">chatty</span><span id="b987"> </span><code id="b988">git add</code><span id="b997"> </span><span id="b998">fills</span><span id="b1003"> </span><span id="b1004">the</span><span id="b1007"> </span><span id="b1008">pipe</span><span id="b1012">,</span><span id="b1013"> </span><span id="b1014">feed</span><span id="b1018">(</span><span id="b1019">)</span><span id="b1020"> </span><span id="b1021">hangs</span></li>
+<li id="b1027"><span id="b1031">[ ]</span><span id="b1034"> </span><span id="b1035">non</span><span id="b1038">-</span><span id="b1039">blocking</span><span id="b1047"> </span><span id="b1048">drain</span><span id="b1053"> </span><span id="b1054">or</span><span id="b1056"> </span><span id="b1057">file</span><span id="b1061">-</span><span id="b1062">backed</span><span id="b1068"> </span><span id="b1069">stdout</span></li>
+</ul>
+<h2 id="outcome"><span id="b1077"><span id="b1081">Outcome</span></span></h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

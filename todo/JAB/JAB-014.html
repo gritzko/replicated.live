@@ -7,61 +7,60 @@
 <meta property="og:title" content="JAB-014: net.accept swallows real errors as &quot;not ready&quot; — pol.IN accept loop busy-spins">
 <meta property="og:description" content="JABCNetAccept (jab/net.cpp:76) maps every non-OK from TCPAccept to -1, though the ABC op distinguishes NETAGAIN from TCPFAIL (dog/abc/TCP.h:21). A real failure (EMFILE, ECONNABORTED) thus looks like EAGAIN, and the level-triggered pol.IN accept loop spins on it instead of throwing. NET.md promises &quot;Errors throw out of the loop… (other than EAGAIN)&quot; and maps &quot;TCPAccept (EAGAIN → -1)&quot; — the code honors neither. Found in the 2026-07-24 jab/ review.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-014.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JAB-014: net.accept swallows real errors as &quot;not ready&quot; — pol.IN accept loop busy-spins</h1>
+<h1 id="jab-014-netaccept-swallows-real-errors-as-not-ready-—-polin-accept-loop-busy-spins"><span id="b0"><span id="b4">JAB-014</span><span id="b11">:</span><span id="b12"> </span><span id="b13">net</span><span id="b16">.</span><span id="b17">accept</span><span id="b23"> </span><span id="b24">swallows</span><span id="b32"> </span><span id="b33">real</span><span id="b37"> </span><span id="b38">errors</span><span id="b44"> </span><span id="b45">as</span><span id="b47"> </span><span id="b48">&quot;</span><span id="b49">not</span><span id="b52"> </span><span id="b53">ready</span><span id="b58">&quot;</span><span id="b59"> </span><span id="b60">—</span><span id="b63"> </span><span id="b64">pol</span><span id="b67">.</span><span id="b68">IN</span><span id="b70"> </span><span id="b71">accept</span><span id="b77"> </span><span id="b78">loop</span><span id="b82"> </span><span id="b83">busy</span><span id="b87">-</span><span id="b88">spins</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
-<dl class="meta"><dt>Sev:</dt><dd>MED</dd></dl>
+<dl class="meta">
+<dt id="b94"><span>Now</span></dt>
+<dd><span id="b102">OPEN</span></dd>
+<dt id="b108"><span>Sev</span></dt>
+<dd><span id="b116">MED</span></dd>
+</dl>
 </div>
-<p>
-<code>JABCNetAccept</code> (jab/net.cpp:76) maps every non-OK from <code>TCPAccept</code> to <code>-1</code>, though the ABC op distinguishes <code>NETAGAIN</code> from <code>TCPFAIL</code> (dog/abc/TCP.h:21). A real failure (EMFILE, ECONNABORTED) thus looks like EAGAIN, and the level-triggered <code>pol.IN</code> accept loop spins on it instead of throwing. NET.md promises &quot;Errors throw out of the loop… (other than EAGAIN)&quot; and maps &quot;TCPAccept (EAGAIN → <code>-1</code>)&quot; — the code honors neither. Found in the 2026-07-24 jab/ review.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b122"><code>JABCNetAccept</code><span id="b137"> </span><span id="b138">(</span><span id="b139">jab/net.cpp:76</span><span id="b153">)</span><span id="b154"> </span><span id="b155">maps</span><span id="b159"> </span><span id="b160">every</span><span id="b165"> </span><span id="b166">non</span><span id="b169">-</span><span id="b170">OK</span><span id="b172"> </span><span id="b173">from</span><span id="b177"> </span><code id="b178">TCPAccept</code><span id="b189"> </span><span id="b190">to</span><span id="b192"> </span><code id="b193">-1</code><span id="b197">,</span><span id="b198"> </span><span id="b199">though</span><span id="b205"> </span><span id="b206">the</span><span id="b209"> </span><span id="b210">ABC</span><span id="b213"> </span><span id="b214">op</span><span id="b216"> </span><span id="b217">distinguishes</span><span id="b230"> </span><code id="b231">NETAGAIN</code><span id="b241"> </span><span id="b242">from</span><span id="b246"> </span><code id="b247">TCPFAIL</code><span id="b256"> </span><span id="b257">(</span><span id="b258">dog/abc/TCP.h:21</span><span id="b274">)</span><span id="b275">.</span><span id="b276"> </span><span id="b277">A</span><span id="b278"> </span><span id="b279">real</span><span id="b283"> </span><span id="b284">failure</span><span id="b291"> </span><span id="b292">(</span><span id="b293">EMFILE</span><span id="b299">,</span><span id="b300"> </span><span id="b301">ECONNABORTED</span><span id="b313">)</span><span id="b314"> </span><span id="b315">thus</span><span id="b319"> </span><span id="b320">looks</span><span id="b325"> </span><span id="b326">like</span><span id="b330"> </span><span id="b331">EAGAIN</span><span id="b337">,</span><span id="b338"> </span><span id="b339">and</span><span id="b342"> </span><span id="b343">the</span><span id="b346"> </span><span id="b347">level</span><span id="b352">-</span><span id="b353">triggered</span><span id="b362"> </span><code id="b363">pol.IN</code><span id="b371"> </span><span id="b372">accept</span><span id="b378"> </span><span id="b379">loop</span><span id="b383"> </span><span id="b384">spins</span><span id="b389"> </span><span id="b390">on</span><span id="b392"> </span><span id="b393">it</span><span id="b395"> </span><span id="b396">instead</span><span id="b403"> </span><span id="b404">of</span><span id="b406"> </span><span id="b407">throwing</span><span id="b415">.</span><span id="b416"> </span><span id="b417">NET.md</span><span id="b423"> </span><span id="b424">promises</span><span id="b432"> </span><span id="b433">&quot;</span><span id="b434">Errors</span><span id="b440"> </span><span id="b441">throw</span><span id="b446"> </span><span id="b447">out</span><span id="b450"> </span><span id="b451">of</span><span id="b453"> </span><span id="b454">the</span><span id="b457"> </span><span id="b458">loop</span><span id="b462">…</span><span id="b465"> </span><span id="b466">(</span><span id="b467">other</span><span id="b472"> </span><span id="b473">than</span><span id="b477"> </span><span id="b478">EAGAIN</span><span id="b484">)</span><span id="b485">&quot;</span><span id="b486"> </span><span id="b487">and</span><span id="b490"> </span><span id="b491">maps</span><span id="b495"> </span><span id="b496">&quot;</span><span id="b497">TCPAccept</span><span id="b506"> </span><span id="b507">(</span><span id="b508">EAGAIN</span><span id="b514"> </span><span id="b515">→</span><span id="b518"> </span><code id="b519">-1</code><span id="b523">)</span><span id="b524">&quot;</span><span id="b525"> </span><span id="b526">—</span><span id="b529"> </span><span id="b530">the</span><span id="b533"> </span><span id="b534">code</span><span id="b538"> </span><span id="b539">honors</span><span id="b545"> </span><span id="b546">neither</span><span id="b553">.</span><span id="b554"> </span><span id="b555">Found</span><span id="b560"> </span><span id="b561">in</span><span id="b563"> </span><span id="b564">the</span><span id="b567"> </span><span id="b568">2026</span><span id="b572">-</span><span id="b573">07</span><span id="b575">-</span><span id="b576">24</span><span id="b578"> </span><span id="b579">jab</span><span id="b582">/</span><span id="b583"> </span><span id="b584">review</span><span id="b590">.</span></p>
+<h2 id="input"><span id="b593"><span id="b597">Input</span></span></h2>
+<h3 id="context"><span id="b604"><span id="b608">Context</span></span></h3>
 <ul>
-<li>A server that hits its fd cap should die loudly, not eat a core at 100%.</li>
+<li id="b616"><span id="b620">A</span><span id="b621"> </span><span id="b622">server</span><span id="b628"> </span><span id="b629">that</span><span id="b633"> </span><span id="b634">hits</span><span id="b638"> </span><span id="b639">its</span><span id="b642"> </span><span id="b643">fd</span><span id="b645"> </span><span id="b646">cap</span><span id="b649"> </span><span id="b650">should</span><span id="b656"> </span><span id="b657">die</span><span id="b660"> </span><span id="b661">loudly</span><span id="b667">,</span><span id="b668"> </span><span id="b669">not</span><span id="b672"> </span><span id="b673">eat</span><span id="b676"> </span><span id="b677">a</span><span id="b678"> </span><span id="b679">core</span><span id="b683"> </span><span id="b684">at</span><span id="b686"> </span><span id="b687">100</span><span id="b690">%</span><span id="b691">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b694"><span id="b698">Goals</span></span></h3>
 <ul>
-<li><code>net.accept</code> returns <code>-1</code> only for NETAGAIN; every other failure throws, matching NET.md.</li>
+<li id="b704"><code id="b708">net.accept</code><span id="b720"> </span><span id="b721">returns</span><span id="b728"> </span><code id="b729">-1</code><span id="b733"> </span><span id="b734">only</span><span id="b738"> </span><span id="b739">for</span><span id="b742"> </span><span id="b743">NETAGAIN</span><span id="b751">;</span><span id="b752"> </span><span id="b753">every</span><span id="b758"> </span><span id="b759">other</span><span id="b764"> </span><span id="b765">failure</span><span id="b772"> </span><span id="b773">throws</span><span id="b779">,</span><span id="b780"> </span><span id="b781">matching</span><span id="b789"> </span><span id="b790">NET.md</span><span id="b796">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b799"><span id="b803">Constraints</span></span></h3>
 <ul>
-<li>Repro-first: drive accept into a distinguishable failure (e.g. fd exhaustion via setrlimit) and assert a throw, not <code>-1</code>.</li>
-<li>Errors in plain words per the standing ruling.</li>
+<li id="b815"><span id="b819">Repro</span><span id="b824">-</span><span id="b825">first</span><span id="b830">:</span><span id="b831"> </span><span id="b832">drive</span><span id="b837"> </span><span id="b838">accept</span><span id="b844"> </span><span id="b845">into</span><span id="b849"> </span><span id="b850">a</span><span id="b851"> </span><span id="b852">distinguishable</span><span id="b867"> </span><span id="b868">failure</span><span id="b875"> </span><span id="b876">(</span><span id="b877">e</span><span id="b878">.</span><span id="b879">g</span><span id="b880">.</span><span id="b881"> </span><span id="b882">fd</span><span id="b884"> </span><span id="b885">exhaustion</span><span id="b895"> </span><span id="b896">via</span><span id="b899"> </span><span id="b900">setrlimit</span><span id="b909">)</span><span id="b910"> </span><span id="b911">and</span><span id="b914"> </span><span id="b915">assert</span><span id="b921"> </span><span id="b922">a</span><span id="b923"> </span><span id="b924">throw</span><span id="b929">,</span><span id="b930"> </span><span id="b931">not</span><span id="b934"> </span><code id="b935">-1</code><span id="b939">.</span></li>
+<li id="b941"><span id="b945">Errors</span><span id="b951"> </span><span id="b952">in</span><span id="b954"> </span><span id="b955">plain</span><span id="b960"> </span><span id="b961">words</span><span id="b966"> </span><span id="b967">per</span><span id="b970"> </span><span id="b971">the</span><span id="b974"> </span><span id="b975">standing</span><span id="b983"> </span><span id="b984">ruling</span><span id="b990">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>Design decisions</h3>
+<h2 id="wip"><span id="b993"><span id="b997">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b1002"><span id="b1006">Design</span><span id="b1012"> </span><span id="b1013">decisions</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li id="b1023"><span id="b1027">(</span><span id="b1028">pending</span><span id="b1035">)</span></li>
 </ul>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro: forced accept failure → throw.</li>
-<li class="open"><input type="checkbox" disabled> Branch on NETAGAIN vs the rest in JABCNetAccept.</li>
-</ul>
-<h3>Blockers and bummers</h3>
+<h3 id="todos"><span id="b1038"><span id="b1042">TODOs</span></span></h3>
 <ul>
-<li>(none)</li>
+<li class="task" id="b1048"><input type="checkbox" disabled="" /> <span id="b1053">Repro</span><span id="b1058">:</span><span id="b1059"> </span><span id="b1060">forced</span><span id="b1066"> </span><span id="b1067">accept</span><span id="b1073"> </span><span id="b1074">failure</span><span id="b1081"> </span><span id="b1082">→</span><span id="b1085"> </span><span id="b1086">throw</span><span id="b1091">.</span></li>
+<li class="task" id="b1093"><input type="checkbox" disabled="" /> <span id="b1098">Branch</span><span id="b1104"> </span><span id="b1105">on</span><span id="b1107"> </span><span id="b1108">NETAGAIN</span><span id="b1116"> </span><span id="b1117">vs</span><span id="b1119"> </span><span id="b1120">the</span><span id="b1123"> </span><span id="b1124">rest</span><span id="b1128"> </span><span id="b1129">in</span><span id="b1131"> </span><span id="b1132">JABCNetAccept</span><span id="b1145">.</span></li>
 </ul>
-<h2>Outcome</h2>
+<h3 id="blockers-and-bummers"><span id="b1148"><span id="b1152">Blockers</span><span id="b1160"> </span><span id="b1161">and</span><span id="b1164"> </span><span id="b1165">bummers</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li id="b1173"><span id="b1177">(</span><span id="b1178">none</span><span id="b1182">)</span></li>
+</ul>
+<h2 id="outcome"><span id="b1185"><span id="b1189">Outcome</span></span></h2>
+<ul>
+<li id="b1197"><span id="b1201">(</span><span id="b1202">pending</span><span id="b1209">)</span></li>
 </ul>
 <div class="footer">
 ❧

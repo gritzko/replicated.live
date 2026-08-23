@@ -7,69 +7,77 @@
 <meta property="og:title" content="CODE-022: put.js hashlet resolver — dead-ternary bug + fold to resolveHexAny">
 <meta property="og:description" content="Deps: none to start. The BROADER hashlet-resolver dedup is owned by CODE-020 (resolveHashlet reconcile → shared/resolve.js); this is the put.js spin-off CODE-020 blockers explicitly told to file separately. A real bug, not just tidiness — carries its own repro. See resolve-hash.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-022.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>CODE-022: put.js hashlet resolver — dead-ternary bug + fold to resolveHexAny</h1>
+<h1 id="code-022-putjs-hashlet-resolver-—-dead-ternary-bug-fold-to-resolvehexany"><span id="b0"><span id="b4">CODE-022</span><span id="b12">:</span><span id="b13"> </span><span id="b14">put.js</span><span id="b20"> </span><span id="b21">hashlet</span><span id="b28"> </span><span id="b29">resolver</span><span id="b37"> </span><span id="b38">—</span><span id="b41"> </span><span id="b42">dead</span><span id="b46">-</span><span id="b47">ternary</span><span id="b54"> </span><span id="b55">bug</span><span id="b58"> </span><span id="b59">+</span><span id="b60"> </span><span id="b61">fold</span><span id="b65"> </span><span id="b66">to</span><span id="b68"> </span><span id="b69">resolveHexAny</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
-<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
-<dl class="meta"><dt>Rep:</dt><dd>///be</dd></dl>
+<dl class="meta">
+<dt id="b83"><span>Now</span></dt>
+<dd><span id="b91">OPEN</span></dd>
+<dt id="b97"><span>Sev</span></dt>
+<dd><span id="b105">HIGH</span></dd>
+<dt id="b111"><span>Rep</span></dt>
+<dd><span id="b119">///be</span></dd>
+</dl>
 </div>
-<p>
-Deps: none to start. The BROADER hashlet-resolver dedup is owned by <a href="CODE-020.html">CODE-020</a> (resolveHashlet reconcile → shared/resolve.js); this is the put.js spin-off <a href="CODE-020.html">CODE-020</a> blockers explicitly told to file separately. A real bug, not just tidiness — carries its own repro. See <a href="../../be/core/resolve_hash.js">resolve-hash</a>.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b127"><span>Deps</span><span id="b131">:</span><span id="b132"> </span><span id="b133">none</span><span id="b137"> </span><span id="b138">to</span><span id="b140"> </span><span id="b141">start</span><span id="b146">.</span><span id="b147"> </span><span id="b148">The</span><span id="b151"> </span><span id="b152">BROADER</span><span id="b159"> </span><span id="b160">hashlet</span><span id="b167">-</span><span id="b168">resolver</span><span id="b176"> </span><span id="b177">dedup</span><span id="b182"> </span><span id="b183">is</span><span id="b185"> </span><span id="b186">owned</span><span id="b191"> </span><span id="b192">by</span>
+<a href="CODE-020.html" title="be/ JS duplication — extract shared primitives"><span id="b196">CODE-020</span></a><span id="b205"> </span><span id="b206">(</span><span id="b207">resolveHashlet</span><span id="b221"> </span><span id="b222">reconcile</span><span id="b231"> </span><span id="b232">→</span><span id="b235"> </span><span id="b236">shared/resolve.js</span><span id="b253">)</span><span id="b254">;</span><span id="b255"> </span><span id="b256">this</span><span id="b260"> </span><span id="b261">is</span><span id="b263"> </span><span id="b264">the</span>
+<span id="b268">put.js</span><span id="b274"> </span><span id="b275">spin</span><span id="b279">-</span><span id="b280">off</span><span id="b283"> </span><a href="CODE-020.html" title="be/ JS duplication — extract shared primitives"><span id="b285">CODE-020</span></a><span id="b294"> </span><span id="b295">blockers</span><span id="b303"> </span><span id="b304">explicitly</span><span id="b314"> </span><span id="b315">told</span><span id="b319"> </span><span id="b320">to</span><span id="b322"> </span><span id="b323">file</span><span id="b327"> </span><span id="b328">separately</span><span id="b338">.</span>
+<span id="b340">A</span><span id="b341"> </span><span id="b342">real</span><span id="b346"> </span><span id="b347">bug</span><span id="b350">,</span><span id="b351"> </span><span id="b352">not</span><span id="b355"> </span><span id="b356">just</span><span id="b360"> </span><span id="b361">tidiness</span><span id="b369"> </span><span id="b370">—</span><span id="b373"> </span><span id="b374">carries</span><span id="b381"> </span><span id="b382">its</span><span id="b385"> </span><span id="b386">own</span><span id="b389"> </span><span id="b390">repro</span><span id="b395">.</span><span id="b396"> </span><span id="b397">See</span><span id="b400"> </span><a href="../../be/core/resolve_hash.js" title="the ONE URI/hash resolver"><span id="b402">resolve-hash</span></a><span id="b415">.</span></p>
+<h2 id="input"><span id="b418"><span id="b422">Input</span></span></h2>
+<h3 id="context"><span id="b429"><span id="b433">Context</span></span></h3>
 <ul>
-<li>put.js:342 <code>resolveHex</code> is a stale copy of <a href="../../be/core/resolve.js">core/resolve.js</a><code>resolveHex</code>.</li>
-<li>put.js:343 <code>return k.getObject(hexish) ? hexish : hexish</code> — BOTH arms return <code>hexish</code>, so a NON-EXISTENT full sha is accepted as valid.</li>
-<li>The copy drops the <code>eachRemote</code> prefix fallback and never reaches <code>k.resolveHexAny</code>, so a mid-history commit hashlet silently misses.</li>
-<li>Put's <code>#sha</code>/<code>#hashlet</code> target resolution rides exactly this function.</li>
+<li id="b442"><span id="b446">put.js:342</span><span id="b456"> </span><code id="b457">resolveHex</code><span id="b469"> </span><span id="b470">is</span><span id="b472"> </span><span id="b473">a</span><span id="b474"> </span><span id="b475">stale</span><span id="b480"> </span><span id="b481">copy</span><span id="b485"> </span><span id="b486">of</span><span id="b488"> </span><a href="../../be/core/resolve.js" title="hex-hashlet → sha helper"><span id="b490">core/resolve.js</span></a><code id="b506">resolveHex</code><span id="b518">.</span></li>
+<li id="b520"><span id="b524">put.js:343</span><span id="b534"> </span><code id="b535">return k.getObject(hexish) ? hexish : hexish</code><span id="b581"> </span><span id="b582">—</span><span id="b585"> </span><span id="b586">BOTH</span><span id="b590"> </span><span id="b591">arms</span>
+<span id="b600">return</span><span id="b606"> </span><code id="b607">hexish</code><span id="b615">,</span><span id="b616"> </span><span id="b617">so</span><span id="b619"> </span><span id="b620">a</span><span id="b621"> </span><span id="b622">NON</span><span id="b625">-</span><span id="b626">EXISTENT</span><span id="b634"> </span><span id="b635">full</span><span id="b639"> </span><span id="b640">sha</span><span id="b643"> </span><span id="b644">is</span><span id="b646"> </span><span id="b647">accepted</span><span id="b655"> </span><span id="b656">as</span><span id="b658"> </span><span id="b659">valid</span><span id="b664">.</span></li>
+<li id="b666"><span id="b670">The</span><span id="b673"> </span><span id="b674">copy</span><span id="b678"> </span><span id="b679">drops</span><span id="b684"> </span><span id="b685">the</span><span id="b688"> </span><code id="b689">eachRemote</code><span id="b701"> </span><span id="b702">prefix</span><span id="b708"> </span><span id="b709">fallback</span><span id="b717"> </span><span id="b718">and</span><span id="b721"> </span><span id="b722">never</span><span id="b727"> </span><span id="b728">reaches</span>
+<code id="b740">k.resolveHexAny</code><span id="b757">,</span><span id="b758"> </span><span id="b759">so</span><span id="b761"> </span><span id="b762">a</span><span id="b763"> </span><span id="b764">mid</span><span id="b767">-</span><span id="b768">history</span><span id="b775"> </span><span id="b776">commit</span><span id="b782"> </span><span id="b783">hashlet</span><span id="b790"> </span><span id="b791">silently</span><span id="b799"> </span><span id="b800">misses</span><span id="b806">.</span></li>
+<li id="b808"><span id="b812">Put</span><span id="b815">'</span><span id="b816">s</span><span id="b817"> </span><code id="b818">#sha</code><span id="b824">/</span><code id="b825">#hashlet</code><span id="b835"> </span><span id="b836">target</span><span id="b842"> </span><span id="b843">resolution</span><span id="b853"> </span><span id="b854">rides</span><span id="b859"> </span><span id="b860">exactly</span><span id="b867"> </span><span id="b868">this</span><span id="b872"> </span><span id="b873">function</span><span id="b881">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b884"><span id="b888">Goals</span></span></h3>
 <ul>
-<li>Fix the dead ternary: an absent full sha resolves to nothing, not itself.</li>
-<li>Route put's hashlet→sha through <code>k.resolveHexAny</code> (any-object reach) or <a href="../../be/core/resolve_hash.js">resolve-hash</a>, retiring the local <code>resolveHex</code> copy.</li>
+<li id="b895"><span id="b899">Fix</span><span id="b902"> </span><span id="b903">the</span><span id="b906"> </span><span id="b907">dead</span><span id="b911"> </span><span id="b912">ternary</span><span id="b919">:</span><span id="b920"> </span><span id="b921">an</span><span id="b923"> </span><span id="b924">absent</span><span id="b930"> </span><span id="b931">full</span><span id="b935"> </span><span id="b936">sha</span><span id="b939"> </span><span id="b940">resolves</span><span id="b948"> </span><span id="b949">to</span><span id="b951"> </span><span id="b952">nothing</span><span id="b959">,</span><span id="b960"> </span><span id="b961">not</span><span id="b964"> </span><span id="b965">itself</span><span id="b971">.</span></li>
+<li id="b973"><span id="b977">Route</span><span id="b982"> </span><span id="b983">put</span><span id="b986">'</span><span id="b987">s</span><span id="b988"> </span><span id="b989">hashlet→sha</span><span id="b1002"> </span><span id="b1003">through</span><span id="b1010"> </span><code id="b1011">k.resolveHexAny</code><span id="b1028"> </span><span id="b1029">(</span><span id="b1030">any</span><span id="b1033">-</span><span id="b1034">object</span><span id="b1040"> </span><span id="b1041">reach</span><span id="b1046">)</span><span id="b1047"> </span><span id="b1048">or</span>
+<a href="../../be/core/resolve_hash.js" title="the ONE URI/hash resolver"><span id="b1056">resolve-hash</span></a><span id="b1069">,</span><span id="b1070"> </span><span id="b1071">retiring</span><span id="b1079"> </span><span id="b1080">the</span><span id="b1083"> </span><span id="b1084">local</span><span id="b1089"> </span><code id="b1090">resolveHex</code><span id="b1102"> </span><span id="b1103">copy</span><span id="b1107">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b1110"><span id="b1114">Constraints</span></span></h3>
 <ul>
-<li>Behavior-preserving EXCEPT the bug fix; repro-first (<a href="../../meta/abc.html">abc</a> policy).</li>
-<li>be/ JS only, drive via jab; the fold joins <a href="CODE-020.html">CODE-020</a>'s resolver group.</li>
+<li id="b1127"><span id="b1131">Behavior</span><span id="b1139">-</span><span id="b1140">preserving</span><span id="b1150"> </span><span id="b1151">EXCEPT</span><span id="b1157"> </span><span id="b1158">the</span><span id="b1161"> </span><span id="b1162">bug</span><span id="b1165"> </span><span id="b1166">fix</span><span id="b1169">;</span><span id="b1170"> </span><span id="b1171">repro</span><span id="b1176">-</span><span id="b1177">first</span><span id="b1182"> </span><span id="b1183">(</span><a href="../../meta/abc.html" title="ABC refactoring policies (repro-first)"><span id="b1185">abc</span></a><span id="b1189"> </span><span id="b1190">policy</span><span id="b1196">)</span><span id="b1197">.</span></li>
+<li id="b1199"><span id="b1203">be</span><span id="b1205">/</span><span id="b1206"> </span><span id="b1207">JS</span><span id="b1209"> </span><span id="b1210">only</span><span id="b1214">,</span><span id="b1215"> </span><span id="b1216">drive</span><span id="b1221"> </span><span id="b1222">via</span><span id="b1225"> </span><span id="b1226">jab</span><span id="b1229">;</span><span id="b1230"> </span><span id="b1231">the</span><span id="b1234"> </span><span id="b1235">fold</span><span id="b1239"> </span><span id="b1240">joins</span><span id="b1245"> </span><a href="CODE-020.html" title="be/ JS duplication — extract shared primitives"><span id="b1247">CODE-020</span></a><span id="b1256">'</span><span id="b1257">s</span><span id="b1258"> </span><span id="b1259">resolver</span><span id="b1267"> </span><span id="b1268">group</span><span id="b1273">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>Design decisions</h3>
+<h2 id="wip"><span id="b1276"><span id="b1280">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b1285"><span id="b1289">Design</span><span id="b1295"> </span><span id="b1296">decisions</span></span></h3>
 <ul>
-<li>The canonical reach is <code>k.resolveHexAny</code> (store hashlet60 index): full sha verbatim iff present, 6..40 prefix unique-or-nothing, all objects.</li>
+<li id="b1307"><span id="b1311">The</span><span id="b1314"> </span><span id="b1315">canonical</span><span id="b1324"> </span><span id="b1325">reach</span><span id="b1330"> </span><span id="b1331">is</span><span id="b1333"> </span><code id="b1334">k.resolveHexAny</code><span id="b1351"> </span><span id="b1352">(</span><span id="b1353">store</span><span id="b1358"> </span><span id="b1359">hashlet60</span><span id="b1368"> </span><span id="b1369">index</span><span id="b1374">)</span><span id="b1375">:</span><span id="b1376"> </span><span id="b1377">full</span>
+<span id="b1386">sha</span><span id="b1389"> </span><span id="b1390">verbatim</span><span id="b1398"> </span><span id="b1399">iff</span><span id="b1402"> </span><span id="b1403">present</span><span id="b1410">,</span><span id="b1411"> </span><span id="b1412">6.</span><span id="b1414">.40</span><span id="b1417"> </span><span id="b1418">prefix</span><span id="b1424"> </span><span id="b1425">unique</span><span id="b1431">-</span><span id="b1432">or</span><span id="b1434">-</span><span id="b1435">nothing</span><span id="b1442">,</span><span id="b1443"> </span><span id="b1444">all</span><span id="b1447"> </span><span id="b1448">objects</span><span id="b1455">.</span></li>
 </ul>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> repro: <code>put ...#&lt;absent-full-sha&gt;</code> is wrongly accepted today</li>
-<li class="open"><input type="checkbox" disabled> repro: <code>put ...#&lt;mid-history-hashlet&gt;</code> silently misses today</li>
-<li class="open"><input type="checkbox" disabled> fix put.js:343 ternary — absent object → fail/undefined, not pass-through</li>
-<li class="open"><input type="checkbox" disabled> fold put.js:342 <code>resolveHex</code> → <code>k.resolveHexAny</code> (drop the local copy)</li>
-<li class="open"><input type="checkbox" disabled> confirm banner target (put.js:336) composes via <code>URI.make</code> (cluster C)</li>
-</ul>
-<h3>Blockers and bummers</h3>
+<h3 id="todos"><span id="b1458"><span id="b1462">TODOs</span></span></h3>
 <ul>
-<li>Reconciling onto one resolver is <a href="CODE-020.html">CODE-020</a>'s repro-gated group; land the put.js bug fix independently, then let the fold ride that group.</li>
+<li class="task" id="b1469"><input type="checkbox" disabled="" /> <span id="b1474">repro</span><span id="b1479">:</span><span id="b1480"> </span><code id="b1481">put ...#&lt;absent-full-sha&gt;</code><span id="b1508"> </span><span id="b1509">is</span><span id="b1511"> </span><span id="b1512">wrongly</span><span id="b1519"> </span><span id="b1520">accepted</span><span id="b1528"> </span><span id="b1529">today</span></li>
+<li class="task" id="b1535"><input type="checkbox" disabled="" /> <span id="b1540">repro</span><span id="b1545">:</span><span id="b1546"> </span><code id="b1547">put ...#&lt;mid-history-hashlet&gt;</code><span id="b1578"> </span><span id="b1579">silently</span><span id="b1587"> </span><span id="b1588">misses</span><span id="b1594"> </span><span id="b1595">today</span></li>
+<li class="task" id="b1601"><input type="checkbox" disabled="" /> <span id="b1606">fix</span><span id="b1609"> </span><span id="b1610">put.js:343</span><span id="b1620"> </span><span id="b1621">ternary</span><span id="b1628"> </span><span id="b1629">—</span><span id="b1632"> </span><span id="b1633">absent</span><span id="b1639"> </span><span id="b1640">object</span><span id="b1646"> </span><span id="b1647">→</span><span id="b1650"> </span><span id="b1651">fail</span><span id="b1655">/</span><span id="b1656">undefined</span><span id="b1665">,</span><span id="b1666"> </span><span id="b1667">not</span><span id="b1670"> </span><span id="b1671">pass</span><span id="b1675">-</span><span id="b1676">through</span></li>
+<li class="task" id="b1684"><input type="checkbox" disabled="" /> <span id="b1689">fold</span><span id="b1693"> </span><span id="b1694">put.js:342</span><span id="b1704"> </span><code id="b1705">resolveHex</code><span id="b1717"> </span><span id="b1718">→</span><span id="b1721"> </span><code id="b1722">k.resolveHexAny</code><span id="b1739"> </span><span id="b1740">(</span><span id="b1741">drop</span><span id="b1745"> </span><span id="b1746">the</span><span id="b1749"> </span><span id="b1750">local</span><span id="b1755"> </span><span id="b1756">copy</span><span id="b1760">)</span></li>
+<li class="task" id="b1762"><input type="checkbox" disabled="" /> <span id="b1767">confirm</span><span id="b1774"> </span><span id="b1775">banner</span><span id="b1781"> </span><span id="b1782">target</span><span id="b1788"> </span><span id="b1789">(</span><span id="b1790">put.js:336</span><span id="b1800">)</span><span id="b1801"> </span><span id="b1802">composes</span><span id="b1810"> </span><span id="b1811">via</span><span id="b1814"> </span><code id="b1815">URI.make</code><span id="b1825"> </span><span id="b1826">(</span><span id="b1827">cluster</span><span id="b1834"> </span><span id="b1835">C</span><span id="b1836">)</span></li>
 </ul>
-<h2>Outcome</h2>
+<h3 id="blockers-and-bummers"><span id="b1839"><span id="b1843">Blockers</span><span id="b1851"> </span><span id="b1852">and</span><span id="b1855"> </span><span id="b1856">bummers</span></span></h3>
 <ul>
-<li>Not started. Suggested commit: <code>CODE-022: fix put hashlet dead ternary + resolveHexAny</code>.</li>
+<li id="b1865"><span id="b1869">Reconciling</span><span id="b1880"> </span><span id="b1881">onto</span><span id="b1885"> </span><span id="b1886">one</span><span id="b1889"> </span><span id="b1890">resolver</span><span id="b1898"> </span><span id="b1899">is</span><span id="b1901"> </span><a href="CODE-020.html" title="be/ JS duplication — extract shared primitives"><span id="b1903">CODE-020</span></a><span id="b1912">'</span><span id="b1913">s</span><span id="b1914"> </span><span id="b1915">repro</span><span id="b1920">-</span><span id="b1921">gated</span><span id="b1926"> </span><span id="b1927">group</span><span id="b1932">;</span><span id="b1933"> </span><span id="b1934">land</span><span id="b1938"> </span><span id="b1939">the</span>
+<span id="b1947">put.js</span><span id="b1953"> </span><span id="b1954">bug</span><span id="b1957"> </span><span id="b1958">fix</span><span id="b1961"> </span><span id="b1962">independently</span><span id="b1975">,</span><span id="b1976"> </span><span id="b1977">then</span><span id="b1981"> </span><span id="b1982">let</span><span id="b1985"> </span><span id="b1986">the</span><span id="b1989"> </span><span id="b1990">fold</span><span id="b1994"> </span><span id="b1995">ride</span><span id="b1999"> </span><span id="b2000">that</span><span id="b2004"> </span><span id="b2005">group</span><span id="b2010">.</span></li>
+</ul>
+<h2 id="outcome"><span id="b2013"><span id="b2017">Outcome</span></span></h2>
+<ul>
+<li id="b2026"><span id="b2030">Not</span><span id="b2033"> </span><span id="b2034">started</span><span id="b2041">.</span><span id="b2042"> </span><span id="b2043">Suggested</span><span id="b2052"> </span><span id="b2053">commit</span><span id="b2059">:</span><span id="b2060"> </span><code id="b2061">CODE-022: fix put hashlet dead ternary + resolveHexAny</code><span id="b2117">.</span></li>
 </ul>
 <div class="footer">
 ❧

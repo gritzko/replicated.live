@@ -5,50 +5,42 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MEM-014: LISTinsert writes to an unvalidated next index (abc/LISTx.h)</title>
 <meta property="og:title" content="MEM-014: LISTinsert writes to an unvalidated next index (abc/LISTx.h)">
-<meta property="og:description" content="LISTinsert bounds-checks only prev (if (len&lt;prev) return LISTBADNDX); the successor next = bAtP(list,prev)-&gt;list.next is then used directly in bAtP(list,next)-&gt;list.prev = len, and bAtP guards only with an assert(p&lt;buf3) that is compiled out in release, so a corrupt/caller-controlled next produces an out-of-bounds write past the buffer in release builds. The goal is to validate next before dereferencing it.">
+<meta property="og:description" content="LISTinsert bounds-checks only prev (if (len&lt;prev) return LISTBADNDX); the successor next = bAtP(list,prev)-&gt;_list.next is then used directly in bAtP(list,next)-&gt;_list.prev = len, and bAtP guards only with an assert(p&lt;buf[3]) that is compiled out in release, so a corrupt/caller-controlled next produces an out-of-bounds write past the buffer in release builds. The goal is to validate next before dereferencing it.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-014.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>MEM-014: LISTinsert writes to an unvalidated <code>next</code> index (abc/LISTx.h)</h1>
+<h1 id="mem-014-listinsert-writes-to-an-unvalidated-next-index-abclistxh"><span id="b0"><span id="b4">MEM-014</span><span id="b11">:</span><span id="b12"> </span><span id="b13">LISTinsert</span><span id="b23"> </span><span id="b24">writes</span><span id="b30"> </span><span id="b31">to</span><span id="b33"> </span><span id="b34">an</span><span id="b36"> </span><span id="b37">unvalidated</span><span id="b48"> </span><code id="b49">next</code><span id="b55"> </span><span id="b56">index</span><span id="b61"> </span><span id="b62">(</span><span id="b63">abc/LISTx.h</span><span id="b74">)</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+<dl class="meta">
+<dt id="b76"><span>Now</span></dt>
+<dd><span id="b84">DONE</span></dd>
+</dl>
 </div>
-<p>
-<code>LISTinsert</code> bounds-checks only <code>prev</code> (<code>if (len&lt;prev) return LISTBADNDX</code>); the successor <code>next = bAtP(list,prev)-&gt;_list.next</code> is then used directly in <code>bAtP(list,next)-&gt;_list.prev = len</code>, and <code>bAtP</code> guards only with an <code>assert(p&lt;buf[3])</code> that is compiled out in release, so a corrupt/caller-controlled <code>next</code> produces an out-of-bounds write past the buffer in release builds. The goal is to validate <code>next</code> before dereferencing it.
-</p>
-<h2>Issues</h2>
-<p>
-Successor index trusted without a bound.
-</p>
+<p id="b91"><code>LISTinsert</code><span id="b103"> </span><span id="b104">bounds</span><span id="b110">-</span><span id="b111">checks</span><span id="b117"> </span><span id="b118">only</span><span id="b122"> </span><code id="b123">prev</code><span id="b129"> </span><span id="b130">(</span><code id="b131">if (len&lt;prev) return LISTBADNDX</code><span id="b164">)</span><span id="b165">;</span><span id="b166"> </span><span id="b167">the</span><span id="b170"> </span><span id="b171">successor</span><span id="b180"> </span><code id="b181">next = bAtP(list,prev)-&gt;_list.next</code><span id="b217"> </span><span id="b218">is</span><span id="b220"> </span><span id="b221">then</span><span id="b225"> </span><span id="b226">used</span><span id="b230"> </span><span id="b231">directly</span><span id="b239"> </span><span id="b240">in</span><span id="b242"> </span><code id="b243">bAtP(list,next)-&gt;_list.prev = len</code><span id="b278">,</span><span id="b279"> </span><span id="b280">and</span><span id="b283"> </span><code id="b284">bAtP</code><span id="b290"> </span><span id="b291">guards</span><span id="b297"> </span><span id="b298">only</span><span id="b302"> </span><span id="b303">with</span><span id="b307"> </span><span id="b308">an</span><span id="b310"> </span><code id="b311">assert(p&lt;buf[3])</code><span id="b329"> </span><span id="b330">that</span><span id="b334"> </span><span id="b335">is</span><span id="b337"> </span><span id="b338">compiled</span><span id="b346"> </span><span id="b347">out</span><span id="b350"> </span><span id="b351">in</span><span id="b353"> </span><span id="b354">release</span><span id="b361">,</span><span id="b362"> </span><span id="b363">so</span><span id="b365"> </span><span id="b366">a</span><span id="b367"> </span><span id="b368">corrupt</span><span id="b375">/</span><span id="b376">caller</span><span id="b382">-</span><span id="b383">controlled</span><span id="b393"> </span><code id="b394">next</code><span id="b400"> </span><span id="b401">produces</span><span id="b409"> </span><span id="b410">an</span><span id="b412"> </span><span id="b413">out</span><span id="b416">-</span><span id="b417">of</span><span id="b419">-</span><span id="b420">bounds</span><span id="b426"> </span><span id="b427">write</span><span id="b432"> </span><span id="b433">past</span><span id="b437"> </span><span id="b438">the</span><span id="b441"> </span><span id="b442">buffer</span><span id="b448"> </span><span id="b449">in</span><span id="b451"> </span><span id="b452">release</span><span id="b459"> </span><span id="b460">builds</span><span id="b466">.</span><span id="b467"> </span><span id="b468">The</span><span id="b471"> </span><span id="b472">goal</span><span id="b476"> </span><span id="b477">is</span><span id="b479"> </span><span id="b480">to</span><span id="b482"> </span><span id="b483">validate</span><span id="b491"> </span><code id="b492">next</code><span id="b498"> </span><span id="b499">before</span><span id="b505"> </span><span id="b506">dereferencing</span><span id="b519"> </span><span id="b520">it</span><span id="b522">.</span></p>
+<h2 id="issues"><span id="b525"><span id="b529">Issues</span></span></h2>
+<p id="b536"><span>Successor</span><span id="b545"> </span><span id="b546">index</span><span id="b551"> </span><span id="b552">trusted</span><span id="b559"> </span><span id="b560">without</span><span id="b567"> </span><span id="b568">a</span><span id="b569"> </span><span id="b570">bound</span><span id="b575">.</span></p>
 <ul>
-<li><code>abc/LISTx.h:11-23</code> — <code>next</code> (from <code>bAtP(list,prev)-&gt;_list.next</code>, :17) used at :21 with no range check; <code>bAtP</code> (<code>abc/Bx.h</code>) only asserts (release: absent) and checks capacity, not data length.</li>
-<li>Trigger: <code>prev == len</code> (so <code>next</code> is the new entry's caller-set <code>.next</code>) or a list with corrupt/uninitialized <code>.next</code> links, in a release build.</li>
+<li id="b578"><code id="b582">abc/LISTx.h:11-23</code><span id="b601"> </span><span id="b602">—</span><span id="b605"> </span><code id="b606">next</code><span id="b612"> </span><span id="b613">(</span><span id="b614">from</span><span id="b618"> </span><code id="b619">bAtP(list,prev)-&gt;_list.next</code><span id="b648">,</span><span id="b649"> </span><span id="b650">:</span><span id="b651">17</span><span id="b653">)</span><span id="b654"> </span><span id="b655">used</span><span id="b659"> </span><span id="b660">at</span><span id="b662"> </span><span id="b663">:</span><span id="b664">21</span><span id="b666"> </span><span id="b667">with</span><span id="b671"> </span><span id="b672">no</span><span id="b674"> </span><span id="b675">range</span><span id="b680"> </span><span id="b681">check</span><span id="b686">;</span><span id="b687"> </span><code id="b688">bAtP</code><span id="b694"> </span><span id="b695">(</span><code id="b696">abc/Bx.h</code><span id="b706">)</span><span id="b707"> </span><span id="b708">only</span><span id="b712"> </span><span id="b713">asserts</span><span id="b720"> </span><span id="b721">(</span><span id="b722">release</span><span id="b729">:</span><span id="b730"> </span><span id="b731">absent</span><span id="b737">)</span><span id="b738"> </span><span id="b739">and</span><span id="b742"> </span><span id="b743">checks</span><span id="b749"> </span><span id="b750">capacity</span><span id="b758">,</span><span id="b759"> </span><span id="b760">not</span><span id="b763"> </span><span id="b764">data</span><span id="b768"> </span><span id="b769">length</span><span id="b775">.</span></li>
+<li id="b777"><span id="b781">Trigger</span><span id="b788">:</span><span id="b789"> </span><code id="b790">prev == len</code><span id="b803"> </span><span id="b804">(</span><span id="b805">so</span><span id="b807"> </span><code id="b808">next</code><span id="b814"> </span><span id="b815">is</span><span id="b817"> </span><span id="b818">the</span><span id="b821"> </span><span id="b822">new</span><span id="b825"> </span><span id="b826">entry</span><span id="b831">'</span><span id="b832">s</span><span id="b833"> </span><span id="b834">caller</span><span id="b840">-</span><span id="b841">set</span><span id="b844"> </span><code id="b845">.next</code><span id="b852">)</span><span id="b853"> </span><span id="b854">or</span><span id="b856"> </span><span id="b857">a</span><span id="b858"> </span><span id="b859">list</span><span id="b863"> </span><span id="b864">with</span><span id="b868"> </span><span id="b869">corrupt</span><span id="b876">/</span><span id="b877">uninitialized</span><span id="b890"> </span><code id="b891">.next</code><span id="b898"> </span><span id="b899">links</span><span id="b904">,</span><span id="b905"> </span><span id="b906">in</span><span id="b908"> </span><span id="b909">a</span><span id="b910"> </span><span id="b911">release</span><span id="b918"> </span><span id="b919">build</span><span id="b924">.</span></li>
 </ul>
-<h2>Blockers</h2>
-<p>
-None.
-</p>
-<h2>Planned</h2>
-<p>
-Bounds-check the successor.
-</p>
+<h2 id="blockers"><span id="b927"><span id="b931">Blockers</span></span></h2>
+<p id="b940"><span>None</span><span id="b944">.</span></p>
+<h2 id="planned"><span id="b947"><span id="b951">Planned</span></span></h2>
+<p id="b959"><span>Bounds</span><span id="b965">-</span><span id="b966">check</span><span id="b971"> </span><span id="b972">the</span><span id="b975"> </span><span id="b976">successor</span><span id="b985">.</span></p>
 <ul>
-<li>Repro first: <code>LISTinsert</code> with <code>prev==len</code> and an out-of-range <code>entry-&gt;next</code> (release-style build); confirm OOB write under ASan.</li>
-<li><code>if (next &gt; len) return LISTBADNDX;</code> (and reject <code>prev==len</code> for non-head inserts), or use a bounds-checked accessor returning an error instead of asserting.</li>
+<li id="b988"><span id="b992">Repro</span><span id="b997"> </span><span id="b998">first</span><span id="b1003">:</span><span id="b1004"> </span><code id="b1005">LISTinsert</code><span id="b1017"> </span><span id="b1018">with</span><span id="b1022"> </span><code id="b1023">prev==len</code><span id="b1034"> </span><span id="b1035">and</span><span id="b1038"> </span><span id="b1039">an</span><span id="b1041"> </span><span id="b1042">out</span><span id="b1045">-</span><span id="b1046">of</span><span id="b1048">-</span><span id="b1049">range</span><span id="b1054"> </span><code id="b1055">entry-&gt;next</code><span id="b1068"> </span><span id="b1069">(</span><span id="b1070">release</span><span id="b1077">-</span><span id="b1078">style</span><span id="b1083"> </span><span id="b1084">build</span><span id="b1089">)</span><span id="b1090">;</span><span id="b1091"> </span><span id="b1092">confirm</span><span id="b1099"> </span><span id="b1100">OOB</span><span id="b1103"> </span><span id="b1104">write</span><span id="b1109"> </span><span id="b1110">under</span><span id="b1115"> </span><span id="b1116">ASan</span><span id="b1120">.</span></li>
+<li id="b1122"><code id="b1126">if (next &gt; len) return LISTBADNDX;</code><span id="b1162"> </span><span id="b1163">(</span><span id="b1164">and</span><span id="b1167"> </span><span id="b1168">reject</span><span id="b1174"> </span><code id="b1175">prev==len</code><span id="b1186"> </span><span id="b1187">for</span><span id="b1190"> </span><span id="b1191">non</span><span id="b1194">-</span><span id="b1195">head</span><span id="b1199"> </span><span id="b1200">inserts</span><span id="b1207">)</span><span id="b1208">,</span><span id="b1209"> </span><span id="b1210">or</span><span id="b1212"> </span><span id="b1213">use</span><span id="b1216"> </span><span id="b1217">a</span><span id="b1218"> </span><span id="b1219">bounds</span><span id="b1225">-</span><span id="b1226">checked</span><span id="b1233"> </span><span id="b1234">accessor</span><span id="b1242"> </span><span id="b1243">returning</span><span id="b1252"> </span><span id="b1253">an</span><span id="b1255"> </span><span id="b1256">error</span><span id="b1261"> </span><span id="b1262">instead</span><span id="b1269"> </span><span id="b1270">of</span><span id="b1272"> </span><span id="b1273">asserting</span><span id="b1282">.</span></li>
 </ul>
 <div class="footer">
 ❧

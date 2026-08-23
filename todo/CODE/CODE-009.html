@@ -7,46 +7,35 @@
 <meta property="og:title" content="CODE-009: beagle: abc buffer ctor + one uri-resolver">
 <meta property="og:description" content="beagle builds static Bu8/u8b buffers as {s,s,s,s+sizeof} literals with raw pointer arithmetic at six BE.cli.c + two DISPATCH.c sites, and BEActPromoteRef/BEActResolveRemote/BEActResolveRef share the same 'static scratch + loop over c-&gt;uris' shape. Use the abc buffer constructor and factor the uri-resolver loop.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-009.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>CODE-009: beagle: abc buffer ctor + one uri-resolver</h1>
-<p>
-beagle builds static Bu8/u8b buffers as {s,s,s,s+sizeof} literals with raw pointer arithmetic at six BE.cli.c + two DISPATCH.c sites, and BEActPromoteRef/BEActResolveRemote/BEActResolveRef share the same 'static scratch + loop over c-&gt;uris' shape. Use the abc buffer constructor and factor the uri-resolver loop.
-</p>
-<h2>Issues</h2>
-<p>
-Hand-rolled static buffer literals (ptr-arith) and a triplicated uri-resolve loop.
-</p>
+<h1 id="code-009-beagle-abc-buffer-ctor-one-uri-resolver"><span id="b0"><span id="b4">CODE-009</span><span id="b12">:</span><span id="b13"> </span><span id="b14">beagle</span><span id="b20">:</span><span id="b21"> </span><span id="b22">abc</span><span id="b25"> </span><span id="b26">buffer</span><span id="b32"> </span><span id="b33">ctor</span><span id="b37"> </span><span id="b38">+</span><span id="b39"> </span><span id="b40">one</span><span id="b43"> </span><span id="b44">uri</span><span id="b47">-</span><span id="b48">resolver</span></span></h1>
+<p id="b58"><span>beagle</span><span id="b64"> </span><span id="b65">builds</span><span id="b71"> </span><span id="b72">static</span><span id="b78"> </span><span id="b79">Bu8</span><span id="b82">/</span><span id="b83">u8b</span><span id="b86"> </span><span id="b87">buffers</span><span id="b94"> </span><span id="b95">as</span><span id="b97"> </span><span id="b98">{</span><span id="b99">s</span><span id="b100">,</span><span id="b101">s</span><span id="b102">,</span><span id="b103">s</span><span id="b104">,</span><span id="b105">s</span><span id="b106">+</span><span id="b107">sizeof</span><span id="b113">}</span><span id="b114"> </span><span id="b115">literals</span><span id="b123"> </span><span id="b124">with</span><span id="b128"> </span><span id="b129">raw</span><span id="b132"> </span><span id="b133">pointer</span><span id="b140"> </span><span id="b141">arithmetic</span><span id="b151"> </span><span id="b152">at</span><span id="b154"> </span><span id="b155">six</span><span id="b158"> </span><span id="b159">BE.cli.c</span><span id="b167"> </span><span id="b168">+</span><span id="b169"> </span><span id="b170">two</span><span id="b173"> </span><span id="b174">DISPATCH.c</span><span id="b184"> </span><span id="b185">sites</span><span id="b190">,</span><span id="b191"> </span><span id="b192">and</span><span id="b195"> </span><span id="b196">BEActPromoteRef</span><span id="b211">/</span><span id="b212">BEActResolveRemote</span><span id="b230">/</span><span id="b231">BEActResolveRef</span><span id="b246"> </span><span id="b247">share</span><span id="b252"> </span><span id="b253">the</span><span id="b256"> </span><span id="b257">same</span><span id="b261"> </span><span id="b262">'</span><span id="b263">static</span><span id="b269"> </span><span id="b270">scratch</span><span id="b277"> </span><span id="b278">+</span><span id="b279"> </span><span id="b280">loop</span><span id="b284"> </span><span id="b285">over</span><span id="b289"> </span><span id="b290">c</span><span id="b291">-</span><span id="b292">&gt;</span><span id="b293">uris</span><span id="b297">'</span><span id="b298"> </span><span id="b299">shape</span><span id="b304">.</span><span id="b305"> </span><span id="b306">Use</span><span id="b309"> </span><span id="b310">the</span><span id="b313"> </span><span id="b314">abc</span><span id="b317"> </span><span id="b318">buffer</span><span id="b324"> </span><span id="b325">constructor</span><span id="b336"> </span><span id="b337">and</span><span id="b340"> </span><span id="b341">factor</span><span id="b347"> </span><span id="b348">the</span><span id="b351"> </span><span id="b352">uri</span><span id="b355">-</span><span id="b356">resolver</span><span id="b364"> </span><span id="b365">loop</span><span id="b369">.</span></p>
+<h2 id="issues"><span id="b372"><span id="b376">Issues</span></span></h2>
+<p id="b384"><span>Hand</span><span id="b388">-</span><span id="b389">rolled</span><span id="b395"> </span><span id="b396">static</span><span id="b402"> </span><span id="b403">buffer</span><span id="b409"> </span><span id="b410">literals</span><span id="b418"> </span><span id="b419">(</span><span id="b420">ptr</span><span id="b423">-</span><span id="b424">arith</span><span id="b429">)</span><span id="b430"> </span><span id="b431">and</span><span id="b434"> </span><span id="b435">a</span><span id="b436"> </span><span id="b437">triplicated</span><span id="b448"> </span><span id="b449">uri</span><span id="b452">-</span><span id="b453">resolve</span><span id="b460"> </span><span id="b461">loop</span><span id="b465">.</span></p>
 <ul>
-<li>Six BE.cli.c + two DISPATCH.c static Bu8 literals {st,st,st,st+sizeof} — CLAUDE.md §10 ptr-arith.</li>
-<li>BEActPromoteRef/BEActResolveRemote (DISPATCH.c:88,147) + BEActResolveRef (BE.cli.c:3287) share the uri-loop shape.</li>
+<li id="b468"><span id="b472">Six</span><span id="b475"> </span><span id="b476">BE.cli.c</span><span id="b484"> </span><span id="b485">+</span><span id="b486"> </span><span id="b487">two</span><span id="b490"> </span><span id="b491">DISPATCH.c</span><span id="b501"> </span><span id="b502">static</span><span id="b508"> </span><span id="b509">Bu8</span><span id="b512"> </span><span id="b513">literals</span><span id="b521"> </span><span id="b522">{</span><span id="b523">st</span><span id="b525">,</span><span id="b526">st</span><span id="b528">,</span><span id="b529">st</span><span id="b531">,</span><span id="b532">st</span><span id="b534">+</span><span id="b535">sizeof</span><span id="b541">}</span><span id="b542"> </span><span id="b543">—</span><span id="b546"> </span><span id="b547">CLAUDE.md</span><span id="b556"> </span><span id="b557">§10</span><span id="b561"> </span><span id="b562">ptr</span><span id="b565">-</span><span id="b566">arith</span><span id="b571">.</span></li>
+<li id="b573"><span id="b577">BEActPromoteRef</span><span id="b592">/</span><span id="b593">BEActResolveRemote</span><span id="b611"> </span><span id="b612">(</span><span id="b613">DISPATCH.c:88</span><span id="b626">,</span><span id="b627">147</span><span id="b630">)</span><span id="b631"> </span><span id="b632">+</span><span id="b633"> </span><span id="b634">BEActResolveRef</span><span id="b649"> </span><span id="b650">(</span><span id="b651">BE.cli.c:3287</span><span id="b664">)</span><span id="b665"> </span><span id="b666">share</span><span id="b671"> </span><span id="b672">the</span><span id="b675"> </span><span id="b676">uri</span><span id="b679">-</span><span id="b680">loop</span><span id="b684"> </span><span id="b685">shape</span><span id="b690">.</span></li>
 </ul>
-<h2>Blockers</h2>
-<p>
-None; shares BE.cli.c with CODE-008 — same beagle worktree, serial.
-</p>
-<h2>Planned</h2>
-<p>
-Replace literals with the abc buffer macro; factor one uri-resolve helper.
-</p>
+<h2 id="blockers"><span id="b693"><span id="b697">Blockers</span></span></h2>
+<p id="b707"><span>None</span><span id="b711">;</span><span id="b712"> </span><span id="b713">shares</span><span id="b719"> </span><span id="b720">BE.cli.c</span><span id="b728"> </span><span id="b729">with</span><span id="b733"> </span><span id="b734">CODE-008</span><span id="b742"> </span><span id="b743">—</span><span id="b746"> </span><span id="b747">same</span><span id="b751"> </span><span id="b752">beagle</span><span id="b758"> </span><span id="b759">worktree</span><span id="b767">,</span><span id="b768"> </span><span id="b769">serial</span><span id="b775">.</span></p>
+<h2 id="planned"><span id="b778"><span id="b782">Planned</span></span></h2>
+<p id="b791"><span>Replace</span><span id="b798"> </span><span id="b799">literals</span><span id="b807"> </span><span id="b808">with</span><span id="b812"> </span><span id="b813">the</span><span id="b816"> </span><span id="b817">abc</span><span id="b820"> </span><span id="b821">buffer</span><span id="b827"> </span><span id="b828">macro</span><span id="b833">;</span><span id="b834"> </span><span id="b835">factor</span><span id="b841"> </span><span id="b842">one</span><span id="b845"> </span><span id="b846">uri</span><span id="b849">-</span><span id="b850">resolve</span><span id="b857"> </span><span id="b858">helper</span><span id="b864">.</span></p>
 <ul>
-<li>Repro first (§17): be resolve/promote paths stay green.</li>
-<li>a_pad / abc buffer ctor for every scratch buf; drop the +sizeof literals.</li>
-<li>One BEResolveOverUris(c,fn) the three actors call.</li>
+<li id="b867"><span id="b871">Repro</span><span id="b876"> </span><span id="b877">first</span><span id="b882"> </span><span id="b883">(</span><span id="b884">§17</span><span id="b888">)</span><span id="b889">:</span><span id="b890"> </span><span id="b891">be</span><span id="b893"> </span><span id="b894">resolve</span><span id="b901">/</span><span id="b902">promote</span><span id="b909"> </span><span id="b910">paths</span><span id="b915"> </span><span id="b916">stay</span><span id="b920"> </span><span id="b921">green</span><span id="b926">.</span></li>
+<li id="b928"><span id="b932">a_pad</span><span id="b937"> </span><span id="b938">/</span><span id="b939"> </span><span id="b940">abc</span><span id="b943"> </span><span id="b944">buffer</span><span id="b950"> </span><span id="b951">ctor</span><span id="b955"> </span><span id="b956">for</span><span id="b959"> </span><span id="b960">every</span><span id="b965"> </span><span id="b966">scratch</span><span id="b973"> </span><span id="b974">buf</span><span id="b977">;</span><span id="b978"> </span><span id="b979">drop</span><span id="b983"> </span><span id="b984">the</span><span id="b987"> </span><span id="b988">+</span><span id="b989">sizeof</span><span id="b995"> </span><span id="b996">literals</span><span id="b1004">.</span></li>
+<li id="b1006"><span id="b1010">One</span><span id="b1013"> </span><span id="b1014">BEResolveOverUris</span><span id="b1031">(</span><span id="b1032">c</span><span id="b1033">,</span><span id="b1034">fn</span><span id="b1036">)</span><span id="b1037"> </span><span id="b1038">the</span><span id="b1041"> </span><span id="b1042">three</span><span id="b1047"> </span><span id="b1048">actors</span><span id="b1054"> </span><span id="b1055">call</span><span id="b1059">.</span></li>
 </ul>
 <div class="footer">
 ❧

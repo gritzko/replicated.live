@@ -3,64 +3,63 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MARK-009: markrefdef is a hand-rolled byte scanner — ragel-ize the refdef grammar</title>
-<meta property="og:title" content="MARK-009: markrefdef is a hand-rolled byte scanner — ragel-ize the refdef grammar">
-<meta property="og:description" content="markrefdef (MARK.c:76-101) parses the refdef line grammar with a manual scan loop (while (!u8csEmpty(s) &amp;&amp; u8csAt(s,0) != ']') u8csUsed(s,1); …) — slice-typed but still hand parsing, against the module's own doctrine (mark/README.mkd:15 &quot;never a hand-rolled byte scan&quot;; abc &quot;never do manual parsing, use ragel&quot;). It also runs TWICE per line (collector pass 1, again per-line in markblocks MARK.c:646). From the 2026-07-07 mark/ diagnostic review; code confirmed in-tree. Method Issues.">
+<title>MARK-009: mark_refdef is a hand-rolled byte scanner — ragel-ize the refdef grammar</title>
+<meta property="og:title" content="MARK-009: mark_refdef is a hand-rolled byte scanner — ragel-ize the refdef grammar">
+<meta property="og:description" content="mark_refdef (MARK.c:76-101) parses the refdef line grammar with a manual scan loop (while (!u8csEmpty(s) &amp;&amp; u8csAt(s,0) != ']') u8csUsed(s,1); …) — slice-typed but still hand parsing, against the module's own doctrine (mark/README.mkd:15 &quot;never a hand-rolled byte scan&quot;; abc &quot;never do manual parsing, use ragel&quot;). It also runs TWICE per line (collector pass 1, again per-line in mark_blocks MARK.c:646). From the 2026-07-07 mark/ diagnostic review; code confirmed in-tree. Method Issues.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/MARK/MARK-009.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>MARK-009: mark_refdef is a hand-rolled byte scanner — ragel-ize the refdef grammar</h1>
+<h1 id="mark-009-mark_refdef-is-a-hand-rolled-byte-scanner-—-ragel-ize-the-refdef-grammar"><span id="b0"><span id="b4">MARK-009</span><span id="b12">:</span><span id="b13"> </span><span id="b14">mark_refdef</span><span id="b25"> </span><span id="b26">is</span><span id="b28"> </span><span id="b29">a</span><span id="b30"> </span><span id="b31">hand</span><span id="b35">-</span><span id="b36">rolled</span><span id="b42"> </span><span id="b43">byte</span><span id="b47"> </span><span id="b48">scanner</span><span id="b55"> </span><span id="b56">—</span><span id="b59"> </span><span id="b60">ragel</span><span id="b65">-</span><span id="b66">ize</span><span id="b69"> </span><span id="b70">the</span><span id="b73"> </span><span id="b74">refdef</span><span id="b80"> </span><span id="b81">grammar</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
-<dl class="meta"><dt>Sev:</dt><dd>LOW</dd></dl>
+<dl class="meta">
+<dt id="b89"><span>Now</span></dt>
+<dd><span id="b97">OPEN</span></dd>
+<dt id="b103"><span>Sev</span></dt>
+<dd><span id="b111">LOW</span></dd>
+</dl>
 </div>
-<p>
-<code>mark_refdef</code> (<code>MARK.c:76-101</code>) parses the refdef line grammar with a manual scan loop (<code>while (!u8csEmpty(s) &amp;&amp; u8csAt(s,0) != ']') u8csUsed(s,1);</code> …) — slice-typed but still hand parsing, against the module's own doctrine (mark/README.mkd:15 &quot;never a hand-rolled byte scan&quot;; <a href="../../meta/abc.html">abc</a> &quot;never do manual parsing, use ragel&quot;). It also runs TWICE per line (collector pass 1, again per-line in <code>mark_blocks</code> <code>MARK.c:646</code>). From the 2026-07-07 mark/ diagnostic review; code confirmed in-tree. Method <a href="../../rule/Issues.html">Issues</a>.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b117"><code>mark_refdef</code><span id="b130"> </span><span id="b131">(</span><code id="b132">MARK.c:76-101</code><span id="b147">)</span><span id="b148"> </span><span id="b149">parses</span><span id="b155"> </span><span id="b156">the</span><span id="b159"> </span><span id="b160">refdef</span><span id="b166"> </span><span id="b167">line</span><span id="b171"> </span><span id="b172">grammar</span><span id="b179"> </span><span id="b180">with</span><span id="b184"> </span><span id="b185">a</span><span id="b186"> </span><span id="b187">manual</span><span id="b193"> </span><span id="b194">scan</span><span id="b198"> </span><span id="b199">loop</span><span id="b203"> </span><span id="b204">(</span><code id="b205">while (!u8csEmpty(s) &amp;&amp; u8csAt(s,0) != ']') u8csUsed(s,1);</code><span id="b265"> </span><span id="b266">…</span><span id="b269">)</span><span id="b270"> </span><span id="b271">—</span><span id="b274"> </span><span id="b275">slice</span><span id="b280">-</span><span id="b281">typed</span><span id="b286"> </span><span id="b287">but</span><span id="b290"> </span><span id="b291">still</span><span id="b296"> </span><span id="b297">hand</span><span id="b301"> </span><span id="b302">parsing</span><span id="b309">,</span><span id="b310"> </span><span id="b311">against</span><span id="b318"> </span><span id="b319">the</span><span id="b322"> </span><span id="b323">module</span><span id="b329">'</span><span id="b330">s</span><span id="b331"> </span><span id="b332">own</span><span id="b335"> </span><span id="b336">doctrine</span><span id="b344"> </span><span id="b345">(</span><span id="b346">mark/README.mkd:15</span><span id="b364"> </span><span id="b365">&quot;</span><span id="b366">never</span><span id="b371"> </span><span id="b372">a</span><span id="b373"> </span><span id="b374">hand</span><span id="b378">-</span><span id="b379">rolled</span><span id="b385"> </span><span id="b386">byte</span><span id="b390"> </span><span id="b391">scan</span><span id="b395">&quot;</span><span id="b396">;</span><span id="b397"> </span><a href="../../meta/abc.html" title="ABC refactoring policies"><span id="b399">abc</span></a><span id="b403"> </span><span id="b404">&quot;</span><span id="b405">never</span><span id="b410"> </span><span id="b411">do</span><span id="b413"> </span><span id="b414">manual</span><span id="b420"> </span><span id="b421">parsing</span><span id="b428">,</span><span id="b429"> </span><span id="b430">use</span><span id="b433"> </span><span id="b434">ragel</span><span id="b439">&quot;</span><span id="b440">)</span><span id="b441">.</span><span id="b442"> </span><span id="b443">It</span><span id="b445"> </span><span id="b446">also</span><span id="b450"> </span><span id="b451">runs</span><span id="b455"> </span><span id="b456">TWICE</span><span id="b461"> </span><span id="b462">per</span><span id="b465"> </span><span id="b466">line</span><span id="b470"> </span><span id="b471">(</span><span id="b472">collector</span><span id="b481"> </span><span id="b482">pass</span><span id="b486"> </span><span id="b487">1</span><span id="b488">,</span><span id="b489"> </span><span id="b490">again</span><span id="b495"> </span><span id="b496">per</span><span id="b499">-</span><span id="b500">line</span><span id="b504"> </span><span id="b505">in</span><span id="b507"> </span><code id="b508">mark_blocks</code><span id="b521"> </span><code id="b522">MARK.c:646</code><span id="b534">)</span><span id="b535">.</span><span id="b536"> </span><span id="b537">From</span><span id="b541"> </span><span id="b542">the</span><span id="b545"> </span><span id="b546">2026</span><span id="b550">-</span><span id="b551">07</span><span id="b553">-</span><span id="b554">07</span><span id="b556"> </span><span id="b557">mark</span><span id="b561">/</span><span id="b562"> </span><span id="b563">diagnostic</span><span id="b573"> </span><span id="b574">review</span><span id="b580">;</span><span id="b581"> </span><span id="b582">code</span><span id="b586"> </span><span id="b587">confirmed</span><span id="b596"> </span><span id="b597">in</span><span id="b599">-</span><span id="b600">tree</span><span id="b604">.</span><span id="b605"> </span><span id="b606">Method</span><span id="b612"> </span><a href="../../rule/Issues.html" title="the parallel fix-and-land loop"><span id="b614">Issues</span></a><span id="b621">.</span></p>
+<h2 id="input"><span id="b624"><span id="b628">Input</span></span></h2>
+<h3 id="context"><span id="b635"><span id="b639">Context</span></span></h3>
 <ul>
-<li>The MARKE ragel lexer already classifies lines — the refdef fields (label, url, title) belong in the same machine or a sibling one.</li>
-<li>Double scanning is a smell of the same missing single classification point.</li>
+<li id="b647"><span id="b651">The</span><span id="b654"> </span><span id="b655">MARKE</span><span id="b660"> </span><span id="b661">ragel</span><span id="b666"> </span><span id="b667">lexer</span><span id="b672"> </span><span id="b673">already</span><span id="b680"> </span><span id="b681">classifies</span><span id="b691"> </span><span id="b692">lines</span><span id="b697"> </span><span id="b698">—</span><span id="b701"> </span><span id="b702">the</span><span id="b705"> </span><span id="b706">refdef</span><span id="b712"> </span><span id="b713">fields</span><span id="b719"> </span><span id="b720">(</span><span id="b721">label</span><span id="b726">,</span><span id="b727"> </span><span id="b728">url</span><span id="b731">,</span><span id="b732"> </span><span id="b733">title</span><span id="b738">)</span><span id="b739"> </span><span id="b740">belong</span><span id="b746"> </span><span id="b747">in</span><span id="b749"> </span><span id="b750">the</span><span id="b753"> </span><span id="b754">same</span><span id="b758"> </span><span id="b759">machine</span><span id="b766"> </span><span id="b767">or</span><span id="b769"> </span><span id="b770">a</span><span id="b771"> </span><span id="b772">sibling</span><span id="b779"> </span><span id="b780">one</span><span id="b783">.</span></li>
+<li id="b785"><span id="b789">Double</span><span id="b795"> </span><span id="b796">scanning</span><span id="b804"> </span><span id="b805">is</span><span id="b807"> </span><span id="b808">a</span><span id="b809"> </span><span id="b810">smell</span><span id="b815"> </span><span id="b816">of</span><span id="b818"> </span><span id="b819">the</span><span id="b822"> </span><span id="b823">same</span><span id="b827"> </span><span id="b828">missing</span><span id="b835"> </span><span id="b836">single</span><span id="b842"> </span><span id="b843">classification</span><span id="b857"> </span><span id="b858">point</span><span id="b863">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b866"><span id="b870">Goals</span></span></h3>
 <ul>
-<li>Refdef grammar lives in ragel (MARKE or a dedicated machine); <code>mark_refdef</code>'s manual loops go; one scan per line.</li>
+<li id="b876"><span id="b880">Refdef</span><span id="b886"> </span><span id="b887">grammar</span><span id="b894"> </span><span id="b895">lives</span><span id="b900"> </span><span id="b901">in</span><span id="b903"> </span><span id="b904">ragel</span><span id="b909"> </span><span id="b910">(</span><span id="b911">MARKE</span><span id="b916"> </span><span id="b917">or</span><span id="b919"> </span><span id="b920">a</span><span id="b921"> </span><span id="b922">dedicated</span><span id="b931"> </span><span id="b932">machine</span><span id="b939">)</span><span id="b940">;</span><span id="b941"> </span><code id="b942">mark_refdef</code><span id="b955">'</span><span id="b956">s</span><span id="b957"> </span><span id="b958">manual</span><span id="b964"> </span><span id="b965">loops</span><span id="b970"> </span><span id="b971">go</span><span id="b973">;</span><span id="b974"> </span><span id="b975">one</span><span id="b978"> </span><span id="b979">scan</span><span id="b983"> </span><span id="b984">per</span><span id="b987"> </span><span id="b988">line</span><span id="b992">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b995"><span id="b999">Constraints</span></span></h3>
 <ul>
-<li>Pure refactor — byte-identical HTML on the whole wiki render (old vs new binary diff empty); regen MARKE.rl.c from the .rl source.</li>
+<li id="b1011"><span id="b1015">Pure</span><span id="b1019"> </span><span id="b1020">refactor</span><span id="b1028"> </span><span id="b1029">—</span><span id="b1032"> </span><span id="b1033">byte</span><span id="b1037">-</span><span id="b1038">identical</span><span id="b1047"> </span><span id="b1048">HTML</span><span id="b1052"> </span><span id="b1053">on</span><span id="b1055"> </span><span id="b1056">the</span><span id="b1059"> </span><span id="b1060">whole</span><span id="b1065"> </span><span id="b1066">wiki</span><span id="b1070"> </span><span id="b1071">render</span><span id="b1077"> </span><span id="b1078">(</span><span id="b1079">old</span><span id="b1082"> </span><span id="b1083">vs</span><span id="b1085"> </span><span id="b1086">new</span><span id="b1089"> </span><span id="b1090">binary</span><span id="b1096"> </span><span id="b1097">diff</span><span id="b1101"> </span><span id="b1102">empty</span><span id="b1107">)</span><span id="b1108">;</span><span id="b1109"> </span><span id="b1110">regen</span><span id="b1115"> </span><span id="b1116">MARKE.rl.c</span><span id="b1126"> </span><span id="b1127">from</span><span id="b1131"> </span><span id="b1132">the</span><span id="b1135"> </span><span id="b1136">.</span><span id="b1137">rl</span><span id="b1139"> </span><span id="b1140">source</span><span id="b1146">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>Design decisions</h3>
+<h2 id="wip"><span id="b1149"><span id="b1153">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b1158"><span id="b1162">Design</span><span id="b1168"> </span><span id="b1169">decisions</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li id="b1179"><span id="b1183">(</span><span id="b1184">pending</span><span id="b1191">)</span></li>
 </ul>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> Ragel refdef machine; retire the manual scan; wiki render byte-identical; suite green.</li>
-</ul>
-<h3>Blockers and bummers</h3>
+<h3 id="todos"><span id="b1194"><span id="b1198">TODOs</span></span></h3>
 <ul>
-<li>None known.</li>
+<li class="task" id="b1204"><input type="checkbox" disabled="" /> <span id="b1209">Ragel</span><span id="b1214"> </span><span id="b1215">refdef</span><span id="b1221"> </span><span id="b1222">machine</span><span id="b1229">;</span><span id="b1230"> </span><span id="b1231">retire</span><span id="b1237"> </span><span id="b1238">the</span><span id="b1241"> </span><span id="b1242">manual</span><span id="b1248"> </span><span id="b1249">scan</span><span id="b1253">;</span><span id="b1254"> </span><span id="b1255">wiki</span><span id="b1259"> </span><span id="b1260">render</span><span id="b1266"> </span><span id="b1267">byte</span><span id="b1271">-</span><span id="b1272">identical</span><span id="b1281">;</span><span id="b1282"> </span><span id="b1283">suite</span><span id="b1288"> </span><span id="b1289">green</span><span id="b1294">.</span></li>
 </ul>
-<h2>Outcome</h2>
+<h3 id="blockers-and-bummers"><span id="b1297"><span id="b1301">Blockers</span><span id="b1309"> </span><span id="b1310">and</span><span id="b1313"> </span><span id="b1314">bummers</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li id="b1322"><span id="b1326">None</span><span id="b1330"> </span><span id="b1331">known</span><span id="b1336">.</span></li>
+</ul>
+<h2 id="outcome"><span id="b1339"><span id="b1343">Outcome</span></span></h2>
+<ul>
+<li id="b1351"><span id="b1355">(</span><span id="b1356">pending</span><span id="b1363">)</span></li>
 </ul>
 <div class="footer">
 ❧

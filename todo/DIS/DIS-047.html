@@ -7,61 +7,73 @@
 <meta property="og:title" content="DIS-047: weave/graf 3-way merge is very slow on large files">
 <meta property="og:description" content="GRAFMergeWtFile / WEAVEMerge is very slow merging a large file (beagle/BE.cli.c, ~5k lines) during be get. Surfaced updating the JS-027 worktree. Method: Issues.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/DIS/DIS-047.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>DIS-047: weave/graf 3-way merge is very slow on large files</h1>
+<h1 id="dis-047-weavegraf-3-way-merge-is-very-slow-on-large-files"><span id="b0"><span id="b4">DIS-047</span><span id="b11">:</span><span id="b12"> </span><span id="b13">weave</span><span id="b18">/</span><span id="b19">graf</span><span id="b23"> </span><span id="b24">3</span><span id="b25">-</span><span id="b26">way</span><span id="b29"> </span><span id="b30">merge</span><span id="b35"> </span><span id="b36">is</span><span id="b38"> </span><span id="b39">very</span><span id="b43"> </span><span id="b44">slow</span><span id="b48"> </span><span id="b49">on</span><span id="b51"> </span><span id="b52">large</span><span id="b57"> </span><span id="b58">files</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+<dl class="meta">
+<dt id="b64"><span>Now</span></dt>
+<dd><span id="b72">DONE</span></dd>
+</dl>
 </div>
-<p>
-<code>GRAFMergeWtFile</code> / <code>WEAVEMerge</code> is very slow merging a large file (<code>beagle/BE.cli.c</code>, ~5k lines) during <code>be get</code>. Surfaced updating the <a href="../JS/JS-027.html">JS-027</a> worktree. Method: <a href="../../skill/Issues.html">Issues</a>.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b79"><code>GRAFMergeWtFile</code><span id="b96"> </span><span id="b97">/</span><span id="b98"> </span><code id="b99">WEAVEMerge</code><span id="b111"> </span><span id="b112">is</span><span id="b114"> </span><span id="b115">very</span><span id="b119"> </span><span id="b120">slow</span><span id="b124"> </span><span id="b125">merging</span><span id="b132"> </span><span id="b133">a</span><span id="b134"> </span><span id="b135">large</span><span id="b140"> </span><span id="b141">file</span>
+<span id="b146">(</span><code id="b147">beagle/BE.cli.c</code><span id="b164">,</span><span id="b165"> </span><span id="b166">~</span><span id="b167">5</span><span id="b168">k</span><span id="b169"> </span><span id="b170">lines</span><span id="b175">)</span><span id="b176"> </span><span id="b177">during</span><span id="b183"> </span><code id="b184">be get</code><span id="b192">.</span><span id="b193"> </span><span id="b194">Surfaced</span><span id="b202"> </span><span id="b203">updating</span><span id="b211"> </span><span id="b212">the</span><span id="b215"> </span><a href="../JS/JS-027.html" title="reimplement be status as bin/status.js"><span id="b217">JS-027</span></a>
+<span id="b225">worktree</span><span id="b233">.</span><span id="b234"> </span><span id="b235">Method</span><span id="b241">:</span><span id="b242"> </span><a href="../../skill/Issues.html" title="the parallel fix-and-land loop"><span id="b244">Issues</span></a><span id="b251">.</span></p>
+<h2 id="input"><span id="b254"><span id="b258">Input</span></span></h2>
+<h3 id="context"><span id="b265"><span id="b269">Context</span></span></h3>
 <ul>
-<li><code>be get</code> onto trunk <code>371ad14b</code> weave-merged <code>beagle/BE.cli.c</code> (both sides edited it: SUBS-027b be-head + the JS-025 hook) — &quot;merge of BE.cli.c was veeerey slow&quot; (user, direct observation).</li>
-<li>BE.cli.c is ~5000 lines; the single-file merge took noticeably long.</li>
-<li>Path: <code>GRAFMergeWtFileTunable</code> (<code>graf/GET.c:301</code>) → <code>WEAVEMerge</code> / <code>GRAFMerge3Bytes</code> / <code>WEAVENext</code> (<code>dog/WEAVE</code>). Suspect superlinear token scan or repeated whole-blob rewrites per <code>WEAVENext</code> (the blob is rewritten whole — see <code>dog/WEAVE.h</code> &quot;rewrite the whole blob&quot;).</li>
+<li id="b277"><code id="b281">be get</code><span id="b289"> </span><span id="b290">onto</span><span id="b294"> </span><span id="b295">trunk</span><span id="b300"> </span><code id="b301">371ad14b</code><span id="b311"> </span><span id="b312">weave</span><span id="b317">-</span><span id="b318">merged</span><span id="b324"> </span><code id="b325">beagle/BE.cli.c</code><span id="b342"> </span><span id="b343">(</span><span id="b344">both</span><span id="b348"> </span><span id="b349">sides</span>
+<span id="b359">edited</span><span id="b365"> </span><span id="b366">it</span><span id="b368">:</span><span id="b369"> </span><span id="b370">SUBS</span><span id="b374">-</span><span id="b375">027b</span><span id="b379"> </span><span id="b380">be</span><span id="b382">-</span><span id="b383">head</span><span id="b387"> </span><span id="b388">+</span><span id="b389"> </span><span id="b390">the</span><span id="b393"> </span><span id="b394">JS-025</span><span id="b400"> </span><span id="b401">hook</span><span id="b405">)</span><span id="b406"> </span><span id="b407">—</span><span id="b410"> </span><span id="b411">&quot;</span><span id="b412">merge</span><span id="b417"> </span><span id="b418">of</span><span id="b420"> </span><span id="b421">BE.cli.c</span><span id="b429"> </span><span id="b430">was</span>
+<span id="b438">veeerey</span><span id="b445"> </span><span id="b446">slow</span><span id="b450">&quot;</span><span id="b451"> </span><span id="b452">(</span><span id="b453">user</span><span id="b457">,</span><span id="b458"> </span><span id="b459">direct</span><span id="b465"> </span><span id="b466">observation</span><span id="b477">)</span><span id="b478">.</span></li>
+<li id="b480"><span id="b484">BE.cli.c</span><span id="b492"> </span><span id="b493">is</span><span id="b495"> </span><span id="b496">~</span><span id="b497">5000</span><span id="b501"> </span><span id="b502">lines</span><span id="b507">;</span><span id="b508"> </span><span id="b509">the</span><span id="b512"> </span><span id="b513">single</span><span id="b519">-</span><span id="b520">file</span><span id="b524"> </span><span id="b525">merge</span><span id="b530"> </span><span id="b531">took</span><span id="b535"> </span><span id="b536">noticeably</span><span id="b546"> </span><span id="b547">long</span><span id="b551">.</span></li>
+<li id="b553"><span id="b557">Path</span><span id="b561">:</span><span id="b562"> </span><code id="b563">GRAFMergeWtFileTunable</code><span id="b587"> </span><span id="b588">(</span><code id="b589">graf/GET.c:301</code><span id="b605">)</span><span id="b606"> </span><span id="b607">→</span><span id="b610"> </span><code id="b611">WEAVEMerge</code><span id="b623"> </span><span id="b624">/</span>
+<code id="b630">GRAFMerge3Bytes</code><span id="b647"> </span><span id="b648">/</span><span id="b649"> </span><code id="b650">WEAVENext</code><span id="b661"> </span><span id="b662">(</span><code id="b663">dog/WEAVE</code><span id="b674">)</span><span id="b675">.</span><span id="b676"> </span><span id="b677">Suspect</span><span id="b684"> </span><span id="b685">superlinear</span><span id="b696"> </span><span id="b697">token</span><span id="b702"> </span><span id="b703">scan</span>
+<span id="b712">or</span><span id="b714"> </span><span id="b715">repeated</span><span id="b723"> </span><span id="b724">whole</span><span id="b729">-</span><span id="b730">blob</span><span id="b734"> </span><span id="b735">rewrites</span><span id="b743"> </span><span id="b744">per</span><span id="b747"> </span><code id="b748">WEAVENext</code><span id="b759"> </span><span id="b760">(</span><span id="b761">the</span><span id="b764"> </span><span id="b765">blob</span><span id="b769"> </span><span id="b770">is</span><span id="b772"> </span><span id="b773">rewritten</span><span id="b782"> </span><span id="b783">whole</span><span id="b788"> </span><span id="b789">—</span>
+<span id="b797">see</span><span id="b800"> </span><code id="b801">dog/WEAVE.h</code><span id="b814"> </span><span id="b815">&quot;</span><span id="b816">rewrite</span><span id="b823"> </span><span id="b824">the</span><span id="b827"> </span><span id="b828">whole</span><span id="b833"> </span><span id="b834">blob</span><span id="b838">&quot;</span><span id="b839">)</span><span id="b840">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b843"><span id="b847">Goals</span></span></h3>
 <ul>
-<li>Profile the merge on a large file; bring it to ~linear. Add a bench that makes a regression brutally obvious (CLAUDE.md §3).</li>
+<li id="b853"><span id="b857">Profile</span><span id="b864"> </span><span id="b865">the</span><span id="b868"> </span><span id="b869">merge</span><span id="b874"> </span><span id="b875">on</span><span id="b877"> </span><span id="b878">a</span><span id="b879"> </span><span id="b880">large</span><span id="b885"> </span><span id="b886">file</span><span id="b890">;</span><span id="b891"> </span><span id="b892">bring</span><span id="b897"> </span><span id="b898">it</span><span id="b900"> </span><span id="b901">to</span><span id="b903"> </span><span id="b904">~</span><span id="b905">linear</span><span id="b911">.</span><span id="b912"> </span><span id="b913">Add</span><span id="b916"> </span><span id="b917">a</span><span id="b918"> </span><span id="b919">bench</span><span id="b924"> </span><span id="b925">that</span><span id="b929"> </span><span id="b930">makes</span>
+<span id="b940">a</span><span id="b941"> </span><span id="b942">regression</span><span id="b952"> </span><span id="b953">brutally</span><span id="b961"> </span><span id="b962">obvious</span><span id="b969"> </span><span id="b970">(</span><span id="b971">CLAUDE.md</span><span id="b980"> </span><span id="b981">§3</span><span id="b984">)</span><span id="b985">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b988"><span id="b992">Constraints</span></span></h3>
 <ul>
-<li><code>dog/WEAVE</code> (WEAVEMerge/WEAVEEmitMerged) + <code>graf/GET.c</code>. Measure before optimizing.</li>
+<li id="b1004"><code id="b1008">dog/WEAVE</code><span id="b1019"> </span><span id="b1020">(</span><span id="b1021">WEAVEMerge</span><span id="b1031">/</span><span id="b1032">WEAVEEmitMerged</span><span id="b1047">)</span><span id="b1048"> </span><span id="b1049">+</span><span id="b1050"> </span><code id="b1051">graf/GET.c</code><span id="b1063">.</span><span id="b1064"> </span><span id="b1065">Measure</span><span id="b1072"> </span><span id="b1073">before</span><span id="b1079"> </span><span id="b1080">optimizing</span><span id="b1090">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>Design decisions</h3>
+<h2 id="wip"><span id="b1093"><span id="b1097">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b1102"><span id="b1106">Design</span><span id="b1112"> </span><span id="b1113">decisions</span></span></h3>
 <ul>
-<li>(open) find where the time goes (token identity scan? per-step whole-blob rewrite?) before touching the hot loop.</li>
+<li id="b1123"><span id="b1127">(</span><span id="b1128">open</span><span id="b1132">)</span><span id="b1133"> </span><span id="b1134">find</span><span id="b1138"> </span><span id="b1139">where</span><span id="b1144"> </span><span id="b1145">the</span><span id="b1148"> </span><span id="b1149">time</span><span id="b1153"> </span><span id="b1154">goes</span><span id="b1158"> </span><span id="b1159">(</span><span id="b1160">token</span><span id="b1165"> </span><span id="b1166">identity</span><span id="b1174"> </span><span id="b1175">scan</span><span id="b1179">?</span><span id="b1180"> </span><span id="b1181">per</span><span id="b1184">-</span><span id="b1185">step</span><span id="b1189"> </span><span id="b1190">whole</span><span id="b1195">-</span><span id="b1196">blob</span>
+<span id="b1205">rewrite</span><span id="b1212">?</span><span id="b1213">)</span><span id="b1214"> </span><span id="b1215">before</span><span id="b1221"> </span><span id="b1222">touching</span><span id="b1230"> </span><span id="b1231">the</span><span id="b1234"> </span><span id="b1235">hot</span><span id="b1238"> </span><span id="b1239">loop</span><span id="b1243">.</span></li>
 </ul>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> Bench: WEAVEMerge on a 5k-line file; capture baseline time + apparent complexity.</li>
-<li class="open"><input type="checkbox" disabled> Optimize the hot path; assert the bench improvement.</li>
-</ul>
-<h3>Blockers</h3>
+<h3 id="todos"><span id="b1246"><span id="b1250">TODOs</span></span></h3>
 <ul>
-<li>None.</li>
+<li class="task" id="b1256"><input type="checkbox" disabled="" /> <span id="b1261">Bench</span><span id="b1266">:</span><span id="b1267"> </span><span id="b1268">WEAVEMerge</span><span id="b1278"> </span><span id="b1279">on</span><span id="b1281"> </span><span id="b1282">a</span><span id="b1283"> </span><span id="b1284">5</span><span id="b1285">k</span><span id="b1286">-</span><span id="b1287">line</span><span id="b1291"> </span><span id="b1292">file</span><span id="b1296">;</span><span id="b1297"> </span><span id="b1298">capture</span><span id="b1305"> </span><span id="b1306">baseline</span><span id="b1314"> </span><span id="b1315">time</span><span id="b1319"> </span><span id="b1320">+</span><span id="b1321"> </span><span id="b1322">apparent</span><span id="b1330"> </span><span id="b1331">complexity</span><span id="b1341">.</span></li>
+<li class="task" id="b1343"><input type="checkbox" disabled="" /> <span id="b1348">Optimize</span><span id="b1356"> </span><span id="b1357">the</span><span id="b1360"> </span><span id="b1361">hot</span><span id="b1364"> </span><span id="b1365">path</span><span id="b1369">;</span><span id="b1370"> </span><span id="b1371">assert</span><span id="b1377"> </span><span id="b1378">the</span><span id="b1381"> </span><span id="b1382">bench</span><span id="b1387"> </span><span id="b1388">improvement</span><span id="b1399">.</span></li>
 </ul>
-<h2>Outcome</h2>
+<h3 id="blockers"><span id="b1402"><span id="b1406">Blockers</span></span></h3>
 <ul>
-<li><strong>LANDED <code>5b062e24</code></strong> (2026-06-21): O(n²)→linear <code>WEAVEMerge</code> Pass-2 remover-union (<code>dog/WEAVE.c</code>) — prefix-sum slots + one scatter pass + compaction via the existing <code>umap</code>, order-preserving so merge output is BYTE-IDENTICAL. <del>212× faster (N=5k: 9777ms→46ms; doubling 4.04×→2.27×). Bench <code>dog/test/WEAVE04.c</code> (<code>DWEAVE04test</code>, fails if ratio ≥ 3.0). FUZZ-VALIDATED: <code>DWEAVEfuzz</code> 235k runs × 16 jobs / 10 min, 0 crashes / 0 oracle failures / 0 sanitizer findings (corpus `</del>/src/Corpus/dweave`).</li>
+<li id="b1415"><span id="b1419">None</span><span id="b1423">.</span></li>
+</ul>
+<h2 id="outcome"><span id="b1426"><span id="b1430">Outcome</span></span></h2>
+<ul>
+<li id="b1438"><strong id="b1442"><span id="b1443">LANDED</span><span id="b1449"> </span><code id="b1450">5b062e24</code></strong><span id="b1461"> </span><span id="b1462">(</span><span id="b1463">2026</span><span id="b1467">-</span><span id="b1468">06</span><span id="b1470">-</span><span id="b1471">21</span><span id="b1473">)</span><span id="b1474">:</span><span id="b1475"> </span><span id="b1476">O</span><span id="b1477">(</span><span id="b1478">n²</span><span id="b1481">)</span><span id="b1482">→linear</span><span id="b1491"> </span><code id="b1492">WEAVEMerge</code><span id="b1504"> </span><span id="b1505">Pass</span><span id="b1509">-</span><span id="b1510">2</span><span id="b1511"> </span><span id="b1512">remover</span><span id="b1519">-</span><span id="b1520">union</span>
+<span id="b1530">(</span><code id="b1531">dog/WEAVE.c</code><span id="b1544">)</span><span id="b1545"> </span><span id="b1546">—</span><span id="b1549"> </span><span id="b1550">prefix</span><span id="b1556">-</span><span id="b1557">sum</span><span id="b1560"> </span><span id="b1561">slots</span><span id="b1566"> </span><span id="b1567">+</span><span id="b1568"> </span><span id="b1569">one</span><span id="b1572"> </span><span id="b1573">scatter</span><span id="b1580"> </span><span id="b1581">pass</span><span id="b1585"> </span><span id="b1586">+</span><span id="b1587"> </span><span id="b1588">compaction</span><span id="b1598"> </span><span id="b1599">via</span><span id="b1602"> </span><span id="b1603">the</span><span id="b1606"> </span><span id="b1607">existing</span>
+<code id="b1620">umap</code><span id="b1626">,</span><span id="b1627"> </span><span id="b1628">order</span><span id="b1633">-</span><span id="b1634">preserving</span><span id="b1644"> </span><span id="b1645">so</span><span id="b1647"> </span><span id="b1648">merge</span><span id="b1653"> </span><span id="b1654">output</span><span id="b1660"> </span><span id="b1661">is</span><span id="b1663"> </span><span id="b1664">BYTE</span><span id="b1668">-</span><span id="b1669">IDENTICAL</span><span id="b1678">.</span><span id="b1679"> </span><del id="b1680"><span id="b1681">212</span><span id="b1684">×</span><span id="b1686"> </span><span id="b1687">faster</span><span id="b1693"> </span><span id="b1694">(</span><span id="b1695">N</span><span id="b1696">=</span><span id="b1697">5</span><span id="b1698">k</span><span id="b1699">:</span>
+<span id="b1705">9777</span><span id="b1709">ms→46ms</span><span id="b1718">;</span><span id="b1719"> </span><span id="b1720">doubling</span><span id="b1728"> </span><span id="b1729">4.04</span><span id="b1733">×→2</span><span id="b1739">.27</span><span id="b1742">×</span><span id="b1744">)</span><span id="b1745">.</span><span id="b1746"> </span><span id="b1747">Bench</span><span id="b1752"> </span><code id="b1753">dog/test/WEAVE04.c</code><span id="b1773"> </span><span id="b1774">(</span><code id="b1775">DWEAVE04test</code><span id="b1789">,</span>
+<span id="b1795">fails</span><span id="b1800"> </span><span id="b1801">if</span><span id="b1803"> </span><span id="b1804">ratio</span><span id="b1809"> </span><span id="b1810">≥</span><span id="b1813"> </span><span id="b1814">3.0</span><span id="b1817">)</span><span id="b1818">.</span><span id="b1819"> </span><span id="b1820">FUZZ</span><span id="b1824">-</span><span id="b1825">VALIDATED</span><span id="b1834">:</span><span id="b1835"> </span><code id="b1836">DWEAVEfuzz</code><span id="b1848"> </span><span id="b1849">235</span><span id="b1852">k</span><span id="b1853"> </span><span id="b1854">runs</span><span id="b1858"> </span><span id="b1859">×</span><span id="b1861"> </span><span id="b1862">16</span><span id="b1864"> </span><span id="b1865">jobs</span><span id="b1869"> </span><span id="b1870">/</span><span id="b1871"> </span><span id="b1872">10</span><span id="b1874"> </span><span id="b1875">min</span><span id="b1878">,</span>
+<span id="b1884">0</span><span id="b1885"> </span><span id="b1886">crashes</span><span id="b1893"> </span><span id="b1894">/</span><span id="b1895"> </span><span id="b1896">0</span><span id="b1897"> </span><span id="b1898">oracle</span><span id="b1904"> </span><span id="b1905">failures</span><span id="b1913"> </span><span id="b1914">/</span><span id="b1915"> </span><span id="b1916">0</span><span id="b1917"> </span><span id="b1918">sanitizer</span><span id="b1927"> </span><span id="b1928">findings</span><span id="b1936"> </span><span id="b1937">(</span><span id="b1938">corpus</span><span id="b1944"> </span><span id="b1945">`</span></del><span id="b1947">/</span><span id="b1948">src</span><span id="b1951">/</span><span id="b1952">Corpus</span><span id="b1958">/</span><span id="b1959">dweave</span><span id="b1965">`</span><span id="b1966">)</span><span id="b1967">.</span></li>
 </ul>
 <div class="footer">
 ❧

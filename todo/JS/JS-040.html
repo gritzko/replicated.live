@@ -5,63 +5,74 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>JS-040: bin/lib/ingest.js — pack ingest (keeper write side)</title>
 <meta property="og:title" content="JS-040: bin/lib/ingest.js — pack ingest (keeper write side)">
-<meta property="og:description" content="Land a received packfile into the shard: resolve every object (incl. REFDELTA against the existing store / in-pack bases), re-encode OFS-only into a fresh NNNNN.keeper pack-log, and index it into the shard's wh128 LSM. Mirrors keeper/UNPK.c + KEEPIngestFile (unlinkable). Part of JS-038.">
+<meta property="og:description" content="Land a received packfile into the shard: resolve every object (incl. REF_DELTA against the existing store / in-pack bases), re-encode OFS-only into a fresh NNNNN.keeper pack-log, and index it into the shard's wh128 LSM. Mirrors keeper/UNPK.c + KEEPIngestFile (unlinkable). Part of JS-038.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/JS/JS-040.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-040: <code>bin/lib/ingest.js</code> — pack ingest (keeper write side)</h1>
+<h1 id="js-040-binlibingestjs-—-pack-ingest-keeper-write-side"><span id="b0"><span id="b4">JS-040</span><span id="b10">:</span><span id="b11"> </span><code id="b12">bin/lib/ingest.js</code><span id="b31"> </span><span id="b32">—</span><span id="b35"> </span><span id="b36">pack</span><span id="b40"> </span><span id="b41">ingest</span><span id="b47"> </span><span id="b48">(</span><span id="b49">keeper</span><span id="b55"> </span><span id="b56">write</span><span id="b61"> </span><span id="b62">side</span><span id="b66">)</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+<dl class="meta">
+<dt id="b68"><span>Now</span></dt>
+<dd><span id="b76">DONE</span></dd>
+</dl>
 </div>
-<p>
-Land a received packfile into the shard: resolve every object (incl. REF_DELTA against the existing store / in-pack bases), re-encode OFS-only into a fresh <code>NNNNN.keeper</code> pack-log, and index it into the shard's wh128 LSM. Mirrors <code>keeper/UNPK.c</code> + <code>KEEPIngestFile</code> (unlinkable). Part of <a href="JS-038.html">JS-038</a>.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b83"><span>Land</span><span id="b87"> </span><span id="b88">a</span><span id="b89"> </span><span id="b90">received</span><span id="b98"> </span><span id="b99">packfile</span><span id="b107"> </span><span id="b108">into</span><span id="b112"> </span><span id="b113">the</span><span id="b116"> </span><span id="b117">shard</span><span id="b122">:</span><span id="b123"> </span><span id="b124">resolve</span><span id="b131"> </span><span id="b132">every</span><span id="b137"> </span><span id="b138">object</span><span id="b144"> </span><span id="b145">(</span><span id="b146">incl</span><span id="b150">.</span><span id="b151"> </span><span id="b152">REF_DELTA</span>
+<span id="b162">against</span><span id="b169"> </span><span id="b170">the</span><span id="b173"> </span><span id="b174">existing</span><span id="b182"> </span><span id="b183">store</span><span id="b188"> </span><span id="b189">/</span><span id="b190"> </span><span id="b191">in</span><span id="b193">-</span><span id="b194">pack</span><span id="b198"> </span><span id="b199">bases</span><span id="b204">)</span><span id="b205">,</span><span id="b206"> </span><span id="b207">re</span><span id="b209">-</span><span id="b210">encode</span><span id="b216"> </span><span id="b217">OFS</span><span id="b220">-</span><span id="b221">only</span><span id="b225"> </span><span id="b226">into</span><span id="b230"> </span><span id="b231">a</span><span id="b232"> </span><span id="b233">fresh</span>
+<code id="b239">NNNNN.keeper</code><span id="b253"> </span><span id="b254">pack</span><span id="b258">-</span><span id="b259">log</span><span id="b262">,</span><span id="b263"> </span><span id="b264">and</span><span id="b267"> </span><span id="b268">index</span><span id="b273"> </span><span id="b274">it</span><span id="b276"> </span><span id="b277">into</span><span id="b281"> </span><span id="b282">the</span><span id="b285"> </span><span id="b286">shard</span><span id="b291">'</span><span id="b292">s</span><span id="b293"> </span><span id="b294">wh128</span><span id="b299"> </span><span id="b300">LSM</span><span id="b303">.</span><span id="b304"> </span><span id="b305">Mirrors</span>
+<code id="b313">keeper/UNPK.c</code><span id="b328"> </span><span id="b329">+</span><span id="b330"> </span><code id="b331">KEEPIngestFile</code><span id="b347"> </span><span id="b348">(</span><span id="b349">unlinkable</span><span id="b359">)</span><span id="b360">.</span><span id="b361"> </span><span id="b362">Part</span><span id="b366"> </span><span id="b367">of</span><span id="b369"> </span><a href="JS-038.html" title="umbrella: be get as bin/get.js"><span id="b371">JS-038</span></a><span id="b378">.</span></p>
+<h2 id="input"><span id="b381"><span id="b385">Input</span></span></h2>
+<h3 id="context"><span id="b392"><span id="b396">Context</span></span></h3>
 <ul>
-<li>The keeper store is OFS-only pack-logs + an <code>abc.index</code> wh128 lane. <code>keeper.js</code> READS them but <code>indexPackByWalk</code> SKIPS REF_DELTA (&quot;unresolvable in pure JS&quot;) — false: <code>_pack_inflate</code> the delta + <code>getObject(baseSha)</code> + <code>git.delta.apply</code> resolves it. Received git packs ARE thin (REF_DELTA).</li>
+<li id="b404"><span id="b408">The</span><span id="b411"> </span><span id="b412">keeper</span><span id="b418"> </span><span id="b419">store</span><span id="b424"> </span><span id="b425">is</span><span id="b427"> </span><span id="b428">OFS</span><span id="b431">-</span><span id="b432">only</span><span id="b436"> </span><span id="b437">pack</span><span id="b441">-</span><span id="b442">logs</span><span id="b446"> </span><span id="b447">+</span><span id="b448"> </span><span id="b449">an</span><span id="b451"> </span><code id="b452">abc.index</code><span id="b463"> </span><span id="b464">wh128</span><span id="b469"> </span><span id="b470">lane</span><span id="b474">.</span>
+<code id="b480">keeper.js</code><span id="b491"> </span><span id="b492">READS</span><span id="b497"> </span><span id="b498">them</span><span id="b502"> </span><span id="b503">but</span><span id="b506"> </span><code id="b507">indexPackByWalk</code><span id="b524"> </span><span id="b525">SKIPS</span><span id="b530"> </span><span id="b531">REF_DELTA</span><span id="b540"> </span><span id="b541">(</span><span id="b542">&quot;</span><span id="b543">unresolvable</span>
+<span id="b560">in</span><span id="b562"> </span><span id="b563">pure</span><span id="b567"> </span><span id="b568">JS</span><span id="b570">&quot;</span><span id="b571">)</span><span id="b572"> </span><span id="b573">—</span><span id="b576"> </span><span id="b577">false</span><span id="b582">:</span><span id="b583"> </span><code id="b584">_pack_inflate</code><span id="b599"> </span><span id="b600">the</span><span id="b603"> </span><span id="b604">delta</span><span id="b609"> </span><span id="b610">+</span><span id="b611"> </span><code id="b612">getObject(baseSha)</code><span id="b632"> </span><span id="b633">+</span>
+<code id="b639">git.delta.apply</code><span id="b656"> </span><span id="b657">resolves</span><span id="b665"> </span><span id="b666">it</span><span id="b668">.</span><span id="b669"> </span><span id="b670">Received</span><span id="b678"> </span><span id="b679">git</span><span id="b682"> </span><span id="b683">packs</span><span id="b688"> </span><span id="b689">ARE</span><span id="b692"> </span><span id="b693">thin</span><span id="b697"> </span><span id="b698">(</span><span id="b699">REF_DELTA</span><span id="b708">)</span><span id="b709">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b712"><span id="b716">Goals</span></span></h3>
 <ul>
-<li><code>ingest(repo, packBytes)</code>: walk records (<code>_pack_next</code>/<code>_pack_type</code>), resolve raw/OFS via <code>_pack_resolve</code>, REF via inflate+apply against in-pack map or <code>keeper.getObject</code>; re-feed full bytes through <code>pack.feed</code> (OFS-only log).</li>
-<li>Index the new log into the shard (<code>pack.scan</code> → <code>abc.index.put</code>/flush), so a follow-up <code>keeper.getObject</code> of any landed sha succeeds.</li>
+<li id="b722"><code id="b726">ingest(repo, packBytes)</code><span id="b751">:</span><span id="b752"> </span><span id="b753">walk</span><span id="b757"> </span><span id="b758">records</span><span id="b765"> </span><span id="b766">(</span><code id="b767">_pack_next</code><span id="b779">/</span><code id="b780">_pack_type</code><span id="b792">)</span><span id="b793">,</span><span id="b794"> </span><span id="b795">resolve</span>
+<span id="b807">raw</span><span id="b810">/</span><span id="b811">OFS</span><span id="b814"> </span><span id="b815">via</span><span id="b818"> </span><code id="b819">_pack_resolve</code><span id="b834">,</span><span id="b835"> </span><span id="b836">REF</span><span id="b839"> </span><span id="b840">via</span><span id="b843"> </span><span id="b844">inflate</span><span id="b851">+</span><span id="b852">apply</span><span id="b857"> </span><span id="b858">against</span><span id="b865"> </span><span id="b866">in</span><span id="b868">-</span><span id="b869">pack</span><span id="b873"> </span><span id="b874">map</span><span id="b877"> </span><span id="b878">or</span>
+<code id="b885">keeper.getObject</code><span id="b903">;</span><span id="b904"> </span><span id="b905">re</span><span id="b907">-</span><span id="b908">feed</span><span id="b912"> </span><span id="b913">full</span><span id="b917"> </span><span id="b918">bytes</span><span id="b923"> </span><span id="b924">through</span><span id="b931"> </span><code id="b932">pack.feed</code><span id="b943"> </span><span id="b944">(</span><span id="b945">OFS</span><span id="b948">-</span><span id="b949">only</span><span id="b953"> </span><span id="b954">log</span><span id="b957">)</span><span id="b958">.</span></li>
+<li id="b960"><span id="b964">Index</span><span id="b969"> </span><span id="b970">the</span><span id="b973"> </span><span id="b974">new</span><span id="b977"> </span><span id="b978">log</span><span id="b981"> </span><span id="b982">into</span><span id="b986"> </span><span id="b987">the</span><span id="b990"> </span><span id="b991">shard</span><span id="b996"> </span><span id="b997">(</span><code id="b998">pack.scan</code><span id="b1009"> </span><span id="b1010">→</span><span id="b1013"> </span><code id="b1014">abc.index.put</code><span id="b1029">/</span><span id="b1030">flush</span><span id="b1035">)</span><span id="b1036">,</span><span id="b1037"> </span><span id="b1038">so</span><span id="b1040"> </span><span id="b1041">a</span>
+<span id="b1047">follow</span><span id="b1053">-</span><span id="b1054">up</span><span id="b1056"> </span><code id="b1057">keeper.getObject</code><span id="b1075"> </span><span id="b1076">of</span><span id="b1078"> </span><span id="b1079">any</span><span id="b1082"> </span><span id="b1083">landed</span><span id="b1089"> </span><span id="b1090">sha</span><span id="b1093"> </span><span id="b1094">succeeds</span><span id="b1102">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b1105"><span id="b1109">Constraints</span></span></h3>
 <ul>
-<li>libdog+<code>abc</code> ONLY. Write a new <code>NNNNN.keeper</code> beside existing shard packs; never mutate a landed pack. Re-encode deflates via <code>pack.feed</code> (or <a href="JS-035.html">JS-035</a>).</li>
+<li id="b1121"><span id="b1125">libdog</span><span id="b1131">+</span><code id="b1132">abc</code><span id="b1137"> </span><span id="b1138">ONLY</span><span id="b1142">.</span><span id="b1143"> </span><span id="b1144">Write</span><span id="b1149"> </span><span id="b1150">a</span><span id="b1151"> </span><span id="b1152">new</span><span id="b1155"> </span><code id="b1156">NNNNN.keeper</code><span id="b1170"> </span><span id="b1171">beside</span><span id="b1177"> </span><span id="b1178">existing</span><span id="b1186"> </span><span id="b1187">shard</span><span id="b1192"> </span><span id="b1193">packs</span><span id="b1198">;</span>
+<span id="b1204">never</span><span id="b1209"> </span><span id="b1210">mutate</span><span id="b1216"> </span><span id="b1217">a</span><span id="b1218"> </span><span id="b1219">landed</span><span id="b1225"> </span><span id="b1226">pack</span><span id="b1230">.</span><span id="b1231"> </span><span id="b1232">Re</span><span id="b1234">-</span><span id="b1235">encode</span><span id="b1241"> </span><span id="b1242">deflates</span><span id="b1250"> </span><span id="b1251">via</span><span id="b1254"> </span><code id="b1255">pack.feed</code><span id="b1266"> </span><span id="b1267">(</span><span id="b1268">or</span><span id="b1270"> </span><a href="JS-035.html" title="zip.deflate / zip.inflate"><span id="b1272">JS-035</span></a><span id="b1279">)</span><span id="b1280">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>Design decisions</h3>
+<h2 id="wip"><span id="b1283"><span id="b1287">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b1292"><span id="b1296">Design</span><span id="b1302"> </span><span id="b1303">decisions</span></span></h3>
 <ul>
-<li>Two-pass: pass 1 builds the received pack's sha→offset map (raw+OFS first), pass 2 resolves REF bases (map ∪ store) — the UNPK dep-order, in JS.</li>
-<li>Un-stub <code>keeper.js</code> REF_DELTA on the read path too (shared resolver helper).</li>
+<li id="b1313"><span id="b1317">Two</span><span id="b1320">-</span><span id="b1321">pass</span><span id="b1325">:</span><span id="b1326"> </span><span id="b1327">pass</span><span id="b1331"> </span><span id="b1332">1</span><span id="b1333"> </span><span id="b1334">builds</span><span id="b1340"> </span><span id="b1341">the</span><span id="b1344"> </span><span id="b1345">received</span><span id="b1353"> </span><span id="b1354">pack</span><span id="b1358">'</span><span id="b1359">s</span><span id="b1360"> </span><span id="b1361">sha→offset</span><span id="b1373"> </span><span id="b1374">map</span><span id="b1377"> </span><span id="b1378">(</span><span id="b1379">raw</span><span id="b1382">+</span><span id="b1383">OFS</span><span id="b1386"> </span><span id="b1387">first</span><span id="b1392">)</span><span id="b1393">,</span>
+<span id="b1399">pass</span><span id="b1403"> </span><span id="b1404">2</span><span id="b1405"> </span><span id="b1406">resolves</span><span id="b1414"> </span><span id="b1415">REF</span><span id="b1418"> </span><span id="b1419">bases</span><span id="b1424"> </span><span id="b1425">(</span><span id="b1426">map</span><span id="b1429"> </span><span id="b1430">∪</span><span id="b1433"> </span><span id="b1434">store</span><span id="b1439">)</span><span id="b1440"> </span><span id="b1441">—</span><span id="b1444"> </span><span id="b1445">the</span><span id="b1448"> </span><span id="b1449">UNPK</span><span id="b1453"> </span><span id="b1454">dep</span><span id="b1457">-</span><span id="b1458">order</span><span id="b1463">,</span><span id="b1464"> </span><span id="b1465">in</span><span id="b1467"> </span><span id="b1468">JS</span><span id="b1470">.</span></li>
+<li id="b1472"><span id="b1476">Un</span><span id="b1478">-</span><span id="b1479">stub</span><span id="b1483"> </span><code id="b1484">keeper.js</code><span id="b1495"> </span><span id="b1496">REF_DELTA</span><span id="b1505"> </span><span id="b1506">on</span><span id="b1508"> </span><span id="b1509">the</span><span id="b1512"> </span><span id="b1513">read</span><span id="b1517"> </span><span id="b1518">path</span><span id="b1522"> </span><span id="b1523">too</span><span id="b1526"> </span><span id="b1527">(</span><span id="b1528">shared</span><span id="b1534"> </span><span id="b1535">resolver</span><span id="b1543"> </span><span id="b1544">helper</span><span id="b1550">)</span><span id="b1551">.</span></li>
 </ul>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first <code>test/js/get/ingest.js</code> (helpers <code>test/js/lib/</code>): ingest a real thin pack (fixture from <code>test/get/</code>), then <code>keeper.getObject</code> each tip object re-hashes to its sha; OFS-only log re-<code>scan</code>s clean (no REF left).</li>
-<li class="open"><input type="checkbox" disabled> Implement <code>bin/lib/ingest.js</code> + REF resolver; reindex the shard.</li>
-</ul>
-<h3>Blockers</h3>
+<h3 id="todos"><span id="b1554"><span id="b1558">TODOs</span></span></h3>
 <ul>
-<li>← <a href="JS-035.html">JS-035</a> (deflate, re-encode robustness), <a href="JS-039.html">JS-039</a> (supplies real packs).</li>
+<li class="task" id="b1564"><input type="checkbox" disabled="" /> <span id="b1569">Repro</span><span id="b1574">-</span><span id="b1575">first</span><span id="b1580"> </span><code id="b1581">test/js/get/ingest.js</code><span id="b1604"> </span><span id="b1605">(</span><span id="b1606">helpers</span><span id="b1613"> </span><code id="b1614">test/js/lib/</code><span id="b1628">)</span><span id="b1629">:</span><span id="b1630"> </span><span id="b1631">ingest</span><span id="b1637"> </span><span id="b1638">a</span><span id="b1639"> </span><span id="b1640">real</span>
+<span id="b1649">  </span><span id="b1651">thin</span><span id="b1655"> </span><span id="b1656">pack</span><span id="b1660"> </span><span id="b1661">(</span><span id="b1662">fixture</span><span id="b1669"> </span><span id="b1670">from</span><span id="b1674"> </span><code id="b1675">test/get/</code><span id="b1686">)</span><span id="b1687">,</span><span id="b1688"> </span><span id="b1689">then</span><span id="b1693"> </span><code id="b1694">keeper.getObject</code><span id="b1712"> </span><span id="b1713">each</span><span id="b1717"> </span><span id="b1718">tip</span>
+<span id="b1726">  </span><span id="b1728">object</span><span id="b1734"> </span><span id="b1735">re</span><span id="b1737">-</span><span id="b1738">hashes</span><span id="b1744"> </span><span id="b1745">to</span><span id="b1747"> </span><span id="b1748">its</span><span id="b1751"> </span><span id="b1752">sha</span><span id="b1755">;</span><span id="b1756"> </span><span id="b1757">OFS</span><span id="b1760">-</span><span id="b1761">only</span><span id="b1765"> </span><span id="b1766">log</span><span id="b1769"> </span><span id="b1770">re</span><span id="b1772">-</span><code id="b1773">scan</code><span id="b1779">s</span><span id="b1780"> </span><span id="b1781">clean</span><span id="b1786"> </span><span id="b1787">(</span><span id="b1788">no</span><span id="b1790"> </span><span id="b1791">REF</span><span id="b1794"> </span><span id="b1795">left</span><span id="b1799">)</span><span id="b1800">.</span></li>
+<li class="task" id="b1802"><input type="checkbox" disabled="" /> <span id="b1807">Implement</span><span id="b1816"> </span><code id="b1817">bin/lib/ingest.js</code><span id="b1836"> </span><span id="b1837">+</span><span id="b1838"> </span><span id="b1839">REF</span><span id="b1842"> </span><span id="b1843">resolver</span><span id="b1851">;</span><span id="b1852"> </span><span id="b1853">reindex</span><span id="b1860"> </span><span id="b1861">the</span><span id="b1864"> </span><span id="b1865">shard</span><span id="b1870">.</span></li>
 </ul>
-<h2>Outcome</h2>
+<h3 id="blockers"><span id="b1873"><span id="b1877">Blockers</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li id="b1886"><span id="b1890">←</span><span id="b1893"> </span><a href="JS-035.html" title="zip.deflate / zip.inflate"><span id="b1895">JS-035</span></a><span id="b1902"> </span><span id="b1903">(</span><span id="b1904">deflate</span><span id="b1911">,</span><span id="b1912"> </span><span id="b1913">re</span><span id="b1915">-</span><span id="b1916">encode</span><span id="b1922"> </span><span id="b1923">robustness</span><span id="b1933">)</span><span id="b1934">,</span><span id="b1935"> </span><a href="JS-039.html" title="wire + pkt + transport"><span id="b1937">JS-039</span></a><span id="b1944"> </span><span id="b1945">(</span><span id="b1946">supplies</span><span id="b1954"> </span><span id="b1955">real</span><span id="b1959"> </span><span id="b1960">packs</span><span id="b1965">)</span><span id="b1966">.</span></li>
+</ul>
+<h2 id="outcome"><span id="b1969"><span id="b1973">Outcome</span></span></h2>
+<ul>
+<li id="b1981"><span id="b1985">(</span><span id="b1986">pending</span><span id="b1993">)</span></li>
 </ul>
 <div class="footer">
 ❧

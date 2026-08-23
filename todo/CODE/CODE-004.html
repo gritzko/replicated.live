@@ -5,52 +5,44 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CODE-004: keeper: one commit-parents/BFS/sha40 helper</title>
 <meta property="og:title" content="CODE-004: keeper: one commit-parents/BFS/sha40 helper">
-<meta property="og:description" content="keeper open-codes commit ancestry in many places: three near-identical BFS loops in KEEP.c (IsAncestor/SharesAncestor), the 40-hex→sha1 decode at 7+ sites (the file-static keephex40sha in WALK.c is unused elsewhere), and WIRECLI's own parent-walks. Extract a commit-parents collector, a bounded BFS-with-seen, and a shared sha40 decoder.">
+<meta property="og:description" content="keeper open-codes commit ancestry in many places: three near-identical BFS loops in KEEP.c (IsAncestor/SharesAncestor), the 40-hex→sha1 decode at 7+ sites (the file-static keep_hex40_sha in WALK.c is unused elsewhere), and WIRECLI's own parent-walks. Extract a commit-parents collector, a bounded BFS-with-seen, and a shared sha40 decoder.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-004.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>CODE-004: keeper: one commit-parents/BFS/sha40 helper</h1>
+<h1 id="code-004-keeper-one-commit-parentsbfssha40-helper"><span id="b0"><span id="b4">CODE-004</span><span id="b12">:</span><span id="b13"> </span><span id="b14">keeper</span><span id="b20">:</span><span id="b21"> </span><span id="b22">one</span><span id="b25"> </span><span id="b26">commit</span><span id="b32">-</span><span id="b33">parents</span><span id="b40">/</span><span id="b41">BFS</span><span id="b44">/</span><span id="b45">sha40</span><span id="b50"> </span><span id="b51">helper</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+<dl class="meta">
+<dt id="b58"><span>Now</span></dt>
+<dd><span id="b66">DONE</span></dd>
+</dl>
 </div>
-<p>
-keeper open-codes commit ancestry in many places: three near-identical BFS loops in KEEP.c (IsAncestor/SharesAncestor), the 40-hex→sha1 decode at 7+ sites (the file-static keep_hex40_sha in WALK.c is unused elsewhere), and WIRECLI's own parent-walks. Extract a commit-parents collector, a bounded BFS-with-seen, and a shared sha40 decoder.
-</p>
-<h2>Issues</h2>
-<p>
-Commit BFS, parent collection, and hex40→sha1 decode are pasted across keeper.
-</p>
+<p id="b73"><span>keeper</span><span id="b79"> </span><span id="b80">open</span><span id="b84">-</span><span id="b85">codes</span><span id="b90"> </span><span id="b91">commit</span><span id="b97"> </span><span id="b98">ancestry</span><span id="b106"> </span><span id="b107">in</span><span id="b109"> </span><span id="b110">many</span><span id="b114"> </span><span id="b115">places</span><span id="b121">:</span><span id="b122"> </span><span id="b123">three</span><span id="b128"> </span><span id="b129">near</span><span id="b133">-</span><span id="b134">identical</span><span id="b143"> </span><span id="b144">BFS</span><span id="b147"> </span><span id="b148">loops</span><span id="b153"> </span><span id="b154">in</span><span id="b156"> </span><span id="b157">KEEP.c</span><span id="b163"> </span><span id="b164">(</span><span id="b165">IsAncestor</span><span id="b175">/</span><span id="b176">SharesAncestor</span><span id="b190">)</span><span id="b191">,</span><span id="b192"> </span><span id="b193">the</span><span id="b196"> </span><span id="b197">40</span><span id="b199">-</span><span id="b200">hex→sha1</span><span id="b210"> </span><span id="b211">decode</span><span id="b217"> </span><span id="b218">at</span><span id="b220"> </span><span id="b221">7</span><span id="b222">+</span><span id="b223"> </span><span id="b224">sites</span><span id="b229"> </span><span id="b230">(</span><span id="b231">the</span><span id="b234"> </span><span id="b235">file</span><span id="b239">-</span><span id="b240">static</span><span id="b246"> </span><span id="b247">keep_hex40_sha</span><span id="b261"> </span><span id="b262">in</span><span id="b264"> </span><span id="b265">WALK.c</span><span id="b271"> </span><span id="b272">is</span><span id="b274"> </span><span id="b275">unused</span><span id="b281"> </span><span id="b282">elsewhere</span><span id="b291">)</span><span id="b292">,</span><span id="b293"> </span><span id="b294">and</span><span id="b297"> </span><span id="b298">WIRECLI</span><span id="b305">'</span><span id="b306">s</span><span id="b307"> </span><span id="b308">own</span><span id="b311"> </span><span id="b312">parent</span><span id="b318">-</span><span id="b319">walks</span><span id="b324">.</span><span id="b325"> </span><span id="b326">Extract</span><span id="b333"> </span><span id="b334">a</span><span id="b335"> </span><span id="b336">commit</span><span id="b342">-</span><span id="b343">parents</span><span id="b350"> </span><span id="b351">collector</span><span id="b360">,</span><span id="b361"> </span><span id="b362">a</span><span id="b363"> </span><span id="b364">bounded</span><span id="b371"> </span><span id="b372">BFS</span><span id="b375">-</span><span id="b376">with</span><span id="b380">-</span><span id="b381">seen</span><span id="b385">,</span><span id="b386"> </span><span id="b387">and</span><span id="b390"> </span><span id="b391">a</span><span id="b392"> </span><span id="b393">shared</span><span id="b399"> </span><span id="b400">sha40</span><span id="b405"> </span><span id="b406">decoder</span><span id="b413">.</span></p>
+<h2 id="issues"><span id="b416"><span id="b420">Issues</span></span></h2>
+<p id="b428"><span>Commit</span><span id="b434"> </span><span id="b435">BFS</span><span id="b438">,</span><span id="b439"> </span><span id="b440">parent</span><span id="b446"> </span><span id="b447">collection</span><span id="b457">,</span><span id="b458"> </span><span id="b459">and</span><span id="b462"> </span><span id="b463">hex40→sha1</span><span id="b475"> </span><span id="b476">decode</span><span id="b482"> </span><span id="b483">are</span><span id="b486"> </span><span id="b487">pasted</span><span id="b493"> </span><span id="b494">across</span><span id="b500"> </span><span id="b501">keeper</span><span id="b507">.</span></p>
 <ul>
-<li>Three BFS loops: KEEPIsAncestor + the two inlined in keep_shares_ancestor_inner (KEEP.c:1015-1160).</li>
-<li>hex40→sha1 'bail on fail' block at WALK.c:633, KEEP.c:1030/1107/1144, WIRECLI.c:1228/1273, KEEP.exe.c:946.</li>
-<li>wpush_walk_commit/wpush_collect_commits (WIRECLI.c:1219,1267) re-walk headers + decode the parent.</li>
+<li id="b510"><span id="b514">Three</span><span id="b519"> </span><span id="b520">BFS</span><span id="b523"> </span><span id="b524">loops</span><span id="b529">:</span><span id="b530"> </span><span id="b531">KEEPIsAncestor</span><span id="b545"> </span><span id="b546">+</span><span id="b547"> </span><span id="b548">the</span><span id="b551"> </span><span id="b552">two</span><span id="b555"> </span><span id="b556">inlined</span><span id="b563"> </span><span id="b564">in</span><span id="b566"> </span><span id="b567">keep_shares_ancestor_inner</span><span id="b593"> </span><span id="b594">(</span><span id="b595">KEEP.c:1015</span><span id="b606">-</span><span id="b607">1160</span><span id="b611">)</span><span id="b612">.</span></li>
+<li id="b614"><span id="b618">hex40→sha1</span><span id="b630"> </span><span id="b631">'</span><span id="b632">bail</span><span id="b636"> </span><span id="b637">on</span><span id="b639"> </span><span id="b640">fail</span><span id="b644">'</span><span id="b645"> </span><span id="b646">block</span><span id="b651"> </span><span id="b652">at</span><span id="b654"> </span><span id="b655">WALK.c:633</span><span id="b665">,</span><span id="b666"> </span><span id="b667">KEEP.c:1030</span><span id="b678">/</span><span id="b679">1107</span><span id="b683">/</span><span id="b684">1144</span><span id="b688">,</span><span id="b689"> </span><span id="b690">WIRECLI.c:1228</span><span id="b704">/</span><span id="b705">1273</span><span id="b709">,</span><span id="b710"> </span><span id="b711">KEEP.exe.c:946</span><span id="b725">.</span></li>
+<li id="b727"><span id="b731">wpush_walk_commit</span><span id="b748">/</span><span id="b749">wpush_collect_commits</span><span id="b770"> </span><span id="b771">(</span><span id="b772">WIRECLI.c:1219</span><span id="b786">,</span><span id="b787">1267</span><span id="b791">)</span><span id="b792"> </span><span id="b793">re</span><span id="b795">-</span><span id="b796">walk</span><span id="b800"> </span><span id="b801">headers</span><span id="b808"> </span><span id="b809">+</span><span id="b810"> </span><span id="b811">decode</span><span id="b817"> </span><span id="b818">the</span><span id="b821"> </span><span id="b822">parent</span><span id="b828">.</span></li>
 </ul>
-<h2>Blockers</h2>
-<p>
-None; keeper-internal. keep_hex40_sha already exists in WALK.c but is file-static and unused elsewhere.
-</p>
-<h2>Planned</h2>
-<p>
-Promote a sha40 decoder and a commit-parents helper; rebuild the walks on a BFS visitor.
-</p>
+<h2 id="blockers"><span id="b831"><span id="b835">Blockers</span></span></h2>
+<p id="b845"><span>None</span><span id="b849">;</span><span id="b850"> </span><span id="b851">keeper</span><span id="b857">-</span><span id="b858">internal</span><span id="b866">.</span><span id="b867"> </span><span id="b868">keep_hex40_sha</span><span id="b882"> </span><span id="b883">already</span><span id="b890"> </span><span id="b891">exists</span><span id="b897"> </span><span id="b898">in</span><span id="b900"> </span><span id="b901">WALK.c</span><span id="b907"> </span><span id="b908">but</span><span id="b911"> </span><span id="b912">is</span><span id="b914"> </span><span id="b915">file</span><span id="b919">-</span><span id="b920">static</span><span id="b926"> </span><span id="b927">and</span><span id="b930"> </span><span id="b931">unused</span><span id="b937"> </span><span id="b938">elsewhere</span><span id="b947">.</span></p>
+<h2 id="planned"><span id="b950"><span id="b954">Planned</span></span></h2>
+<p id="b963"><span>Promote</span><span id="b970"> </span><span id="b971">a</span><span id="b972"> </span><span id="b973">sha40</span><span id="b978"> </span><span id="b979">decoder</span><span id="b986"> </span><span id="b987">and</span><span id="b990"> </span><span id="b991">a</span><span id="b992"> </span><span id="b993">commit</span><span id="b999">-</span><span id="b1000">parents</span><span id="b1007"> </span><span id="b1008">helper</span><span id="b1014">;</span><span id="b1015"> </span><span id="b1016">rebuild</span><span id="b1023"> </span><span id="b1024">the</span><span id="b1027"> </span><span id="b1028">walks</span><span id="b1033"> </span><span id="b1034">on</span><span id="b1036"> </span><span id="b1037">a</span><span id="b1038"> </span><span id="b1039">BFS</span><span id="b1042"> </span><span id="b1043">visitor</span><span id="b1050">.</span></p>
 <ul>
-<li>Repro first (§17): ancestor / shares-ancestor table tests over a small fixture DAG.</li>
-<li>sha1FromHex40(u8csc,sha1*) shared in KEEP.h; replace all 7 sites.</li>
-<li>keep_commit_parents(commit)→parents; a BFS-with-seen helper; Is/SharesAncestor become visitors.</li>
+<li id="b1053"><span id="b1057">Repro</span><span id="b1062"> </span><span id="b1063">first</span><span id="b1068"> </span><span id="b1069">(</span><span id="b1070">§17</span><span id="b1074">)</span><span id="b1075">:</span><span id="b1076"> </span><span id="b1077">ancestor</span><span id="b1085"> </span><span id="b1086">/</span><span id="b1087"> </span><span id="b1088">shares</span><span id="b1094">-</span><span id="b1095">ancestor</span><span id="b1103"> </span><span id="b1104">table</span><span id="b1109"> </span><span id="b1110">tests</span><span id="b1115"> </span><span id="b1116">over</span><span id="b1120"> </span><span id="b1121">a</span><span id="b1122"> </span><span id="b1123">small</span><span id="b1128"> </span><span id="b1129">fixture</span><span id="b1136"> </span><span id="b1137">DAG</span><span id="b1140">.</span></li>
+<li id="b1142"><span id="b1146">sha1FromHex40</span><span id="b1159">(</span><span id="b1160">u8csc</span><span id="b1165">,</span><span id="b1166">sha1</span><span id="b1170">*</span><span id="b1171">)</span><span id="b1172"> </span><span id="b1173">shared</span><span id="b1179"> </span><span id="b1180">in</span><span id="b1182"> </span><span id="b1183">KEEP.h</span><span id="b1189">;</span><span id="b1190"> </span><span id="b1191">replace</span><span id="b1198"> </span><span id="b1199">all</span><span id="b1202"> </span><span id="b1203">7</span><span id="b1204"> </span><span id="b1205">sites</span><span id="b1210">.</span></li>
+<li id="b1212"><span id="b1216">keep_commit_parents</span><span id="b1235">(</span><span id="b1236">commit</span><span id="b1242">)</span><span id="b1243">→parents</span><span id="b1253">;</span><span id="b1254"> </span><span id="b1255">a</span><span id="b1256"> </span><span id="b1257">BFS</span><span id="b1260">-</span><span id="b1261">with</span><span id="b1265">-</span><span id="b1266">seen</span><span id="b1270"> </span><span id="b1271">helper</span><span id="b1277">;</span><span id="b1278"> </span><span id="b1279">Is</span><span id="b1281">/</span><span id="b1282">SharesAncestor</span><span id="b1296"> </span><span id="b1297">become</span><span id="b1303"> </span><span id="b1304">visitors</span><span id="b1312">.</span></li>
 </ul>
 <div class="footer">
 ❧

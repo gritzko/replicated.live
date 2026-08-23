@@ -7,66 +7,76 @@
 <meta property="og:title" content="JS-034: gap review — thin libdog/abc leaves only if needed">
 <meta property="og:description" content="After the JS modules land, decide whether any hot path warrants a thin libdog/abc native leaf. Part of JS-027. Method: Issues.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/JS/JS-034.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-034: gap review — thin libdog/abc leaves only if needed</h1>
+<h1 id="js-034-gap-review-—-thin-libdogabc-leaves-only-if-needed"><span id="b0"><span id="b4">JS-034</span><span id="b10">:</span><span id="b11"> </span><span id="b12">gap</span><span id="b15"> </span><span id="b16">review</span><span id="b22"> </span><span id="b23">—</span><span id="b26"> </span><span id="b27">thin</span><span id="b31"> </span><span id="b32">libdog</span><span id="b38">/</span><span id="b39">abc</span><span id="b42"> </span><span id="b43">leaves</span><span id="b49"> </span><span id="b50">only</span><span id="b54"> </span><span id="b55">if</span><span id="b57"> </span><span id="b58">needed</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+<dl class="meta">
+<dt id="b65"><span>Now</span></dt>
+<dd><span id="b73">DONE</span></dd>
+</dl>
 </div>
-<p>
-After the JS modules land, decide whether any hot path warrants a thin libdog/abc native leaf. Part of <a href="JS-027.html">JS-027</a>. Method: <a href="../../rule/Issues.html">Issues</a>.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b80"><span>After</span><span id="b85"> </span><span id="b86">the</span><span id="b89"> </span><span id="b90">JS</span><span id="b92"> </span><span id="b93">modules</span><span id="b100"> </span><span id="b101">land</span><span id="b105">,</span><span id="b106"> </span><span id="b107">decide</span><span id="b113"> </span><span id="b114">whether</span><span id="b121"> </span><span id="b122">any</span><span id="b125"> </span><span id="b126">hot</span><span id="b129"> </span><span id="b130">path</span><span id="b134"> </span><span id="b135">warrants</span><span id="b143"> </span><span id="b144">a</span><span id="b145"> </span><span id="b146">thin</span><span id="b150"> </span><span id="b151">libdog</span><span id="b157">/</span><span id="b158">abc</span>
+<span id="b162">native</span><span id="b168"> </span><span id="b169">leaf</span><span id="b173">.</span><span id="b174"> </span><span id="b175">Part</span><span id="b179"> </span><span id="b180">of</span><span id="b182"> </span><a href="JS-027.html" title="umbrella: reimplement be status as bin/status.js"><span id="b184">JS-027</span></a><span id="b191">.</span><span id="b192"> </span><span id="b193">Method</span><span id="b199">:</span><span id="b200"> </span><a href="../../rule/Issues.html" title="the parallel fix-and-land loop"><span id="b202">Issues</span></a><span id="b209">.</span></p>
+<h2 id="input"><span id="b212"><span id="b216">Input</span></span></h2>
+<h3 id="context"><span id="b223"><span id="b227">Context</span></span></h3>
 <ul>
-<li><a href="JS-027.html">JS-027</a> does <code>be status</code> in pure JS over existing bindings; some paths may be too slow/awkward. Concrete gaps surfaced during JS-030..033 (all worked around in JS, parity still byte-identical — these are convenience/perf leaves, libdog/abc):<ol>
-<li><code>io.stat</code> returns <code>{size,mode,kind}</code> only — NO <code>mtime</code>; classify spawned <code>stat -c '%Y %n'</code> (chunked ≤200 paths — a 2955-path argv overflowed <code>spawnFds</code> scratch). A thin <code>mtime</code> field on the stat leaf removes the spawn.</li>
-<li><code>io.stat</code> follows symlinks (FILEStat not FILELStat) + no <code>io.readlink</code> — a dangling symlink throws; symlink content unconfirmable. Want lstat + readlink leaves.</li>
-<li><code>pack.scan</code>/<code>pack.resolve</code> (PIDXScan/PACKResolveOfs) fail on REF_DELTA — fine for keeper (OFS-only per PackLog invariant), but foreign imports need a sha-base resolver.</li>
-<li><code>io.readdir</code> <code>hidden:false</code> drops dotfiles — needed <code>hidden:true</code> to scan a tracked <code>.gitignore</code> (only <code>.git</code>/<code>.be</code> should be meta-filtered).</li>
-<li>classify quirk: a stamped wt-only file reads <code>unk</code> where native shows <code>new</code> (<code>SNIFFAtKnown</code> <code>new</code> branch) — orthogonal; only bites be-redirect files inside a recursed sub.</li>
-<li>Optional: ULOG <code>has(ts)</code>/<code>row(i)</code> index, <code>git/IGNO</code> matcher, <code>HUNKu8sFeedRow</code> (ULOG→HUNK serialize) — currently done in pure JS, would be tidier as libdog leaves.</li>
+<li id="b235"><a href="JS-027.html" title="umbrella: reimplement be status as bin/status.js"><span id="b240">JS-027</span></a><span id="b247"> </span><span id="b248">does</span><span id="b252"> </span><code id="b253">be status</code><span id="b264"> </span><span id="b265">in</span><span id="b267"> </span><span id="b268">pure</span><span id="b272"> </span><span id="b273">JS</span><span id="b275"> </span><span id="b276">over</span><span id="b280"> </span><span id="b281">existing</span><span id="b289"> </span><span id="b290">bindings</span><span id="b298">;</span><span id="b299"> </span><span id="b300">some</span><span id="b304"> </span><span id="b305">paths</span><span id="b310"> </span><span id="b311">may</span><span id="b314"> </span><span id="b315">be</span>
+<span id="b322">too</span><span id="b325"> </span><span id="b326">slow</span><span id="b330">/</span><span id="b331">awkward</span><span id="b338">.</span><span id="b339"> </span><span id="b340">Concrete</span><span id="b348"> </span><span id="b349">gaps</span><span id="b353"> </span><span id="b354">surfaced</span><span id="b362"> </span><span id="b363">during</span><span id="b369"> </span><span id="b370">JS-030</span><span id="b376">.</span><span id="b377">.033</span><span id="b381"> </span><span id="b382">(</span><span id="b383">all</span><span id="b386"> </span><span id="b387">worked</span><span id="b393"> </span><span id="b394">around</span>
+<span id="b405">in</span><span id="b407"> </span><span id="b408">JS</span><span id="b410">,</span><span id="b411"> </span><span id="b412">parity</span><span id="b418"> </span><span id="b419">still</span><span id="b424"> </span><span id="b425">byte</span><span id="b429">-</span><span id="b430">identical</span><span id="b439"> </span><span id="b440">—</span><span id="b443"> </span><span id="b444">these</span><span id="b449"> </span><span id="b450">are</span><span id="b453"> </span><span id="b454">convenience</span><span id="b465">/</span><span id="b466">perf</span><span id="b470"> </span><span id="b471">leaves</span><span id="b477">,</span><span id="b478"> </span><span id="b479">libdog</span><span id="b485">/</span><span id="b486">abc</span><span id="b489">)</span><span id="b490">:</span>
+<ol>
+<li id="b492"><code id="b500">io.stat</code><span id="b509"> </span><span id="b510">returns</span><span id="b517"> </span><code id="b518">{size,mode,kind}</code><span id="b536"> </span><span id="b537">only</span><span id="b541"> </span><span id="b542">—</span><span id="b545"> </span><span id="b546">NO</span><span id="b548"> </span><code id="b549">mtime</code><span id="b556">;</span><span id="b557"> </span><span id="b558">classify</span><span id="b566"> </span><span id="b567">spawned</span>
+<code id="b583">stat -c '%Y %n'</code><span id="b600"> </span><span id="b601">(</span><span id="b602">chunked</span><span id="b609"> </span><span id="b610">≤200</span><span id="b616"> </span><span id="b617">paths</span><span id="b622"> </span><span id="b623">—</span><span id="b626"> </span><span id="b627">a</span><span id="b628"> </span><span id="b629">2955</span><span id="b633">-</span><span id="b634">path</span><span id="b638"> </span><span id="b639">argv</span><span id="b643"> </span><span id="b644">overflowed</span>
+<code id="b663">spawnFds</code><span id="b673"> </span><span id="b674">scratch</span><span id="b681">)</span><span id="b682">.</span><span id="b683"> </span><span id="b684">A</span><span id="b685"> </span><span id="b686">thin</span><span id="b690"> </span><code id="b691">mtime</code><span id="b698"> </span><span id="b699">field</span><span id="b704"> </span><span id="b705">on</span><span id="b707"> </span><span id="b708">the</span><span id="b711"> </span><span id="b712">stat</span><span id="b716"> </span><span id="b717">leaf</span><span id="b721"> </span><span id="b722">removes</span><span id="b729"> </span><span id="b730">the</span><span id="b733"> </span><span id="b734">spawn</span><span id="b739">.</span></li>
+<li id="b741"><code id="b749">io.stat</code><span id="b758"> </span><span id="b759">follows</span><span id="b766"> </span><span id="b767">symlinks</span><span id="b775"> </span><span id="b776">(</span><span id="b777">FILEStat</span><span id="b785"> </span><span id="b786">not</span><span id="b789"> </span><span id="b790">FILELStat</span><span id="b799">)</span><span id="b800"> </span><span id="b801">+</span><span id="b802"> </span><span id="b803">no</span><span id="b805"> </span><code id="b806">io.readlink</code><span id="b819"> </span><span id="b820">—</span><span id="b823"> </span><span id="b824">a</span>
+<span id="b834">dangling</span><span id="b842"> </span><span id="b843">symlink</span><span id="b850"> </span><span id="b851">throws</span><span id="b857">;</span><span id="b858"> </span><span id="b859">symlink</span><span id="b866"> </span><span id="b867">content</span><span id="b874"> </span><span id="b875">unconfirmable</span><span id="b888">.</span><span id="b889"> </span><span id="b890">Want</span><span id="b894"> </span><span id="b895">lstat</span><span id="b900"> </span><span id="b901">+</span><span id="b902"> </span><span id="b903">readlink</span><span id="b911"> </span><span id="b912">leaves</span><span id="b918">.</span></li>
+<li id="b920"><code id="b928">pack.scan</code><span id="b939">/</span><code id="b940">pack.resolve</code><span id="b954"> </span><span id="b955">(</span><span id="b956">PIDXScan</span><span id="b964">/</span><span id="b965">PACKResolveOfs</span><span id="b979">)</span><span id="b980"> </span><span id="b981">fail</span><span id="b985"> </span><span id="b986">on</span><span id="b988"> </span><span id="b989">REF_DELTA</span><span id="b998"> </span><span id="b999">—</span><span id="b1002"> </span><span id="b1003">fine</span>
+<span id="b1016">for</span><span id="b1019"> </span><span id="b1020">keeper</span><span id="b1026"> </span><span id="b1027">(</span><span id="b1028">OFS</span><span id="b1031">-</span><span id="b1032">only</span><span id="b1036"> </span><span id="b1037">per</span><span id="b1040"> </span><span id="b1041">PackLog</span><span id="b1048"> </span><span id="b1049">invariant</span><span id="b1058">)</span><span id="b1059">,</span><span id="b1060"> </span><span id="b1061">but</span><span id="b1064"> </span><span id="b1065">foreign</span><span id="b1072"> </span><span id="b1073">imports</span><span id="b1080"> </span><span id="b1081">need</span><span id="b1085"> </span><span id="b1086">a</span><span id="b1087"> </span><span id="b1088">sha</span><span id="b1091">-</span><span id="b1092">base</span><span id="b1096"> </span><span id="b1097">resolver</span><span id="b1105">.</span></li>
+<li id="b1107"><code id="b1115">io.readdir</code><span id="b1127"> </span><code id="b1128">hidden:false</code><span id="b1142"> </span><span id="b1143">drops</span><span id="b1148"> </span><span id="b1149">dotfiles</span><span id="b1157"> </span><span id="b1158">—</span><span id="b1161"> </span><span id="b1162">needed</span><span id="b1168"> </span><code id="b1169">hidden:true</code><span id="b1182"> </span><span id="b1183">to</span><span id="b1185"> </span><span id="b1186">scan</span><span id="b1190"> </span><span id="b1191">a</span>
+<span id="b1201">tracked</span><span id="b1208"> </span><code id="b1209">.gitignore</code><span id="b1221"> </span><span id="b1222">(</span><span id="b1223">only</span><span id="b1227"> </span><code id="b1228">.git</code><span id="b1234">/</span><code id="b1235">.be</code><span id="b1240"> </span><span id="b1241">should</span><span id="b1247"> </span><span id="b1248">be</span><span id="b1250"> </span><span id="b1251">meta</span><span id="b1255">-</span><span id="b1256">filtered</span><span id="b1264">)</span><span id="b1265">.</span></li>
+<li id="b1267"><span id="b1275">classify</span><span id="b1283"> </span><span id="b1284">quirk</span><span id="b1289">:</span><span id="b1290"> </span><span id="b1291">a</span><span id="b1292"> </span><span id="b1293">stamped</span><span id="b1300"> </span><span id="b1301">wt</span><span id="b1303">-</span><span id="b1304">only</span><span id="b1308"> </span><span id="b1309">file</span><span id="b1313"> </span><span id="b1314">reads</span><span id="b1319"> </span><code id="b1320">unk</code><span id="b1325"> </span><span id="b1326">where</span><span id="b1331"> </span><span id="b1332">native</span><span id="b1338"> </span><span id="b1339">shows</span><span id="b1344"> </span><code id="b1345">new</code>
+<span id="b1359">(</span><code id="b1360">SNIFFAtKnown</code><span id="b1374"> </span><code id="b1375">new</code><span id="b1380"> </span><span id="b1381">branch</span><span id="b1387">)</span><span id="b1388"> </span><span id="b1389">—</span><span id="b1392"> </span><span id="b1393">orthogonal</span><span id="b1403">;</span><span id="b1404"> </span><span id="b1405">only</span><span id="b1409"> </span><span id="b1410">bites</span><span id="b1415"> </span><span id="b1416">be</span><span id="b1418">-</span><span id="b1419">redirect</span><span id="b1427"> </span><span id="b1428">files</span><span id="b1433"> </span><span id="b1434">inside</span><span id="b1440"> </span><span id="b1441">a</span><span id="b1442"> </span><span id="b1443">recursed</span><span id="b1451"> </span><span id="b1452">sub</span><span id="b1455">.</span></li>
+<li id="b1457"><span id="b1465">Optional</span><span id="b1473">:</span><span id="b1474"> </span><span id="b1475">ULOG</span><span id="b1479"> </span><code id="b1480">has(ts)</code><span id="b1489">/</span><code id="b1490">row(i)</code><span id="b1498"> </span><span id="b1499">index</span><span id="b1504">,</span><span id="b1505"> </span><code id="b1506">git/IGNO</code><span id="b1516"> </span><span id="b1517">matcher</span><span id="b1524">,</span><span id="b1525"> </span><code id="b1526">HUNKu8sFeedRow</code>
+<span id="b1551">(</span><span id="b1552">ULOG→HUNK</span><span id="b1563"> </span><span id="b1564">serialize</span><span id="b1573">)</span><span id="b1574"> </span><span id="b1575">—</span><span id="b1578"> </span><span id="b1579">currently</span><span id="b1588"> </span><span id="b1589">done</span><span id="b1593"> </span><span id="b1594">in</span><span id="b1596"> </span><span id="b1597">pure</span><span id="b1601"> </span><span id="b1602">JS</span><span id="b1604">,</span><span id="b1605"> </span><span id="b1606">would</span><span id="b1611"> </span><span id="b1612">be</span><span id="b1614"> </span><span id="b1615">tidier</span><span id="b1621"> </span><span id="b1622">as</span><span id="b1624"> </span><span id="b1625">libdog</span><span id="b1631"> </span><span id="b1632">leaves</span><span id="b1638">.</span></li>
 </ol>
 </li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b1641"><span id="b1645">Goals</span></span></h3>
 <ul>
-<li>Measure JS-029/031/033 hot paths; per candidate decide pure-JS vs a thin <code>dog/</code> or <code>abc/</code> leaf (never a dog). File a focused ticket per accepted leaf.</li>
+<li id="b1651"><span id="b1655">Measure</span><span id="b1662"> </span><span id="b1663">JS-029</span><span id="b1669">/</span><span id="b1670">031</span><span id="b1673">/</span><span id="b1674">033</span><span id="b1677"> </span><span id="b1678">hot</span><span id="b1681"> </span><span id="b1682">paths</span><span id="b1687">;</span><span id="b1688"> </span><span id="b1689">per</span><span id="b1692"> </span><span id="b1693">candidate</span><span id="b1702"> </span><span id="b1703">decide</span><span id="b1709"> </span><span id="b1710">pure</span><span id="b1714">-</span><span id="b1715">JS</span><span id="b1717"> </span><span id="b1718">vs</span><span id="b1720"> </span><span id="b1721">a</span><span id="b1722"> </span><span id="b1723">thin</span><span id="b1727"> </span><code id="b1728">dog/</code>
+<span id="b1739">or</span><span id="b1741"> </span><code id="b1742">abc/</code><span id="b1748"> </span><span id="b1749">leaf</span><span id="b1753"> </span><span id="b1754">(</span><span id="b1755">never</span><span id="b1760"> </span><span id="b1761">a</span><span id="b1762"> </span><span id="b1763">dog</span><span id="b1766">)</span><span id="b1767">.</span><span id="b1768"> </span><span id="b1769">File</span><span id="b1773"> </span><span id="b1774">a</span><span id="b1775"> </span><span id="b1776">focused</span><span id="b1783"> </span><span id="b1784">ticket</span><span id="b1790"> </span><span id="b1791">per</span><span id="b1794"> </span><span id="b1795">accepted</span><span id="b1803"> </span><span id="b1804">leaf</span><span id="b1808">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b1811"><span id="b1815">Constraints</span></span></h3>
 <ul>
-<li>Any new C is a libdog/abc leaf only. Bias to pure JS unless a measured win.</li>
+<li id="b1827"><span id="b1831">Any</span><span id="b1834"> </span><span id="b1835">new</span><span id="b1838"> </span><span id="b1839">C</span><span id="b1840"> </span><span id="b1841">is</span><span id="b1843"> </span><span id="b1844">a</span><span id="b1845"> </span><span id="b1846">libdog</span><span id="b1852">/</span><span id="b1853">abc</span><span id="b1856"> </span><span id="b1857">leaf</span><span id="b1861"> </span><span id="b1862">only</span><span id="b1866">.</span><span id="b1867"> </span><span id="b1868">Bias</span><span id="b1872"> </span><span id="b1873">to</span><span id="b1875"> </span><span id="b1876">pure</span><span id="b1880"> </span><span id="b1881">JS</span><span id="b1883"> </span><span id="b1884">unless</span><span id="b1890"> </span><span id="b1891">a</span><span id="b1892"> </span><span id="b1893">measured</span><span id="b1901"> </span><span id="b1902">win</span><span id="b1905">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>Design decisions</h3>
+<h2 id="wip"><span id="b1908"><span id="b1912">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b1917"><span id="b1921">Design</span><span id="b1927"> </span><span id="b1928">decisions</span></span></h3>
 <ul>
-<li>(open) decide after parity lands; perf oracle = native <code>be status</code> timing.</li>
+<li id="b1938"><span id="b1942">(</span><span id="b1943">open</span><span id="b1947">)</span><span id="b1948"> </span><span id="b1949">decide</span><span id="b1955"> </span><span id="b1956">after</span><span id="b1961"> </span><span id="b1962">parity</span><span id="b1968"> </span><span id="b1969">lands</span><span id="b1974">;</span><span id="b1975"> </span><span id="b1976">perf</span><span id="b1980"> </span><span id="b1981">oracle</span><span id="b1987"> </span><span id="b1988">=</span><span id="b1989"> </span><span id="b1990">native</span><span id="b1996"> </span><code id="b1997">be status</code><span id="b2008"> </span><span id="b2009">timing</span><span id="b2015">.</span></li>
 </ul>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> Profile; list accepted leaves with rationale; file per-leaf tickets.</li>
-</ul>
-<h3>Blockers</h3>
+<h3 id="todos"><span id="b2018"><span id="b2022">TODOs</span></span></h3>
 <ul>
-<li>← <a href="JS-031.html">JS-031</a> (parity first).</li>
+<li class="task" id="b2028"><input type="checkbox" disabled="" /> <span id="b2033">Profile</span><span id="b2040">;</span><span id="b2041"> </span><span id="b2042">list</span><span id="b2046"> </span><span id="b2047">accepted</span><span id="b2055"> </span><span id="b2056">leaves</span><span id="b2062"> </span><span id="b2063">with</span><span id="b2067"> </span><span id="b2068">rationale</span><span id="b2077">;</span><span id="b2078"> </span><span id="b2079">file</span><span id="b2083"> </span><span id="b2084">per</span><span id="b2087">-</span><span id="b2088">leaf</span><span id="b2092"> </span><span id="b2093">tickets</span><span id="b2100">.</span></li>
 </ul>
-<h2>Outcome</h2>
+<h3 id="blockers"><span id="b2103"><span id="b2107">Blockers</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li id="b2116"><span id="b2120">←</span><span id="b2123"> </span><a href="JS-031.html" title="classify + ignore + status.js"><span id="b2125">JS-031</span></a><span id="b2132"> </span><span id="b2133">(</span><span id="b2134">parity</span><span id="b2140"> </span><span id="b2141">first</span><span id="b2146">)</span><span id="b2147">.</span></li>
+</ul>
+<h2 id="outcome"><span id="b2150"><span id="b2154">Outcome</span></span></h2>
+<ul>
+<li id="b2162"><span id="b2166">(</span><span id="b2167">pending</span><span id="b2174">)</span></li>
 </ul>
 <div class="footer">
 ❧

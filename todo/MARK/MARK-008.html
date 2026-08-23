@@ -5,63 +5,62 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MARK-008: CRLF input leaks \r into the rendered HTML and into budget counts</title>
 <meta property="og:title" content="MARK-008: CRLF input leaks \r into the rendered HTML and into budget counts">
-<meta property="og:description" content="A CRLF-file renders carriage returns verbatim (&lt;h1&gt;Title\r&lt;/h1&gt;, &lt;li&gt;item one\r&lt;/li&gt;): markblank tolerates \r but line slicing never sheds it, and the budget checker counts it as a content codepoint. Any DOS-edited or windows-contributed page renders dirty and can breach --strict one char early. From the 2026-07-07 mark/ diagnostic review, orchestrator-verified by probe (2 raw \r in the rendered body). Method Issues.">
+<meta property="og:description" content="A CRLF-file renders carriage returns verbatim (&lt;h1&gt;Title\r&lt;/h1&gt;, &lt;li&gt;item one\r&lt;/li&gt;): mark_blank tolerates \r but line slicing never sheds it, and the budget checker counts it as a content codepoint. Any DOS-edited or windows-contributed page renders dirty and can breach --strict one char early. From the 2026-07-07 mark/ diagnostic review, orchestrator-verified by probe (2 raw \r in the rendered body). Method Issues.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/MARK/MARK-008.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>MARK-008: CRLF input leaks <code>\r</code> into the rendered HTML and into budget counts</h1>
+<h1 id="mark-008-crlf-input-leaks-r-into-the-rendered-html-and-into-budget-counts"><span id="b0"><span id="b4">MARK-008</span><span id="b12">:</span><span id="b13"> </span><span id="b14">CRLF</span><span id="b18"> </span><span id="b19">input</span><span id="b24"> </span><span id="b25">leaks</span><span id="b30"> </span><code id="b31">\r</code><span id="b35"> </span><span id="b36">into</span><span id="b40"> </span><span id="b41">the</span><span id="b44"> </span><span id="b45">rendered</span><span id="b53"> </span><span id="b54">HTML</span><span id="b58"> </span><span id="b59">and</span><span id="b62"> </span><span id="b63">into</span><span id="b67"> </span><span id="b68">budget</span><span id="b74"> </span><span id="b75">counts</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
-<dl class="meta"><dt>Sev:</dt><dd>LOW</dd></dl>
+<dl class="meta">
+<dt id="b82"><span>Now</span></dt>
+<dd><span id="b90">OPEN</span></dd>
+<dt id="b96"><span>Sev</span></dt>
+<dd><span id="b104">LOW</span></dd>
+</dl>
 </div>
-<p>
-A CRLF-file renders carriage returns verbatim (<code>&lt;h1&gt;Title\r&lt;/h1&gt;</code>, <code>&lt;li&gt;item one\r&lt;/li&gt;</code>): <code>mark_blank</code> tolerates <code>\r</code> but line slicing never sheds it, and the budget checker counts it as a content codepoint. Any DOS-edited or windows-contributed page renders dirty and can breach <code>--strict</code> one char early. From the 2026-07-07 mark/ diagnostic review, orchestrator-verified by probe (2 raw <code>\r</code> in the rendered body). Method <a href="../../rule/Issues.html">Issues</a>.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b110"><span>A</span><span id="b111"> </span><span id="b112">CRLF</span><span id="b116">-</span><span id="b117">file</span><span id="b121"> </span><span id="b122">renders</span><span id="b129"> </span><span id="b130">carriage</span><span id="b138"> </span><span id="b139">returns</span><span id="b146"> </span><span id="b147">verbatim</span><span id="b155"> </span><span id="b156">(</span><code id="b157">&lt;h1&gt;Title\r&lt;/h1&gt;</code><span id="b175">,</span><span id="b176"> </span><code id="b177">&lt;li&gt;item one\r&lt;/li&gt;</code><span id="b198">)</span><span id="b199">:</span><span id="b200"> </span><code id="b201">mark_blank</code><span id="b213"> </span><span id="b214">tolerates</span><span id="b223"> </span><code id="b224">\r</code><span id="b228"> </span><span id="b229">but</span><span id="b232"> </span><span id="b233">line</span><span id="b237"> </span><span id="b238">slicing</span><span id="b245"> </span><span id="b246">never</span><span id="b251"> </span><span id="b252">sheds</span><span id="b257"> </span><span id="b258">it</span><span id="b260">,</span><span id="b261"> </span><span id="b262">and</span><span id="b265"> </span><span id="b266">the</span><span id="b269"> </span><span id="b270">budget</span><span id="b276"> </span><span id="b277">checker</span><span id="b284"> </span><span id="b285">counts</span><span id="b291"> </span><span id="b292">it</span><span id="b294"> </span><span id="b295">as</span><span id="b297"> </span><span id="b298">a</span><span id="b299"> </span><span id="b300">content</span><span id="b307"> </span><span id="b308">codepoint</span><span id="b317">.</span><span id="b318"> </span><span id="b319">Any</span><span id="b322"> </span><span id="b323">DOS</span><span id="b326">-</span><span id="b327">edited</span><span id="b333"> </span><span id="b334">or</span><span id="b336"> </span><span id="b337">windows</span><span id="b344">-</span><span id="b345">contributed</span><span id="b356"> </span><span id="b357">page</span><span id="b361"> </span><span id="b362">renders</span><span id="b369"> </span><span id="b370">dirty</span><span id="b375"> </span><span id="b376">and</span><span id="b379"> </span><span id="b380">can</span><span id="b383"> </span><span id="b384">breach</span><span id="b390"> </span><code id="b391">--strict</code><span id="b401"> </span><span id="b402">one</span><span id="b405"> </span><span id="b406">char</span><span id="b410"> </span><span id="b411">early</span><span id="b416">.</span><span id="b417"> </span><span id="b418">From</span><span id="b422"> </span><span id="b423">the</span><span id="b426"> </span><span id="b427">2026</span><span id="b431">-</span><span id="b432">07</span><span id="b434">-</span><span id="b435">07</span><span id="b437"> </span><span id="b438">mark</span><span id="b442">/</span><span id="b443"> </span><span id="b444">diagnostic</span><span id="b454"> </span><span id="b455">review</span><span id="b461">,</span><span id="b462"> </span><span id="b463">orchestrator</span><span id="b475">-</span><span id="b476">verified</span><span id="b484"> </span><span id="b485">by</span><span id="b487"> </span><span id="b488">probe</span><span id="b493"> </span><span id="b494">(</span><span id="b495">2</span><span id="b496"> </span><span id="b497">raw</span><span id="b500"> </span><code id="b501">\r</code><span id="b505"> </span><span id="b506">in</span><span id="b508"> </span><span id="b509">the</span><span id="b512"> </span><span id="b513">rendered</span><span id="b521"> </span><span id="b522">body</span><span id="b526">)</span><span id="b527">.</span><span id="b528"> </span><span id="b529">Method</span><span id="b535"> </span><a href="../../rule/Issues.html" title="the parallel fix-and-land loop"><span id="b537">Issues</span></a><span id="b544">.</span></p>
+<h2 id="input"><span id="b547"><span id="b551">Input</span></span></h2>
+<h3 id="context"><span id="b558"><span id="b562">Context</span></span></h3>
 <ul>
-<li>Probe (2026-07-07): <code>#   Title\r\n\r\n -  item one\r\n</code> → <code>grep -c '\r'</code> finds 2 in the HTML (fresh build).</li>
-<li>One shed point (end-of-line classification) fixes render + budgets together.</li>
+<li id="b570"><span id="b574">Probe</span><span id="b579"> </span><span id="b580">(</span><span id="b581">2026</span><span id="b585">-</span><span id="b586">07</span><span id="b588">-</span><span id="b589">07</span><span id="b591">)</span><span id="b592">:</span><span id="b593"> </span><code id="b594">#   Title\r\n\r\n -  item one\r\n</code><span id="b629"> </span><span id="b630">→</span><span id="b633"> </span><code id="b634">grep -c '\r'</code><span id="b648"> </span><span id="b649">finds</span><span id="b654"> </span><span id="b655">2</span><span id="b656"> </span><span id="b657">in</span><span id="b659"> </span><span id="b660">the</span><span id="b663"> </span><span id="b664">HTML</span><span id="b668"> </span><span id="b669">(</span><span id="b670">fresh</span><span id="b675"> </span><span id="b676">build</span><span id="b681">)</span><span id="b682">.</span></li>
+<li id="b684"><span id="b688">One</span><span id="b691"> </span><span id="b692">shed</span><span id="b696"> </span><span id="b697">point</span><span id="b702"> </span><span id="b703">(</span><span id="b704">end</span><span id="b707">-</span><span id="b708">of</span><span id="b710">-</span><span id="b711">line</span><span id="b715"> </span><span id="b716">classification</span><span id="b730">)</span><span id="b731"> </span><span id="b732">fixes</span><span id="b737"> </span><span id="b738">render</span><span id="b744"> </span><span id="b745">+</span><span id="b746"> </span><span id="b747">budgets</span><span id="b754"> </span><span id="b755">together</span><span id="b763">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b766"><span id="b770">Goals</span></span></h3>
 <ul>
-<li>A trailing <code>\r</code> is shed at line slicing — output byte-identical to the LF twin, budgets count content only.</li>
+<li id="b776"><span id="b780">A</span><span id="b781"> </span><span id="b782">trailing</span><span id="b790"> </span><code id="b791">\r</code><span id="b795"> </span><span id="b796">is</span><span id="b798"> </span><span id="b799">shed</span><span id="b803"> </span><span id="b804">at</span><span id="b806"> </span><span id="b807">line</span><span id="b811"> </span><span id="b812">slicing</span><span id="b819"> </span><span id="b820">—</span><span id="b823"> </span><span id="b824">output</span><span id="b830"> </span><span id="b831">byte</span><span id="b835">-</span><span id="b836">identical</span><span id="b845"> </span><span id="b846">to</span><span id="b848"> </span><span id="b849">the</span><span id="b852"> </span><span id="b853">LF</span><span id="b855"> </span><span id="b856">twin</span><span id="b860">,</span><span id="b861"> </span><span id="b862">budgets</span><span id="b869"> </span><span id="b870">count</span><span id="b875"> </span><span id="b876">content</span><span id="b883"> </span><span id="b884">only</span><span id="b888">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b891"><span id="b895">Constraints</span></span></h3>
 <ul>
-<li>Repro-first (CRLF twin of an LF case, assert identical HTML); shed in the lexer/line-cut layer, not per-emitter.</li>
+<li id="b907"><span id="b911">Repro</span><span id="b916">-</span><span id="b917">first</span><span id="b922"> </span><span id="b923">(</span><span id="b924">CRLF</span><span id="b928"> </span><span id="b929">twin</span><span id="b933"> </span><span id="b934">of</span><span id="b936"> </span><span id="b937">an</span><span id="b939"> </span><span id="b940">LF</span><span id="b942"> </span><span id="b943">case</span><span id="b947">,</span><span id="b948"> </span><span id="b949">assert</span><span id="b955"> </span><span id="b956">identical</span><span id="b965"> </span><span id="b966">HTML</span><span id="b970">)</span><span id="b971">;</span><span id="b972"> </span><span id="b973">shed</span><span id="b977"> </span><span id="b978">in</span><span id="b980"> </span><span id="b981">the</span><span id="b984"> </span><span id="b985">lexer</span><span id="b990">/</span><span id="b991">line</span><span id="b995">-</span><span id="b996">cut</span><span id="b999"> </span><span id="b1000">layer</span><span id="b1005">,</span><span id="b1006"> </span><span id="b1007">not</span><span id="b1010"> </span><span id="b1011">per</span><span id="b1014">-</span><span id="b1015">emitter</span><span id="b1022">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>Design decisions</h3>
+<h2 id="wip"><span id="b1025"><span id="b1029">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b1034"><span id="b1038">Design</span><span id="b1044"> </span><span id="b1045">decisions</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li id="b1055"><span id="b1059">(</span><span id="b1060">pending</span><span id="b1067">)</span></li>
 </ul>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro: CRLF twin renders byte-identical to LF.</li>
-<li class="open"><input type="checkbox" disabled> Shed <code>\r</code> at the line boundary; suite green.</li>
-</ul>
-<h3>Blockers and bummers</h3>
+<h3 id="todos"><span id="b1070"><span id="b1074">TODOs</span></span></h3>
 <ul>
-<li>None known.</li>
+<li class="task" id="b1080"><input type="checkbox" disabled="" /> <span id="b1085">Repro</span><span id="b1090">:</span><span id="b1091"> </span><span id="b1092">CRLF</span><span id="b1096"> </span><span id="b1097">twin</span><span id="b1101"> </span><span id="b1102">renders</span><span id="b1109"> </span><span id="b1110">byte</span><span id="b1114">-</span><span id="b1115">identical</span><span id="b1124"> </span><span id="b1125">to</span><span id="b1127"> </span><span id="b1128">LF</span><span id="b1130">.</span></li>
+<li class="task" id="b1132"><input type="checkbox" disabled="" /> <span id="b1137">Shed</span><span id="b1141"> </span><code id="b1142">\r</code><span id="b1146"> </span><span id="b1147">at</span><span id="b1149"> </span><span id="b1150">the</span><span id="b1153"> </span><span id="b1154">line</span><span id="b1158"> </span><span id="b1159">boundary</span><span id="b1167">;</span><span id="b1168"> </span><span id="b1169">suite</span><span id="b1174"> </span><span id="b1175">green</span><span id="b1180">.</span></li>
 </ul>
-<h2>Outcome</h2>
+<h3 id="blockers-and-bummers"><span id="b1183"><span id="b1187">Blockers</span><span id="b1195"> </span><span id="b1196">and</span><span id="b1199"> </span><span id="b1200">bummers</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li id="b1208"><span id="b1212">None</span><span id="b1216"> </span><span id="b1217">known</span><span id="b1222">.</span></li>
+</ul>
+<h2 id="outcome"><span id="b1225"><span id="b1229">Outcome</span></span></h2>
+<ul>
+<li id="b1237"><span id="b1241">(</span><span id="b1242">pending</span><span id="b1249">)</span></li>
 </ul>
 <div class="footer">
 ❧

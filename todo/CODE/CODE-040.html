@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-040: weave.js — group mask lies above 31 groups, null side throws</title>
+<meta property="og:title" content="CODE-040: weave.js — group mask lies above 31 groups, null side throws">
+<meta property="og:description" content="index/weave.js:64 spells spine = ng &gt;= 32 ? 0xFFFFFFFF : ((1 &lt;&lt; ng) - 1), but the mask loop at :72 uses 1 &lt;&lt; g, which JS shifts mod 32 — at 32+ groups every mask is wrong and no run ever matches the spine, so the guard reads as handling a case it breaks. weave.js:134 null-guards base but not ours/theirs, and bytesEq dereferences .length at once — a null side throws where the contract is &quot;null means unweavable, the caller falls back loudly&quot;. Callers pass 2 groups today. Found in the 2026-08-21 review.">
+<meta property="og:type" content="article">
+<link rel="stylesheet" href="/blob/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/blob/js/asciicast.js"></script>
+<a class="banner" href="/">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1 id="code-040-weavejs-—-group-mask-lies-above-31-groups-null-side-throws"><span id="b0"><span id="b4">CODE-040</span><span id="b12">:</span><span id="b13"> </span><span id="b14">weave.js</span><span id="b22"> </span><span id="b23">—</span><span id="b26"> </span><span id="b27">group</span><span id="b32"> </span><span id="b33">mask</span><span id="b37"> </span><span id="b38">lies</span><span id="b42"> </span><span id="b43">above</span><span id="b48"> </span><span id="b49">31</span><span id="b51"> </span><span id="b52">groups</span><span id="b58">,</span><span id="b59"> </span><span id="b60">null</span><span id="b64"> </span><span id="b65">side</span><span id="b69"> </span><span id="b70">throws</span></span></h1>
+<dl class="meta">
+<dt id="b78"><span>Now</span></dt>
+<dd><span id="b82">DONE</span></dd>
+<dt id="b88"><span>Sev</span></dt>
+<dd><span id="b92">LOW</span></dd>
+<dt id="b97"><span>Rep</span></dt>
+<dd><span id="b101">///bee</span></dd>
+<dt id="b109"><span>Ask</span></dt>
+<dd><span id="b113">gritzko</span></dd>
+<dt id="b122"><span>Rev</span></dt>
+<dd><span id="b126">///bee#184fddf</span></dd>
+</dl>
+<h2 id="input"><span id="b143"><span id="b147">Input</span></span></h2>
+<h3 id="context"><span id="b154"><span id="b158">Context</span></span></h3>
+<p id="b166"><span>index/weave.js:64</span><span id="b183"> </span><span id="b184">spells</span><span id="b190"> </span><code id="b191">spine = ng &gt;= 32 ? 0xFFFFFFFF : ((1 &lt;&lt; ng) - 1)</code><span id="b240">,</span>
+<span id="b242">but</span><span id="b245"> </span><span id="b246">the</span><span id="b249"> </span><span id="b250">mask</span><span id="b254"> </span><span id="b255">loop</span><span id="b259"> </span><span id="b260">at</span><span id="b262"> </span><span id="b263">:</span><span id="b264">72</span><span id="b266"> </span><span id="b267">uses</span><span id="b271"> </span><code id="b272">1 &lt;&lt; g</code><span id="b280">,</span><span id="b281"> </span><span id="b282">which</span><span id="b287"> </span><span id="b288">JS</span><span id="b290"> </span><span id="b291">shifts</span><span id="b297"> </span><span id="b298">mod</span><span id="b301"> </span><span id="b302">32</span><span id="b304"> </span><span id="b305">—</span><span id="b308"> </span><span id="b309">at</span><span id="b311"> </span><span id="b312">32</span><span id="b314">+</span>
+<span id="b316">groups</span><span id="b322"> </span><span id="b323">every</span><span id="b328"> </span><span id="b329">mask</span><span id="b333"> </span><span id="b334">is</span><span id="b336"> </span><span id="b337">wrong</span><span id="b342"> </span><span id="b343">and</span><span id="b346"> </span><span id="b347">no</span><span id="b349"> </span><span id="b350">run</span><span id="b353"> </span><span id="b354">ever</span><span id="b358"> </span><span id="b359">matches</span><span id="b366"> </span><span id="b367">the</span><span id="b370"> </span><span id="b371">spine</span><span id="b376">,</span><span id="b377"> </span><span id="b378">so</span><span id="b380"> </span><span id="b381">the</span><span id="b384"> </span><span id="b385">guard</span>
+<span id="b391">reads</span><span id="b396"> </span><span id="b397">as</span><span id="b399"> </span><span id="b400">handling</span><span id="b408"> </span><span id="b409">a</span><span id="b410"> </span><span id="b411">case</span><span id="b415"> </span><span id="b416">it</span><span id="b418"> </span><span id="b419">breaks</span><span id="b425">.</span><span id="b426"> </span><span id="b427">weave.js:134</span><span id="b439"> </span><span id="b440">null</span><span id="b444">-</span><span id="b445">guards</span><span id="b451"> </span><code id="b452">base</code><span id="b458"> </span><span id="b459">but</span><span id="b462"> </span><span id="b463">not</span>
+<code id="b467">ours</code><span id="b473">/</span><code id="b474">theirs</code><span id="b482">,</span><span id="b483"> </span><span id="b484">and</span><span id="b487"> </span><code id="b488">bytesEq</code><span id="b497"> </span><span id="b498">dereferences</span><span id="b510"> </span><code id="b511">.length</code><span id="b520"> </span><span id="b521">at</span><span id="b523"> </span><span id="b524">once</span><span id="b528"> </span><span id="b529">—</span><span id="b532"> </span><span id="b533">a</span><span id="b534"> </span><span id="b535">null</span><span id="b539"> </span><span id="b540">side</span>
+<span id="b545">throws</span><span id="b551"> </span><span id="b552">where</span><span id="b557"> </span><span id="b558">the</span><span id="b561"> </span><span id="b562">contract</span><span id="b570"> </span><span id="b571">is</span><span id="b573"> </span><span id="b574">&quot;</span><span id="b575">null</span><span id="b579"> </span><span id="b580">means</span><span id="b585"> </span><span id="b586">unweavable</span><span id="b596">,</span><span id="b597"> </span><span id="b598">the</span><span id="b601"> </span><span id="b602">caller</span><span id="b608"> </span><span id="b609">falls</span><span id="b614"> </span><span id="b615">back</span>
+<span id="b620">loudly</span><span id="b626">&quot;</span><span id="b627">.</span><span id="b628"> </span><span id="b629">Callers</span><span id="b636"> </span><span id="b637">pass</span><span id="b641"> </span><span id="b642">2</span><span id="b643"> </span><span id="b644">groups</span><span id="b650"> </span><span id="b651">today</span><span id="b656">.</span><span id="b657"> </span><span id="b658">Found</span><span id="b663"> </span><span id="b664">in</span><span id="b666"> </span><span id="b667">the</span><span id="b670"> </span><span id="b671">2026</span><span id="b675">-</span><span id="b676">08</span><span id="b678">-</span><span id="b679">21</span><span id="b681"> </span><span id="b682">review</span><span id="b688">.</span></p>
+<h3 id="goals"><span id="b691"><span id="b695">Goals</span></span></h3>
+<p id="b701"><span>Fail</span><span id="b705"> </span><span id="b706">loudly</span><span id="b712"> </span><span id="b713">at</span><span id="b715"> </span><span id="b716">ng</span><span id="b718"> </span><span id="b719">&gt;</span><span id="b720"> </span><span id="b721">31</span><span id="b723"> </span><span id="b724">(</span><span id="b725">or</span><span id="b727"> </span><span id="b728">go</span><span id="b730"> </span><span id="b731">BigInt</span><span id="b737">)</span><span id="b738"> </span><span id="b739">instead</span><span id="b746"> </span><span id="b747">of</span><span id="b749"> </span><span id="b750">mis</span><span id="b753">-</span><span id="b754">masking</span><span id="b761">;</span><span id="b762"> </span><span id="b763">symmetric</span><span id="b772"> </span><span id="b773">null</span>
+<span id="b778">guards</span><span id="b784"> </span><span id="b785">on</span><span id="b787"> </span><span id="b788">all</span><span id="b791"> </span><span id="b792">three</span><span id="b797"> </span><span id="b798">sides</span><span id="b803">;</span><span id="b804"> </span><span id="b805">unit</span><span id="b809"> </span><span id="b810">repro</span><span id="b815"> </span><span id="b816">for</span><span id="b819"> </span><span id="b820">both</span><span id="b824">.</span></p>
+<h2 id="wip"><span id="b827"><span id="b831">WIP</span></span></h2>
+<h3 id="todos"><span id="b836"><span id="b840">TODOs</span></span></h3>
+<ul>
+<li id="b846"><span id="b850">[ ]</span><span id="b853"> </span><span id="b854">unit</span><span id="b858">:</span><span id="b859"> </span><span id="b860">32</span><span id="b862">-</span><span id="b863">group</span><span id="b868"> </span><span id="b869">weave</span><span id="b874"> </span><span id="b875">refuses</span><span id="b882"> </span><span id="b883">rather</span><span id="b889"> </span><span id="b890">than</span><span id="b894"> </span><span id="b895">mis</span><span id="b898">-</span><span id="b899">merges</span></li>
+<li id="b906"><span id="b910">[ ]</span><span id="b913"> </span><span id="b914">unit</span><span id="b918">:</span><span id="b919"> </span><span id="b920">null</span><span id="b924"> </span><span id="b925">ours</span><span id="b929">/</span><span id="b930">theirs</span><span id="b936"> </span><span id="b937">falls</span><span id="b942"> </span><span id="b943">back</span><span id="b947">,</span><span id="b948"> </span><span id="b949">not</span><span id="b952"> </span><span id="b953">throws</span></li>
+</ul>
+<h2 id="outcome"><span id="b961"><span id="b965">Outcome</span></span></h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

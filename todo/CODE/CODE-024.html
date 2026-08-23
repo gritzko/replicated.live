@@ -7,61 +7,72 @@
 <meta property="og:title" content="CODE-024: io.mmap per-file read helpers leak mappings — use the pooled-fd read">
 <meta property="og:description" content="Deps: none. The sanctioned replacement already exists — wtread readFileBytes (pooled open/readAll/close, landed under CODE-020 57ff502a). This ticket routes the remaining per-file mmap readers through it. Repro concern is the RESIDENT pager loop over a big tree, per classify's own documented rule.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-024.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>CODE-024: io.mmap per-file read helpers leak mappings — use the pooled-fd read</h1>
+<h1 id="code-024-iommap-per-file-read-helpers-leak-mappings-—-use-the-pooled-fd-read"><span id="b0"><span id="b4">CODE-024</span><span id="b12">:</span><span id="b13"> </span><span id="b14">io</span><span id="b16">.</span><span id="b17">mmap</span><span id="b21"> </span><span id="b22">per</span><span id="b25">-</span><span id="b26">file</span><span id="b30"> </span><span id="b31">read</span><span id="b35"> </span><span id="b36">helpers</span><span id="b43"> </span><span id="b44">leak</span><span id="b48"> </span><span id="b49">mappings</span><span id="b57"> </span><span id="b58">—</span><span id="b61"> </span><span id="b62">use</span><span id="b65"> </span><span id="b66">the</span><span id="b69"> </span><span id="b70">pooled</span><span id="b76">-</span><span id="b77">fd</span><span id="b79"> </span><span id="b80">read</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
-<dl class="meta"><dt>Sev:</dt><dd>MED</dd></dl>
+<dl class="meta">
+<dt id="b85"><span>Now</span></dt>
+<dd><span id="b93">OPEN</span></dd>
+<dt id="b99"><span>Sev</span></dt>
+<dd><span id="b107">MED</span></dd>
+</dl>
 </div>
-<p>
-Deps: none. The sanctioned replacement already exists — <a href="../../be/shared/wtread.js">wtread</a> <code>readFileBytes</code> (pooled open/readAll/close, landed under <a href="CODE-020.html">CODE-020</a> <code>57ff502a</code>). This ticket routes the remaining per-file mmap readers through it. Repro concern is the RESIDENT pager loop over a big tree, per <a href="../../be/shared/classify.js">classify</a>'s own documented rule.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b113"><span>Deps</span><span id="b117">:</span><span id="b118"> </span><span id="b119">none</span><span id="b123">.</span><span id="b124"> </span><span id="b125">The</span><span id="b128"> </span><span id="b129">sanctioned</span><span id="b139"> </span><span id="b140">replacement</span><span id="b151"> </span><span id="b152">already</span><span id="b159"> </span><span id="b160">exists</span><span id="b166"> </span><span id="b167">—</span><span id="b170"> </span><a href="../../be/shared/wtread.js" title="pooled-fd readFileBytes (CODE-020 57ff502a)"><span id="b172">wtread</span></a><span id="b179"> </span><code id="b180">readFileBytes</code>
+<span id="b196">(</span><span id="b197">pooled</span><span id="b203"> </span><span id="b204">open</span><span id="b208">/</span><span id="b209">readAll</span><span id="b216">/</span><span id="b217">close</span><span id="b222">,</span><span id="b223"> </span><span id="b224">landed</span><span id="b230"> </span><span id="b231">under</span><span id="b236"> </span><a href="CODE-020.html" title="be/ JS duplication — extract shared primitives"><span id="b238">CODE-020</span></a><span id="b247"> </span><code id="b248">57ff502a</code><span id="b258">)</span><span id="b259">.</span><span id="b260"> </span><span id="b261">This</span><span id="b265"> </span><span id="b266">ticket</span>
+<span id="b273">routes</span><span id="b279"> </span><span id="b280">the</span><span id="b283"> </span><span id="b284">remaining</span><span id="b293"> </span><span id="b294">per</span><span id="b297">-</span><span id="b298">file</span><span id="b302"> </span><span id="b303">mmap</span><span id="b307"> </span><span id="b308">readers</span><span id="b315"> </span><span id="b316">through</span><span id="b323"> </span><span id="b324">it</span><span id="b326">.</span><span id="b327"> </span><span id="b328">Repro</span><span id="b333"> </span><span id="b334">concern</span><span id="b341"> </span><span id="b342">is</span><span id="b344"> </span><span id="b345">the</span>
+<span id="b349">RESIDENT</span><span id="b357"> </span><span id="b358">pager</span><span id="b363"> </span><span id="b364">loop</span><span id="b368"> </span><span id="b369">over</span><span id="b373"> </span><span id="b374">a</span><span id="b375"> </span><span id="b376">big</span><span id="b379"> </span><span id="b380">tree</span><span id="b384">,</span><span id="b385"> </span><span id="b386">per</span><span id="b389"> </span><a href="../../be/shared/classify.js" title="the no-mmap rule (lines 159-165)"><span id="b391">classify</span></a><span id="b400">'</span><span id="b401">s</span><span id="b402"> </span><span id="b403">own</span><span id="b406"> </span><span id="b407">documented</span><span id="b417"> </span><span id="b418">rule</span><span id="b422">.</span></p>
+<h2 id="input"><span id="b425"><span id="b429">Input</span></span></h2>
+<h3 id="context"><span id="b436"><span id="b440">Context</span></span></h3>
 <ul>
-<li>classify.js:159-165 states the rule: <code>io.mmap</code> leaks the mapping (no JS-side unmap), so a wt with &gt;~1000 tracked files exhausts the process's mmap regions mid-sweep; every later map fails and the file reads as a false <code>mod</code> (the 279-file real-repo regression). Reads MUST use pooled fd.</li>
-<li>Offenders still mmap per-file/per-dir: ignore.js:157 (<code>readFileText</code>, per <code>.gitignore</code> during a tree scan), diff.js:317 (<code>readWtFile</code>, per changed file), why.js:27 (per file). ingest.js:242 <code>io._mmap</code> per appendRecords.</li>
-<li>In the resident loop these accumulate — the exact regression classify.js documents, just on the diff/search/ignore paths instead of status.</li>
+<li id="b449"><span id="b453">classify.js:159</span><span id="b468">-</span><span id="b469">165</span><span id="b472"> </span><span id="b473">states</span><span id="b479"> </span><span id="b480">the</span><span id="b483"> </span><span id="b484">rule</span><span id="b488">:</span><span id="b489"> </span><code id="b490">io.mmap</code><span id="b499"> </span><span id="b500">leaks</span><span id="b505"> </span><span id="b506">the</span><span id="b509"> </span><span id="b510">mapping</span><span id="b517"> </span><span id="b518">(</span><span id="b519">no</span><span id="b521"> </span><span id="b522">JS</span><span id="b524">-</span><span id="b525">side</span>
+<span id="b534">unmap</span><span id="b539">)</span><span id="b540">,</span><span id="b541"> </span><span id="b542">so</span><span id="b544"> </span><span id="b545">a</span><span id="b546"> </span><span id="b547">wt</span><span id="b549"> </span><span id="b550">with</span><span id="b554"> </span><span id="b555">&gt;</span><span id="b556">~</span><span id="b557">1000</span><span id="b561"> </span><span id="b562">tracked</span><span id="b569"> </span><span id="b570">files</span><span id="b575"> </span><span id="b576">exhausts</span><span id="b584"> </span><span id="b585">the</span><span id="b588"> </span><span id="b589">process</span><span id="b596">'</span><span id="b597">s</span><span id="b598"> </span><span id="b599">mmap</span>
+<span id="b608">regions</span><span id="b615"> </span><span id="b616">mid</span><span id="b619">-</span><span id="b620">sweep</span><span id="b625">;</span><span id="b626"> </span><span id="b627">every</span><span id="b632"> </span><span id="b633">later</span><span id="b638"> </span><span id="b639">map</span><span id="b642"> </span><span id="b643">fails</span><span id="b648"> </span><span id="b649">and</span><span id="b652"> </span><span id="b653">the</span><span id="b656"> </span><span id="b657">file</span><span id="b661"> </span><span id="b662">reads</span><span id="b667"> </span><span id="b668">as</span><span id="b670"> </span><span id="b671">a</span><span id="b672"> </span><span id="b673">false</span>
+<code id="b683">mod</code><span id="b688"> </span><span id="b689">(</span><span id="b690">the</span><span id="b693"> </span><span id="b694">279</span><span id="b697">-</span><span id="b698">file</span><span id="b702"> </span><span id="b703">real</span><span id="b707">-</span><span id="b708">repo</span><span id="b712"> </span><span id="b713">regression</span><span id="b723">)</span><span id="b724">.</span><span id="b725"> </span><span id="b726">Reads</span><span id="b731"> </span><span id="b732">MUST</span><span id="b736"> </span><span id="b737">use</span><span id="b740"> </span><span id="b741">pooled</span><span id="b747"> </span><span id="b748">fd</span><span id="b750">.</span></li>
+<li id="b752"><span id="b756">Offenders</span><span id="b765"> </span><span id="b766">still</span><span id="b771"> </span><span id="b772">mmap</span><span id="b776"> </span><span id="b777">per</span><span id="b780">-</span><span id="b781">file</span><span id="b785">/</span><span id="b786">per</span><span id="b789">-</span><span id="b790">dir</span><span id="b793">:</span><span id="b794"> </span><span id="b795">ignore.js:157</span><span id="b808"> </span><span id="b809">(</span><code id="b810">readFileText</code><span id="b824">,</span><span id="b825"> </span><span id="b826">per</span>
+<code id="b834">.gitignore</code><span id="b846"> </span><span id="b847">during</span><span id="b853"> </span><span id="b854">a</span><span id="b855"> </span><span id="b856">tree</span><span id="b860"> </span><span id="b861">scan</span><span id="b865">)</span><span id="b866">,</span><span id="b867"> </span><span id="b868">diff.js:317</span><span id="b879"> </span><span id="b880">(</span><code id="b881">readWtFile</code><span id="b893">,</span><span id="b894"> </span><span id="b895">per</span><span id="b898"> </span><span id="b899">changed</span>
+<span id="b911">file</span><span id="b915">)</span><span id="b916">,</span><span id="b917"> </span><span id="b918">why.js:27</span><span id="b927"> </span><span id="b928">(</span><span id="b929">per</span><span id="b932"> </span><span id="b933">file</span><span id="b937">)</span><span id="b938">.</span><span id="b939"> </span><span id="b940">ingest.js:242</span><span id="b953"> </span><code id="b954">io._mmap</code><span id="b964"> </span><span id="b965">per</span><span id="b968"> </span><span id="b969">appendRecords</span><span id="b982">.</span></li>
+<li id="b984"><span id="b988">In</span><span id="b990"> </span><span id="b991">the</span><span id="b994"> </span><span id="b995">resident</span><span id="b1003"> </span><span id="b1004">loop</span><span id="b1008"> </span><span id="b1009">these</span><span id="b1014"> </span><span id="b1015">accumulate</span><span id="b1025"> </span><span id="b1026">—</span><span id="b1029"> </span><span id="b1030">the</span><span id="b1033"> </span><span id="b1034">exact</span><span id="b1039"> </span><span id="b1040">regression</span><span id="b1050"> </span><span id="b1051">classify.js</span>
+<span id="b1067">documents</span><span id="b1076">,</span><span id="b1077"> </span><span id="b1078">just</span><span id="b1082"> </span><span id="b1083">on</span><span id="b1085"> </span><span id="b1086">the</span><span id="b1089"> </span><span id="b1090">diff</span><span id="b1094">/</span><span id="b1095">search</span><span id="b1101">/</span><span id="b1102">ignore</span><span id="b1108"> </span><span id="b1109">paths</span><span id="b1114"> </span><span id="b1115">instead</span><span id="b1122"> </span><span id="b1123">of</span><span id="b1125"> </span><span id="b1126">status</span><span id="b1132">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b1135"><span id="b1139">Goals</span></span></h3>
 <ul>
-<li>Route per-file/per-dir reads through the pooled fd path (<a href="../../be/shared/wtread.js">wtread</a> <code>readFileBytes</code> or a shared read helper), so no mapping outlives the call.</li>
+<li id="b1146"><span id="b1150">Route</span><span id="b1155"> </span><span id="b1156">per</span><span id="b1159">-</span><span id="b1160">file</span><span id="b1164">/</span><span id="b1165">per</span><span id="b1168">-</span><span id="b1169">dir</span><span id="b1172"> </span><span id="b1173">reads</span><span id="b1178"> </span><span id="b1179">through</span><span id="b1186"> </span><span id="b1187">the</span><span id="b1190"> </span><span id="b1191">pooled</span><span id="b1197"> </span><span id="b1198">fd</span><span id="b1200"> </span><span id="b1201">path</span><span id="b1205"> </span><span id="b1206">(</span><a href="../../be/shared/wtread.js" title="pooled-fd readFileBytes (CODE-020 57ff502a)"><span id="b1208">wtread</span></a>
+<code id="b1220">readFileBytes</code><span id="b1235"> </span><span id="b1236">or</span><span id="b1238"> </span><span id="b1239">a</span><span id="b1240"> </span><span id="b1241">shared</span><span id="b1247"> </span><span id="b1248">read</span><span id="b1252"> </span><span id="b1253">helper</span><span id="b1259">)</span><span id="b1260">,</span><span id="b1261"> </span><span id="b1262">so</span><span id="b1264"> </span><span id="b1265">no</span><span id="b1267"> </span><span id="b1268">mapping</span><span id="b1275"> </span><span id="b1276">outlives</span><span id="b1284"> </span><span id="b1285">the</span><span id="b1288"> </span><span id="b1289">call</span><span id="b1293">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b1296"><span id="b1300">Constraints</span></span></h3>
 <ul>
-<li>Behavior-preserving; pack-oriented mmaps with documented bounds (ingest.js:143/410, 31-bit caveat) are a SEPARATE concern — scope this to the unbounded per-wt-file readers. be/ JS only.</li>
+<li id="b1313"><span id="b1317">Behavior</span><span id="b1325">-</span><span id="b1326">preserving</span><span id="b1336">;</span><span id="b1337"> </span><span id="b1338">pack</span><span id="b1342">-</span><span id="b1343">oriented</span><span id="b1351"> </span><span id="b1352">mmaps</span><span id="b1357"> </span><span id="b1358">with</span><span id="b1362"> </span><span id="b1363">documented</span><span id="b1373"> </span><span id="b1374">bounds</span>
+<span id="b1385">(</span><span id="b1386">ingest.js:143</span><span id="b1399">/</span><span id="b1400">410</span><span id="b1403">,</span><span id="b1404"> </span><span id="b1405">31</span><span id="b1407">-</span><span id="b1408">bit</span><span id="b1411"> </span><span id="b1412">caveat</span><span id="b1418">)</span><span id="b1419"> </span><span id="b1420">are</span><span id="b1423"> </span><span id="b1424">a</span><span id="b1425"> </span><span id="b1426">SEPARATE</span><span id="b1434"> </span><span id="b1435">concern</span><span id="b1442"> </span><span id="b1443">—</span><span id="b1446"> </span><span id="b1447">scope</span><span id="b1452"> </span><span id="b1453">this</span><span id="b1457"> </span><span id="b1458">to</span>
+<span id="b1465">the</span><span id="b1468"> </span><span id="b1469">unbounded</span><span id="b1478"> </span><span id="b1479">per</span><span id="b1482">-</span><span id="b1483">wt</span><span id="b1485">-</span><span id="b1486">file</span><span id="b1490"> </span><span id="b1491">readers</span><span id="b1498">.</span><span id="b1499"> </span><span id="b1500">be</span><span id="b1502">/</span><span id="b1503"> </span><span id="b1504">JS</span><span id="b1506"> </span><span id="b1507">only</span><span id="b1511">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> repro/reason: &gt;~1000-file diff or spot search exhausts mappings</li>
-<li class="open"><input type="checkbox" disabled> ignore.js:157 <code>readFileText</code> → pooled fd read</li>
-<li class="open"><input type="checkbox" disabled> diff.js:317 <code>readWtFile</code> → <a href="../../be/shared/wtread.js">wtread</a> <code>readFileBytes</code></li>
-<li class="open"><input type="checkbox" disabled> why.js:27 file read → same</li>
-<li class="open"><input type="checkbox" disabled> ingest.js:242 <code>io._mmap</code> appendRecords — ensure unmap/close or document the bound</li>
-</ul>
-<h3>Blockers and bummers</h3>
+<h2 id="wip"><span id="b1514"><span id="b1518">WIP</span></span></h2>
+<h3 id="todos"><span id="b1523"><span id="b1527">TODOs</span></span></h3>
 <ul>
-<li>diff.js:188 notes an mmap-follows-symlink leak already; fold that concern in.</li>
+<li class="task" id="b1534"><input type="checkbox" disabled="" /> <span id="b1539">repro</span><span id="b1544">/</span><span id="b1545">reason</span><span id="b1551">:</span><span id="b1552"> </span><span id="b1553">&gt;</span><span id="b1554">~</span><span id="b1555">1000</span><span id="b1559">-</span><span id="b1560">file</span><span id="b1564"> </span><span id="b1565">diff</span><span id="b1569"> </span><span id="b1570">or</span><span id="b1572"> </span><span id="b1573">spot</span><span id="b1577"> </span><span id="b1578">search</span><span id="b1584"> </span><span id="b1585">exhausts</span><span id="b1593"> </span><span id="b1594">mappings</span></li>
+<li class="task" id="b1603"><input type="checkbox" disabled="" /> <span id="b1608">ignore.js:157</span><span id="b1621"> </span><code id="b1622">readFileText</code><span id="b1636"> </span><span id="b1637">→</span><span id="b1640"> </span><span id="b1641">pooled</span><span id="b1647"> </span><span id="b1648">fd</span><span id="b1650"> </span><span id="b1651">read</span></li>
+<li class="task" id="b1656"><input type="checkbox" disabled="" /> <span id="b1661">diff.js:317</span><span id="b1672"> </span><code id="b1673">readWtFile</code><span id="b1685"> </span><span id="b1686">→</span><span id="b1689"> </span><a href="../../be/shared/wtread.js" title="pooled-fd readFileBytes (CODE-020 57ff502a)"><span id="b1691">wtread</span></a><span id="b1698"> </span><code id="b1699">readFileBytes</code></li>
+<li class="task" id="b1715"><input type="checkbox" disabled="" /> <span id="b1720">why.js:27</span><span id="b1729"> </span><span id="b1730">file</span><span id="b1734"> </span><span id="b1735">read</span><span id="b1739"> </span><span id="b1740">→</span><span id="b1743"> </span><span id="b1744">same</span></li>
+<li class="task" id="b1749"><input type="checkbox" disabled="" /> <span id="b1754">ingest.js:242</span><span id="b1767"> </span><code id="b1768">io._mmap</code><span id="b1778"> </span><span id="b1779">appendRecords</span><span id="b1792"> </span><span id="b1793">—</span><span id="b1796"> </span><span id="b1797">ensure</span><span id="b1803"> </span><span id="b1804">unmap</span><span id="b1809">/</span><span id="b1810">close</span><span id="b1815"> </span><span id="b1816">or</span><span id="b1818"> </span><span id="b1819">document</span><span id="b1827"> </span><span id="b1828">the</span><span id="b1831"> </span><span id="b1832">bound</span></li>
 </ul>
-<h2>Outcome</h2>
+<h3 id="blockers-and-bummers"><span id="b1839"><span id="b1843">Blockers</span><span id="b1851"> </span><span id="b1852">and</span><span id="b1855"> </span><span id="b1856">bummers</span></span></h3>
 <ul>
-<li>Not started. Suggested commit: <code>CODE-024: per-file reads off io.mmap onto pooled fd</code>.</li>
+<li id="b1865"><span id="b1869">diff.js:188</span><span id="b1880"> </span><span id="b1881">notes</span><span id="b1886"> </span><span id="b1887">an</span><span id="b1889"> </span><span id="b1890">mmap</span><span id="b1894">-</span><span id="b1895">follows</span><span id="b1902">-</span><span id="b1903">symlink</span><span id="b1910"> </span><span id="b1911">leak</span><span id="b1915"> </span><span id="b1916">already</span><span id="b1923">;</span><span id="b1924"> </span><span id="b1925">fold</span><span id="b1929"> </span><span id="b1930">that</span><span id="b1934"> </span><span id="b1935">concern</span><span id="b1942"> </span><span id="b1943">in</span><span id="b1945">.</span></li>
+</ul>
+<h2 id="outcome"><span id="b1948"><span id="b1952">Outcome</span></span></h2>
+<ul>
+<li id="b1961"><span id="b1965">Not</span><span id="b1968"> </span><span id="b1969">started</span><span id="b1976">.</span><span id="b1977"> </span><span id="b1978">Suggested</span><span id="b1987"> </span><span id="b1988">commit</span><span id="b1994">:</span><span id="b1995"> </span><code id="b1996">CODE-024: per-file reads off io.mmap onto pooled fd</code><span id="b2049">.</span></li>
 </ul>
 <div class="footer">
 ❧

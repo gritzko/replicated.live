@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-043: render theme split-brain — G drift, BRO_THEME dead for ANSI</title>
+<meta property="og:title" content="CODE-043: render theme split-brain — G drift, BRO_THEME dead for ANSI">
+<meta property="og:description" content="Two hand-kept parallel palettes have drifted: render/ansi.js:62 paints slot G as 256-colour 149 (#afd75f) while render/theme.js:25 gives the browser G &quot;32&quot; (#43bc6c) — every other slot matches byte for byte. theme.js:178-182 claims $BRO_THEME &quot;picks the pager's palette exactly as it picks the browser's&quot;, but ansi.js never requires theme.js: dark/light switch HTML only. theme.paint/ theme.reset have zero callers, and reset()'s bold test (s === &quot;1&quot;, theme.js:146-150) misses &quot;38;5;33;1&quot; so bold would stay latched. html.js:32 sells three non-xterm entries as &quot;xterm's own table&quot; with no source link. Found in the 2026-08-21 review.">
+<meta property="og:type" content="article">
+<link rel="stylesheet" href="/blob/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/blob/js/asciicast.js"></script>
+<a class="banner" href="/">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1 id="code-043-render-theme-split-brain-—-g-drift-bro_theme-dead-for-ansi"><span id="b0"><span id="b4">CODE-043</span><span id="b12">:</span><span id="b13"> </span><span id="b14">render</span><span id="b20"> </span><span id="b21">theme</span><span id="b26"> </span><span id="b27">split</span><span id="b32">-</span><span id="b33">brain</span><span id="b38"> </span><span id="b39">—</span><span id="b42"> </span><span id="b43">G</span><span id="b44"> </span><span id="b45">drift</span><span id="b50">,</span><span id="b51"> </span><span id="b52">BRO_THEME</span><span id="b61"> </span><span id="b62">dead</span><span id="b66"> </span><span id="b67">for</span><span id="b70"> </span><span id="b71">ANSI</span></span></h1>
+<dl class="meta">
+<dt id="b77"><span>Now</span></dt>
+<dd><span id="b81">OPEN</span></dd>
+<dt id="b87"><span>Sev</span></dt>
+<dd><span id="b91">LOW</span></dd>
+<dt id="b96"><span>Rep</span></dt>
+<dd><span id="b100">///bee</span></dd>
+<dt id="b108"><span>Ask</span></dt>
+<dd><span id="b112">gritzko</span></dd>
+<dt id="b121"><span>Rev</span></dt>
+<dd><span id="b125">///bee#184fddf</span></dd>
+</dl>
+<h2 id="input"><span id="b142"><span id="b146">Input</span></span></h2>
+<h3 id="context"><span id="b153"><span id="b157">Context</span></span></h3>
+<p id="b165"><span>Two</span><span id="b168"> </span><span id="b169">hand</span><span id="b173">-</span><span id="b174">kept</span><span id="b178"> </span><span id="b179">parallel</span><span id="b187"> </span><span id="b188">palettes</span><span id="b196"> </span><span id="b197">have</span><span id="b201"> </span><span id="b202">drifted</span><span id="b209">:</span><span id="b210"> </span><span id="b211">render/ansi.js:62</span><span id="b228"> </span><span id="b229">paints</span><span id="b235"> </span><span id="b236">slot</span><span id="b240"> </span><span id="b241">G</span>
+<span id="b243">as</span><span id="b245"> </span><span id="b246">256</span><span id="b249">-</span><span id="b250">colour</span><span id="b256"> </span><span id="b257">149</span><span id="b260"> </span><span id="b261">(</span><span id="b262">#</span><span id="b263">afd75f</span><span id="b269">)</span><span id="b270"> </span><span id="b271">while</span><span id="b276"> </span><span id="b277">render/theme.js:25</span><span id="b295"> </span><span id="b296">gives</span><span id="b301"> </span><span id="b302">the</span><span id="b305"> </span><span id="b306">browser</span><span id="b313"> </span><span id="b314">G</span><span id="b315"> </span><span id="b316">&quot;</span><span id="b317">32</span><span id="b319">&quot;</span>
+<span id="b321">(</span><span id="b322">#</span><span id="b323">43</span><span id="b325">bc6c</span><span id="b329">)</span><span id="b330"> </span><span id="b331">—</span><span id="b334"> </span><span id="b335">every</span><span id="b340"> </span><span id="b341">other</span><span id="b346"> </span><span id="b347">slot</span><span id="b351"> </span><span id="b352">matches</span><span id="b359"> </span><span id="b360">byte</span><span id="b364"> </span><span id="b365">for</span><span id="b368"> </span><span id="b369">byte</span><span id="b373">.</span><span id="b374"> </span><span id="b375">theme.js:178</span><span id="b387">-</span><span id="b388">182</span><span id="b391"> </span><span id="b392">claims</span>
+<span id="b399">$</span><span id="b400">BRO_THEME</span><span id="b409"> </span><span id="b410">&quot;</span><span id="b411">picks</span><span id="b416"> </span><span id="b417">the</span><span id="b420"> </span><span id="b421">pager</span><span id="b426">'</span><span id="b427">s</span><span id="b428"> </span><span id="b429">palette</span><span id="b436"> </span><span id="b437">exactly</span><span id="b444"> </span><span id="b445">as</span><span id="b447"> </span><span id="b448">it</span><span id="b450"> </span><span id="b451">picks</span><span id="b456"> </span><span id="b457">the</span><span id="b460"> </span><span id="b461">browser</span><span id="b468">'</span><span id="b469">s</span><span id="b470">&quot;</span><span id="b471">,</span><span id="b472"> </span><span id="b473">but</span>
+<span id="b477">ansi.js</span><span id="b484"> </span><span id="b485">never</span><span id="b490"> </span><span id="b491">requires</span><span id="b499"> </span><span id="b500">theme.js</span><span id="b508">:</span><span id="b509"> </span><span id="b510">dark</span><span id="b514">/</span><span id="b515">light</span><span id="b520"> </span><span id="b521">switch</span><span id="b527"> </span><span id="b528">HTML</span><span id="b532"> </span><span id="b533">only</span><span id="b537">.</span><span id="b538"> </span><span id="b539">theme</span><span id="b544">.</span><span id="b545">paint</span><span id="b550">/</span>
+<span id="b552">theme</span><span id="b557">.</span><span id="b558">reset</span><span id="b563"> </span><span id="b564">have</span><span id="b568"> </span><span id="b569">zero</span><span id="b573"> </span><span id="b574">callers</span><span id="b581">,</span><span id="b582"> </span><span id="b583">and</span><span id="b586"> </span><span id="b587">reset</span><span id="b592">(</span><span id="b593">)</span><span id="b594">'</span><span id="b595">s</span><span id="b596"> </span><span id="b597">bold</span><span id="b601"> </span><span id="b602">test</span><span id="b606"> </span><span id="b607">(</span><code id="b608">s === &quot;1&quot;</code><span id="b619">,</span>
+<span id="b621">theme.js:146</span><span id="b633">-</span><span id="b634">150</span><span id="b637">)</span><span id="b638"> </span><span id="b639">misses</span><span id="b645"> </span><span id="b646">&quot;</span><span id="b647">38</span><span id="b649">;</span><span id="b650">5</span><span id="b651">;</span><span id="b652">33</span><span id="b654">;</span><span id="b655">1</span><span id="b656">&quot;</span><span id="b657"> </span><span id="b658">so</span><span id="b660"> </span><span id="b661">bold</span><span id="b665"> </span><span id="b666">would</span><span id="b671"> </span><span id="b672">stay</span><span id="b676"> </span><span id="b677">latched</span><span id="b684">.</span><span id="b685"> </span><span id="b686">html.js:32</span>
+<span id="b697">sells</span><span id="b702"> </span><span id="b703">three</span><span id="b708"> </span><span id="b709">non</span><span id="b712">-</span><span id="b713">xterm</span><span id="b718"> </span><span id="b719">entries</span><span id="b726"> </span><span id="b727">as</span><span id="b729"> </span><span id="b730">&quot;</span><span id="b731">xterm</span><span id="b736">'</span><span id="b737">s</span><span id="b738"> </span><span id="b739">own</span><span id="b742"> </span><span id="b743">table</span><span id="b748">&quot;</span><span id="b749"> </span><span id="b750">with</span><span id="b754"> </span><span id="b755">no</span><span id="b757"> </span><span id="b758">source</span><span id="b764"> </span><span id="b765">link</span><span id="b769">.</span>
+<span id="b771">Found</span><span id="b776"> </span><span id="b777">in</span><span id="b779"> </span><span id="b780">the</span><span id="b783"> </span><span id="b784">2026</span><span id="b788">-</span><span id="b789">08</span><span id="b791">-</span><span id="b792">21</span><span id="b794"> </span><span id="b795">review</span><span id="b801">.</span></p>
+<h3 id="goals"><span id="b804"><span id="b808">Goals</span></span></h3>
+<p id="b814"><span>One</span><span id="b817"> </span><span id="b818">palette</span><span id="b825"> </span><span id="b826">source</span><span id="b832"> </span><span id="b833">both</span><span id="b837"> </span><span id="b838">sinks</span><span id="b843"> </span><span id="b844">read</span><span id="b848"> </span><span id="b849">(</span><span id="b850">ansi</span><span id="b854"> </span><span id="b855">derives</span><span id="b862"> </span><span id="b863">from</span><span id="b867"> </span><span id="b868">theme.js</span><span id="b876">)</span><span id="b877">;</span><span id="b878"> </span><span id="b879">delete</span><span id="b885"> </span><span id="b886">or</span>
+<span id="b889">fix</span><span id="b892"> </span><span id="b893">the</span><span id="b896"> </span><span id="b897">dead</span><span id="b901"> </span><span id="b902">paint</span><span id="b907">/</span><span id="b908">reset</span><span id="b913"> </span><span id="b914">pair</span><span id="b918">;</span><span id="b919"> </span><span id="b920">link</span><span id="b924"> </span><span id="b925">the</span><span id="b928"> </span><span id="b929">provenance</span><span id="b939"> </span><span id="b940">of</span><span id="b942"> </span><span id="b943">the</span><span id="b946"> </span><span id="b947">substituted</span><span id="b958"> </span><span id="b959">table</span>
+<span id="b965">entries</span><span id="b972">.</span><span id="b973"> </span><span id="b974">A</span><span id="b975"> </span><span id="b976">round</span><span id="b981">-</span><span id="b982">trip</span><span id="b986"> </span><span id="b987">test</span><span id="b991"> </span><span id="b992">pinning</span><span id="b999"> </span><span id="b1000">ANSI</span><span id="b1004"> </span><span id="b1005">and</span><span id="b1008"> </span><span id="b1009">HTML</span><span id="b1013"> </span><span id="b1014">to</span><span id="b1016"> </span><span id="b1017">the</span><span id="b1020"> </span><span id="b1021">same</span><span id="b1025"> </span><span id="b1026">slot</span><span id="b1030"> </span><span id="b1031">colours</span><span id="b1038">.</span></p>
+<h2 id="wip"><span id="b1041"><span id="b1045">WIP</span></span></h2>
+<h3 id="todos"><span id="b1050"><span id="b1054">TODOs</span></span></h3>
+<ul>
+<li id="b1060"><span id="b1064">[ ]</span><span id="b1067"> </span><span id="b1068">single</span><span id="b1074"> </span><span id="b1075">palette</span><span id="b1082"> </span><span id="b1083">table</span><span id="b1088">;</span><span id="b1089"> </span><span id="b1090">G</span><span id="b1091"> </span><span id="b1092">renders</span><span id="b1099"> </span><span id="b1100">one</span><span id="b1103"> </span><span id="b1104">green</span><span id="b1109"> </span><span id="b1110">everywhere</span></li>
+<li id="b1121"><span id="b1125">[ ]</span><span id="b1128"> </span><span id="b1129">$</span><span id="b1130">BRO_THEME</span><span id="b1139"> </span><span id="b1140">reaches</span><span id="b1147"> </span><span id="b1148">the</span><span id="b1151"> </span><span id="b1152">pager</span><span id="b1157"> </span><span id="b1158">or</span><span id="b1160"> </span><span id="b1161">the</span><span id="b1164"> </span><span id="b1165">claim</span><span id="b1170"> </span><span id="b1171">at</span><span id="b1173"> </span><span id="b1174">theme.js:178</span><span id="b1186"> </span><span id="b1187">goes</span></li>
+<li id="b1192"><span id="b1196">[ ]</span><span id="b1199"> </span><span id="b1200">dead</span><span id="b1204"> </span><span id="b1205">paint</span><span id="b1210">/</span><span id="b1211">reset</span><span id="b1216"> </span><span id="b1217">removed</span><span id="b1224"> </span><span id="b1225">or</span><span id="b1227"> </span><span id="b1228">repaired</span></li>
+</ul>
+<h2 id="outcome"><span id="b1238"><span id="b1242">Outcome</span></span></h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

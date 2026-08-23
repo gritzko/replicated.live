@@ -3,65 +3,64 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JAB-012: ulog.close frees the box but JS keeps the raw pointer — post-close use is UAF</title>
-<meta property="og:title" content="JAB-012: ulog.close frees the box but JS keeps the raw pointer — post-close use is UAF">
-<meta property="og:description" content="JABCulogClose (jab/ulog.hpp:337) does ULOGClose(...); free(h); while the handle circulating in JS is the box's address as a Number; JABCulogHandle (ulog.hpp:276) only rejects d &lt;= 0, so a second ulogclose(h) or any post-close call dereferences freed memory. The &quot;idempotent — nulls handle&quot; comment at ulog.hpp:245 is false — C cannot null the JS-held Number. Found in the 2026-07-24 jab/ review.">
+<title>JAB-012: ulog._close frees the box but JS keeps the raw pointer — post-close use is UAF</title>
+<meta property="og:title" content="JAB-012: ulog._close frees the box but JS keeps the raw pointer — post-close use is UAF">
+<meta property="og:description" content="JABCulogClose (jab/ulog.hpp:337) does ULOGClose(...); free(h); while the handle circulating in JS is the box's address as a Number; JABCulogHandle (ulog.hpp:276) only rejects d &lt;= 0, so a second _ulog_close(h) or any post-close call dereferences freed memory. The &quot;idempotent — nulls handle&quot; comment at ulog.hpp:245 is false — C cannot null the JS-held Number. Found in the 2026-07-24 jab/ review.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-012.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JAB-012: ulog._close frees the box but JS keeps the raw pointer — post-close use is UAF</h1>
+<h1 id="jab-012-ulog_close-frees-the-box-but-js-keeps-the-raw-pointer-—-post-close-use-is-uaf"><span id="b0"><span id="b4">JAB-012</span><span id="b11">:</span><span id="b12"> </span><span id="b13">ulog</span><span id="b17">.</span><span id="b18">_close</span><span id="b24"> </span><span id="b25">frees</span><span id="b30"> </span><span id="b31">the</span><span id="b34"> </span><span id="b35">box</span><span id="b38"> </span><span id="b39">but</span><span id="b42"> </span><span id="b43">JS</span><span id="b45"> </span><span id="b46">keeps</span><span id="b51"> </span><span id="b52">the</span><span id="b55"> </span><span id="b56">raw</span><span id="b59"> </span><span id="b60">pointer</span><span id="b67"> </span><span id="b68">—</span><span id="b71"> </span><span id="b72">post</span><span id="b76">-</span><span id="b77">close</span><span id="b82"> </span><span id="b83">use</span><span id="b86"> </span><span id="b87">is</span><span id="b89"> </span><span id="b90">UAF</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
-<dl class="meta"><dt>Sev:</dt><dd>HIGH</dd></dl>
+<dl class="meta">
+<dt id="b94"><span>Now</span></dt>
+<dd><span id="b102">OPEN</span></dd>
+<dt id="b108"><span>Sev</span></dt>
+<dd><span id="b116">HIGH</span></dd>
+</dl>
 </div>
-<p>
-<code>JABCulogClose</code> (jab/ulog.hpp:337) does <code>ULOGClose(...); free(h);</code> while the handle circulating in JS is the box's address as a Number; <code>JABCulogHandle</code> (ulog.hpp:276) only rejects <code>d &lt;= 0</code>, so a second <code>_ulog_close(h)</code> or any post-close call dereferences freed memory. The &quot;idempotent — nulls handle&quot; comment at ulog.hpp:245 is false — C cannot null the JS-held Number. Found in the 2026-07-24 jab/ review.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b123"><code>JABCulogClose</code><span id="b138"> </span><span id="b139">(</span><span id="b140">jab/ulog.hpp:337</span><span id="b156">)</span><span id="b157"> </span><span id="b158">does</span><span id="b162"> </span><code id="b163">ULOGClose(...); free(h);</code><span id="b189"> </span><span id="b190">while</span><span id="b195"> </span><span id="b196">the</span><span id="b199"> </span><span id="b200">handle</span><span id="b206"> </span><span id="b207">circulating</span><span id="b218"> </span><span id="b219">in</span><span id="b221"> </span><span id="b222">JS</span><span id="b224"> </span><span id="b225">is</span><span id="b227"> </span><span id="b228">the</span><span id="b231"> </span><span id="b232">box</span><span id="b235">'</span><span id="b236">s</span><span id="b237"> </span><span id="b238">address</span><span id="b245"> </span><span id="b246">as</span><span id="b248"> </span><span id="b249">a</span><span id="b250"> </span><span id="b251">Number</span><span id="b257">;</span><span id="b258"> </span><code id="b259">JABCulogHandle</code><span id="b275"> </span><span id="b276">(</span><span id="b277">ulog.hpp:276</span><span id="b289">)</span><span id="b290"> </span><span id="b291">only</span><span id="b295"> </span><span id="b296">rejects</span><span id="b303"> </span><code id="b304">d &lt;= 0</code><span id="b312">,</span><span id="b313"> </span><span id="b314">so</span><span id="b316"> </span><span id="b317">a</span><span id="b318"> </span><span id="b319">second</span><span id="b325"> </span><code id="b326">_ulog_close(h)</code><span id="b342"> </span><span id="b343">or</span><span id="b345"> </span><span id="b346">any</span><span id="b349"> </span><span id="b350">post</span><span id="b354">-</span><span id="b355">close</span><span id="b360"> </span><span id="b361">call</span><span id="b365"> </span><span id="b366">dereferences</span><span id="b378"> </span><span id="b379">freed</span><span id="b384"> </span><span id="b385">memory</span><span id="b391">.</span><span id="b392"> </span><span id="b393">The</span><span id="b396"> </span><span id="b397">&quot;</span><span id="b398">idempotent</span><span id="b408"> </span><span id="b409">—</span><span id="b412"> </span><span id="b413">nulls</span><span id="b418"> </span><span id="b419">handle</span><span id="b425">&quot;</span><span id="b426"> </span><span id="b427">comment</span><span id="b434"> </span><span id="b435">at</span><span id="b437"> </span><span id="b438">ulog.hpp:245</span><span id="b450"> </span><span id="b451">is</span><span id="b453"> </span><span id="b454">false</span><span id="b459"> </span><span id="b460">—</span><span id="b463"> </span><span id="b464">C</span><span id="b465"> </span><span id="b466">cannot</span><span id="b472"> </span><span id="b473">null</span><span id="b477"> </span><span id="b478">the</span><span id="b481"> </span><span id="b482">JS</span><span id="b484">-</span><span id="b485">held</span><span id="b489"> </span><span id="b490">Number</span><span id="b496">.</span><span id="b497"> </span><span id="b498">Found</span><span id="b503"> </span><span id="b504">in</span><span id="b506"> </span><span id="b507">the</span><span id="b510"> </span><span id="b511">2026</span><span id="b515">-</span><span id="b516">07</span><span id="b518">-</span><span id="b519">24</span><span id="b521"> </span><span id="b522">jab</span><span id="b525">/</span><span id="b526"> </span><span id="b527">review</span><span id="b533">.</span></p>
+<h2 id="input"><span id="b536"><span id="b540">Input</span></span></h2>
+<h3 id="context"><span id="b547"><span id="b551">Context</span></span></h3>
 <ul>
-<li>Double-close is an easy JS-side mistake (finally blocks, error paths); today it is silent heap corruption, not an error.</li>
+<li id="b559"><span id="b563">Double</span><span id="b569">-</span><span id="b570">close</span><span id="b575"> </span><span id="b576">is</span><span id="b578"> </span><span id="b579">an</span><span id="b581"> </span><span id="b582">easy</span><span id="b586"> </span><span id="b587">JS</span><span id="b589">-</span><span id="b590">side</span><span id="b594"> </span><span id="b595">mistake</span><span id="b602"> </span><span id="b603">(</span><span id="b604">finally</span><span id="b611"> </span><span id="b612">blocks</span><span id="b618">,</span><span id="b619"> </span><span id="b620">error</span><span id="b625"> </span><span id="b626">paths</span><span id="b631">)</span><span id="b632">;</span><span id="b633"> </span><span id="b634">today</span><span id="b639"> </span><span id="b640">it</span><span id="b642"> </span><span id="b643">is</span><span id="b645"> </span><span id="b646">silent</span><span id="b652"> </span><span id="b653">heap</span><span id="b657"> </span><span id="b658">corruption</span><span id="b668">,</span><span id="b669"> </span><span id="b670">not</span><span id="b673"> </span><span id="b674">an</span><span id="b676"> </span><span id="b677">error</span><span id="b682">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b685"><span id="b689">Goals</span></span></h3>
 <ul>
-<li>Post-close use of a ulog handle throws a plain-words error; double-close is a no-op or throws — never UAF.</li>
+<li id="b695"><span id="b699">Post</span><span id="b703">-</span><span id="b704">close</span><span id="b709"> </span><span id="b710">use</span><span id="b713"> </span><span id="b714">of</span><span id="b716"> </span><span id="b717">a</span><span id="b718"> </span><span id="b719">ulog</span><span id="b723"> </span><span id="b724">handle</span><span id="b730"> </span><span id="b731">throws</span><span id="b737"> </span><span id="b738">a</span><span id="b739"> </span><span id="b740">plain</span><span id="b745">-</span><span id="b746">words</span><span id="b751"> </span><span id="b752">error</span><span id="b757">;</span><span id="b758"> </span><span id="b759">double</span><span id="b765">-</span><span id="b766">close</span><span id="b771"> </span><span id="b772">is</span><span id="b774"> </span><span id="b775">a</span><span id="b776"> </span><span id="b777">no</span><span id="b779">-</span><span id="b780">op</span><span id="b782"> </span><span id="b783">or</span><span id="b785"> </span><span id="b786">throws</span><span id="b792"> </span><span id="b793">—</span><span id="b796"> </span><span id="b797">never</span><span id="b802"> </span><span id="b803">UAF</span><span id="b806">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b809"><span id="b813">Constraints</span></span></h3>
 <ul>
-<li>Repro-first: open, close, close again / append after close — assert throw, run under ASAN.</li>
-<li>Keep the handle representation cheap; a generation-checked slot table or a magic field zeroed on close both fit.</li>
+<li id="b825"><span id="b829">Repro</span><span id="b834">-</span><span id="b835">first</span><span id="b840">:</span><span id="b841"> </span><span id="b842">open</span><span id="b846">,</span><span id="b847"> </span><span id="b848">close</span><span id="b853">,</span><span id="b854"> </span><span id="b855">close</span><span id="b860"> </span><span id="b861">again</span><span id="b866"> </span><span id="b867">/</span><span id="b868"> </span><span id="b869">append</span><span id="b875"> </span><span id="b876">after</span><span id="b881"> </span><span id="b882">close</span><span id="b887"> </span><span id="b888">—</span><span id="b891"> </span><span id="b892">assert</span><span id="b898"> </span><span id="b899">throw</span><span id="b904">,</span><span id="b905"> </span><span id="b906">run</span><span id="b909"> </span><span id="b910">under</span><span id="b915"> </span><span id="b916">ASAN</span><span id="b920">.</span></li>
+<li id="b922"><span id="b926">Keep</span><span id="b930"> </span><span id="b931">the</span><span id="b934"> </span><span id="b935">handle</span><span id="b941"> </span><span id="b942">representation</span><span id="b956"> </span><span id="b957">cheap</span><span id="b962">;</span><span id="b963"> </span><span id="b964">a</span><span id="b965"> </span><span id="b966">generation</span><span id="b976">-</span><span id="b977">checked</span><span id="b984"> </span><span id="b985">slot</span><span id="b989"> </span><span id="b990">table</span><span id="b995"> </span><span id="b996">or</span><span id="b998"> </span><span id="b999">a</span><span id="b1000"> </span><span id="b1001">magic</span><span id="b1006"> </span><span id="b1007">field</span><span id="b1012"> </span><span id="b1013">zeroed</span><span id="b1019"> </span><span id="b1020">on</span><span id="b1022"> </span><span id="b1023">close</span><span id="b1028"> </span><span id="b1029">both</span><span id="b1033"> </span><span id="b1034">fit</span><span id="b1037">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>Design decisions</h3>
+<h2 id="wip"><span id="b1040"><span id="b1044">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b1049"><span id="b1053">Design</span><span id="b1059"> </span><span id="b1060">decisions</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li id="b1070"><span id="b1074">(</span><span id="b1075">pending</span><span id="b1082">)</span></li>
 </ul>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> ASAN repro: double-close + use-after-close.</li>
-<li class="open"><input type="checkbox" disabled> Invalidate handles on close; fix the ulog.hpp:245 comment.</li>
-</ul>
-<h3>Blockers and bummers</h3>
+<h3 id="todos"><span id="b1085"><span id="b1089">TODOs</span></span></h3>
 <ul>
-<li>(none)</li>
+<li class="task" id="b1095"><input type="checkbox" disabled="" /> <span id="b1100">ASAN</span><span id="b1104"> </span><span id="b1105">repro</span><span id="b1110">:</span><span id="b1111"> </span><span id="b1112">double</span><span id="b1118">-</span><span id="b1119">close</span><span id="b1124"> </span><span id="b1125">+</span><span id="b1126"> </span><span id="b1127">use</span><span id="b1130">-</span><span id="b1131">after</span><span id="b1136">-</span><span id="b1137">close</span><span id="b1142">.</span></li>
+<li class="task" id="b1144"><input type="checkbox" disabled="" /> <span id="b1149">Invalidate</span><span id="b1159"> </span><span id="b1160">handles</span><span id="b1167"> </span><span id="b1168">on</span><span id="b1170"> </span><span id="b1171">close</span><span id="b1176">;</span><span id="b1177"> </span><span id="b1178">fix</span><span id="b1181"> </span><span id="b1182">the</span><span id="b1185"> </span><span id="b1186">ulog.hpp:245</span><span id="b1198"> </span><span id="b1199">comment</span><span id="b1206">.</span></li>
 </ul>
-<h2>Outcome</h2>
+<h3 id="blockers-and-bummers"><span id="b1209"><span id="b1213">Blockers</span><span id="b1221"> </span><span id="b1222">and</span><span id="b1225"> </span><span id="b1226">bummers</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li id="b1234"><span id="b1238">(</span><span id="b1239">none</span><span id="b1243">)</span></li>
+</ul>
+<h2 id="outcome"><span id="b1246"><span id="b1250">Outcome</span></span></h2>
+<ul>
+<li id="b1258"><span id="b1262">(</span><span id="b1263">pending</span><span id="b1270">)</span></li>
 </ul>
 <div class="footer">
 ❧

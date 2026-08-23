@@ -7,65 +7,79 @@
 <meta property="og:title" content="ABC-006: Bx.h buffer template: bSplice units, bReMap shrink, bAcquire math">
 <meta property="og:description" content="Three defects in the typed-buffer template (2026-07-07 review). All are latent-but-armed: the template instantiates for kv32, kv64, sha256, range32, u8cs, … and the only current bSplice caller happens to be u8.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/ABC/ABC-006.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>ABC-006: Bx.h buffer template: bSplice units, bReMap shrink, bAcquire math</h1>
+<h1 id="abc-006-bxh-buffer-template-bsplice-units-bremap-shrink-bacquire-math"><span id="b0"><span id="b4">ABC-006</span><span id="b11">:</span><span id="b12"> </span><span id="b13">Bx.h</span><span id="b17"> </span><span id="b18">buffer</span><span id="b24"> </span><span id="b25">template</span><span id="b33">:</span><span id="b34"> </span><span id="b35">bSplice</span><span id="b42"> </span><span id="b43">units</span><span id="b48">,</span><span id="b49"> </span><span id="b50">bReMap</span><span id="b56"> </span><span id="b57">shrink</span><span id="b63">,</span><span id="b64"> </span><span id="b65">bAcquire</span><span id="b73"> </span><span id="b74">math</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+<dl class="meta">
+<dt id="b79"><span>Now</span></dt>
+<dd><span id="b87">DONE</span></dd>
+</dl>
 </div>
-<p>
-Three defects in the typed-buffer template (2026-07-07 review). All are latent-but-armed: the template instantiates for <code>kv32</code>, <code>kv64</code>, <code>sha256</code>, <code>range32</code>, <code>u8cs</code>, … and the only current <code>bSplice</code> caller happens to be u8.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b94"><span>Three</span><span id="b99"> </span><span id="b100">defects</span><span id="b107"> </span><span id="b108">in</span><span id="b110"> </span><span id="b111">the</span><span id="b114"> </span><span id="b115">typed</span><span id="b120">-</span><span id="b121">buffer</span><span id="b127"> </span><span id="b128">template</span><span id="b136"> </span><span id="b137">(</span><span id="b138">2026</span><span id="b142">-</span><span id="b143">07</span><span id="b145">-</span><span id="b146">07</span><span id="b148"> </span><span id="b149">review</span><span id="b155">)</span><span id="b156">.</span><span id="b157"> </span><span id="b158">All</span><span id="b161"> </span><span id="b162">are</span>
+<span id="b166">latent</span><span id="b172">-</span><span id="b173">but</span><span id="b176">-</span><span id="b177">armed</span><span id="b182">:</span><span id="b183"> </span><span id="b184">the</span><span id="b187"> </span><span id="b188">template</span><span id="b196"> </span><span id="b197">instantiates</span><span id="b209"> </span><span id="b210">for</span><span id="b213"> </span><code id="b214">kv32</code><span id="b220">,</span><span id="b221"> </span><code id="b222">kv64</code><span id="b228">,</span><span id="b229"> </span><code id="b230">sha256</code><span id="b238">,</span>
+<code id="b240">range32</code><span id="b249">,</span><span id="b250"> </span><code id="b251">u8cs</code><span id="b257">,</span><span id="b258"> </span><span id="b259">…</span><span id="b262"> </span><span id="b263">and</span><span id="b266"> </span><span id="b267">the</span><span id="b270"> </span><span id="b271">only</span><span id="b275"> </span><span id="b276">current</span><span id="b283"> </span><code id="b284">bSplice</code><span id="b293"> </span><span id="b294">caller</span><span id="b300"> </span><span id="b301">happens</span><span id="b308"> </span><span id="b309">to</span><span id="b311"> </span><span id="b312">be</span><span id="b314"> </span><span id="b315">u8</span><span id="b317">.</span></p>
+<h2 id="input"><span id="b320"><span id="b324">Input</span></span></h2>
+<h3 id="context"><span id="b331"><span id="b335">Context</span></span></h3>
 <ul>
-<li><code>Bx.h:435-438</code> <code>bSplice</code> mixes units: <code>off</code>, <code>cut</code>, <code>$len(paste)</code>, <code>bDataLen</code> are ELEMENT counts but applied to <code>u8 *b</code> as BYTE offsets and memmove sizes. Correct only for <code>sizeof(T)==1</code>; any non-u8 instantiation splices garbage while still advancing <code>buf[2]</code> in elements. Sole caller today: <code>TLV.h:70</code> (u8) — works by accident.</li>
-<li><code>Bx.h:388-393</code> <code>bReMap</code> non-mremap fallback memmoves <code>old_size</code> bytes into a <code>new_size</code> mapping — OOB write on any shrink; this is the path macOS CI takes. Also <code>MAP_SHARED</code> vs the mremap path's private mapping. (Distinct from MEM-021's MMAP.c items.)</li>
-<li><code>Bx.h:506-510</code> <code>bAcquire</code>: (1) aligns with <code>sizeof(T)</code> mask instead of <code>alignof(T)</code> — garbage for non-power-of-2 T, and inconsistent with <code>bAlign</code>/<code>bAren</code> (Bx.h:451,483) which use alignof; (2) <code>cap * sizeof(T)</code> unchecked overflow → tiny sz passes the room check, child claims cap elements over a few bytes; (3) <code>base + sz &gt; arena[3]</code> pointer-overflow UB. Same <code>len * sizeof(T)</code> overflow in <code>bAllocate</code> (:202), <code>bMap</code> (:369).</li>
+<li id="b343"><code id="b347">Bx.h:435-438</code><span id="b361"> </span><code id="b362">bSplice</code><span id="b371"> </span><span id="b372">mixes</span><span id="b377"> </span><span id="b378">units</span><span id="b383">:</span><span id="b384"> </span><code id="b385">off</code><span id="b390">,</span><span id="b391"> </span><code id="b392">cut</code><span id="b397">,</span><span id="b398"> </span><code id="b399">$len(paste)</code><span id="b412">,</span>
+<code id="b418">bDataLen</code><span id="b428"> </span><span id="b429">are</span><span id="b432"> </span><span id="b433">ELEMENT</span><span id="b440"> </span><span id="b441">counts</span><span id="b447"> </span><span id="b448">but</span><span id="b451"> </span><span id="b452">applied</span><span id="b459"> </span><span id="b460">to</span><span id="b462"> </span><code id="b463">u8 *b</code><span id="b470"> </span><span id="b471">as</span><span id="b473"> </span><span id="b474">BYTE</span><span id="b478"> </span><span id="b479">offsets</span><span id="b486"> </span><span id="b487">and</span>
+<span id="b495">memmove</span><span id="b502"> </span><span id="b503">sizes</span><span id="b508">.</span><span id="b509"> </span><span id="b510">Correct</span><span id="b517"> </span><span id="b518">only</span><span id="b522"> </span><span id="b523">for</span><span id="b526"> </span><code id="b527">sizeof(T)==1</code><span id="b541">;</span><span id="b542"> </span><span id="b543">any</span><span id="b546"> </span><span id="b547">non</span><span id="b550">-</span><span id="b551">u8</span><span id="b553"> </span><span id="b554">instantiation</span>
+<span id="b572">splices</span><span id="b579"> </span><span id="b580">garbage</span><span id="b587"> </span><span id="b588">while</span><span id="b593"> </span><span id="b594">still</span><span id="b599"> </span><span id="b600">advancing</span><span id="b609"> </span><code id="b610">buf[2]</code><span id="b618"> </span><span id="b619">in</span><span id="b621"> </span><span id="b622">elements</span><span id="b630">.</span><span id="b631"> </span><span id="b632">Sole</span><span id="b636"> </span><span id="b637">caller</span>
+<span id="b648">today</span><span id="b653">:</span><span id="b654"> </span><code id="b655">TLV.h:70</code><span id="b665"> </span><span id="b666">(</span><span id="b667">u8</span><span id="b669">)</span><span id="b670"> </span><span id="b671">—</span><span id="b674"> </span><span id="b675">works</span><span id="b680"> </span><span id="b681">by</span><span id="b683"> </span><span id="b684">accident</span><span id="b692">.</span></li>
+<li id="b694"><code id="b698">Bx.h:388-393</code><span id="b712"> </span><code id="b713">bReMap</code><span id="b721"> </span><span id="b722">non</span><span id="b725">-</span><span id="b726">mremap</span><span id="b732"> </span><span id="b733">fallback</span><span id="b741"> </span><span id="b742">memmoves</span><span id="b750"> </span><code id="b751">old_size</code><span id="b761"> </span><span id="b762">bytes</span>
+<span id="b772">into</span><span id="b776"> </span><span id="b777">a</span><span id="b778"> </span><code id="b779">new_size</code><span id="b789"> </span><span id="b790">mapping</span><span id="b797"> </span><span id="b798">—</span><span id="b801"> </span><span id="b802">OOB</span><span id="b805"> </span><span id="b806">write</span><span id="b811"> </span><span id="b812">on</span><span id="b814"> </span><span id="b815">any</span><span id="b818"> </span><span id="b819">shrink</span><span id="b825">;</span><span id="b826"> </span><span id="b827">this</span><span id="b831"> </span><span id="b832">is</span><span id="b834"> </span><span id="b835">the</span><span id="b838"> </span><span id="b839">path</span>
+<span id="b848">macOS</span><span id="b853"> </span><span id="b854">CI</span><span id="b856"> </span><span id="b857">takes</span><span id="b862">.</span><span id="b863"> </span><span id="b864">Also</span><span id="b868"> </span><code id="b869">MAP_SHARED</code><span id="b881"> </span><span id="b882">vs</span><span id="b884"> </span><span id="b885">the</span><span id="b888"> </span><span id="b889">mremap</span><span id="b895"> </span><span id="b896">path</span><span id="b900">'</span><span id="b901">s</span><span id="b902"> </span><span id="b903">private</span><span id="b910"> </span><span id="b911">mapping</span><span id="b918">.</span>
+<span id="b924">(</span><span id="b925">Distinct</span><span id="b933"> </span><span id="b934">from</span><span id="b938"> </span><span id="b939">MEM-021</span><span id="b946">'</span><span id="b947">s</span><span id="b948"> </span><span id="b949">MMAP.c</span><span id="b955"> </span><span id="b956">items</span><span id="b961">.</span><span id="b962">)</span></li>
+<li id="b964"><code id="b968">Bx.h:506-510</code><span id="b982"> </span><code id="b983">bAcquire</code><span id="b993">:</span><span id="b994"> </span><span id="b995">(</span><span id="b996">1</span><span id="b997">)</span><span id="b998"> </span><span id="b999">aligns</span><span id="b1005"> </span><span id="b1006">with</span><span id="b1010"> </span><code id="b1011">sizeof(T)</code><span id="b1022"> </span><span id="b1023">mask</span><span id="b1027"> </span><span id="b1028">instead</span><span id="b1035"> </span><span id="b1036">of</span>
+<code id="b1043">alignof(T)</code><span id="b1055"> </span><span id="b1056">—</span><span id="b1059"> </span><span id="b1060">garbage</span><span id="b1067"> </span><span id="b1068">for</span><span id="b1071"> </span><span id="b1072">non</span><span id="b1075">-</span><span id="b1076">power</span><span id="b1081">-</span><span id="b1082">of</span><span id="b1084">-</span><span id="b1085">2</span><span id="b1086"> </span><span id="b1087">T</span><span id="b1088">,</span><span id="b1089"> </span><span id="b1090">and</span><span id="b1093"> </span><span id="b1094">inconsistent</span><span id="b1106"> </span><span id="b1107">with</span>
+<code id="b1116">bAlign</code><span id="b1124">/</span><code id="b1125">bAren</code><span id="b1132"> </span><span id="b1133">(</span><span id="b1134">Bx.h:451</span><span id="b1142">,</span><span id="b1143">483</span><span id="b1146">)</span><span id="b1147"> </span><span id="b1148">which</span><span id="b1153"> </span><span id="b1154">use</span><span id="b1157"> </span><span id="b1158">alignof</span><span id="b1165">;</span><span id="b1166"> </span><span id="b1167">(</span><span id="b1168">2</span><span id="b1169">)</span><span id="b1170"> </span><code id="b1171">cap * sizeof(T)</code>
+<span id="b1193">unchecked</span><span id="b1202"> </span><span id="b1203">overflow</span><span id="b1211"> </span><span id="b1212">→</span><span id="b1215"> </span><span id="b1216">tiny</span><span id="b1220"> </span><span id="b1221">sz</span><span id="b1223"> </span><span id="b1224">passes</span><span id="b1230"> </span><span id="b1231">the</span><span id="b1234"> </span><span id="b1235">room</span><span id="b1239"> </span><span id="b1240">check</span><span id="b1245">,</span><span id="b1246"> </span><span id="b1247">child</span><span id="b1252"> </span><span id="b1253">claims</span><span id="b1259"> </span><span id="b1260">cap</span>
+<span id="b1268">elements</span><span id="b1276"> </span><span id="b1277">over</span><span id="b1281"> </span><span id="b1282">a</span><span id="b1283"> </span><span id="b1284">few</span><span id="b1287"> </span><span id="b1288">bytes</span><span id="b1293">;</span><span id="b1294"> </span><span id="b1295">(</span><span id="b1296">3</span><span id="b1297">)</span><span id="b1298"> </span><code id="b1299">base + sz &gt; arena[3]</code><span id="b1321"> </span><span id="b1322">pointer</span><span id="b1329">-</span><span id="b1330">overflow</span>
+<span id="b1343">UB</span><span id="b1345">.</span><span id="b1346"> </span><span id="b1347">Same</span><span id="b1351"> </span><code id="b1352">len * sizeof(T)</code><span id="b1369"> </span><span id="b1370">overflow</span><span id="b1378"> </span><span id="b1379">in</span><span id="b1381"> </span><code id="b1382">bAllocate</code><span id="b1393"> </span><span id="b1394">(</span><span id="b1395">:</span><span id="b1396">202</span><span id="b1399">)</span><span id="b1400">,</span><span id="b1401"> </span><code id="b1402">bMap</code><span id="b1408"> </span><span id="b1409">(</span><span id="b1410">:</span><span id="b1411">369</span><span id="b1414">)</span><span id="b1415">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b1418"><span id="b1422">Goals</span></span></h3>
 <ul>
-<li>Repro: instantiate <code>bSplice</code> for a 4/8-byte T and splice mid-buffer; a shrink <code>bReMap</code> under <code>#undef MREMAP</code> build; bAcquire with huge cap.</li>
-<li>Fix units (scale by sizeof(T) or keep T* arithmetic), clamp the remap copy to min(old,new), alignof + overflow-checked size math.</li>
+<li id="b1428"><span id="b1432">Repro</span><span id="b1437">:</span><span id="b1438"> </span><span id="b1439">instantiate</span><span id="b1450"> </span><code id="b1451">bSplice</code><span id="b1460"> </span><span id="b1461">for</span><span id="b1464"> </span><span id="b1465">a</span><span id="b1466"> </span><span id="b1467">4</span><span id="b1468">/</span><span id="b1469">8</span><span id="b1470">-</span><span id="b1471">byte</span><span id="b1475"> </span><span id="b1476">T</span><span id="b1477"> </span><span id="b1478">and</span><span id="b1481"> </span><span id="b1482">splice</span><span id="b1488"> </span><span id="b1489">mid</span><span id="b1492">-</span><span id="b1493">buffer</span><span id="b1499">;</span>
+<span id="b1505">a</span><span id="b1506"> </span><span id="b1507">shrink</span><span id="b1513"> </span><code id="b1514">bReMap</code><span id="b1522"> </span><span id="b1523">under</span><span id="b1528"> </span><code id="b1529">#undef MREMAP</code><span id="b1544"> </span><span id="b1545">build</span><span id="b1550">;</span><span id="b1551"> </span><span id="b1552">bAcquire</span><span id="b1560"> </span><span id="b1561">with</span><span id="b1565"> </span><span id="b1566">huge</span><span id="b1570"> </span><span id="b1571">cap</span><span id="b1574">.</span></li>
+<li id="b1576"><span id="b1580">Fix</span><span id="b1583"> </span><span id="b1584">units</span><span id="b1589"> </span><span id="b1590">(</span><span id="b1591">scale</span><span id="b1596"> </span><span id="b1597">by</span><span id="b1599"> </span><span id="b1600">sizeof</span><span id="b1606">(</span><span id="b1607">T</span><span id="b1608">)</span><span id="b1609"> </span><span id="b1610">or</span><span id="b1612"> </span><span id="b1613">keep</span><span id="b1617"> </span><span id="b1618">T</span><span id="b1619">*</span><span id="b1620"> </span><span id="b1621">arithmetic</span><span id="b1631">)</span><span id="b1632">,</span><span id="b1633"> </span><span id="b1634">clamp</span><span id="b1639"> </span><span id="b1640">the</span><span id="b1643"> </span><span id="b1644">remap</span>
+<span id="b1654">copy</span><span id="b1658"> </span><span id="b1659">to</span><span id="b1661"> </span><span id="b1662">min</span><span id="b1665">(</span><span id="b1666">old</span><span id="b1669">,</span><span id="b1670">new</span><span id="b1673">)</span><span id="b1674">,</span><span id="b1675"> </span><span id="b1676">alignof</span><span id="b1683"> </span><span id="b1684">+</span><span id="b1685"> </span><span id="b1686">overflow</span><span id="b1694">-</span><span id="b1695">checked</span><span id="b1702"> </span><span id="b1703">size</span><span id="b1707"> </span><span id="b1708">math</span><span id="b1712">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b1715"><span id="b1719">Constraints</span></span></h3>
 <ul>
-<li>abc/ core — review-gated; behavior-preserving for u8 instantiations.</li>
-<li>Coordinate with <a href="../MEM/MEM-021.html">MEM-021</a> (adjacent MMAP fixes), disjoint lines.</li>
+<li id="b1731"><span id="b1735">abc</span><span id="b1738">/</span><span id="b1739"> </span><span id="b1740">core</span><span id="b1744"> </span><span id="b1745">—</span><span id="b1748"> </span><span id="b1749">review</span><span id="b1755">-</span><span id="b1756">gated</span><span id="b1761">;</span><span id="b1762"> </span><span id="b1763">behavior</span><span id="b1771">-</span><span id="b1772">preserving</span><span id="b1782"> </span><span id="b1783">for</span><span id="b1786"> </span><span id="b1787">u8</span><span id="b1789"> </span><span id="b1790">instantiations</span><span id="b1804">.</span></li>
+<li id="b1806"><span id="b1810">Coordinate</span><span id="b1820"> </span><span id="b1821">with</span><span id="b1825"> </span><a href="../MEM/MEM-021.html" title="abc latent bounds/overflow hardening"><span id="b1827">MEM-021</span></a><span id="b1835"> </span><span id="b1836">(</span><span id="b1837">adjacent</span><span id="b1845"> </span><span id="b1846">MMAP</span><span id="b1850"> </span><span id="b1851">fixes</span><span id="b1856">)</span><span id="b1857">,</span><span id="b1858"> </span><span id="b1859">disjoint</span><span id="b1867"> </span><span id="b1868">lines</span><span id="b1873">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>Design decisions</h3>
+<h2 id="wip"><span id="b1876"><span id="b1880">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b1885"><span id="b1889">Design</span><span id="b1895"> </span><span id="b1896">decisions</span></span></h3>
 <ul>
-<li>(open)</li>
+<li id="b1906"><span id="b1910">(</span><span id="b1911">open</span><span id="b1915">)</span></li>
 </ul>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> repro tests (non-u8 splice, shrink remap, overflow cap)</li>
-<li class="open"><input type="checkbox" disabled> bSplice element-scaled moves</li>
-<li class="open"><input type="checkbox" disabled> bReMap copy clamp + mapping flags</li>
-<li class="open"><input type="checkbox" disabled> bAcquire/bAllocate/bMap alignment + size-overflow guards</li>
-</ul>
-<h3>Blockers and bummers</h3>
+<h3 id="todos"><span id="b1918"><span id="b1922">TODOs</span></span></h3>
 <ul>
-<li>(none)</li>
+<li class="task" id="b1928"><input type="checkbox" disabled="" /> <span id="b1933">repro</span><span id="b1938"> </span><span id="b1939">tests</span><span id="b1944"> </span><span id="b1945">(</span><span id="b1946">non</span><span id="b1949">-</span><span id="b1950">u8</span><span id="b1952"> </span><span id="b1953">splice</span><span id="b1959">,</span><span id="b1960"> </span><span id="b1961">shrink</span><span id="b1967"> </span><span id="b1968">remap</span><span id="b1973">,</span><span id="b1974"> </span><span id="b1975">overflow</span><span id="b1983"> </span><span id="b1984">cap</span><span id="b1987">)</span></li>
+<li class="task" id="b1989"><input type="checkbox" disabled="" /> <span id="b1994">bSplice</span><span id="b2001"> </span><span id="b2002">element</span><span id="b2009">-</span><span id="b2010">scaled</span><span id="b2016"> </span><span id="b2017">moves</span></li>
+<li class="task" id="b2023"><input type="checkbox" disabled="" /> <span id="b2028">bReMap</span><span id="b2034"> </span><span id="b2035">copy</span><span id="b2039"> </span><span id="b2040">clamp</span><span id="b2045"> </span><span id="b2046">+</span><span id="b2047"> </span><span id="b2048">mapping</span><span id="b2055"> </span><span id="b2056">flags</span></li>
+<li class="task" id="b2062"><input type="checkbox" disabled="" /> <span id="b2067">bAcquire</span><span id="b2075">/</span><span id="b2076">bAllocate</span><span id="b2085">/</span><span id="b2086">bMap</span><span id="b2090"> </span><span id="b2091">alignment</span><span id="b2100"> </span><span id="b2101">+</span><span id="b2102"> </span><span id="b2103">size</span><span id="b2107">-</span><span id="b2108">overflow</span><span id="b2116"> </span><span id="b2117">guards</span></li>
 </ul>
-<h2>Outcome</h2>
+<h3 id="blockers-and-bummers"><span id="b2125"><span id="b2129">Blockers</span><span id="b2137"> </span><span id="b2138">and</span><span id="b2141"> </span><span id="b2142">bummers</span></span></h3>
 <ul>
-<li>(open)</li>
+<li id="b2150"><span id="b2154">(</span><span id="b2155">none</span><span id="b2159">)</span></li>
+</ul>
+<h2 id="outcome"><span id="b2162"><span id="b2166">Outcome</span></span></h2>
+<ul>
+<li id="b2174"><span id="b2178">(</span><span id="b2179">open</span><span id="b2183">)</span></li>
 </ul>
 <div class="footer">
 ❧

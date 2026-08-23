@@ -5,62 +5,61 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MARK-010: raw C stack arrays and raw pointer indexing in MARK.c vs the ABC idioms</title>
 <meta property="og:title" content="MARK-010: raw C stack arrays and raw pointer indexing in MARK.c vs the ABC idioms">
-<meta property="og:description" content="MARK.c carries raw markref refsMARKMAXREFS (16KB stack, MARK.c:741) and markframe stkMARKMAXSTACK (MARK.c:598) where CLAUDE.md §1 / abc mandate the typed forms (apad, or BASS acarve for the 16KB table), plus raw pointer indexing u8 state = linef0 (MARK.c:699) — bounds-safe only via the marker contract — where u8csAt is the idiom. Style-only: no observed misbehavior, but it is exactly the slice/pointer mode-mixing abc calls the worst sin. From the 2026-07-07 mark/ diagnostic review; code confirmed in-tree. Method Issues.">
+<meta property="og:description" content="MARK.c carries raw markref refs[MARK_MAX_REFS] (16KB stack, MARK.c:741) and markframe stk[MARK_MAX_STACK] (MARK.c:598) where CLAUDE.md §1 / abc mandate the typed forms (a_pad, or BASS a_carve for the 16KB table), plus raw pointer indexing u8 state = linef[0][(size_t)depth * 4 + 2] (MARK.c:699) — bounds-safe only via the marker contract — where u8csAt is the idiom. Style-only: no observed misbehavior, but it is exactly the slice/pointer mode-mixing abc calls the worst sin. From the 2026-07-07 mark/ diagnostic review; code confirmed in-tree. Method Issues.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/MARK/MARK-010.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>MARK-010: raw C stack arrays and raw pointer indexing in MARK.c vs the ABC idioms</h1>
+<h1 id="mark-010-raw-c-stack-arrays-and-raw-pointer-indexing-in-markc-vs-the-abc-idioms"><span id="b0"><span id="b4">MARK-010</span><span id="b12">:</span><span id="b13"> </span><span id="b14">raw</span><span id="b17"> </span><span id="b18">C</span><span id="b19"> </span><span id="b20">stack</span><span id="b25"> </span><span id="b26">arrays</span><span id="b32"> </span><span id="b33">and</span><span id="b36"> </span><span id="b37">raw</span><span id="b40"> </span><span id="b41">pointer</span><span id="b48"> </span><span id="b49">indexing</span><span id="b57"> </span><span id="b58">in</span><span id="b60"> </span><span id="b61">MARK.c</span><span id="b67"> </span><span id="b68">vs</span><span id="b70"> </span><span id="b71">the</span><span id="b74"> </span><span id="b75">ABC</span><span id="b78"> </span><span id="b79">idioms</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
-<dl class="meta"><dt>Sev:</dt><dd>LOW</dd></dl>
+<dl class="meta">
+<dt id="b86"><span>Now</span></dt>
+<dd><span id="b94">OPEN</span></dd>
+<dt id="b100"><span>Sev</span></dt>
+<dd><span id="b108">LOW</span></dd>
+</dl>
 </div>
-<p>
-<code>MARK.c</code> carries raw <code>markref refs[MARK_MAX_REFS]</code> (16KB stack, <code>MARK.c:741</code>) and <code>markframe stk[MARK_MAX_STACK]</code> (<code>MARK.c:598</code>) where CLAUDE.md §1 / <a href="../../meta/abc.html">abc</a> mandate the typed forms (<code>a_pad</code>, or BASS <code>a_carve</code> for the 16KB table), plus raw pointer indexing <code>u8 state = linef[0][(size_t)depth * 4 + 2]</code> (<code>MARK.c:699</code>) — bounds-safe only via the marker contract — where <code>u8csAt</code> is the idiom. Style-only: no observed misbehavior, but it is exactly the slice/pointer mode-mixing <a href="../../meta/abc.html">abc</a> calls the worst sin. From the 2026-07-07 mark/ diagnostic review; code confirmed in-tree. Method <a href="../../rule/Issues.html">Issues</a>.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b114"><code>MARK.c</code><span id="b122"> </span><span id="b123">carries</span><span id="b130"> </span><span id="b131">raw</span><span id="b134"> </span><code id="b135">markref refs[MARK_MAX_REFS]</code><span id="b164"> </span><span id="b165">(</span><span id="b166">16</span><span id="b168">KB</span><span id="b170"> </span><span id="b171">stack</span><span id="b176">,</span><span id="b177"> </span><code id="b178">MARK.c:741</code><span id="b190">)</span><span id="b191"> </span><span id="b192">and</span><span id="b195"> </span><code id="b196">markframe stk[MARK_MAX_STACK]</code><span id="b227"> </span><span id="b228">(</span><code id="b229">MARK.c:598</code><span id="b241">)</span><span id="b242"> </span><span id="b243">where</span><span id="b248"> </span><span id="b249">CLAUDE.md</span><span id="b258"> </span><span id="b259">§1</span><span id="b262"> </span><span id="b263">/</span><span id="b264"> </span><a href="../../meta/abc.html" title="ABC refactoring policies"><span id="b266">abc</span></a><span id="b270"> </span><span id="b271">mandate</span><span id="b278"> </span><span id="b279">the</span><span id="b282"> </span><span id="b283">typed</span><span id="b288"> </span><span id="b289">forms</span><span id="b294"> </span><span id="b295">(</span><code id="b296">a_pad</code><span id="b303">,</span><span id="b304"> </span><span id="b305">or</span><span id="b307"> </span><span id="b308">BASS</span><span id="b312"> </span><code id="b313">a_carve</code><span id="b322"> </span><span id="b323">for</span><span id="b326"> </span><span id="b327">the</span><span id="b330"> </span><span id="b331">16</span><span id="b333">KB</span><span id="b335"> </span><span id="b336">table</span><span id="b341">)</span><span id="b342">,</span><span id="b343"> </span><span id="b344">plus</span><span id="b348"> </span><span id="b349">raw</span><span id="b352"> </span><span id="b353">pointer</span><span id="b360"> </span><span id="b361">indexing</span><span id="b369"> </span><code id="b370">u8 state = linef[0][(size_t)depth * 4 + 2]</code><span id="b414"> </span><span id="b415">(</span><code id="b416">MARK.c:699</code><span id="b428">)</span><span id="b429"> </span><span id="b430">—</span><span id="b433"> </span><span id="b434">bounds</span><span id="b440">-</span><span id="b441">safe</span><span id="b445"> </span><span id="b446">only</span><span id="b450"> </span><span id="b451">via</span><span id="b454"> </span><span id="b455">the</span><span id="b458"> </span><span id="b459">marker</span><span id="b465"> </span><span id="b466">contract</span><span id="b474"> </span><span id="b475">—</span><span id="b478"> </span><span id="b479">where</span><span id="b484"> </span><code id="b485">u8csAt</code><span id="b493"> </span><span id="b494">is</span><span id="b496"> </span><span id="b497">the</span><span id="b500"> </span><span id="b501">idiom</span><span id="b506">.</span><span id="b507"> </span><span id="b508">Style</span><span id="b513">-</span><span id="b514">only</span><span id="b518">:</span><span id="b519"> </span><span id="b520">no</span><span id="b522"> </span><span id="b523">observed</span><span id="b531"> </span><span id="b532">misbehavior</span><span id="b543">,</span><span id="b544"> </span><span id="b545">but</span><span id="b548"> </span><span id="b549">it</span><span id="b551"> </span><span id="b552">is</span><span id="b554"> </span><span id="b555">exactly</span><span id="b562"> </span><span id="b563">the</span><span id="b566"> </span><span id="b567">slice</span><span id="b572">/</span><span id="b573">pointer</span><span id="b580"> </span><span id="b581">mode</span><span id="b585">-</span><span id="b586">mixing</span><span id="b592"> </span><a href="../../meta/abc.html" title="ABC refactoring policies"><span id="b594">abc</span></a><span id="b598"> </span><span id="b599">calls</span><span id="b604"> </span><span id="b605">the</span><span id="b608"> </span><span id="b609">worst</span><span id="b614"> </span><span id="b615">sin</span><span id="b618">.</span><span id="b619"> </span><span id="b620">From</span><span id="b624"> </span><span id="b625">the</span><span id="b628"> </span><span id="b629">2026</span><span id="b633">-</span><span id="b634">07</span><span id="b636">-</span><span id="b637">07</span><span id="b639"> </span><span id="b640">mark</span><span id="b644">/</span><span id="b645"> </span><span id="b646">diagnostic</span><span id="b656"> </span><span id="b657">review</span><span id="b663">;</span><span id="b664"> </span><span id="b665">code</span><span id="b669"> </span><span id="b670">confirmed</span><span id="b679"> </span><span id="b680">in</span><span id="b682">-</span><span id="b683">tree</span><span id="b687">.</span><span id="b688"> </span><span id="b689">Method</span><span id="b695"> </span><a href="../../rule/Issues.html" title="the parallel fix-and-land loop"><span id="b697">Issues</span></a><span id="b704">.</span></p>
+<h2 id="input"><span id="b707"><span id="b711">Input</span></span></h2>
+<h3 id="context"><span id="b718"><span id="b722">Context</span></span></h3>
 <ul>
-<li><code>refs[512]</code> is also the silent-truncation table of <a href="MARK-007.html">MARK-007</a> — sizing policy and storage idiom want one combined fix.</li>
-<li>16KB of stack per render call is a real cost on deep call chains (dir walk).</li>
+<li id="b730"><code id="b734">refs[512]</code><span id="b745"> </span><span id="b746">is</span><span id="b748"> </span><span id="b749">also</span><span id="b753"> </span><span id="b754">the</span><span id="b757"> </span><span id="b758">silent</span><span id="b764">-</span><span id="b765">truncation</span><span id="b775"> </span><span id="b776">table</span><span id="b781"> </span><span id="b782">of</span><span id="b784"> </span><a href="MARK-007.html" title="MARK_MAX_REFS silent truncation misresolves links"><span id="b786">MARK-007</span></a><span id="b795"> </span><span id="b796">—</span><span id="b799"> </span><span id="b800">sizing</span><span id="b806"> </span><span id="b807">policy</span><span id="b813"> </span><span id="b814">and</span><span id="b817"> </span><span id="b818">storage</span><span id="b825"> </span><span id="b826">idiom</span><span id="b831"> </span><span id="b832">want</span><span id="b836"> </span><span id="b837">one</span><span id="b840"> </span><span id="b841">combined</span><span id="b849"> </span><span id="b850">fix</span><span id="b853">.</span></li>
+<li id="b855"><span id="b859">16</span><span id="b861">KB</span><span id="b863"> </span><span id="b864">of</span><span id="b866"> </span><span id="b867">stack</span><span id="b872"> </span><span id="b873">per</span><span id="b876"> </span><span id="b877">render</span><span id="b883"> </span><span id="b884">call</span><span id="b888"> </span><span id="b889">is</span><span id="b891"> </span><span id="b892">a</span><span id="b893"> </span><span id="b894">real</span><span id="b898"> </span><span id="b899">cost</span><span id="b903"> </span><span id="b904">on</span><span id="b906"> </span><span id="b907">deep</span><span id="b911"> </span><span id="b912">call</span><span id="b916"> </span><span id="b917">chains</span><span id="b923"> </span><span id="b924">(</span><span id="b925">dir</span><span id="b928"> </span><span id="b929">walk</span><span id="b933">)</span><span id="b934">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b937"><span id="b941">Goals</span></span></h3>
 <ul>
-<li>Typed/idiomatic storage: <code>a_pad</code> for the fixed frame stack, BASS carve for the ref table; <code>u8csAt</code> over raw double-indexing; zero behavior change (byte-identical wiki render).</li>
+<li id="b947"><span id="b951">Typed</span><span id="b956">/</span><span id="b957">idiomatic</span><span id="b966"> </span><span id="b967">storage</span><span id="b974">:</span><span id="b975"> </span><code id="b976">a_pad</code><span id="b983"> </span><span id="b984">for</span><span id="b987"> </span><span id="b988">the</span><span id="b991"> </span><span id="b992">fixed</span><span id="b997"> </span><span id="b998">frame</span><span id="b1003"> </span><span id="b1004">stack</span><span id="b1009">,</span><span id="b1010"> </span><span id="b1011">BASS</span><span id="b1015"> </span><span id="b1016">carve</span><span id="b1021"> </span><span id="b1022">for</span><span id="b1025"> </span><span id="b1026">the</span><span id="b1029"> </span><span id="b1030">ref</span><span id="b1033"> </span><span id="b1034">table</span><span id="b1039">;</span><span id="b1040"> </span><code id="b1041">u8csAt</code><span id="b1049"> </span><span id="b1050">over</span><span id="b1054"> </span><span id="b1055">raw</span><span id="b1058"> </span><span id="b1059">double</span><span id="b1065">-</span><span id="b1066">indexing</span><span id="b1074">;</span><span id="b1075"> </span><span id="b1076">zero</span><span id="b1080"> </span><span id="b1081">behavior</span><span id="b1089"> </span><span id="b1090">change</span><span id="b1096"> </span><span id="b1097">(</span><span id="b1098">byte</span><span id="b1102">-</span><span id="b1103">identical</span><span id="b1112"> </span><span id="b1113">wiki</span><span id="b1117"> </span><span id="b1118">render</span><span id="b1124">)</span><span id="b1125">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b1128"><span id="b1132">Constraints</span></span></h3>
 <ul>
-<li>Pure refactor, land after/with <a href="MARK-007.html">MARK-007</a>; ABC buffer rules (<a href="../../meta/abc.html">abc</a> BASS section — acquire in own frame, no carve between lign/cquire).</li>
+<li id="b1144"><span id="b1148">Pure</span><span id="b1152"> </span><span id="b1153">refactor</span><span id="b1161">,</span><span id="b1162"> </span><span id="b1163">land</span><span id="b1167"> </span><span id="b1168">after</span><span id="b1173">/</span><span id="b1174">with</span><span id="b1178"> </span><a href="MARK-007.html" title="MARK_MAX_REFS silent truncation misresolves links"><span id="b1180">MARK-007</span></a><span id="b1189">;</span><span id="b1190"> </span><span id="b1191">ABC</span><span id="b1194"> </span><span id="b1195">buffer</span><span id="b1201"> </span><span id="b1202">rules</span><span id="b1207"> </span><span id="b1208">(</span><a href="../../meta/abc.html" title="ABC refactoring policies"><span id="b1210">abc</span></a><span id="b1214"> </span><span id="b1215">BASS</span><span id="b1219"> </span><span id="b1220">section</span><span id="b1227"> </span><span id="b1228">—</span><span id="b1231"> </span><span id="b1232">acquire</span><span id="b1239"> </span><span id="b1240">in</span><span id="b1242"> </span><span id="b1243">own</span><span id="b1246"> </span><span id="b1247">frame</span><span id="b1252">,</span><span id="b1253"> </span><span id="b1254">no</span><span id="b1256"> </span><span id="b1257">carve</span><span id="b1262"> </span><span id="b1263">between</span><span id="b1270"> </span><span id="b1271">lign</span><span id="b1275">/</span><span id="b1276">cquire</span><span id="b1282">)</span><span id="b1283">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>Design decisions</h3>
+<h2 id="wip"><span id="b1286"><span id="b1290">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b1295"><span id="b1299">Design</span><span id="b1305"> </span><span id="b1306">decisions</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li id="b1316"><span id="b1320">(</span><span id="b1321">pending</span><span id="b1328">)</span></li>
 </ul>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> Swap storage idioms; byte-identical render check; suite green.</li>
-</ul>
-<h3>Blockers and bummers</h3>
+<h3 id="todos"><span id="b1331"><span id="b1335">TODOs</span></span></h3>
 <ul>
-<li>None known.</li>
+<li class="task" id="b1341"><input type="checkbox" disabled="" /> <span id="b1346">Swap</span><span id="b1350"> </span><span id="b1351">storage</span><span id="b1358"> </span><span id="b1359">idioms</span><span id="b1365">;</span><span id="b1366"> </span><span id="b1367">byte</span><span id="b1371">-</span><span id="b1372">identical</span><span id="b1381"> </span><span id="b1382">render</span><span id="b1388"> </span><span id="b1389">check</span><span id="b1394">;</span><span id="b1395"> </span><span id="b1396">suite</span><span id="b1401"> </span><span id="b1402">green</span><span id="b1407">.</span></li>
 </ul>
-<h2>Outcome</h2>
+<h3 id="blockers-and-bummers"><span id="b1410"><span id="b1414">Blockers</span><span id="b1422"> </span><span id="b1423">and</span><span id="b1426"> </span><span id="b1427">bummers</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li id="b1435"><span id="b1439">None</span><span id="b1443"> </span><span id="b1444">known</span><span id="b1449">.</span></li>
+</ul>
+<h2 id="outcome"><span id="b1452"><span id="b1456">Outcome</span></span></h2>
+<ul>
+<li id="b1464"><span id="b1468">(</span><span id="b1469">pending</span><span id="b1476">)</span></li>
 </ul>
 <div class="footer">
 ❧

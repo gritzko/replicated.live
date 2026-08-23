@@ -5,63 +5,62 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>JAB-013: ulog seekURI misses long-URI rows — 2048 pad NOROOM reads as &quot;no match&quot;; drain already has the raw slice</title>
 <meta property="og:title" content="JAB-013: ulog seekURI misses long-URI rows — 2048 pad NOROOM reads as &quot;no match&quot;; drain already has the raw slice">
-<meta property="og:description" content="ulogseekURI (jab/ulog.hpp:172-195) reconstructs each row's URI via URIMake into a fixed u8 ub2048; on NOROOM JABCulogUriText returns 0 and the row silently never matches. Feed accepts raw URIs up to FILEPATHMAXLEN=1024 whose escaped form (~3x) exceeds the pad — the same class JS-108 fixed on the read path (JABCulogUriStr, ulog.hpp:38, sized malloc). The reconstruction is also needless: ULOGu8sDrain sets rec.uri.data to the row's URI slice (dog/ULOG.c:119, ULOG.h:159); the ulog.hpp:25 comment claiming it stays empty is wrong. Found in the 2026-07-24 jab/ review.">
+<meta property="og:description" content="_ulog_seekURI (jab/ulog.hpp:172-195) reconstructs each row's URI via URIMake into a fixed u8 ub[2048]; on NOROOM JABCulogUriText returns 0 and the row silently never matches. Feed accepts raw URIs up to FILE_PATH_MAX_LEN=1024 whose escaped form (~3x) exceeds the pad — the same class JS-108 fixed on the read path (JABCulogUriStr, ulog.hpp:38, sized malloc). The reconstruction is also needless: ULOGu8sDrain sets rec.uri.data to the row's URI slice (dog/ULOG.c:119, ULOG.h:159); the ulog.hpp:25 comment claiming it stays empty is wrong. Found in the 2026-07-24 jab/ review.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-013.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JAB-013: ulog seekURI misses long-URI rows — 2048 pad NOROOM reads as &quot;no match&quot;; drain already has the raw slice</h1>
+<h1 id="jab-013-ulog-seekuri-misses-long-uri-rows-—-2048-pad-noroom-reads-as-no-match-drain-already-has-the-raw-slice"><span id="b0"><span id="b4">JAB-013</span><span id="b11">:</span><span id="b12"> </span><span id="b13">ulog</span><span id="b17"> </span><span id="b18">seekURI</span><span id="b25"> </span><span id="b26">misses</span><span id="b32"> </span><span id="b33">long</span><span id="b37">-</span><span id="b38">URI</span><span id="b41"> </span><span id="b42">rows</span><span id="b46"> </span><span id="b47">—</span><span id="b50"> </span><span id="b51">2048</span><span id="b55"> </span><span id="b56">pad</span><span id="b59"> </span><span id="b60">NOROOM</span><span id="b66"> </span><span id="b67">reads</span><span id="b72"> </span><span id="b73">as</span><span id="b75"> </span><span id="b76">&quot;</span><span id="b77">no</span><span id="b79"> </span><span id="b80">match</span><span id="b85">&quot;</span><span id="b86">;</span><span id="b87"> </span><span id="b88">drain</span><span id="b93"> </span><span id="b94">already</span><span id="b101"> </span><span id="b102">has</span><span id="b105"> </span><span id="b106">the</span><span id="b109"> </span><span id="b110">raw</span><span id="b113"> </span><span id="b114">slice</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
-<dl class="meta"><dt>Sev:</dt><dd>MED</dd></dl>
+<dl class="meta">
+<dt id="b120"><span>Now</span></dt>
+<dd><span id="b128">OPEN</span></dd>
+<dt id="b134"><span>Sev</span></dt>
+<dd><span id="b142">MED</span></dd>
+</dl>
 </div>
-<p>
-<code>_ulog_seekURI</code> (jab/ulog.hpp:172-195) reconstructs each row's URI via <code>URIMake</code> into a fixed <code>u8 ub[2048]</code>; on NOROOM <code>JABCulogUriText</code> returns 0 and the row silently never matches. Feed accepts raw URIs up to <code>FILE_PATH_MAX_LEN</code>=1024 whose escaped form (~3x) exceeds the pad — the same class <a href="./JS-108.html">JS-108</a> fixed on the read path (<code>JABCulogUriStr</code>, ulog.hpp:38, sized malloc). The reconstruction is also needless: <code>ULOGu8sDrain</code> sets <code>rec.uri.data</code> to the row's URI slice (dog/ULOG.c:119, ULOG.h:159); the ulog.hpp:25 comment claiming it stays empty is wrong. Found in the 2026-07-24 jab/ review.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b148"><code>_ulog_seekURI</code><span id="b163"> </span><span id="b164">(</span><span id="b165">jab/ulog.hpp:172</span><span id="b181">-</span><span id="b182">195</span><span id="b185">)</span><span id="b186"> </span><span id="b187">reconstructs</span><span id="b199"> </span><span id="b200">each</span><span id="b204"> </span><span id="b205">row</span><span id="b208">'</span><span id="b209">s</span><span id="b210"> </span><span id="b211">URI</span><span id="b214"> </span><span id="b215">via</span><span id="b218"> </span><code id="b219">URIMake</code><span id="b228"> </span><span id="b229">into</span><span id="b233"> </span><span id="b234">a</span><span id="b235"> </span><span id="b236">fixed</span><span id="b241"> </span><code id="b242">u8 ub[2048]</code><span id="b255">;</span><span id="b256"> </span><span id="b257">on</span><span id="b259"> </span><span id="b260">NOROOM</span><span id="b266"> </span><code id="b267">JABCulogUriText</code><span id="b284"> </span><span id="b285">returns</span><span id="b292"> </span><span id="b293">0</span><span id="b294"> </span><span id="b295">and</span><span id="b298"> </span><span id="b299">the</span><span id="b302"> </span><span id="b303">row</span><span id="b306"> </span><span id="b307">silently</span><span id="b315"> </span><span id="b316">never</span><span id="b321"> </span><span id="b322">matches</span><span id="b329">.</span><span id="b330"> </span><span id="b331">Feed</span><span id="b335"> </span><span id="b336">accepts</span><span id="b343"> </span><span id="b344">raw</span><span id="b347"> </span><span id="b348">URIs</span><span id="b352"> </span><span id="b353">up</span><span id="b355"> </span><span id="b356">to</span><span id="b358"> </span><code id="b359">FILE_PATH_MAX_LEN</code><span id="b378">=</span><span id="b379">1024</span><span id="b383"> </span><span id="b384">whose</span><span id="b389"> </span><span id="b390">escaped</span><span id="b397"> </span><span id="b398">form</span><span id="b402"> </span><span id="b403">(</span><span id="b404">~</span><span id="b405">3</span><span id="b406">x</span><span id="b407">)</span><span id="b408"> </span><span id="b409">exceeds</span><span id="b416"> </span><span id="b417">the</span><span id="b420"> </span><span id="b421">pad</span><span id="b424"> </span><span id="b425">—</span><span id="b428"> </span><span id="b429">the</span><span id="b432"> </span><span id="b433">same</span><span id="b437"> </span><span id="b438">class</span><span id="b443"> </span><a href="JS-108"><span id="b445">JS-108</span></a><span id="b452"> </span><span id="b453">fixed</span><span id="b458"> </span><span id="b459">on</span><span id="b461"> </span><span id="b462">the</span><span id="b465"> </span><span id="b466">read</span><span id="b470"> </span><span id="b471">path</span><span id="b475"> </span><span id="b476">(</span><code id="b477">JABCulogUriStr</code><span id="b493">,</span><span id="b494"> </span><span id="b495">ulog.hpp:38</span><span id="b506">,</span><span id="b507"> </span><span id="b508">sized</span><span id="b513"> </span><span id="b514">malloc</span><span id="b520">)</span><span id="b521">.</span><span id="b522"> </span><span id="b523">The</span><span id="b526"> </span><span id="b527">reconstruction</span><span id="b541"> </span><span id="b542">is</span><span id="b544"> </span><span id="b545">also</span><span id="b549"> </span><span id="b550">needless</span><span id="b558">:</span><span id="b559"> </span><code id="b560">ULOGu8sDrain</code><span id="b574"> </span><span id="b575">sets</span><span id="b579"> </span><code id="b580">rec.uri.data</code><span id="b594"> </span><span id="b595">to</span><span id="b597"> </span><span id="b598">the</span><span id="b601"> </span><span id="b602">row</span><span id="b605">'</span><span id="b606">s</span><span id="b607"> </span><span id="b608">URI</span><span id="b611"> </span><span id="b612">slice</span><span id="b617"> </span><span id="b618">(</span><span id="b619">dog/ULOG.c:119</span><span id="b633">,</span><span id="b634"> </span><span id="b635">ULOG.h:159</span><span id="b645">)</span><span id="b646">;</span><span id="b647"> </span><span id="b648">the</span><span id="b651"> </span><span id="b652">ulog.hpp:25</span><span id="b663"> </span><span id="b664">comment</span><span id="b671"> </span><span id="b672">claiming</span><span id="b680"> </span><span id="b681">it</span><span id="b683"> </span><span id="b684">stays</span><span id="b689"> </span><span id="b690">empty</span><span id="b695"> </span><span id="b696">is</span><span id="b698"> </span><span id="b699">wrong</span><span id="b704">.</span><span id="b705"> </span><span id="b706">Found</span><span id="b711"> </span><span id="b712">in</span><span id="b714"> </span><span id="b715">the</span><span id="b718"> </span><span id="b719">2026</span><span id="b723">-</span><span id="b724">07</span><span id="b726">-</span><span id="b727">24</span><span id="b729"> </span><span id="b730">jab</span><span id="b733">/</span><span id="b734"> </span><span id="b735">review</span><span id="b741">.</span></p>
+<h2 id="input"><span id="b744"><span id="b748">Input</span></span></h2>
+<h3 id="context"><span id="b755"><span id="b759">Context</span></span></h3>
 <ul>
-<li>A <code>put</code>/<code>log</code> on a deep path can write rows that seekURI then cannot find — reads as data loss to the caller.</li>
+<li id="b767"><span id="b771">A</span><span id="b772"> </span><code id="b773">put</code><span id="b778">/</span><code id="b779">log</code><span id="b784"> </span><span id="b785">on</span><span id="b787"> </span><span id="b788">a</span><span id="b789"> </span><span id="b790">deep</span><span id="b794"> </span><span id="b795">path</span><span id="b799"> </span><span id="b800">can</span><span id="b803"> </span><span id="b804">write</span><span id="b809"> </span><span id="b810">rows</span><span id="b814"> </span><span id="b815">that</span><span id="b819"> </span><span id="b820">seekURI</span><span id="b827"> </span><span id="b828">then</span><span id="b832"> </span><span id="b833">cannot</span><span id="b839"> </span><span id="b840">find</span><span id="b844"> </span><span id="b845">—</span><span id="b848"> </span><span id="b849">reads</span><span id="b854"> </span><span id="b855">as</span><span id="b857"> </span><span id="b858">data</span><span id="b862"> </span><span id="b863">loss</span><span id="b867"> </span><span id="b868">to</span><span id="b870"> </span><span id="b871">the</span><span id="b874"> </span><span id="b875">caller</span><span id="b881">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b884"><span id="b888">Goals</span></span></h3>
 <ul>
-<li>seekURI matches every row it stored, regardless of URI length; compare against the raw <code>rec.uri.data</code> slice instead of reconstructing.</li>
+<li id="b894"><span id="b898">seekURI</span><span id="b905"> </span><span id="b906">matches</span><span id="b913"> </span><span id="b914">every</span><span id="b919"> </span><span id="b920">row</span><span id="b923"> </span><span id="b924">it</span><span id="b926"> </span><span id="b927">stored</span><span id="b933">,</span><span id="b934"> </span><span id="b935">regardless</span><span id="b945"> </span><span id="b946">of</span><span id="b948"> </span><span id="b949">URI</span><span id="b952"> </span><span id="b953">length</span><span id="b959">;</span><span id="b960"> </span><span id="b961">compare</span><span id="b968"> </span><span id="b969">against</span><span id="b976"> </span><span id="b977">the</span><span id="b980"> </span><span id="b981">raw</span><span id="b984"> </span><code id="b985">rec.uri.data</code><span id="b999"> </span><span id="b1000">slice</span><span id="b1005"> </span><span id="b1006">instead</span><span id="b1013"> </span><span id="b1014">of</span><span id="b1016"> </span><span id="b1017">reconstructing</span><span id="b1031">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b1034"><span id="b1038">Constraints</span></span></h3>
 <ul>
-<li>Repro-first: append a row whose escaped URI &gt; 2048 bytes, assert seekURI finds it.</li>
-<li>Fix the ulog.hpp:25 comment while there.</li>
+<li id="b1050"><span id="b1054">Repro</span><span id="b1059">-</span><span id="b1060">first</span><span id="b1065">:</span><span id="b1066"> </span><span id="b1067">append</span><span id="b1073"> </span><span id="b1074">a</span><span id="b1075"> </span><span id="b1076">row</span><span id="b1079"> </span><span id="b1080">whose</span><span id="b1085"> </span><span id="b1086">escaped</span><span id="b1093"> </span><span id="b1094">URI</span><span id="b1097"> </span><span id="b1098">&gt;</span><span id="b1099"> </span><span id="b1100">2048</span><span id="b1104"> </span><span id="b1105">bytes</span><span id="b1110">,</span><span id="b1111"> </span><span id="b1112">assert</span><span id="b1118"> </span><span id="b1119">seekURI</span><span id="b1126"> </span><span id="b1127">finds</span><span id="b1132"> </span><span id="b1133">it</span><span id="b1135">.</span></li>
+<li id="b1137"><span id="b1141">Fix</span><span id="b1144"> </span><span id="b1145">the</span><span id="b1148"> </span><span id="b1149">ulog.hpp:25</span><span id="b1160"> </span><span id="b1161">comment</span><span id="b1168"> </span><span id="b1169">while</span><span id="b1174"> </span><span id="b1175">there</span><span id="b1180">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>Design decisions</h3>
+<h2 id="wip"><span id="b1183"><span id="b1187">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b1192"><span id="b1196">Design</span><span id="b1202"> </span><span id="b1203">decisions</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li id="b1213"><span id="b1217">(</span><span id="b1218">pending</span><span id="b1225">)</span></li>
 </ul>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro: long-URI row, seekURI hit.</li>
-<li class="open"><input type="checkbox" disabled> Match on the drained uri slice; drop the URIMake pad path.</li>
-</ul>
-<h3>Blockers and bummers</h3>
+<h3 id="todos"><span id="b1228"><span id="b1232">TODOs</span></span></h3>
 <ul>
-<li>(none)</li>
+<li class="task" id="b1238"><input type="checkbox" disabled="" /> <span id="b1243">Repro</span><span id="b1248">:</span><span id="b1249"> </span><span id="b1250">long</span><span id="b1254">-</span><span id="b1255">URI</span><span id="b1258"> </span><span id="b1259">row</span><span id="b1262">,</span><span id="b1263"> </span><span id="b1264">seekURI</span><span id="b1271"> </span><span id="b1272">hit</span><span id="b1275">.</span></li>
+<li class="task" id="b1277"><input type="checkbox" disabled="" /> <span id="b1282">Match</span><span id="b1287"> </span><span id="b1288">on</span><span id="b1290"> </span><span id="b1291">the</span><span id="b1294"> </span><span id="b1295">drained</span><span id="b1302"> </span><span id="b1303">uri</span><span id="b1306"> </span><span id="b1307">slice</span><span id="b1312">;</span><span id="b1313"> </span><span id="b1314">drop</span><span id="b1318"> </span><span id="b1319">the</span><span id="b1322"> </span><span id="b1323">URIMake</span><span id="b1330"> </span><span id="b1331">pad</span><span id="b1334"> </span><span id="b1335">path</span><span id="b1339">.</span></li>
 </ul>
-<h2>Outcome</h2>
+<h3 id="blockers-and-bummers"><span id="b1342"><span id="b1346">Blockers</span><span id="b1354"> </span><span id="b1355">and</span><span id="b1358"> </span><span id="b1359">bummers</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li id="b1367"><span id="b1371">(</span><span id="b1372">none</span><span id="b1376">)</span></li>
+</ul>
+<h2 id="outcome"><span id="b1379"><span id="b1383">Outcome</span></span></h2>
+<ul>
+<li id="b1391"><span id="b1395">(</span><span id="b1396">pending</span><span id="b1403">)</span></li>
 </ul>
 <div class="footer">
 ❧

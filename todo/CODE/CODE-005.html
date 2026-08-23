@@ -5,48 +5,37 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CODE-005: keeper: dedup tree-descent, cap-parse, obj-hdr</title>
 <meta property="og:title" content="CODE-005: keeper: dedup tree-descent, cap-parse, obj-hdr">
-<meta property="og:description" content="Three more keeper duplications: projdescendinner/lsfdescendinner are the same tree-path descent, recvparsecaps/wireparsecaps share the capability token-loop, and wpushfeedobjhdr is byte-identical to keepfeedobjhdr (the pack obj-hdr varint). Factor each into one shared keeper helper.">
+<meta property="og:description" content="Three more keeper duplications: proj_descend_inner/lsf_descend_inner are the same tree-path descent, recv_parse_caps/wire_parse_caps share the capability token-loop, and wpush_feed_obj_hdr is byte-identical to keep_feed_obj_hdr (the pack obj-hdr varint). Factor each into one shared keeper helper.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-005.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>CODE-005: keeper: dedup tree-descent, cap-parse, obj-hdr</h1>
-<p>
-Three more keeper duplications: proj_descend_inner/lsf_descend_inner are the same tree-path descent, recv_parse_caps/wire_parse_caps share the capability token-loop, and wpush_feed_obj_hdr is byte-identical to keep_feed_obj_hdr (the pack obj-hdr varint). Factor each into one shared keeper helper.
-</p>
-<h2>Issues</h2>
-<p>
-Tree-path descent, capability parsing, and pack obj-hdr encoding each exist twice.
-</p>
+<h1 id="code-005-keeper-dedup-tree-descent-cap-parse-obj-hdr"><span id="b0"><span id="b4">CODE-005</span><span id="b12">:</span><span id="b13"> </span><span id="b14">keeper</span><span id="b20">:</span><span id="b21"> </span><span id="b22">dedup</span><span id="b27"> </span><span id="b28">tree</span><span id="b32">-</span><span id="b33">descent</span><span id="b40">,</span><span id="b41"> </span><span id="b42">cap</span><span id="b45">-</span><span id="b46">parse</span><span id="b51">,</span><span id="b52"> </span><span id="b53">obj</span><span id="b56">-</span><span id="b57">hdr</span></span></h1>
+<p id="b62"><span>Three</span><span id="b67"> </span><span id="b68">more</span><span id="b72"> </span><span id="b73">keeper</span><span id="b79"> </span><span id="b80">duplications</span><span id="b92">:</span><span id="b93"> </span><span id="b94">proj_descend_inner</span><span id="b112">/</span><span id="b113">lsf_descend_inner</span><span id="b130"> </span><span id="b131">are</span><span id="b134"> </span><span id="b135">the</span><span id="b138"> </span><span id="b139">same</span><span id="b143"> </span><span id="b144">tree</span><span id="b148">-</span><span id="b149">path</span><span id="b153"> </span><span id="b154">descent</span><span id="b161">,</span><span id="b162"> </span><span id="b163">recv_parse_caps</span><span id="b178">/</span><span id="b179">wire_parse_caps</span><span id="b194"> </span><span id="b195">share</span><span id="b200"> </span><span id="b201">the</span><span id="b204"> </span><span id="b205">capability</span><span id="b215"> </span><span id="b216">token</span><span id="b221">-</span><span id="b222">loop</span><span id="b226">,</span><span id="b227"> </span><span id="b228">and</span><span id="b231"> </span><span id="b232">wpush_feed_obj_hdr</span><span id="b250"> </span><span id="b251">is</span><span id="b253"> </span><span id="b254">byte</span><span id="b258">-</span><span id="b259">identical</span><span id="b268"> </span><span id="b269">to</span><span id="b271"> </span><span id="b272">keep_feed_obj_hdr</span><span id="b289"> </span><span id="b290">(</span><span id="b291">the</span><span id="b294"> </span><span id="b295">pack</span><span id="b299"> </span><span id="b300">obj</span><span id="b303">-</span><span id="b304">hdr</span><span id="b307"> </span><span id="b308">varint</span><span id="b314">)</span><span id="b315">.</span><span id="b316"> </span><span id="b317">Factor</span><span id="b323"> </span><span id="b324">each</span><span id="b328"> </span><span id="b329">into</span><span id="b333"> </span><span id="b334">one</span><span id="b337"> </span><span id="b338">shared</span><span id="b344"> </span><span id="b345">keeper</span><span id="b351"> </span><span id="b352">helper</span><span id="b358">.</span></p>
+<h2 id="issues"><span id="b361"><span id="b365">Issues</span></span></h2>
+<p id="b373"><span>Tree</span><span id="b377">-</span><span id="b378">path</span><span id="b382"> </span><span id="b383">descent</span><span id="b390">,</span><span id="b391"> </span><span id="b392">capability</span><span id="b402"> </span><span id="b403">parsing</span><span id="b410">,</span><span id="b411"> </span><span id="b412">and</span><span id="b415"> </span><span id="b416">pack</span><span id="b420"> </span><span id="b421">obj</span><span id="b424">-</span><span id="b425">hdr</span><span id="b428"> </span><span id="b429">encoding</span><span id="b437"> </span><span id="b438">each</span><span id="b442"> </span><span id="b443">exist</span><span id="b448"> </span><span id="b449">twice</span><span id="b454">.</span></p>
 <ul>
-<li>proj_descend_inner/lsf_descend_inner (PROJ.c:88, WALK.c:182) = same split-on-'/' tree descent.</li>
-<li>recv_parse_caps/wire_parse_caps (RECV.c:48, WIRE.c:36) share the SP/TAB token-loop scaffold.</li>
-<li>wpush_feed_obj_hdr (WIRECLI.c:1288) is byte-for-byte keep_feed_obj_hdr (KEEP.c:1486).</li>
+<li id="b457"><span id="b461">proj_descend_inner</span><span id="b479">/</span><span id="b480">lsf_descend_inner</span><span id="b497"> </span><span id="b498">(</span><span id="b499">PROJ.c:88</span><span id="b508">,</span><span id="b509"> </span><span id="b510">WALK.c:182</span><span id="b520">)</span><span id="b521"> </span><span id="b522">=</span><span id="b523"> </span><span id="b524">same</span><span id="b528"> </span><span id="b529">split</span><span id="b534">-</span><span id="b535">on</span><span id="b537">-</span><span id="b538">'</span><span id="b539">/</span><span id="b540">'</span><span id="b541"> </span><span id="b542">tree</span><span id="b546"> </span><span id="b547">descent</span><span id="b554">.</span></li>
+<li id="b556"><span id="b560">recv_parse_caps</span><span id="b575">/</span><span id="b576">wire_parse_caps</span><span id="b591"> </span><span id="b592">(</span><span id="b593">RECV.c:48</span><span id="b602">,</span><span id="b603"> </span><span id="b604">WIRE.c:36</span><span id="b613">)</span><span id="b614"> </span><span id="b615">share</span><span id="b620"> </span><span id="b621">the</span><span id="b624"> </span><span id="b625">SP</span><span id="b627">/</span><span id="b628">TAB</span><span id="b631"> </span><span id="b632">token</span><span id="b637">-</span><span id="b638">loop</span><span id="b642"> </span><span id="b643">scaffold</span><span id="b651">.</span></li>
+<li id="b653"><span id="b657">wpush_feed_obj_hdr</span><span id="b675"> </span><span id="b676">(</span><span id="b677">WIRECLI.c:1288</span><span id="b691">)</span><span id="b692"> </span><span id="b693">is</span><span id="b695"> </span><span id="b696">byte</span><span id="b700">-</span><span id="b701">for</span><span id="b704">-</span><span id="b705">byte</span><span id="b709"> </span><span id="b710">keep_feed_obj_hdr</span><span id="b727"> </span><span id="b728">(</span><span id="b729">KEEP.c:1486</span><span id="b740">)</span><span id="b741">.</span></li>
 </ul>
-<h2>Blockers</h2>
-<p>
-None; keeper-internal. Shares KEEP.c/WALK.c/WIRECLI.c with CODE-004 — same worktree, serial.
-</p>
-<h2>Planned</h2>
-<p>
-Lift one shared function per pair; drop the duplicate.
-</p>
+<h2 id="blockers"><span id="b744"><span id="b748">Blockers</span></span></h2>
+<p id="b758"><span>None</span><span id="b762">;</span><span id="b763"> </span><span id="b764">keeper</span><span id="b770">-</span><span id="b771">internal</span><span id="b779">.</span><span id="b780"> </span><span id="b781">Shares</span><span id="b787"> </span><span id="b788">KEEP.c</span><span id="b794">/</span><span id="b795">WALK.c</span><span id="b801">/</span><span id="b802">WIRECLI.c</span><span id="b811"> </span><span id="b812">with</span><span id="b816"> </span><span id="b817">CODE-004</span><span id="b825"> </span><span id="b826">—</span><span id="b829"> </span><span id="b830">same</span><span id="b834"> </span><span id="b835">worktree</span><span id="b843">,</span><span id="b844"> </span><span id="b845">serial</span><span id="b851">.</span></p>
+<h2 id="planned"><span id="b854"><span id="b858">Planned</span></span></h2>
+<p id="b867"><span>Lift</span><span id="b871"> </span><span id="b872">one</span><span id="b875"> </span><span id="b876">shared</span><span id="b882"> </span><span id="b883">function</span><span id="b891"> </span><span id="b892">per</span><span id="b895"> </span><span id="b896">pair</span><span id="b900">;</span><span id="b901"> </span><span id="b902">drop</span><span id="b906"> </span><span id="b907">the</span><span id="b910"> </span><span id="b911">duplicate</span><span id="b920">.</span></p>
 <ul>
-<li>Repro first (§17): a path-descent test + a cap-parse test + a pack-hdr round-trip.</li>
-<li>Shared KEEPTreeDescend(commit,path); a shared cap parser; one obj-hdr encoder in KEEP.h.</li>
+<li id="b923"><span id="b927">Repro</span><span id="b932"> </span><span id="b933">first</span><span id="b938"> </span><span id="b939">(</span><span id="b940">§17</span><span id="b944">)</span><span id="b945">:</span><span id="b946"> </span><span id="b947">a</span><span id="b948"> </span><span id="b949">path</span><span id="b953">-</span><span id="b954">descent</span><span id="b961"> </span><span id="b962">test</span><span id="b966"> </span><span id="b967">+</span><span id="b968"> </span><span id="b969">a</span><span id="b970"> </span><span id="b971">cap</span><span id="b974">-</span><span id="b975">parse</span><span id="b980"> </span><span id="b981">test</span><span id="b985"> </span><span id="b986">+</span><span id="b987"> </span><span id="b988">a</span><span id="b989"> </span><span id="b990">pack</span><span id="b994">-</span><span id="b995">hdr</span><span id="b998"> </span><span id="b999">round</span><span id="b1004">-</span><span id="b1005">trip</span><span id="b1009">.</span></li>
+<li id="b1011"><span id="b1015">Shared</span><span id="b1021"> </span><span id="b1022">KEEPTreeDescend</span><span id="b1037">(</span><span id="b1038">commit</span><span id="b1044">,</span><span id="b1045">path</span><span id="b1049">)</span><span id="b1050">;</span><span id="b1051"> </span><span id="b1052">a</span><span id="b1053"> </span><span id="b1054">shared</span><span id="b1060"> </span><span id="b1061">cap</span><span id="b1064"> </span><span id="b1065">parser</span><span id="b1071">;</span><span id="b1072"> </span><span id="b1073">one</span><span id="b1076"> </span><span id="b1077">obj</span><span id="b1080">-</span><span id="b1081">hdr</span><span id="b1084"> </span><span id="b1085">encoder</span><span id="b1092"> </span><span id="b1093">in</span><span id="b1095"> </span><span id="b1096">KEEP.h</span><span id="b1102">.</span></li>
 </ul>
 <div class="footer">
 ❧

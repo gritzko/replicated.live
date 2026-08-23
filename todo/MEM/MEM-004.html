@@ -5,51 +5,43 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MEM-004: TLVprobe huge-length overflow → wild value slice (abc/TLV.c)</title>
 <meta property="og:title" content="MEM-004: TLVprobe huge-length overflow → wild value slice (abc/TLV.c)">
-<meta property="og:description" content="For huge TLV records TLVprobe reads a full attacker-controlled 64-bit body length and bounds it only with (hlen + blen) &lt;= $len(data) computed in u64; a blen near u64max makes 9 + blen wrap below $len(data) and pass, after which callers build value1 = value0 + blen and advance from0 += hlen + blen, yielding wildly out-of-bounds pointers handed to downstream readers. The goal is an overflow-safe length check.">
+<meta property="og:description" content="For huge TLV records TLVprobe reads a full attacker-controlled 64-bit body length and bounds it only with (*hlen + *blen) &lt;= $len(data) computed in u64; a *blen near u64max makes 9 + *blen wrap below $len(data) and pass, after which callers build value[1] = value[0] + blen and advance from[0] += hlen + blen, yielding wildly out-of-bounds pointers handed to downstream readers. The goal is an overflow-safe length check.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/MEM/MEM-004.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>MEM-004: TLVprobe huge-length overflow → wild value slice (abc/TLV.c)</h1>
+<h1 id="mem-004-tlvprobe-huge-length-overflow-→-wild-value-slice-abctlvc"><span id="b0"><span id="b4">MEM-004</span><span id="b11">:</span><span id="b12"> </span><span id="b13">TLVprobe</span><span id="b21"> </span><span id="b22">huge</span><span id="b26">-</span><span id="b27">length</span><span id="b33"> </span><span id="b34">overflow</span><span id="b42"> </span><span id="b43">→</span><span id="b46"> </span><span id="b47">wild</span><span id="b51"> </span><span id="b52">value</span><span id="b57"> </span><span id="b58">slice</span><span id="b63"> </span><span id="b64">(</span><span id="b65">abc/TLV.c</span><span id="b74">)</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+<dl class="meta">
+<dt id="b76"><span>Now</span></dt>
+<dd><span id="b84">DONE</span></dd>
+</dl>
 </div>
-<p>
-For huge TLV records <code>TLVprobe</code> reads a full attacker-controlled 64-bit body length and bounds it only with <code>(*hlen + *blen) &lt;= $len(data)</code> computed in u64; a <code>*blen</code> near <code>u64max</code> makes <code>9 + *blen</code> wrap below <code>$len(data)</code> and pass, after which callers build <code>value[1] = value[0] + blen</code> and advance <code>from[0] += hlen + blen</code>, yielding wildly out-of-bounds pointers handed to downstream readers. The goal is an overflow-safe length check.
-</p>
-<h2>Issues</h2>
-<p>
-Additive length guard wraps for huge-record lengths.
-</p>
+<p id="b91"><span>For</span><span id="b94"> </span><span id="b95">huge</span><span id="b99"> </span><span id="b100">TLV</span><span id="b103"> </span><span id="b104">records</span><span id="b111"> </span><code id="b112">TLVprobe</code><span id="b122"> </span><span id="b123">reads</span><span id="b128"> </span><span id="b129">a</span><span id="b130"> </span><span id="b131">full</span><span id="b135"> </span><span id="b136">attacker</span><span id="b144">-</span><span id="b145">controlled</span><span id="b155"> </span><span id="b156">64</span><span id="b158">-</span><span id="b159">bit</span><span id="b162"> </span><span id="b163">body</span><span id="b167"> </span><span id="b168">length</span><span id="b174"> </span><span id="b175">and</span><span id="b178"> </span><span id="b179">bounds</span><span id="b185"> </span><span id="b186">it</span><span id="b188"> </span><span id="b189">only</span><span id="b193"> </span><span id="b194">with</span><span id="b198"> </span><code id="b199">(*hlen + *blen) &lt;= $len(data)</code><span id="b230"> </span><span id="b231">computed</span><span id="b239"> </span><span id="b240">in</span><span id="b242"> </span><span id="b243">u64</span><span id="b246">;</span><span id="b247"> </span><span id="b248">a</span><span id="b249"> </span><code id="b250">*blen</code><span id="b257"> </span><span id="b258">near</span><span id="b262"> </span><code id="b263">u64max</code><span id="b271"> </span><span id="b272">makes</span><span id="b277"> </span><code id="b278">9 + *blen</code><span id="b289"> </span><span id="b290">wrap</span><span id="b294"> </span><span id="b295">below</span><span id="b300"> </span><code id="b301">$len(data)</code><span id="b313"> </span><span id="b314">and</span><span id="b317"> </span><span id="b318">pass</span><span id="b322">,</span><span id="b323"> </span><span id="b324">after</span><span id="b329"> </span><span id="b330">which</span><span id="b335"> </span><span id="b336">callers</span><span id="b343"> </span><span id="b344">build</span><span id="b349"> </span><code id="b350">value[1] = value[0] + blen</code><span id="b378"> </span><span id="b379">and</span><span id="b382"> </span><span id="b383">advance</span><span id="b390"> </span><code id="b391">from[0] += hlen + blen</code><span id="b415">,</span><span id="b416"> </span><span id="b417">yielding</span><span id="b425"> </span><span id="b426">wildly</span><span id="b432"> </span><span id="b433">out</span><span id="b436">-</span><span id="b437">of</span><span id="b439">-</span><span id="b440">bounds</span><span id="b446"> </span><span id="b447">pointers</span><span id="b455"> </span><span id="b456">handed</span><span id="b462"> </span><span id="b463">to</span><span id="b465"> </span><span id="b466">downstream</span><span id="b476"> </span><span id="b477">readers</span><span id="b484">.</span><span id="b485"> </span><span id="b486">The</span><span id="b489"> </span><span id="b490">goal</span><span id="b494"> </span><span id="b495">is</span><span id="b497"> </span><span id="b498">an</span><span id="b500"> </span><span id="b501">overflow</span><span id="b509">-</span><span id="b510">safe</span><span id="b514"> </span><span id="b515">length</span><span id="b521"> </span><span id="b522">check</span><span id="b527">.</span></p>
+<h2 id="issues"><span id="b530"><span id="b534">Issues</span></span></h2>
+<p id="b541"><span>Additive</span><span id="b549"> </span><span id="b550">length</span><span id="b556"> </span><span id="b557">guard</span><span id="b562"> </span><span id="b563">wraps</span><span id="b568"> </span><span id="b569">for</span><span id="b572"> </span><span id="b573">huge</span><span id="b577">-</span><span id="b578">record</span><span id="b584"> </span><span id="b585">lengths</span><span id="b592">.</span></p>
 <ul>
-<li><code>abc/TLV.c:19-27</code> — <code>*blen = *(u64*)(*data+1)</code>; only guard is <code>(*hlen+*blen) &lt;= $len(data)</code>, which wraps for large <code>*blen</code>.</li>
-<li><code>_TLVu8sDrain:36</code> <code>value[1]=value[0]+blen</code> and <code>TLVDrain$:112</code> <code>rec[1]=from[0]+hlen+blen</code> then form OOB slices; <code>from[0]+=hlen+blen</code> desyncs the stream.</li>
-<li>Trigger: untrusted TLV with a huge-type byte (<code>'!'..':'</code>) + 8-byte length where <code>9+blen</code> wraps below <code>$len(data)</code>.</li>
+<li id="b595"><code id="b599">abc/TLV.c:19-27</code><span id="b616"> </span><span id="b617">—</span><span id="b620"> </span><code id="b621">*blen = *(u64*)(*data+1)</code><span id="b647">;</span><span id="b648"> </span><span id="b649">only</span><span id="b653"> </span><span id="b654">guard</span><span id="b659"> </span><span id="b660">is</span><span id="b662"> </span><code id="b663">(*hlen+*blen) &lt;= $len(data)</code><span id="b692">,</span><span id="b693"> </span><span id="b694">which</span><span id="b699"> </span><span id="b700">wraps</span><span id="b705"> </span><span id="b706">for</span><span id="b709"> </span><span id="b710">large</span><span id="b715"> </span><code id="b716">*blen</code><span id="b723">.</span></li>
+<li id="b725"><code id="b729">_TLVu8sDrain:36</code><span id="b746"> </span><code id="b747">value[1]=value[0]+blen</code><span id="b771"> </span><span id="b772">and</span><span id="b775"> </span><code id="b776">TLVDrain$:112</code><span id="b791"> </span><code id="b792">rec[1]=from[0]+hlen+blen</code><span id="b818"> </span><span id="b819">then</span><span id="b823"> </span><span id="b824">form</span><span id="b828"> </span><span id="b829">OOB</span><span id="b832"> </span><span id="b833">slices</span><span id="b839">;</span><span id="b840"> </span><code id="b841">from[0]+=hlen+blen</code><span id="b861"> </span><span id="b862">desyncs</span><span id="b869"> </span><span id="b870">the</span><span id="b873"> </span><span id="b874">stream</span><span id="b880">.</span></li>
+<li id="b882"><span id="b886">Trigger</span><span id="b893">:</span><span id="b894"> </span><span id="b895">untrusted</span><span id="b904"> </span><span id="b905">TLV</span><span id="b908"> </span><span id="b909">with</span><span id="b913"> </span><span id="b914">a</span><span id="b915"> </span><span id="b916">huge</span><span id="b920">-</span><span id="b921">type</span><span id="b925"> </span><span id="b926">byte</span><span id="b930"> </span><span id="b931">(</span><code id="b932">'!'..':'</code><span id="b942">)</span><span id="b943"> </span><span id="b944">+</span><span id="b945"> </span><span id="b946">8</span><span id="b947">-</span><span id="b948">byte</span><span id="b952"> </span><span id="b953">length</span><span id="b959"> </span><span id="b960">where</span><span id="b965"> </span><code id="b966">9+blen</code><span id="b974"> </span><span id="b975">wraps</span><span id="b980"> </span><span id="b981">below</span><span id="b986"> </span><code id="b987">$len(data)</code><span id="b999">.</span></li>
 </ul>
-<h2>Blockers</h2>
-<p>
-None.
-</p>
-<h2>Planned</h2>
-<p>
-Compare against remaining room without adding.
-</p>
+<h2 id="blockers"><span id="b1002"><span id="b1006">Blockers</span></span></h2>
+<p id="b1015"><span>None</span><span id="b1019">.</span></p>
+<h2 id="planned"><span id="b1022"><span id="b1026">Planned</span></span></h2>
+<p id="b1034"><span>Compare</span><span id="b1041"> </span><span id="b1042">against</span><span id="b1049"> </span><span id="b1050">remaining</span><span id="b1059"> </span><span id="b1060">room</span><span id="b1064"> </span><span id="b1065">without</span><span id="b1072"> </span><span id="b1073">adding</span><span id="b1079">.</span></p>
 <ul>
-<li>Repro first: add a <code>TLV</code> probe/drain test row with a huge-type byte and <code>blen=u64max-4</code>; confirm wild slice under ASan.</li>
-<li>Guard as <code>if (*blen &gt; (u64)$len(data) - *hlen) return TLVNODATA;</code> after ensuring <code>$len(data) &gt;= *hlen</code> (or check <code>*blen</code> and <code>*hlen</code> separately so the sum cannot wrap).</li>
+<li id="b1082"><span id="b1086">Repro</span><span id="b1091"> </span><span id="b1092">first</span><span id="b1097">:</span><span id="b1098"> </span><span id="b1099">add</span><span id="b1102"> </span><span id="b1103">a</span><span id="b1104"> </span><code id="b1105">TLV</code><span id="b1110"> </span><span id="b1111">probe</span><span id="b1116">/</span><span id="b1117">drain</span><span id="b1122"> </span><span id="b1123">test</span><span id="b1127"> </span><span id="b1128">row</span><span id="b1131"> </span><span id="b1132">with</span><span id="b1136"> </span><span id="b1137">a</span><span id="b1138"> </span><span id="b1139">huge</span><span id="b1143">-</span><span id="b1144">type</span><span id="b1148"> </span><span id="b1149">byte</span><span id="b1153"> </span><span id="b1154">and</span><span id="b1157"> </span><code id="b1158">blen=u64max-4</code><span id="b1173">;</span><span id="b1174"> </span><span id="b1175">confirm</span><span id="b1182"> </span><span id="b1183">wild</span><span id="b1187"> </span><span id="b1188">slice</span><span id="b1193"> </span><span id="b1194">under</span><span id="b1199"> </span><span id="b1200">ASan</span><span id="b1204">.</span></li>
+<li id="b1206"><span id="b1210">Guard</span><span id="b1215"> </span><span id="b1216">as</span><span id="b1218"> </span><code id="b1219">if (*blen &gt; (u64)$len(data) - *hlen) return TLVNODATA;</code><span id="b1275"> </span><span id="b1276">after</span><span id="b1281"> </span><span id="b1282">ensuring</span><span id="b1290"> </span><code id="b1291">$len(data) &gt;= *hlen</code><span id="b1312"> </span><span id="b1313">(</span><span id="b1314">or</span><span id="b1316"> </span><span id="b1317">check</span><span id="b1322"> </span><code id="b1323">*blen</code><span id="b1330"> </span><span id="b1331">and</span><span id="b1334"> </span><code id="b1335">*hlen</code><span id="b1342"> </span><span id="b1343">separately</span><span id="b1353"> </span><span id="b1354">so</span><span id="b1356"> </span><span id="b1357">the</span><span id="b1360"> </span><span id="b1361">sum</span><span id="b1364"> </span><span id="b1365">cannot</span><span id="b1371"> </span><span id="b1372">wrap</span><span id="b1376">)</span><span id="b1377">.</span></li>
 </ul>
 <div class="footer">
 ❧

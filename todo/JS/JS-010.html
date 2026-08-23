@@ -5,63 +5,77 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>JS-010: boundary cleanup — JSStringRef leaks + callback re-entrancy / exception safety</title>
 <meta property="og:title" content="JS-010: boundary cleanup — JSStringRef leaks + callback re-entrancy / exception safety">
-<meta property="og:description" content="JSValueToStringCopy refs are never released, and the poll callbacks re-enter JS that can mutate JSFILES/JABCTIMER mid-loop while a C++ throw unwinding through a C-ABI callback is UB. Method: Issues.">
+<meta property="og:description" content="JSValueToStringCopy refs are never released, and the poll callbacks re-enter JS that can mutate JS_FILES/JABC_TIMER mid-loop while a C++ throw unwinding through a C-ABI callback is UB. Method: Issues.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/JS/JS-010.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-010: boundary cleanup — <code>JSStringRef</code> leaks + callback re-entrancy / exception safety</h1>
+<h1 id="js-010-boundary-cleanup-—-jsstringref-leaks-callback-re-entrancy-exception-safety"><span id="b0"><span id="b4">JS-010</span><span id="b10">:</span><span id="b11"> </span><span id="b12">boundary</span><span id="b20"> </span><span id="b21">cleanup</span><span id="b28"> </span><span id="b29">—</span><span id="b32"> </span><code id="b33">JSStringRef</code><span id="b46"> </span><span id="b47">leaks</span><span id="b52"> </span><span id="b53">+</span><span id="b54"> </span><span id="b55">callback</span><span id="b63"> </span><span id="b64">re</span><span id="b66">-</span><span id="b67">entrancy</span><span id="b75"> </span><span id="b76">/</span><span id="b77"> </span><span id="b78">exception</span><span id="b87"> </span><span id="b88">safety</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+<dl class="meta">
+<dt id="b95"><span>Now</span></dt>
+<dd><span id="b103">DONE</span></dd>
+</dl>
 </div>
-<p>
-<code>JSValueToStringCopy</code> refs are never released, and the poll callbacks re-enter JS that can mutate <code>JS_FILES</code>/<code>JABC_TIMER</code> mid-loop while a C++ <code>throw</code> unwinding through a C-ABI callback is UB. Method: <a href="../../rule/Issues.html">Issues</a>.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b110"><code>JSValueToStringCopy</code><span id="b131"> </span><span id="b132">refs</span><span id="b136"> </span><span id="b137">are</span><span id="b140"> </span><span id="b141">never</span><span id="b146"> </span><span id="b147">released</span><span id="b155">,</span><span id="b156"> </span><span id="b157">and</span><span id="b160"> </span><span id="b161">the</span><span id="b164"> </span><span id="b165">poll</span><span id="b169"> </span><span id="b170">callbacks</span><span id="b179"> </span><span id="b180">re</span><span id="b182">-</span><span id="b183">enter</span><span id="b188"> </span><span id="b189">JS</span>
+<span id="b192">that</span><span id="b196"> </span><span id="b197">can</span><span id="b200"> </span><span id="b201">mutate</span><span id="b207"> </span><code id="b208">JS_FILES</code><span id="b218">/</span><code id="b219">JABC_TIMER</code><span id="b231"> </span><span id="b232">mid</span><span id="b235">-</span><span id="b236">loop</span><span id="b240"> </span><span id="b241">while</span><span id="b246"> </span><span id="b247">a</span><span id="b248"> </span><span id="b249">C</span><span id="b250">+</span><span id="b251">+</span><span id="b252"> </span><code id="b253">throw</code><span id="b260"> </span><span id="b261">unwinding</span>
+<span id="b271">through</span><span id="b278"> </span><span id="b279">a</span><span id="b280"> </span><span id="b281">C</span><span id="b282">-</span><span id="b283">ABI</span><span id="b286"> </span><span id="b287">callback</span><span id="b295"> </span><span id="b296">is</span><span id="b298"> </span><span id="b299">UB</span><span id="b301">.</span><span id="b302"> </span><span id="b303">Method</span><span id="b309">:</span><span id="b310"> </span><a href="../../rule/Issues.html" title="the parallel fix-and-land loop"><span id="b312">Issues</span></a><span id="b319">.</span></p>
+<h2 id="input"><span id="b322"><span id="b326">Input</span></span></h2>
+<h3 id="context"><span id="b333"><span id="b337">Context</span></span></h3>
 <ul>
-<li>(a) <code>JSValueToStringCopy</code> returns a +1 ref never released — <code>utf8.cpp:18</code> (<code>JABCutf8Encode</code>), <code>convert.cpp:77</code>.</li>
-<li>(b) Poll callbacks (<code>timeout_cb</code> <code>io.cpp:176-189</code>, <code>JABCioNetOnEvent</code> <code>io.cpp:281-336</code>) re-enter JS that can mutate <code>JS_FILES</code> / <code>JABC_TIMER</code> mid-loop with no guard; a C++ <code>throw</code> unwinding through these C-ABI callbacks is UB.</li>
-<li><code>WITH_JS</code>-gated WIP; <code>convert.cpp</code> is the dead rdx path, <code>utf8.cpp</code> is live.</li>
+<li id="b345"><span id="b349">(</span><span id="b350">a</span><span id="b351">)</span><span id="b352"> </span><code id="b353">JSValueToStringCopy</code><span id="b374"> </span><span id="b375">returns</span><span id="b382"> </span><span id="b383">a</span><span id="b384"> </span><span id="b385">+</span><span id="b386">1</span><span id="b387"> </span><span id="b388">ref</span><span id="b391"> </span><span id="b392">never</span><span id="b397"> </span><span id="b398">released</span><span id="b406"> </span><span id="b407">—</span><span id="b410"> </span><code id="b411">utf8.cpp:18</code>
+<span id="b429">(</span><code id="b430">JABCutf8Encode</code><span id="b446">)</span><span id="b447">,</span><span id="b448"> </span><code id="b449">convert.cpp:77</code><span id="b465">.</span></li>
+<li id="b467"><span id="b471">(</span><span id="b472">b</span><span id="b473">)</span><span id="b474"> </span><span id="b475">Poll</span><span id="b479"> </span><span id="b480">callbacks</span><span id="b489"> </span><span id="b490">(</span><code id="b491">timeout_cb</code><span id="b503"> </span><code id="b504">io.cpp:176-189</code><span id="b520">,</span><span id="b521"> </span><code id="b522">JABCioNetOnEvent</code>
+<code id="b545">io.cpp:281-336</code><span id="b561">)</span><span id="b562"> </span><span id="b563">re</span><span id="b565">-</span><span id="b566">enter</span><span id="b571"> </span><span id="b572">JS</span><span id="b574"> </span><span id="b575">that</span><span id="b579"> </span><span id="b580">can</span><span id="b583"> </span><span id="b584">mutate</span><span id="b590"> </span><code id="b591">JS_FILES</code><span id="b601"> </span><span id="b602">/</span><span id="b603"> </span><code id="b604">JABC_TIMER</code>
+<span id="b621">mid</span><span id="b624">-</span><span id="b625">loop</span><span id="b629"> </span><span id="b630">with</span><span id="b634"> </span><span id="b635">no</span><span id="b637"> </span><span id="b638">guard</span><span id="b643">;</span><span id="b644"> </span><span id="b645">a</span><span id="b646"> </span><span id="b647">C</span><span id="b648">+</span><span id="b649">+</span><span id="b650"> </span><code id="b651">throw</code><span id="b658"> </span><span id="b659">unwinding</span><span id="b668"> </span><span id="b669">through</span><span id="b676"> </span><span id="b677">these</span><span id="b682"> </span><span id="b683">C</span><span id="b684">-</span><span id="b685">ABI</span><span id="b688"> </span><span id="b689">callbacks</span>
+<span id="b703">is</span><span id="b705"> </span><span id="b706">UB</span><span id="b708">.</span></li>
+<li id="b710"><code id="b714">WITH_JS</code><span id="b723">-</span><span id="b724">gated</span><span id="b729"> </span><span id="b730">WIP</span><span id="b733">;</span><span id="b734"> </span><code id="b735">convert.cpp</code><span id="b748"> </span><span id="b749">is</span><span id="b751"> </span><span id="b752">the</span><span id="b755"> </span><span id="b756">dead</span><span id="b760"> </span><span id="b761">rdx</span><span id="b764"> </span><span id="b765">path</span><span id="b769">,</span><span id="b770"> </span><code id="b771">utf8.cpp</code><span id="b781"> </span><span id="b782">is</span><span id="b784"> </span><span id="b785">live</span><span id="b789">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b792"><span id="b796">Goals</span></span></h3>
 <ul>
-<li>Every <code>JSStringRef</code> released; callbacks survive re-entrant <code>JS_FILES</code>/<code>JABC_TIMER</code> mutation; no C++ exception escapes a C-ABI callback.</li>
+<li id="b802"><span id="b806">Every</span><span id="b811"> </span><code id="b812">JSStringRef</code><span id="b825"> </span><span id="b826">released</span><span id="b834">;</span><span id="b835"> </span><span id="b836">callbacks</span><span id="b845"> </span><span id="b846">survive</span><span id="b853"> </span><span id="b854">re</span><span id="b856">-</span><span id="b857">entrant</span><span id="b864"> </span><code id="b865">JS_FILES</code><span id="b875">/</span><code id="b876">JABC_TIMER</code>
+<span id="b893">mutation</span><span id="b901">;</span><span id="b902"> </span><span id="b903">no</span><span id="b905"> </span><span id="b906">C</span><span id="b907">+</span><span id="b908">+</span><span id="b909"> </span><span id="b910">exception</span><span id="b919"> </span><span id="b920">escapes</span><span id="b927"> </span><span id="b928">a</span><span id="b929"> </span><span id="b930">C</span><span id="b931">-</span><span id="b932">ABI</span><span id="b935"> </span><span id="b936">callback</span><span id="b944">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b947"><span id="b951">Constraints</span></span></h3>
 <ul>
-<li>Pair every <code>JSValueToStringCopy</code> with <code>JSStringRelease</code>; wrap callback bodies in <code>try{}catch(...){}</code> (effectively <code>noexcept</code>); document the single-thread contract and add a re-entrancy assert.</li>
+<li id="b963"><span id="b967">Pair</span><span id="b971"> </span><span id="b972">every</span><span id="b977"> </span><code id="b978">JSValueToStringCopy</code><span id="b999"> </span><span id="b1000">with</span><span id="b1004"> </span><code id="b1005">JSStringRelease</code><span id="b1022">;</span><span id="b1023"> </span><span id="b1024">wrap</span><span id="b1028"> </span><span id="b1029">callback</span><span id="b1037"> </span><span id="b1038">bodies</span><span id="b1044"> </span><span id="b1045">in</span>
+<code id="b1052">try{}catch(...){}</code><span id="b1071"> </span><span id="b1072">(</span><span id="b1073">effectively</span><span id="b1084"> </span><code id="b1085">noexcept</code><span id="b1095">)</span><span id="b1096">;</span><span id="b1097"> </span><span id="b1098">document</span><span id="b1106"> </span><span id="b1107">the</span><span id="b1110"> </span><span id="b1111">single</span><span id="b1117">-</span><span id="b1118">thread</span><span id="b1124"> </span><span id="b1125">contract</span>
+<span id="b1138">and</span><span id="b1141"> </span><span id="b1142">add</span><span id="b1145"> </span><span id="b1146">a</span><span id="b1147"> </span><span id="b1148">re</span><span id="b1150">-</span><span id="b1151">entrancy</span><span id="b1159"> </span><span id="b1160">assert</span><span id="b1166">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>Design decisions</h3>
+<h2 id="wip"><span id="b1169"><span id="b1173">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b1178"><span id="b1182">Design</span><span id="b1188"> </span><span id="b1189">decisions</span></span></h3>
 <ul>
-<li>(open) Add the release at each site; make the callbacks exception-safe and re-entrancy-aware.</li>
+<li id="b1199"><span id="b1203">(</span><span id="b1204">open</span><span id="b1208">)</span><span id="b1209"> </span><span id="b1210">Add</span><span id="b1213"> </span><span id="b1214">the</span><span id="b1217"> </span><span id="b1218">release</span><span id="b1225"> </span><span id="b1226">at</span><span id="b1228"> </span><span id="b1229">each</span><span id="b1233"> </span><span id="b1234">site</span><span id="b1238">;</span><span id="b1239"> </span><span id="b1240">make</span><span id="b1244"> </span><span id="b1245">the</span><span id="b1248"> </span><span id="b1249">callbacks</span><span id="b1258"> </span><span id="b1259">exception</span><span id="b1268">-</span><span id="b1269">safe</span><span id="b1273"> </span><span id="b1274">and</span>
+<span id="b1282">re</span><span id="b1284">-</span><span id="b1285">entrancy</span><span id="b1293">-</span><span id="b1294">aware</span><span id="b1299">.</span></li>
 </ul>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro-first: a callback that schedules/cancels a timer or closes a file mid-loop does not corrupt the table; a throwing callback does not escape.</li>
-<li class="open"><input type="checkbox" disabled> Add <code>JSStringRelease</code> + the <code>catch(...)</code> guards + the contract note/assert.</li>
-</ul>
-<h3>Blockers</h3>
+<h3 id="todos"><span id="b1302"><span id="b1306">TODOs</span></span></h3>
 <ul>
-<li>None.</li>
+<li class="task" id="b1312"><input type="checkbox" disabled="" /> <span id="b1317">Repro</span><span id="b1322">-</span><span id="b1323">first</span><span id="b1328">:</span><span id="b1329"> </span><span id="b1330">a</span><span id="b1331"> </span><span id="b1332">callback</span><span id="b1340"> </span><span id="b1341">that</span><span id="b1345"> </span><span id="b1346">schedules</span><span id="b1355">/</span><span id="b1356">cancels</span><span id="b1363"> </span><span id="b1364">a</span><span id="b1365"> </span><span id="b1366">timer</span><span id="b1371"> </span><span id="b1372">or</span><span id="b1374"> </span><span id="b1375">closes</span><span id="b1381"> </span><span id="b1382">a</span><span id="b1383"> </span><span id="b1384">file</span>
+<span id="b1393">  </span><span id="b1395">mid</span><span id="b1398">-</span><span id="b1399">loop</span><span id="b1403"> </span><span id="b1404">does</span><span id="b1408"> </span><span id="b1409">not</span><span id="b1412"> </span><span id="b1413">corrupt</span><span id="b1420"> </span><span id="b1421">the</span><span id="b1424"> </span><span id="b1425">table</span><span id="b1430">;</span><span id="b1431"> </span><span id="b1432">a</span><span id="b1433"> </span><span id="b1434">throwing</span><span id="b1442"> </span><span id="b1443">callback</span><span id="b1451"> </span><span id="b1452">does</span><span id="b1456"> </span><span id="b1457">not</span><span id="b1460"> </span><span id="b1461">escape</span><span id="b1467">.</span></li>
+<li class="task" id="b1469"><input type="checkbox" disabled="" /> <span id="b1474">Add</span><span id="b1477"> </span><code id="b1478">JSStringRelease</code><span id="b1495"> </span><span id="b1496">+</span><span id="b1497"> </span><span id="b1498">the</span><span id="b1501"> </span><code id="b1502">catch(...)</code><span id="b1514"> </span><span id="b1515">guards</span><span id="b1521"> </span><span id="b1522">+</span><span id="b1523"> </span><span id="b1524">the</span><span id="b1527"> </span><span id="b1528">contract</span><span id="b1536"> </span><span id="b1537">note</span><span id="b1541">/</span><span id="b1542">assert</span><span id="b1548">.</span></li>
 </ul>
-<h2>Outcome</h2>
+<h3 id="blockers"><span id="b1551"><span id="b1555">Blockers</span></span></h3>
 <ul>
-<li><strong>LANDED <code>f20e2ec7</code></strong> (2026-06-16): audited io/utf8/main.cpp — no remaining live <code>JSStringRef</code> leaks (all paired w/ release; the cited utf8:18 was JS-003, convert.cpp is dead); wrapped both poll callbacks (<code>timeout_cb</code>, <code>JABCioNetOnEvent</code>) in <code>try{}catch(...){}</code> + a single-thread re-entrancy guard (<code>JABCioReentry</code>). C++-throw containment verified RED (abort) → GREEN via a new <code>jabc_test</code> row.</li>
+<li id="b1564"><span id="b1568">None</span><span id="b1572">.</span></li>
+</ul>
+<h2 id="outcome"><span id="b1575"><span id="b1579">Outcome</span></span></h2>
+<ul>
+<li id="b1587"><strong id="b1591"><span id="b1592">LANDED</span><span id="b1598"> </span><code id="b1599">f20e2ec7</code></strong><span id="b1610"> </span><span id="b1611">(</span><span id="b1612">2026</span><span id="b1616">-</span><span id="b1617">06</span><span id="b1619">-</span><span id="b1620">16</span><span id="b1622">)</span><span id="b1623">:</span><span id="b1624"> </span><span id="b1625">audited</span><span id="b1632"> </span><span id="b1633">io/utf8/main.cpp</span><span id="b1649"> </span><span id="b1650">—</span><span id="b1653"> </span><span id="b1654">no</span><span id="b1656"> </span><span id="b1657">remaining</span>
+<span id="b1671">live</span><span id="b1675"> </span><code id="b1676">JSStringRef</code><span id="b1689"> </span><span id="b1690">leaks</span><span id="b1695"> </span><span id="b1696">(</span><span id="b1697">all</span><span id="b1700"> </span><span id="b1701">paired</span><span id="b1707"> </span><span id="b1708">w</span><span id="b1709">/</span><span id="b1710"> </span><span id="b1711">release</span><span id="b1718">;</span><span id="b1719"> </span><span id="b1720">the</span><span id="b1723"> </span><span id="b1724">cited</span><span id="b1729"> </span><span id="b1730">utf8</span><span id="b1734">:</span><span id="b1735">18</span><span id="b1737"> </span><span id="b1738">was</span><span id="b1741"> </span><span id="b1742">JS-003</span><span id="b1748">,</span>
+<span id="b1754">convert.cpp</span><span id="b1765"> </span><span id="b1766">is</span><span id="b1768"> </span><span id="b1769">dead</span><span id="b1773">)</span><span id="b1774">;</span><span id="b1775"> </span><span id="b1776">wrapped</span><span id="b1783"> </span><span id="b1784">both</span><span id="b1788"> </span><span id="b1789">poll</span><span id="b1793"> </span><span id="b1794">callbacks</span><span id="b1803"> </span><span id="b1804">(</span><code id="b1805">timeout_cb</code><span id="b1817">,</span>
+<code id="b1823">JABCioNetOnEvent</code><span id="b1841">)</span><span id="b1842"> </span><span id="b1843">in</span><span id="b1845"> </span><code id="b1846">try{}catch(...){}</code><span id="b1865"> </span><span id="b1866">+</span><span id="b1867"> </span><span id="b1868">a</span><span id="b1869"> </span><span id="b1870">single</span><span id="b1876">-</span><span id="b1877">thread</span><span id="b1883"> </span><span id="b1884">re</span><span id="b1886">-</span><span id="b1887">entrancy</span><span id="b1895"> </span><span id="b1896">guard</span>
+<span id="b1906">(</span><code id="b1907">JABCioReentry</code><span id="b1922">)</span><span id="b1923">.</span><span id="b1924"> </span><span id="b1925">C</span><span id="b1926">+</span><span id="b1927">+</span><span id="b1928">-</span><span id="b1929">throw</span><span id="b1934"> </span><span id="b1935">containment</span><span id="b1946"> </span><span id="b1947">verified</span><span id="b1955"> </span><span id="b1956">RED</span><span id="b1959"> </span><span id="b1960">(</span><span id="b1961">abort</span><span id="b1966">)</span><span id="b1967"> </span><span id="b1968">→</span><span id="b1971"> </span><span id="b1972">GREEN</span><span id="b1977"> </span><span id="b1978">via</span><span id="b1981"> </span><span id="b1982">a</span><span id="b1983"> </span><span id="b1984">new</span>
+<code id="b1992">jabc_test</code><span id="b2003"> </span><span id="b2004">row</span><span id="b2007">.</span></li>
 </ul>
 <div class="footer">
 ❧

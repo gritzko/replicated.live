@@ -7,53 +7,51 @@
 <meta property="og:title" content="JS-112: require() keeps a module cached after its evaluation throws">
 <meta property="og:description" content="Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers. Node's CommonJS contract removes a module from the cache when its evaluation throws, so a retry re-evaluates; jab instead returns the half-initialized exports silently.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/JS/JS-112.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JS-112: require() keeps a module cached after its evaluation throws</h1>
+<h1 id="js-112-require-keeps-a-module-cached-after-its-evaluation-throws"><span id="b0"><span id="b4">JS-112</span><span id="b10">:</span><span id="b11"> </span><span id="b12">require</span><span id="b19">(</span><span id="b20">)</span><span id="b21"> </span><span id="b22">keeps</span><span id="b27"> </span><span id="b28">a</span><span id="b29"> </span><span id="b30">module</span><span id="b36"> </span><span id="b37">cached</span><span id="b43"> </span><span id="b44">after</span><span id="b49"> </span><span id="b50">its</span><span id="b53"> </span><span id="b54">evaluation</span><span id="b64"> </span><span id="b65">throws</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>DONE</dd></dl>
+<dl class="meta">
+<dt id="b72"><span>Now</span></dt>
+<dd><span id="b80">DONE</span></dd>
+</dl>
 </div>
-<p>
-Proposed by the 2026-07-07 jab multi-agent review; confirmed by both skeptic verifiers. Node's CommonJS contract removes a module from the cache when its evaluation throws, so a retry re-evaluates; jab instead returns the half-initialized exports silently.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b87"><span>Proposed</span><span id="b95"> </span><span id="b96">by</span><span id="b98"> </span><span id="b99">the</span><span id="b102"> </span><span id="b103">2026</span><span id="b107">-</span><span id="b108">07</span><span id="b110">-</span><span id="b111">07</span><span id="b113"> </span><span id="b114">jab</span><span id="b117"> </span><span id="b118">multi</span><span id="b123">-</span><span id="b124">agent</span><span id="b129"> </span><span id="b130">review</span><span id="b136">;</span><span id="b137"> </span><span id="b138">confirmed</span><span id="b147"> </span><span id="b148">by</span><span id="b150"> </span><span id="b151">both</span><span id="b155"> </span><span id="b156">skeptic</span><span id="b163"> </span><span id="b164">verifiers</span><span id="b173">.</span><span id="b174"> </span><span id="b175">Node</span><span id="b179">'</span><span id="b180">s</span><span id="b181"> </span><span id="b182">CommonJS</span><span id="b190"> </span><span id="b191">contract</span><span id="b199"> </span><span id="b200">removes</span><span id="b207"> </span><span id="b208">a</span><span id="b209"> </span><span id="b210">module</span><span id="b216"> </span><span id="b217">from</span><span id="b221"> </span><span id="b222">the</span><span id="b225"> </span><span id="b226">cache</span><span id="b231"> </span><span id="b232">when</span><span id="b236"> </span><span id="b237">its</span><span id="b240"> </span><span id="b241">evaluation</span><span id="b251"> </span><span id="b252">throws</span><span id="b258">,</span><span id="b259"> </span><span id="b260">so</span><span id="b262"> </span><span id="b263">a</span><span id="b264"> </span><span id="b265">retry</span><span id="b270"> </span><span id="b271">re</span><span id="b273">-</span><span id="b274">evaluates</span><span id="b283">;</span><span id="b284"> </span><span id="b285">jab</span><span id="b288"> </span><span id="b289">instead</span><span id="b296"> </span><span id="b297">returns</span><span id="b304"> </span><span id="b305">the</span><span id="b308"> </span><span id="b309">half</span><span id="b313">-</span><span id="b314">initialized</span><span id="b325"> </span><span id="b326">exports</span><span id="b333"> </span><span id="b334">silently</span><span id="b342">.</span></p>
+<h2 id="input"><span id="b345"><span id="b349">Input</span></span></h2>
+<h3 id="context"><span id="b356"><span id="b360">Context</span></span></h3>
 <ul>
-<li><code>cache[abs] = module; // before eval: cycle-safe</code> (jab require.cpp:76) then <code>fn(module, ...)</code> (require.cpp:78-80) with no try/catch removing the entry on failure.</li>
-<li><code>try { require('./a.js') } catch (e) {} ... require('./a.js')</code> — the second call hits the cache (require.cpp:73) and returns partial exports, hiding the original failure.</li>
-<li>test/require.js does not cover a throwing module.</li>
+<li id="b368"><code id="b372">cache[abs] = module; // before eval: cycle-safe</code><span id="b421"> </span><span id="b422">(</span><span id="b423">jab</span><span id="b426"> </span><span id="b427">require.cpp:76</span><span id="b441">)</span><span id="b442"> </span><span id="b443">then</span><span id="b447"> </span><code id="b448">fn(module, ...)</code><span id="b465"> </span><span id="b466">(</span><span id="b467">require.cpp:78</span><span id="b481">-</span><span id="b482">80</span><span id="b484">)</span><span id="b485"> </span><span id="b486">with</span><span id="b490"> </span><span id="b491">no</span><span id="b493"> </span><span id="b494">try</span><span id="b497">/</span><span id="b498">catch</span><span id="b503"> </span><span id="b504">removing</span><span id="b512"> </span><span id="b513">the</span><span id="b516"> </span><span id="b517">entry</span><span id="b522"> </span><span id="b523">on</span><span id="b525"> </span><span id="b526">failure</span><span id="b533">.</span></li>
+<li id="b535"><code id="b539">try { require('./a.js') } catch (e) {} ... require('./a.js')</code><span id="b601"> </span><span id="b602">—</span><span id="b605"> </span><span id="b606">the</span><span id="b609"> </span><span id="b610">second</span><span id="b616"> </span><span id="b617">call</span><span id="b621"> </span><span id="b622">hits</span><span id="b626"> </span><span id="b627">the</span><span id="b630"> </span><span id="b631">cache</span><span id="b636"> </span><span id="b637">(</span><span id="b638">require.cpp:73</span><span id="b652">)</span><span id="b653"> </span><span id="b654">and</span><span id="b657"> </span><span id="b658">returns</span><span id="b665"> </span><span id="b666">partial</span><span id="b673"> </span><span id="b674">exports</span><span id="b681">,</span><span id="b682"> </span><span id="b683">hiding</span><span id="b689"> </span><span id="b690">the</span><span id="b693"> </span><span id="b694">original</span><span id="b702"> </span><span id="b703">failure</span><span id="b710">.</span></li>
+<li id="b712"><span id="b716">test/require.js</span><span id="b731"> </span><span id="b732">does</span><span id="b736"> </span><span id="b737">not</span><span id="b740"> </span><span id="b741">cover</span><span id="b746"> </span><span id="b747">a</span><span id="b748"> </span><span id="b749">throwing</span><span id="b757"> </span><span id="b758">module</span><span id="b764">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b767"><span id="b771">Goals</span></span></h3>
 <ul>
-<li>Repro first: throwing module, second require re-evaluates (Node semantics).</li>
-<li>try/catch around the eval; <code>delete cache[abs]</code> before rethrowing; cycle-safety preserved.</li>
+<li id="b777"><span id="b781">Repro</span><span id="b786"> </span><span id="b787">first</span><span id="b792">:</span><span id="b793"> </span><span id="b794">throwing</span><span id="b802"> </span><span id="b803">module</span><span id="b809">,</span><span id="b810"> </span><span id="b811">second</span><span id="b817"> </span><span id="b818">require</span><span id="b825"> </span><span id="b826">re</span><span id="b828">-</span><span id="b829">evaluates</span><span id="b838"> </span><span id="b839">(</span><span id="b840">Node</span><span id="b844"> </span><span id="b845">semantics</span><span id="b854">)</span><span id="b855">.</span></li>
+<li id="b857"><span id="b861">try</span><span id="b864">/</span><span id="b865">catch</span><span id="b870"> </span><span id="b871">around</span><span id="b877"> </span><span id="b878">the</span><span id="b881"> </span><span id="b882">eval</span><span id="b886">;</span><span id="b887"> </span><code id="b888">delete cache[abs]</code><span id="b907"> </span><span id="b908">before</span><span id="b914"> </span><span id="b915">rethrowing</span><span id="b925">;</span><span id="b926"> </span><span id="b927">cycle</span><span id="b932">-</span><span id="b933">safety</span><span id="b939"> </span><span id="b940">preserved</span><span id="b949">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b952"><span id="b956">Constraints</span></span></h3>
 <ul>
-<li>Keep the before-eval cache insert (cycles); only the failure path changes.</li>
+<li id="b968"><span id="b972">Keep</span><span id="b976"> </span><span id="b977">the</span><span id="b980"> </span><span id="b981">before</span><span id="b987">-</span><span id="b988">eval</span><span id="b992"> </span><span id="b993">cache</span><span id="b998"> </span><span id="b999">insert</span><span id="b1005"> </span><span id="b1006">(</span><span id="b1007">cycles</span><span id="b1013">)</span><span id="b1014">;</span><span id="b1015"> </span><span id="b1016">only</span><span id="b1020"> </span><span id="b1021">the</span><span id="b1024"> </span><span id="b1025">failure</span><span id="b1032"> </span><span id="b1033">path</span><span id="b1037"> </span><span id="b1038">changes</span><span id="b1045">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> repro in test/require.js</li>
-<li class="open"><input type="checkbox" disabled> delete-on-throw in the require machine</li>
+<h2 id="wip"><span id="b1048"><span id="b1052">WIP</span></span></h2>
+<h3 id="todos"><span id="b1057"><span id="b1061">TODOs</span></span></h3>
+<ul>
+<li class="task" id="b1067"><input type="checkbox" disabled="" /> <span id="b1072">repro</span><span id="b1077"> </span><span id="b1078">in</span><span id="b1080"> </span><span id="b1081">test/require.js</span></li>
+<li class="task" id="b1097"><input type="checkbox" disabled="" /> <span id="b1102">delete</span><span id="b1108">-</span><span id="b1109">on</span><span id="b1111">-</span><span id="b1112">throw</span><span id="b1117"> </span><span id="b1118">in</span><span id="b1120"> </span><span id="b1121">the</span><span id="b1124"> </span><span id="b1125">require</span><span id="b1132"> </span><span id="b1133">machine</span></li>
 </ul>
 <ul>
-<li>2026-07-10 revision: still OPEN — require.cpp load() (now ~L88-99): cache<a href="./abs.html">abs</a>=module at :93, fn(...) at :97 with no try/catch/delete-on-throw. NB require.cpp rewritten by GIT-041 (a5cf85b) for be-dir pinning, this path untouched</li>
+<li id="b1141"><span id="b1145">2026</span><span id="b1149">-</span><span id="b1150">07</span><span id="b1152">-</span><span id="b1153">10</span><span id="b1155"> </span><span id="b1156">revision</span><span id="b1164">:</span><span id="b1165"> </span><span id="b1166">still</span><span id="b1171"> </span><span id="b1172">OPEN</span><span id="b1176"> </span><span id="b1177">—</span><span id="b1180"> </span><span id="b1181">require.cpp</span><span id="b1192"> </span><span id="b1193">load</span><span id="b1197">(</span><span id="b1198">)</span><span id="b1199"> </span><span id="b1200">(</span><span id="b1201">now</span><span id="b1204"> </span><span id="b1205">~</span><span id="b1206">L88</span><span id="b1209">-</span><span id="b1210">99</span><span id="b1212">)</span><span id="b1213">:</span><span id="b1214"> </span><span id="b1215">cache</span><a href="abs"><span id="b1221">abs</span></a><span id="b1225">=</span><span id="b1226">module</span><span id="b1232"> </span><span id="b1233">at</span><span id="b1235"> </span><span id="b1236">:</span><span id="b1237">93</span><span id="b1239">,</span><span id="b1240"> </span><span id="b1241">fn</span><span id="b1243">(</span><span id="b1244">.</span><span id="b1245">.</span><span id="b1246">.</span><span id="b1247">)</span><span id="b1248"> </span><span id="b1249">at</span><span id="b1251"> </span><span id="b1252">:</span><span id="b1253">97</span><span id="b1255"> </span><span id="b1256">with</span><span id="b1260"> </span><span id="b1261">no</span><span id="b1263"> </span><span id="b1264">try</span><span id="b1267">/</span><span id="b1268">catch</span><span id="b1273">/</span><span id="b1274">delete</span><span id="b1280">-</span><span id="b1281">on</span><span id="b1283">-</span><span id="b1284">throw</span><span id="b1289">.</span><span id="b1290"> </span><span id="b1291">NB</span><span id="b1293"> </span><span id="b1294">require.cpp</span><span id="b1305"> </span><span id="b1306">rewritten</span><span id="b1315"> </span><span id="b1316">by</span><span id="b1318"> </span><span id="b1319">GIT-041</span><span id="b1326"> </span><span id="b1327">(</span><span id="b1328">a5cf85b</span><span id="b1335">)</span><span id="b1336"> </span><span id="b1337">for</span><span id="b1340"> </span><span id="b1341">be</span><span id="b1343">-</span><span id="b1344">dir</span><span id="b1347"> </span><span id="b1348">pinning</span><span id="b1355">,</span><span id="b1356"> </span><span id="b1357">this</span><span id="b1361"> </span><span id="b1362">path</span><span id="b1366"> </span><span id="b1367">untouched</span></li>
 </ul>
 <div class="footer">
 ❧

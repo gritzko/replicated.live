@@ -7,69 +7,66 @@
 <meta property="og:title" content="BE-025: perf + style — repeated full-wtlog scans, double hunk retention, redundant re-encode, whitespace">
 <meta property="og:description" content="Four perf/style cleanups from the be/ review (none change behavior):">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/BE/BE-025.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>BE-025: perf + style — repeated full-wtlog scans, double hunk retention, redundant re-encode, whitespace</h1>
+<h1 id="be-025-perf-style-—-repeated-full-wtlog-scans-double-hunk-retention-redundant-re-encode-whitespace"><span id="b0"><span id="b4">BE-025</span><span id="b10">:</span><span id="b11"> </span><span id="b12">perf</span><span id="b16"> </span><span id="b17">+</span><span id="b18"> </span><span id="b19">style</span><span id="b24"> </span><span id="b25">—</span><span id="b28"> </span><span id="b29">repeated</span><span id="b37"> </span><span id="b38">full</span><span id="b42">-</span><span id="b43">wtlog</span><span id="b48"> </span><span id="b49">scans</span><span id="b54">,</span><span id="b55"> </span><span id="b56">double</span><span id="b62"> </span><span id="b63">hunk</span><span id="b67"> </span><span id="b68">retention</span><span id="b77">,</span><span id="b78"> </span><span id="b79">redundant</span><span id="b88"> </span><span id="b89">re</span><span id="b91">-</span><span id="b92">encode</span><span id="b98">,</span><span id="b99"> </span><span id="b100">whitespace</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
-<dl class="meta"><dt>Sev:</dt><dd>LOW</dd></dl>
+<dl class="meta">
+<dt id="b111"><span>Now</span></dt>
+<dd><span id="b119">OPEN</span></dd>
+<dt id="b125"><span>Sev</span></dt>
+<dd><span id="b133">LOW</span></dd>
+</dl>
 </div>
-<p>
-Four perf/style cleanups from the be/ review (none change behavior):
-</p>
+<p id="b139"><span>Four</span><span id="b143"> </span><span id="b144">perf</span><span id="b148">/</span><span id="b149">style</span><span id="b154"> </span><span id="b155">cleanups</span><span id="b163"> </span><span id="b164">from</span><span id="b168"> </span><span id="b169">the</span><span id="b172"> </span><span id="b173">be</span><span id="b175">/</span><span id="b176"> </span><span id="b177">review</span><span id="b183"> </span><span id="b184">(</span><span id="b185">none</span><span id="b189"> </span><span id="b190">change</span><span id="b196"> </span><span id="b197">behavior</span><span id="b205">)</span><span id="b206">:</span></p>
 <ul>
-<li><code>core/discover.js:75</code> — row0Uri scans the ENTIRE wtlog to read row 0 (<code>ulog.each</code> has no early stop), and find() runs it REPEATEDLY per command → O(wtlog) per invocation for a single row.</li>
-<li><code>core/loop.js:81</code> — _hunkSink retains every fed record in the closure <code>recs</code> array forever (never drained; replay could read the old HUNK log instead) → ~2× peak memory alongside the ram HUNK log.</li>
-<li><code>core/emit.js:150</code> — flush encodes the rendered body to UTF-8 bytes then immediately DECODES them back to a string for writeStdout (a redundant round-trip per flush).</li>
-<li><code>core/loop.js:144</code> — mintBe's wrap-defaults block is tab-indented with trailing whitespace in an otherwise 2-space file.</li>
+<li id="b209"><code id="b213">core/discover.js:75</code><span id="b234"> </span><span id="b235">—</span><span id="b238"> </span><span id="b239">row0Uri</span><span id="b246"> </span><span id="b247">scans</span><span id="b252"> </span><span id="b253">the</span><span id="b256"> </span><span id="b257">ENTIRE</span><span id="b263"> </span><span id="b264">wtlog</span><span id="b269"> </span><span id="b270">to</span><span id="b272"> </span><span id="b273">read</span><span id="b277"> </span><span id="b278">row</span><span id="b281"> </span><span id="b282">0</span><span id="b283"> </span><span id="b284">(</span><code id="b285">ulog.each</code><span id="b296"> </span><span id="b297">has</span><span id="b300"> </span><span id="b301">no</span><span id="b303"> </span><span id="b304">early</span><span id="b309"> </span><span id="b310">stop</span><span id="b314">)</span><span id="b315">,</span><span id="b316"> </span><span id="b317">and</span><span id="b320"> </span><span id="b321">find</span><span id="b325">(</span><span id="b326">)</span><span id="b327"> </span><span id="b328">runs</span><span id="b332"> </span><span id="b333">it</span><span id="b335"> </span><span id="b336">REPEATEDLY</span><span id="b346"> </span><span id="b347">per</span><span id="b350"> </span><span id="b351">command</span><span id="b358"> </span><span id="b359">→</span><span id="b362"> </span><span id="b363">O</span><span id="b364">(</span><span id="b365">wtlog</span><span id="b370">)</span><span id="b371"> </span><span id="b372">per</span><span id="b375"> </span><span id="b376">invocation</span><span id="b386"> </span><span id="b387">for</span><span id="b390"> </span><span id="b391">a</span><span id="b392"> </span><span id="b393">single</span><span id="b399"> </span><span id="b400">row</span><span id="b403">.</span></li>
+<li id="b405"><code id="b409">core/loop.js:81</code><span id="b426"> </span><span id="b427">—</span><span id="b430"> </span><span id="b431">_hunkSink</span><span id="b440"> </span><span id="b441">retains</span><span id="b448"> </span><span id="b449">every</span><span id="b454"> </span><span id="b455">fed</span><span id="b458"> </span><span id="b459">record</span><span id="b465"> </span><span id="b466">in</span><span id="b468"> </span><span id="b469">the</span><span id="b472"> </span><span id="b473">closure</span><span id="b480"> </span><code id="b481">recs</code><span id="b487"> </span><span id="b488">array</span><span id="b493"> </span><span id="b494">forever</span><span id="b501"> </span><span id="b502">(</span><span id="b503">never</span><span id="b508"> </span><span id="b509">drained</span><span id="b516">;</span><span id="b517"> </span><span id="b518">replay</span><span id="b524"> </span><span id="b525">could</span><span id="b530"> </span><span id="b531">read</span><span id="b535"> </span><span id="b536">the</span><span id="b539"> </span><span id="b540">old</span><span id="b543"> </span><span id="b544">HUNK</span><span id="b548"> </span><span id="b549">log</span><span id="b552"> </span><span id="b553">instead</span><span id="b560">)</span><span id="b561"> </span><span id="b562">→</span><span id="b565"> </span><span id="b566">~</span><span id="b567">2</span><span id="b568">×</span><span id="b570"> </span><span id="b571">peak</span><span id="b575"> </span><span id="b576">memory</span><span id="b582"> </span><span id="b583">alongside</span><span id="b592"> </span><span id="b593">the</span><span id="b596"> </span><span id="b597">ram</span><span id="b600"> </span><span id="b601">HUNK</span><span id="b605"> </span><span id="b606">log</span><span id="b609">.</span></li>
+<li id="b611"><code id="b615">core/emit.js:150</code><span id="b633"> </span><span id="b634">—</span><span id="b637"> </span><span id="b638">flush</span><span id="b643"> </span><span id="b644">encodes</span><span id="b651"> </span><span id="b652">the</span><span id="b655"> </span><span id="b656">rendered</span><span id="b664"> </span><span id="b665">body</span><span id="b669"> </span><span id="b670">to</span><span id="b672"> </span><span id="b673">UTF</span><span id="b676">-</span><span id="b677">8</span><span id="b678"> </span><span id="b679">bytes</span><span id="b684"> </span><span id="b685">then</span><span id="b689"> </span><span id="b690">immediately</span><span id="b701"> </span><span id="b702">DECODES</span><span id="b709"> </span><span id="b710">them</span><span id="b714"> </span><span id="b715">back</span><span id="b719"> </span><span id="b720">to</span><span id="b722"> </span><span id="b723">a</span><span id="b724"> </span><span id="b725">string</span><span id="b731"> </span><span id="b732">for</span><span id="b735"> </span><span id="b736">writeStdout</span><span id="b747"> </span><span id="b748">(</span><span id="b749">a</span><span id="b750"> </span><span id="b751">redundant</span><span id="b760"> </span><span id="b761">round</span><span id="b766">-</span><span id="b767">trip</span><span id="b771"> </span><span id="b772">per</span><span id="b775"> </span><span id="b776">flush</span><span id="b781">)</span><span id="b782">.</span></li>
+<li id="b784"><code id="b788">core/loop.js:144</code><span id="b806"> </span><span id="b807">—</span><span id="b810"> </span><span id="b811">mintBe</span><span id="b817">'</span><span id="b818">s</span><span id="b819"> </span><span id="b820">wrap</span><span id="b824">-</span><span id="b825">defaults</span><span id="b833"> </span><span id="b834">block</span><span id="b839"> </span><span id="b840">is</span><span id="b842"> </span><span id="b843">tab</span><span id="b846">-</span><span id="b847">indented</span><span id="b855"> </span><span id="b856">with</span><span id="b860"> </span><span id="b861">trailing</span><span id="b869"> </span><span id="b870">whitespace</span><span id="b880"> </span><span id="b881">in</span><span id="b883"> </span><span id="b884">an</span><span id="b886"> </span><span id="b887">otherwise</span><span id="b896"> </span><span id="b897">2</span><span id="b898">-</span><span id="b899">space</span><span id="b904"> </span><span id="b905">file</span><span id="b909">.</span></li>
 </ul>
-<p>
-From the 2026-07-07 be/ review (<a href="REVIEW.html">BE/REVIEW</a>), CONFIRMED. Method <a href="../../rule/Issues.html">Issues</a>.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b912"><span>From</span><span id="b916"> </span><span id="b917">the</span><span id="b920"> </span><span id="b921">2026</span><span id="b925">-</span><span id="b926">07</span><span id="b928">-</span><span id="b929">07</span><span id="b931"> </span><span id="b932">be</span><span id="b934">/</span><span id="b935"> </span><span id="b936">review</span><span id="b942"> </span><span id="b943">(</span><a href="REVIEW.html" title="be/ code-review digest 2026-07-07"><span id="b945">BE/REVIEW</span></a><span id="b955">)</span><span id="b956">,</span><span id="b957"> </span><span id="b958">CONFIRMED</span><span id="b967">.</span><span id="b968"> </span><span id="b969">Method</span><span id="b975"> </span><a href="../../rule/Issues.html" title="the parallel fix-and-land loop"><span id="b977">Issues</span></a><span id="b984">.</span></p>
+<h2 id="input"><span id="b987"><span id="b991">Input</span></span></h2>
+<h3 id="context"><span id="b998"><span id="b1002">Context</span></span></h3>
 <ul>
-<li>row0Uri: <code>ulog.each</code> needs an early-stop (row 0 is the first row); find() calls it once per command, sometimes repeatedly.</li>
-<li>_hunkSink: pager.hunksFromLog(sink.log) shows replay can come from the log, making the JS <code>recs</code> copy avoidable.</li>
+<li id="b1010"><span id="b1014">row0Uri</span><span id="b1021">:</span><span id="b1022"> </span><code id="b1023">ulog.each</code><span id="b1034"> </span><span id="b1035">needs</span><span id="b1040"> </span><span id="b1041">an</span><span id="b1043"> </span><span id="b1044">early</span><span id="b1049">-</span><span id="b1050">stop</span><span id="b1054"> </span><span id="b1055">(</span><span id="b1056">row</span><span id="b1059"> </span><span id="b1060">0</span><span id="b1061"> </span><span id="b1062">is</span><span id="b1064"> </span><span id="b1065">the</span><span id="b1068"> </span><span id="b1069">first</span><span id="b1074"> </span><span id="b1075">row</span><span id="b1078">)</span><span id="b1079">;</span><span id="b1080"> </span><span id="b1081">find</span><span id="b1085">(</span><span id="b1086">)</span><span id="b1087"> </span><span id="b1088">calls</span><span id="b1093"> </span><span id="b1094">it</span><span id="b1096"> </span><span id="b1097">once</span><span id="b1101"> </span><span id="b1102">per</span><span id="b1105"> </span><span id="b1106">command</span><span id="b1113">,</span><span id="b1114"> </span><span id="b1115">sometimes</span><span id="b1124"> </span><span id="b1125">repeatedly</span><span id="b1135">.</span></li>
+<li id="b1137"><span id="b1141">_hunkSink</span><span id="b1150">:</span><span id="b1151"> </span><span id="b1152">pager</span><span id="b1157">.</span><span id="b1158">hunksFromLog</span><span id="b1170">(</span><span id="b1171">sink</span><span id="b1175">.</span><span id="b1176">log</span><span id="b1179">)</span><span id="b1180"> </span><span id="b1181">shows</span><span id="b1186"> </span><span id="b1187">replay</span><span id="b1193"> </span><span id="b1194">can</span><span id="b1197"> </span><span id="b1198">come</span><span id="b1202"> </span><span id="b1203">from</span><span id="b1207"> </span><span id="b1208">the</span><span id="b1211"> </span><span id="b1212">log</span><span id="b1215">,</span><span id="b1216"> </span><span id="b1217">making</span><span id="b1223"> </span><span id="b1224">the</span><span id="b1227"> </span><span id="b1228">JS</span><span id="b1230"> </span><code id="b1231">recs</code><span id="b1237"> </span><span id="b1238">copy</span><span id="b1242"> </span><span id="b1243">avoidable</span><span id="b1252">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b1255"><span id="b1259">Goals</span></span></h3>
 <ul>
-<li>row0 reads via an early-stopping first-row accessor; _hunkSink drops the redundant recs retention (replay from the log); emit writes bytes without the decode round-trip; the whitespace normalized.</li>
+<li id="b1265"><span id="b1269">row0</span><span id="b1273"> </span><span id="b1274">reads</span><span id="b1279"> </span><span id="b1280">via</span><span id="b1283"> </span><span id="b1284">an</span><span id="b1286"> </span><span id="b1287">early</span><span id="b1292">-</span><span id="b1293">stopping</span><span id="b1301"> </span><span id="b1302">first</span><span id="b1307">-</span><span id="b1308">row</span><span id="b1311"> </span><span id="b1312">accessor</span><span id="b1320">;</span><span id="b1321"> </span><span id="b1322">_hunkSink</span><span id="b1331"> </span><span id="b1332">drops</span><span id="b1337"> </span><span id="b1338">the</span><span id="b1341"> </span><span id="b1342">redundant</span><span id="b1351"> </span><span id="b1352">recs</span><span id="b1356"> </span><span id="b1357">retention</span><span id="b1366"> </span><span id="b1367">(</span><span id="b1368">replay</span><span id="b1374"> </span><span id="b1375">from</span><span id="b1379"> </span><span id="b1380">the</span><span id="b1383"> </span><span id="b1384">log</span><span id="b1387">)</span><span id="b1388">;</span><span id="b1389"> </span><span id="b1390">emit</span><span id="b1394"> </span><span id="b1395">writes</span><span id="b1401"> </span><span id="b1402">bytes</span><span id="b1407"> </span><span id="b1408">without</span><span id="b1415"> </span><span id="b1416">the</span><span id="b1419"> </span><span id="b1420">decode</span><span id="b1426"> </span><span id="b1427">round</span><span id="b1432">-</span><span id="b1433">trip</span><span id="b1437">;</span><span id="b1438"> </span><span id="b1439">the</span><span id="b1442"> </span><span id="b1443">whitespace</span><span id="b1453"> </span><span id="b1454">normalized</span><span id="b1464">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b1467"><span id="b1471">Constraints</span></span></h3>
 <ul>
-<li>Behavior-preserving; suite byte-stable where output is asserted.</li>
+<li id="b1483"><span id="b1487">Behavior</span><span id="b1495">-</span><span id="b1496">preserving</span><span id="b1506">;</span><span id="b1507"> </span><span id="b1508">suite</span><span id="b1513"> </span><span id="b1514">byte</span><span id="b1518">-</span><span id="b1519">stable</span><span id="b1525"> </span><span id="b1526">where</span><span id="b1531"> </span><span id="b1532">output</span><span id="b1538"> </span><span id="b1539">is</span><span id="b1541"> </span><span id="b1542">asserted</span><span id="b1550">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>Design decisions</h3>
+<h2 id="wip"><span id="b1553"><span id="b1557">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b1562"><span id="b1566">Design</span><span id="b1572"> </span><span id="b1573">decisions</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li id="b1583"><span id="b1587">(</span><span id="b1588">pending</span><span id="b1595">)</span></li>
 </ul>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> Early-stop row0; drop recs double-retain; kill the re-encode; fix whitespace; suite green.</li>
-</ul>
-<h3>Blockers and bummers</h3>
+<h3 id="todos"><span id="b1598"><span id="b1602">TODOs</span></span></h3>
 <ul>
-<li>None known.</li>
+<li class="task" id="b1608"><input type="checkbox" disabled="" /> <span id="b1613">Early</span><span id="b1618">-</span><span id="b1619">stop</span><span id="b1623"> </span><span id="b1624">row0</span><span id="b1628">;</span><span id="b1629"> </span><span id="b1630">drop</span><span id="b1634"> </span><span id="b1635">recs</span><span id="b1639"> </span><span id="b1640">double</span><span id="b1646">-</span><span id="b1647">retain</span><span id="b1653">;</span><span id="b1654"> </span><span id="b1655">kill</span><span id="b1659"> </span><span id="b1660">the</span><span id="b1663"> </span><span id="b1664">re</span><span id="b1666">-</span><span id="b1667">encode</span><span id="b1673">;</span><span id="b1674"> </span><span id="b1675">fix</span><span id="b1678"> </span><span id="b1679">whitespace</span><span id="b1689">;</span><span id="b1690"> </span><span id="b1691">suite</span><span id="b1696"> </span><span id="b1697">green</span><span id="b1702">.</span></li>
 </ul>
-<h2>Outcome</h2>
+<h3 id="blockers-and-bummers"><span id="b1705"><span id="b1709">Blockers</span><span id="b1717"> </span><span id="b1718">and</span><span id="b1721"> </span><span id="b1722">bummers</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li id="b1730"><span id="b1734">None</span><span id="b1738"> </span><span id="b1739">known</span><span id="b1744">.</span></li>
+</ul>
+<h2 id="outcome"><span id="b1747"><span id="b1751">Outcome</span></span></h2>
+<ul>
+<li id="b1759"><span id="b1763">(</span><span id="b1764">pending</span><span id="b1771">)</span></li>
 </ul>
 <div class="footer">
 ❧

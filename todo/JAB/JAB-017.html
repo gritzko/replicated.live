@@ -3,65 +3,64 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JAB-017: Buf.grow's grow hook is dead — growing a mapped Buf silently severs its file backing</title>
-<meta property="og:title" content="JAB-017: Buf.grow's grow hook is dead — growing a mapped Buf silently severs its file backing">
-<meta property="og:description" content="Buf.grow (jab/buf.cpp:100-108) has an if (this.grow) mapped-backing branch that nothing ever installs (grep across jab/.cpp, test/, jsrc/ — cont.cpp's P.grow is the unrelated PACK scratch grower), so growing an io.ram/io.mmap(&quot;rw&quot;) Buf falls into the heap-copy path: a fresh Uint8Array replaces the mapping and later msync() no longer flushes the file. API.md:118 promises &quot;io.buf/ram: realloc-or-mremap&quot;, which the code cannot do. Found in the 2026-07-24 jab/ review; sibling of the JAB-006 contract gaps.">
+<title>JAB-017: Buf.grow's _grow hook is dead — growing a mapped Buf silently severs its file backing</title>
+<meta property="og:title" content="JAB-017: Buf.grow's _grow hook is dead — growing a mapped Buf silently severs its file backing">
+<meta property="og:description" content="Buf.grow (jab/buf.cpp:100-108) has an if (this._grow) mapped-backing branch that nothing ever installs (grep across jab/*.cpp, test/, jsrc/ — cont.cpp's P._grow is the unrelated PACK scratch grower), so growing an io.ram/io.mmap(&quot;rw&quot;) Buf falls into the heap-copy path: a fresh Uint8Array replaces the mapping and later msync() no longer flushes the file. API.md:118 promises &quot;io.buf/ram: realloc-or-mremap&quot;, which the code cannot do. Found in the 2026-07-24 jab/ review; sibling of the JAB-006 contract gaps.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://replicated.live/todo/JAB/JAB-017.html">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
       crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/css/asciicast.css">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
 <script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
         integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
         crossorigin="anonymous"></script>
-<script defer src="/assets/js/asciicast.js"></script>
-</head>
-<body>
+<script defer src="/blob/js/asciicast.js"></script>
 <a class="banner" href="/">
-<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>JAB-017: Buf.grow's <code>_grow</code> hook is dead — growing a mapped Buf silently severs its file backing</h1>
+<h1 id="jab-017-bufgrows-_grow-hook-is-dead-—-growing-a-mapped-buf-silently-severs-its-file-backing"><span id="b0"><span id="b4">JAB-017</span><span id="b11">:</span><span id="b12"> </span><span id="b13">Buf</span><span id="b16">.</span><span id="b17">grow</span><span id="b21">'</span><span id="b22">s</span><span id="b23"> </span><code id="b24">_grow</code><span id="b31"> </span><span id="b32">hook</span><span id="b36"> </span><span id="b37">is</span><span id="b39"> </span><span id="b40">dead</span><span id="b44"> </span><span id="b45">—</span><span id="b48"> </span><span id="b49">growing</span><span id="b56"> </span><span id="b57">a</span><span id="b58"> </span><span id="b59">mapped</span><span id="b65"> </span><span id="b66">Buf</span><span id="b69"> </span><span id="b70">silently</span><span id="b78"> </span><span id="b79">severs</span><span id="b85"> </span><span id="b86">its</span><span id="b89"> </span><span id="b90">file</span><span id="b94"> </span><span id="b95">backing</span></span></h1>
 <div>
-<dl class="meta"><dt>Now:</dt><dd>OPEN</dd></dl>
-<dl class="meta"><dt>Sev:</dt><dd>MED</dd></dl>
+<dl class="meta">
+<dt id="b103"><span>Now</span></dt>
+<dd><span id="b111">OPEN</span></dd>
+<dt id="b117"><span>Sev</span></dt>
+<dd><span id="b125">MED</span></dd>
+</dl>
 </div>
-<p>
-<code>Buf.grow</code> (jab/buf.cpp:100-108) has an <code>if (this._grow)</code> mapped-backing branch that nothing ever installs (grep across jab/*.cpp, test/, jsrc/ — cont.cpp's <code>P._grow</code> is the unrelated PACK scratch grower), so growing an <code>io.ram</code>/<code>io.mmap(&quot;rw&quot;)</code> Buf falls into the heap-copy path: a fresh <code>Uint8Array</code> replaces the mapping and later <code>msync()</code> no longer flushes the file. API.md:118 promises &quot;io.buf/ram: realloc-or-mremap&quot;, which the code cannot do. Found in the 2026-07-24 jab/ review; sibling of the <a href="./JAB-006.html">JAB-006</a> contract gaps.
-</p>
-<h2>Input</h2>
-<h3>Context</h3>
+<p id="b131"><code>Buf.grow</code><span id="b141"> </span><span id="b142">(</span><span id="b143">jab/buf.cpp:100</span><span id="b158">-</span><span id="b159">108</span><span id="b162">)</span><span id="b163"> </span><span id="b164">has</span><span id="b167"> </span><span id="b168">an</span><span id="b170"> </span><code id="b171">if (this._grow)</code><span id="b188"> </span><span id="b189">mapped</span><span id="b195">-</span><span id="b196">backing</span><span id="b203"> </span><span id="b204">branch</span><span id="b210"> </span><span id="b211">that</span><span id="b215"> </span><span id="b216">nothing</span><span id="b223"> </span><span id="b224">ever</span><span id="b228"> </span><span id="b229">installs</span><span id="b237"> </span><span id="b238">(</span><span id="b239">grep</span><span id="b243"> </span><span id="b244">across</span><span id="b250"> </span><span id="b251">jab</span><span id="b254">/</span><span id="b255">*</span><span id="b256">.</span><span id="b257">cpp</span><span id="b260">,</span><span id="b261"> </span><span id="b262">test</span><span id="b266">/</span><span id="b267">,</span><span id="b268"> </span><span id="b269">jsrc</span><span id="b273">/</span><span id="b274"> </span><span id="b275">—</span><span id="b278"> </span><span id="b279">cont.cpp</span><span id="b287">'</span><span id="b288">s</span><span id="b289"> </span><code id="b290">P._grow</code><span id="b299"> </span><span id="b300">is</span><span id="b302"> </span><span id="b303">the</span><span id="b306"> </span><span id="b307">unrelated</span><span id="b316"> </span><span id="b317">PACK</span><span id="b321"> </span><span id="b322">scratch</span><span id="b329"> </span><span id="b330">grower</span><span id="b336">)</span><span id="b337">,</span><span id="b338"> </span><span id="b339">so</span><span id="b341"> </span><span id="b342">growing</span><span id="b349"> </span><span id="b350">an</span><span id="b352"> </span><code id="b353">io.ram</code><span id="b361">/</span><code id="b362">io.mmap(&quot;rw&quot;)</code><span id="b377"> </span><span id="b378">Buf</span><span id="b381"> </span><span id="b382">falls</span><span id="b387"> </span><span id="b388">into</span><span id="b392"> </span><span id="b393">the</span><span id="b396"> </span><span id="b397">heap</span><span id="b401">-</span><span id="b402">copy</span><span id="b406"> </span><span id="b407">path</span><span id="b411">:</span><span id="b412"> </span><span id="b413">a</span><span id="b414"> </span><span id="b415">fresh</span><span id="b420"> </span><code id="b421">Uint8Array</code><span id="b433"> </span><span id="b434">replaces</span><span id="b442"> </span><span id="b443">the</span><span id="b446"> </span><span id="b447">mapping</span><span id="b454"> </span><span id="b455">and</span><span id="b458"> </span><span id="b459">later</span><span id="b464"> </span><code id="b465">msync()</code><span id="b474"> </span><span id="b475">no</span><span id="b477"> </span><span id="b478">longer</span><span id="b484"> </span><span id="b485">flushes</span><span id="b492"> </span><span id="b493">the</span><span id="b496"> </span><span id="b497">file</span><span id="b501">.</span><span id="b502"> </span><span id="b503">API.md:118</span><span id="b513"> </span><span id="b514">promises</span><span id="b522"> </span><span id="b523">&quot;</span><span id="b524">io</span><span id="b526">.</span><span id="b527">buf</span><span id="b530">/</span><span id="b531">ram</span><span id="b534">:</span><span id="b535"> </span><span id="b536">realloc</span><span id="b543">-</span><span id="b544">or</span><span id="b546">-</span><span id="b547">mremap</span><span id="b553">&quot;</span><span id="b554">,</span><span id="b555"> </span><span id="b556">which</span><span id="b561"> </span><span id="b562">the</span><span id="b565"> </span><span id="b566">code</span><span id="b570"> </span><span id="b571">cannot</span><span id="b577"> </span><span id="b578">do</span><span id="b580">.</span><span id="b581"> </span><span id="b582">Found</span><span id="b587"> </span><span id="b588">in</span><span id="b590"> </span><span id="b591">the</span><span id="b594"> </span><span id="b595">2026</span><span id="b599">-</span><span id="b600">07</span><span id="b602">-</span><span id="b603">24</span><span id="b605"> </span><span id="b606">jab</span><span id="b609">/</span><span id="b610"> </span><span id="b611">review</span><span id="b617">;</span><span id="b618"> </span><span id="b619">sibling</span><span id="b626"> </span><span id="b627">of</span><span id="b629"> </span><span id="b630">the</span><span id="b633"> </span><a href="./JAB-006.html" title="buf.cpp vs API.md contract"><span id="b635">JAB-006</span></a><span id="b643"> </span><span id="b644">contract</span><span id="b652"> </span><span id="b653">gaps</span><span id="b657">.</span></p>
+<h2 id="input"><span id="b660"><span id="b664">Input</span></span></h2>
+<h3 id="context"><span id="b671"><span id="b675">Context</span></span></h3>
 <ul>
-<li>Latent today (no caller grows a mapped Buf yet), but the failure is silent data loss the moment one does.</li>
+<li id="b683"><span id="b687">Latent</span><span id="b693"> </span><span id="b694">today</span><span id="b699"> </span><span id="b700">(</span><span id="b701">no</span><span id="b703"> </span><span id="b704">caller</span><span id="b710"> </span><span id="b711">grows</span><span id="b716"> </span><span id="b717">a</span><span id="b718"> </span><span id="b719">mapped</span><span id="b725"> </span><span id="b726">Buf</span><span id="b729"> </span><span id="b730">yet</span><span id="b733">)</span><span id="b734">,</span><span id="b735"> </span><span id="b736">but</span><span id="b739"> </span><span id="b740">the</span><span id="b743"> </span><span id="b744">failure</span><span id="b751"> </span><span id="b752">is</span><span id="b754"> </span><span id="b755">silent</span><span id="b761"> </span><span id="b762">data</span><span id="b766"> </span><span id="b767">loss</span><span id="b771"> </span><span id="b772">the</span><span id="b775"> </span><span id="b776">moment</span><span id="b782"> </span><span id="b783">one</span><span id="b786"> </span><span id="b787">does</span><span id="b791">.</span></li>
 </ul>
-<h3>Goals</h3>
+<h3 id="goals"><span id="b794"><span id="b798">Goals</span></span></h3>
 <ul>
-<li>Either wire <code>_grow</code> for mapped backings (mremap/ftruncate path) or make <code>grow</code> on a mapped Buf throw; API.md must match the ruling.</li>
+<li id="b804"><span id="b808">Either</span><span id="b814"> </span><span id="b815">wire</span><span id="b819"> </span><code id="b820">_grow</code><span id="b827"> </span><span id="b828">for</span><span id="b831"> </span><span id="b832">mapped</span><span id="b838"> </span><span id="b839">backings</span><span id="b847"> </span><span id="b848">(</span><span id="b849">mremap</span><span id="b855">/</span><span id="b856">ftruncate</span><span id="b865"> </span><span id="b866">path</span><span id="b870">)</span><span id="b871"> </span><span id="b872">or</span><span id="b874"> </span><span id="b875">make</span><span id="b879"> </span><code id="b880">grow</code><span id="b886"> </span><span id="b887">on</span><span id="b889"> </span><span id="b890">a</span><span id="b891"> </span><span id="b892">mapped</span><span id="b898"> </span><span id="b899">Buf</span><span id="b902"> </span><span id="b903">throw</span><span id="b908">;</span><span id="b909"> </span><span id="b910">API.md</span><span id="b916"> </span><span id="b917">must</span><span id="b921"> </span><span id="b922">match</span><span id="b927"> </span><span id="b928">the</span><span id="b931"> </span><span id="b932">ruling</span><span id="b938">.</span></li>
 </ul>
-<h3>Constraints</h3>
+<h3 id="constraints"><span id="b941"><span id="b945">Constraints</span></span></h3>
 <ul>
-<li>Repro-first: grow an mmap-backed Buf, write, msync, reopen — assert bytes hit the file (or assert the throw).</li>
-<li>Depends on the <a href="./JAB-006.html">JAB-006</a> implement-vs-de-document ruling; land consistently with it.</li>
+<li id="b957"><span id="b961">Repro</span><span id="b966">-</span><span id="b967">first</span><span id="b972">:</span><span id="b973"> </span><span id="b974">grow</span><span id="b978"> </span><span id="b979">an</span><span id="b981"> </span><span id="b982">mmap</span><span id="b986">-</span><span id="b987">backed</span><span id="b993"> </span><span id="b994">Buf</span><span id="b997">,</span><span id="b998"> </span><span id="b999">write</span><span id="b1004">,</span><span id="b1005"> </span><span id="b1006">msync</span><span id="b1011">,</span><span id="b1012"> </span><span id="b1013">reopen</span><span id="b1019"> </span><span id="b1020">—</span><span id="b1023"> </span><span id="b1024">assert</span><span id="b1030"> </span><span id="b1031">bytes</span><span id="b1036"> </span><span id="b1037">hit</span><span id="b1040"> </span><span id="b1041">the</span><span id="b1044"> </span><span id="b1045">file</span><span id="b1049"> </span><span id="b1050">(</span><span id="b1051">or</span><span id="b1053"> </span><span id="b1054">assert</span><span id="b1060"> </span><span id="b1061">the</span><span id="b1064"> </span><span id="b1065">throw</span><span id="b1070">)</span><span id="b1071">.</span></li>
+<li id="b1073"><span id="b1077">Depends</span><span id="b1084"> </span><span id="b1085">on</span><span id="b1087"> </span><span id="b1088">the</span><span id="b1091"> </span><a href="./JAB-006.html" title="buf.cpp vs API.md contract"><span id="b1093">JAB-006</span></a><span id="b1101"> </span><span id="b1102">implement</span><span id="b1111">-</span><span id="b1112">vs</span><span id="b1114">-</span><span id="b1115">de</span><span id="b1117">-</span><span id="b1118">document</span><span id="b1126"> </span><span id="b1127">ruling</span><span id="b1133">;</span><span id="b1134"> </span><span id="b1135">land</span><span id="b1139"> </span><span id="b1140">consistently</span><span id="b1152"> </span><span id="b1153">with</span><span id="b1157"> </span><span id="b1158">it</span><span id="b1160">.</span></li>
 </ul>
-<h2>WIP</h2>
-<h3>Design decisions</h3>
+<h2 id="wip"><span id="b1163"><span id="b1167">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b1172"><span id="b1176">Design</span><span id="b1182"> </span><span id="b1183">decisions</span></span></h3>
 <ul>
-<li>(pending — wire vs forbid)</li>
+<li id="b1193"><span id="b1197">(</span><span id="b1198">pending</span><span id="b1205"> </span><span id="b1206">—</span><span id="b1209"> </span><span id="b1210">wire</span><span id="b1214"> </span><span id="b1215">vs</span><span id="b1217"> </span><span id="b1218">forbid</span><span id="b1224">)</span></li>
 </ul>
-<h3>TODOs</h3>
-<ul class="todo">
-<li class="open"><input type="checkbox" disabled> Repro: grow-then-msync on a mapped Buf.</li>
-<li class="open"><input type="checkbox" disabled> Implement or forbid; align API.md:118.</li>
-</ul>
-<h3>Blockers and bummers</h3>
+<h3 id="todos"><span id="b1227"><span id="b1231">TODOs</span></span></h3>
 <ul>
-<li>Gated on the same API ruling as <a href="./JAB-006.html">JAB-006</a>.</li>
+<li class="task" id="b1237"><input type="checkbox" disabled="" /> <span id="b1242">Repro</span><span id="b1247">:</span><span id="b1248"> </span><span id="b1249">grow</span><span id="b1253">-</span><span id="b1254">then</span><span id="b1258">-</span><span id="b1259">msync</span><span id="b1264"> </span><span id="b1265">on</span><span id="b1267"> </span><span id="b1268">a</span><span id="b1269"> </span><span id="b1270">mapped</span><span id="b1276"> </span><span id="b1277">Buf</span><span id="b1280">.</span></li>
+<li class="task" id="b1282"><input type="checkbox" disabled="" /> <span id="b1287">Implement</span><span id="b1296"> </span><span id="b1297">or</span><span id="b1299"> </span><span id="b1300">forbid</span><span id="b1306">;</span><span id="b1307"> </span><span id="b1308">align</span><span id="b1313"> </span><span id="b1314">API.md:118</span><span id="b1324">.</span></li>
 </ul>
-<h2>Outcome</h2>
+<h3 id="blockers-and-bummers"><span id="b1327"><span id="b1331">Blockers</span><span id="b1339"> </span><span id="b1340">and</span><span id="b1343"> </span><span id="b1344">bummers</span></span></h3>
 <ul>
-<li>(pending)</li>
+<li id="b1352"><span id="b1356">Gated</span><span id="b1361"> </span><span id="b1362">on</span><span id="b1364"> </span><span id="b1365">the</span><span id="b1368"> </span><span id="b1369">same</span><span id="b1373"> </span><span id="b1374">API</span><span id="b1377"> </span><span id="b1378">ruling</span><span id="b1384"> </span><span id="b1385">as</span><span id="b1387"> </span><a href="./JAB-006.html" title="buf.cpp vs API.md contract"><span id="b1389">JAB-006</span></a><span id="b1397">.</span></li>
+</ul>
+<h2 id="outcome"><span id="b1400"><span id="b1404">Outcome</span></span></h2>
+<ul>
+<li id="b1412"><span id="b1416">(</span><span id="b1417">pending</span><span id="b1424">)</span></li>
 </ul>
 <div class="footer">
 ❧

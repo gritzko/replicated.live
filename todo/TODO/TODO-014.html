@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TODO-014: the mount table is rebuilt per board row — memoize per run</title>
+<meta property="og:title" content="TODO-014: the mount table is rebuilt per board row — memoize per run">
+<meta property="og:description" content="Profiling bee todo Now:* (975 rows, 2026-08-21): two thirds of all syscalls — 28,626 readlinks, 1,000 opens of `/.config/bee/repos, 6,557 failing stats — come from mnt.byName() called PER ROW (view/todo.js:473 navOf, :505 wtWord, :542 goCells). Every call runs mount.js:51 list() whole: registry re-read, io.realpath per line (a component walk, ~25 readlinks each), gitdir probe per line, fold() re-run. The board builds one identical table ~1,000 times; every other view and every bee http request pays the same tax per //name` resolution.">
+<meta property="og:type" content="article">
+<link rel="stylesheet" href="/blob/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/blob/js/asciicast.js"></script>
+<a class="banner" href="/">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1 id="todo-014-the-mount-table-is-rebuilt-per-board-row-—-memoize-per-run"><span id="b0"><span id="b4">TODO-014</span><span id="b12">:</span><span id="b13"> </span><span id="b14">the</span><span id="b17"> </span><span id="b18">mount</span><span id="b23"> </span><span id="b24">table</span><span id="b29"> </span><span id="b30">is</span><span id="b32"> </span><span id="b33">rebuilt</span><span id="b40"> </span><span id="b41">per</span><span id="b44"> </span><span id="b45">board</span><span id="b50"> </span><span id="b51">row</span><span id="b54"> </span><span id="b55">—</span><span id="b58"> </span><span id="b59">memoize</span><span id="b66"> </span><span id="b67">per</span><span id="b70"> </span><span id="b71">run</span></span></h1>
+<dl class="meta">
+<dt id="b76"><span>Now</span></dt>
+<dd><span id="b80">OPEN</span></dd>
+<dt id="b86"><span>Sev</span></dt>
+<dd><span id="b90">HIGH</span></dd>
+<dt id="b96"><span>Rep</span></dt>
+<dd><span id="b100">///bee</span></dd>
+<dt id="b108"><span>Ask</span></dt>
+<dd><span id="b112">gritzko</span></dd>
+<dt id="b121"><span>See</span></dt>
+<dd><span id="b125">CODE-044</span></dd>
+</dl>
+<h2 id="input"><span id="b136"><span id="b140">Input</span></span></h2>
+<h3 id="context"><span id="b147"><span id="b151">Context</span></span></h3>
+<p id="b159"><span>Profiling</span><span id="b168"> </span><code id="b169">bee todo Now:*</code><span id="b185"> </span><span id="b186">(</span><span id="b187">975</span><span id="b190"> </span><span id="b191">rows</span><span id="b195">,</span><span id="b196"> </span><span id="b197">2026</span><span id="b201">-</span><span id="b202">08</span><span id="b204">-</span><span id="b205">21</span><span id="b207">)</span><span id="b208">:</span><span id="b209"> </span><span id="b210">two</span><span id="b213"> </span><span id="b214">thirds</span><span id="b220"> </span><span id="b221">of</span><span id="b223"> </span><span id="b224">all</span>
+<span id="b228">syscalls</span><span id="b236"> </span><span id="b237">—</span><span id="b240"> </span><span id="b241">28</span><span id="b243">,</span><span id="b244">626</span><span id="b247"> </span><span id="b248">readlinks</span><span id="b257">,</span><span id="b258"> </span><del id="b259"><span id="b260">1</span><span id="b261">,</span><span id="b262">000</span><span id="b265"> </span><span id="b266">opens</span><span id="b271"> </span><span id="b272">of</span><span id="b274"> </span><span id="b275">`</span></del><span id="b277">/</span><span id="b278">.</span><span id="b279">config</span><span id="b285">/</span><span id="b286">bee</span><span id="b289">/</span><span id="b290">repos</span><code id="b295">, 6,557
+failing stats — come from </code><span id="b333">mnt</span><span id="b336">.</span><span id="b337">byName</span><span id="b343">(</span><span id="b344">)</span><code id="b345"> called PER ROW (view/todo.js:473
+navOf, :505 wtWord, :542 goCells). Every call runs mount.js:51 </code><span id="b444">list</span><span id="b448">(</span><span id="b449">)</span><code id="b450">
+whole: registry re-read, </code><span id="b478">io</span><span id="b480">.</span><span id="b481">realpath</span><code id="b489"> per line (a component walk, ~25
+readlinks each), gitdir probe per line, </code><span id="b564">fold</span><span id="b568">(</span><span id="b569">)</span><code id="b570"> re-run. The board builds
+one identical table ~1,000 times; every other view and every </code><span id="b659">bee</span><span id="b662"> </span><span id="b663">http</span><code id="b667">
+request pays the same tax per </code><span id="b700">/</span><span id="b701">/</span><span id="b702">name</span><span id="b706">`</span><span id="b707"> </span><span id="b708">resolution</span><span id="b718">.</span></p>
+<h3 id="goals"><span id="b721"><span id="b725">Goals</span></span></h3>
+<p id="b731"><span>One</span><span id="b734"> </span><code id="b735">list()</code><span id="b743"> </span><span id="b744">per</span><span id="b747"> </span><span id="b748">process</span><span id="b755"> </span><span id="b756">run</span><span id="b759"> </span><span id="b760">—</span><span id="b763"> </span><span id="b764">the</span><span id="b767"> </span><code id="b768">WTS = null</code><span id="b780"> </span><span id="b781">per</span><span id="b784">-</span><span id="b785">run</span><span id="b788"> </span><span id="b789">memo</span><span id="b793"> </span><span id="b794">pattern</span>
+<span id="b802">view/todo.js:861</span><span id="b818"> </span><span id="b819">already</span><span id="b826"> </span><span id="b827">uses</span><span id="b831">.</span><span id="b832"> </span><span id="b833">Resident</span><span id="b841"> </span><span id="b842">processes</span><span id="b851"> </span><span id="b852">(</span><span id="b853">pager</span><span id="b858">,</span><span id="b859"> </span><span id="b860">http</span><span id="b864">)</span><span id="b865"> </span><span id="b866">witness</span><span id="b873"> </span><span id="b874">the</span>
+<span id="b878">memo</span><span id="b882"> </span><span id="b883">on</span><span id="b885"> </span><span id="b886">the</span><span id="b889"> </span><span id="b890">registry</span><span id="b898"> </span><span id="b899">file</span><span id="b903">'</span><span id="b904">s</span><span id="b905"> </span><span id="b906">mtime</span><span id="b911"> </span><span id="b912">so</span><span id="b914"> </span><span id="b915">a</span><span id="b916"> </span><code id="b917">bee install</code><span id="b930"> </span><span id="b931">lands</span><span id="b936"> </span><span id="b937">without</span><span id="b944"> </span><span id="b945">restart</span>
+<span id="b953">(</span><span id="b954">the</span><span id="b957"> </span><span id="b958">staleness</span><span id="b967"> </span><span id="b968">class</span><span id="b973"> </span><span id="b974">CODE-044</span><span id="b982"> </span><span id="b983">flags</span><span id="b988"> </span><span id="b989">for</span><span id="b992"> </span><span id="b993">SUBS</span><span id="b997">)</span><span id="b998">.</span><span id="b999"> </span><span id="b1000">Measure</span><span id="b1007">:</span><span id="b1008"> </span><span id="b1009">the</span><span id="b1012"> </span><span id="b1013">board</span><span id="b1018">'</span><span id="b1019">s</span>
+<span id="b1021">readlink</span><span id="b1029"> </span><span id="b1030">count</span><span id="b1035"> </span><span id="b1036">drops</span><span id="b1041"> </span><span id="b1042">from</span><span id="b1046"> </span><del id="b1047"><span id="b1048">28</span><span id="b1050">k</span><span id="b1051"> </span><span id="b1052">to</span><span id="b1054"> </span></del><span id="b1056">30.</span></p>
+<h3 id="constraints"><span id="b1061"><span id="b1065">Constraints</span></span></h3>
+<p id="b1077"><code>byName</code><span id="b1085">/</span><code id="b1086">named</code><span id="b1093">/</span><code id="b1094">rooted</code><span id="b1102"> </span><span id="b1103">keep</span><span id="b1107"> </span><span id="b1108">their</span><span id="b1113"> </span><span id="b1114">answers</span><span id="b1121"> </span><span id="b1122">bit</span><span id="b1125">-</span><span id="b1126">identical</span><span id="b1135">;</span><span id="b1136"> </span><span id="b1137">the</span><span id="b1140"> </span><span id="b1141">memo</span><span id="b1145"> </span><span id="b1146">lives</span>
+<span id="b1152">in</span><span id="b1154"> </span><span id="b1155">mount.js</span><span id="b1163">,</span><span id="b1164"> </span><span id="b1165">not</span><span id="b1168"> </span><span id="b1169">in</span><span id="b1171"> </span><span id="b1172">callers</span><span id="b1179">.</span></p>
+<h2 id="wip"><span id="b1182"><span id="b1186">WIP</span></span></h2>
+<h3 id="todos"><span id="b1191"><span id="b1195">TODOs</span></span></h3>
+<ul>
+<li id="b1201"><span id="b1205">[ ]</span><span id="b1208"> </span><span id="b1209">per</span><span id="b1212">-</span><span id="b1213">run</span><span id="b1216"> </span><span id="b1217">memo</span><span id="b1221"> </span><span id="b1222">of</span><span id="b1224"> </span><span id="b1225">list</span><span id="b1229">(</span><span id="b1230">)</span><span id="b1231"> </span><span id="b1232">keyed</span><span id="b1237"> </span><span id="b1238">on</span><span id="b1240"> </span><span id="b1241">(</span><span id="b1242">home</span><span id="b1246">,</span><span id="b1247"> </span><span id="b1248">registry</span><span id="b1256"> </span><span id="b1257">mtime</span><span id="b1262">)</span></li>
+<li id="b1264"><span id="b1268">[ ]</span><span id="b1271"> </span><span id="b1272">strace</span><span id="b1278"> </span><span id="b1279">repro</span><span id="b1284">:</span><span id="b1285"> </span><span id="b1286">board</span><span id="b1291"> </span><span id="b1292">readlinks</span><span id="b1301">/</span><span id="b1302">opens</span><span id="b1307"> </span><span id="b1308">counted</span><span id="b1315"> </span><span id="b1316">before</span><span id="b1322"> </span><span id="b1323">and</span><span id="b1326"> </span><span id="b1327">after</span></li>
+</ul>
+<h2 id="outcome"><span id="b1334"><span id="b1338">Outcome</span></span></h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>
