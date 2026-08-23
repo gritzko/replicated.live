@@ -7,6 +7,7 @@
 <meta property="og:title" content="KEEP-006: cap a NNNNN.keeper log at 2 GiB — past that the log is unmappable, and the cap is unenforceable without also capping the fetch">
 <meta property="og:description" content="PackLog says &quot;a new log starts only past a size threshold&quot; but never bounds that threshold, so a single landed pack can make one log arbitrarily large. GET-044 T4 proved it: a linux.git clone streamed 6.45 GB and atomically landed a durable *6.0 GB* 0000000001.keeper — bytes on disk that no reader can open. RULING 2026-07-27 (gritzko): *cap at 2 GB, not at the engine's ceiling. The engine numbers, all measured this session on sparse files: JSC allocates a typed array up to 4 GiB inclusive, but only 2^32-1 of it is addressable (a[2^32-1] reads undefined, JS's canonical not-an-index sentinel), and the JAB-007 Buf | 0 cursor wraps NEGATIVE at 2^31 exactly, so io.mmap yields an empty or garbled view from there up. 2^31-1 is the only bound that survives the whole path, and ingest.js already refuses at exactly that (MMAP_CAP). jab/io.cpp JABC_MAP_MAX now enforces it in the mapper (this session). The sting in the tail: PackLog §Delta-dependency pins OFS_DELTA bases inside one pack*, so a received pack cannot be split across logs — meaning a 2 GB log cap is only achievable if no single fetched pack exceeds 2 GB. Scope: keeper log rotation + the fetch that feeds it. See PackLog, Keeper; method Issues.">
 <meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/KEEP/KEEP-006.html">
 <link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
@@ -219,9 +220,13 @@
 ❧
 <a href="/feed.rss">RSS feed</a> 
 ❧
-<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+<a href="https://github.com/gritzko/beagle">Beagle SCM</a> 
 ❧
-<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+<a href="https://github.com/gritzko/bee">Beagle for git</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime</a>
+❧
+<a href="https://github.com/gritzko/quickjab">QuickJAB runtime</a>
 ❧
 <a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
 ❧

@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CODE-041: wtstat foldSubs recurses submodules with no cycle guard</title>
 <meta property="og:title" content="CODE-041: wtstat foldSubs recurses submodules with no cycle guard">
-<meta property="og:description" content="view/wtstat.js:102-114 foldSubs recurses over subs.mounts() with no visited set; a submodule graph that loops (a repo reachable from itself via gitlinks) recurses until the stack dies. view/todo.js:413-423 solved the same walk with an explicit cycle cut and says why. Found in the 2026-08-21 review.">
+<meta property="og:description" content="view/wtstat.js:102:Hc-114 foldSubs recurses over subs.mounts() with no visited set; a submodule graph that loops (a repo reachable from itself via gitlinks) recurses until the stack dies. view/todo.js:413:i4-423 solved the same walk with an explicit cycle cut and says why. Found in the 2026-08-21 review.">
 <meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-041.html">
 <link rel="stylesheet" href="/blob/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
       integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
@@ -35,27 +36,31 @@
 </dl>
 <h2 id="input"><span id="b136"><span id="b140">Input</span></span></h2>
 <h3 id="context"><span id="b147"><span id="b151">Context</span></span></h3>
-<p id="b159"><span>view/wtstat.js:102</span><span id="b177">-</span><span id="b178">114</span><span id="b181"> </span><code id="b182">foldSubs</code><span id="b192"> </span><span id="b193">recurses</span><span id="b201"> </span><span id="b202">over</span><span id="b206"> </span><code id="b207">subs.mounts()</code><span id="b222"> </span><span id="b223">with</span><span id="b227"> </span><span id="b228">no</span>
-<span id="b231">visited</span><span id="b238"> </span><span id="b239">set</span><span id="b242">;</span><span id="b243"> </span><span id="b244">a</span><span id="b245"> </span><span id="b246">submodule</span><span id="b255"> </span><span id="b256">graph</span><span id="b261"> </span><span id="b262">that</span><span id="b266"> </span><span id="b267">loops</span><span id="b272"> </span><span id="b273">(</span><span id="b274">a</span><span id="b275"> </span><span id="b276">repo</span><span id="b280"> </span><span id="b281">reachable</span><span id="b290"> </span><span id="b291">from</span><span id="b295"> </span><span id="b296">itself</span><span id="b302"> </span><span id="b303">via</span>
-<span id="b307">gitlinks</span><span id="b315">)</span><span id="b316"> </span><span id="b317">recurses</span><span id="b325"> </span><span id="b326">until</span><span id="b331"> </span><span id="b332">the</span><span id="b335"> </span><span id="b336">stack</span><span id="b341"> </span><span id="b342">dies</span><span id="b346">.</span><span id="b347"> </span><span id="b348">view/todo.js:413</span><span id="b364">-</span><span id="b365">423</span><span id="b368"> </span><span id="b369">solved</span><span id="b375"> </span><span id="b376">the</span><span id="b379"> </span><span id="b380">same</span>
-<span id="b385">walk</span><span id="b389"> </span><span id="b390">with</span><span id="b394"> </span><span id="b395">an</span><span id="b397"> </span><span id="b398">explicit</span><span id="b406"> </span><span id="b407">cycle</span><span id="b412"> </span><span id="b413">cut</span><span id="b416"> </span><span id="b417">and</span><span id="b420"> </span><span id="b421">says</span><span id="b425"> </span><span id="b426">why</span><span id="b429">.</span><span id="b430"> </span><span id="b431">Found</span><span id="b436"> </span><span id="b437">in</span><span id="b439"> </span><span id="b440">the</span><span id="b443"> </span><span id="b444">2026</span><span id="b448">-</span><span id="b449">08</span><span id="b451">-</span><span id="b452">21</span><span id="b454"> </span><span id="b455">review</span><span id="b461">.</span></p>
-<h3 id="goals"><span id="b464"><span id="b468">Goals</span></span></h3>
-<p id="b474"><span>A</span><span id="b475"> </span><span id="b476">visited</span><span id="b483"> </span><span id="b484">set</span><span id="b487"> </span><span id="b488">as</span><span id="b490"> </span><span id="b491">todo.js</span><span id="b498"> </span><span id="b499">spells</span><span id="b505"> </span><span id="b506">it</span><span id="b508">;</span><span id="b509"> </span><span id="b510">repro</span><span id="b515"> </span><span id="b516">fixture</span><span id="b523"> </span><span id="b524">with</span><span id="b528"> </span><span id="b529">a</span><span id="b530"> </span><span id="b531">cyclic</span><span id="b537"> </span><span id="b538">mount</span><span id="b543"> </span><span id="b544">that</span>
-<span id="b549">returns</span><span id="b556"> </span><span id="b557">instead</span><span id="b564"> </span><span id="b565">of</span><span id="b567"> </span><span id="b568">hanging</span><span id="b575">.</span></p>
-<h2 id="wip"><span id="b578"><span id="b582">WIP</span></span></h2>
-<h3 id="todos"><span id="b587"><span id="b591">TODOs</span></span></h3>
+<p id="b159"><span>view/wtstat.js:102:Hc</span><span id="b180">-</span><span id="b181">114</span><span id="b184"> </span><code id="b185">foldSubs</code><span id="b195"> </span><span id="b196">recurses</span><span id="b204"> </span><span id="b205">over</span><span id="b209"> </span><code id="b210">subs.mounts()</code><span id="b225"> </span><span id="b226">with</span><span id="b230"> </span><span id="b231">no</span>
+<span id="b234">visited</span><span id="b241"> </span><span id="b242">set</span><span id="b245">;</span><span id="b246"> </span><span id="b247">a</span><span id="b248"> </span><span id="b249">submodule</span><span id="b258"> </span><span id="b259">graph</span><span id="b264"> </span><span id="b265">that</span><span id="b269"> </span><span id="b270">loops</span><span id="b275"> </span><span id="b276">(</span><span id="b277">a</span><span id="b278"> </span><span id="b279">repo</span><span id="b283"> </span><span id="b284">reachable</span><span id="b293"> </span><span id="b294">from</span><span id="b298"> </span><span id="b299">itself</span><span id="b305"> </span><span id="b306">via</span>
+<span id="b310">gitlinks</span><span id="b318">)</span><span id="b319"> </span><span id="b320">recurses</span><span id="b328"> </span><span id="b329">until</span><span id="b334"> </span><span id="b335">the</span><span id="b338"> </span><span id="b339">stack</span><span id="b344"> </span><span id="b345">dies</span><span id="b349">.</span><span id="b350"> </span><span id="b351">view/todo.js:413:i4</span><span id="b370">-</span><span id="b371">423</span><span id="b374"> </span><span id="b375">solved</span><span id="b381"> </span><span id="b382">the</span><span id="b385"> </span><span id="b386">same</span>
+<span id="b391">walk</span><span id="b395"> </span><span id="b396">with</span><span id="b400"> </span><span id="b401">an</span><span id="b403"> </span><span id="b404">explicit</span><span id="b412"> </span><span id="b413">cycle</span><span id="b418"> </span><span id="b419">cut</span><span id="b422"> </span><span id="b423">and</span><span id="b426"> </span><span id="b427">says</span><span id="b431"> </span><span id="b432">why</span><span id="b435">.</span><span id="b436"> </span><span id="b437">Found</span><span id="b442"> </span><span id="b443">in</span><span id="b445"> </span><span id="b446">the</span><span id="b449"> </span><span id="b450">2026</span><span id="b454">-</span><span id="b455">08</span><span id="b457">-</span><span id="b458">21</span><span id="b460"> </span><span id="b461">review</span><span id="b467">.</span></p>
+<h3 id="goals"><span id="b470"><span id="b474">Goals</span></span></h3>
+<p id="b480"><span>A</span><span id="b481"> </span><span id="b482">visited</span><span id="b489"> </span><span id="b490">set</span><span id="b493"> </span><span id="b494">as</span><span id="b496"> </span><span id="b497">todo.js</span><span id="b504"> </span><span id="b505">spells</span><span id="b511"> </span><span id="b512">it</span><span id="b514">;</span><span id="b515"> </span><span id="b516">repro</span><span id="b521"> </span><span id="b522">fixture</span><span id="b529"> </span><span id="b530">with</span><span id="b534"> </span><span id="b535">a</span><span id="b536"> </span><span id="b537">cyclic</span><span id="b543"> </span><span id="b544">mount</span><span id="b549"> </span><span id="b550">that</span>
+<span id="b555">returns</span><span id="b562"> </span><span id="b563">instead</span><span id="b570"> </span><span id="b571">of</span><span id="b573"> </span><span id="b574">hanging</span><span id="b581">.</span></p>
+<h2 id="wip"><span id="b584"><span id="b588">WIP</span></span></h2>
+<h3 id="todos"><span id="b593"><span id="b597">TODOs</span></span></h3>
 <ul>
-<li id="b597"><span id="b601">[ ]</span><span id="b604"> </span><span id="b605">repro</span><span id="b610">:</span><span id="b611"> </span><span id="b612">cyclic</span><span id="b618"> </span><span id="b619">submodule</span><span id="b628"> </span><span id="b629">graph</span><span id="b634"> </span><span id="b635">terminates</span></li>
-<li id="b646"><span id="b650">[ ]</span><span id="b653"> </span><span id="b654">visited</span><span id="b661">-</span><span id="b662">set</span><span id="b665"> </span><span id="b666">guard</span><span id="b671"> </span><span id="b672">in</span><span id="b674"> </span><span id="b675">foldSubs</span></li>
+<li id="b603"><span id="b607">[ ]</span><span id="b610"> </span><span id="b611">repro</span><span id="b616">:</span><span id="b617"> </span><span id="b618">cyclic</span><span id="b624"> </span><span id="b625">submodule</span><span id="b634"> </span><span id="b635">graph</span><span id="b640"> </span><span id="b641">terminates</span></li>
+<li id="b652"><span id="b656">[ ]</span><span id="b659"> </span><span id="b660">visited</span><span id="b667">-</span><span id="b668">set</span><span id="b671"> </span><span id="b672">guard</span><span id="b677"> </span><span id="b678">in</span><span id="b680"> </span><span id="b681">foldSubs</span></li>
 </ul>
-<h2 id="outcome"><span id="b685"><span id="b689">Outcome</span></span></h2>
+<h2 id="outcome"><span id="b691"><span id="b695">Outcome</span></span></h2>
 <div class="footer">
 ❧
 <a href="/feed.rss">RSS feed</a> 
 ❧
-<a href="https://github.com/gritzko/beagle">Beagle SCM GitHub</a> 
+<a href="https://github.com/gritzko/beagle">Beagle SCM</a> 
 ❧
-<a href="https://github.com/gritzko/jab">JAB runtime GitHub</a>
+<a href="https://github.com/gritzko/bee">Beagle for git</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime</a>
+❧
+<a href="https://github.com/gritzko/quickjab">QuickJAB runtime</a>
 ❧
 <a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
 ❧
