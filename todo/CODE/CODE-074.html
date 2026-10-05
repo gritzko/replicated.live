@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-074: the blob round lexes every blob when only the TRI round owes work</title>
+<meta property="og:title" content="CODE-074: the blob round lexes every blob when only the TRI round owes work">
+<meta property="og:description" content="index/lindex.js:327:PS calls hk.parse on every moved blob regardless of which rounds owe: forcing the TRI-only round on git.git gives links:0 syms:0 with parse = 1.85 s and 4807 lexes, 100% waste. That is exactly the BEE-071 upgrade path every existing repo takes (LINK/SYM marks at the tip, no tri mark) and the path after any failed tix.commit at :293. Also :319 builds a progress() in blobRound but never ticks it, so the 8-43 s scan shows nothing, and N workers interleave their note lines. Found in the 2026-09-18 index review.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-074.html">
+<link rel="stylesheet" href="/blob/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/blob/js/asciicast.js"></script>
+<a class="banner" href="/">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1 id="code-074-the-blob-round-lexes-every-blob-when-only-the-tri-round-owes-work"><span id="b0"><span id="b4">CODE-074</span><span id="b12">:</span><span id="b13"> </span><span id="b14">the</span><span id="b17"> </span><span id="b18">blob</span><span id="b22"> </span><span id="b23">round</span><span id="b28"> </span><span id="b29">lexes</span><span id="b34"> </span><span id="b35">every</span><span id="b40"> </span><span id="b41">blob</span><span id="b45"> </span><span id="b46">when</span><span id="b50"> </span><span id="b51">only</span><span id="b55"> </span><span id="b56">the</span><span id="b59"> </span><span id="b60">TRI</span><span id="b63"> </span><span id="b64">round</span><span id="b69"> </span><span id="b70">owes</span><span id="b74"> </span><span id="b75">work</span></span></h1>
+<dl class="meta">
+<dt id="b81"><span>Now</span></dt>
+<dd><span id="b85">OPEN</span></dd>
+<dt id="b91"><span>Sev</span></dt>
+<dd><span id="b95">MED</span></dd>
+<dt id="b100"><span>Rep</span></dt>
+<dd><span id="b104">///bee</span></dd>
+<dt id="b112"><span>Ask</span></dt>
+<dd><span id="b116">gritzko</span></dd>
+<dt id="b125"><span>Rev</span></dt>
+<dd><span id="b129">///bee#8cb69a0</span></dd>
+<dt id="b145"><span>See</span></dt>
+<dd><span id="b149">BEE-071</span></dd>
+<dt id="b158"><span>See</span></dt>
+<dd><span id="b162">BEE-067</span></dd>
+</dl>
+<h2 id="input"><span id="b172"><span id="b176">Input</span></span></h2>
+<h3 id="context"><span id="b183"><span id="b187">Context</span></span></h3>
+<p id="b195"><span>index/lindex.js:327:PS</span><span id="b217"> </span><span id="b218">calls</span><span id="b223"> </span><code id="b224">hk.parse</code><span id="b234"> </span><span id="b235">on</span><span id="b237"> </span><span id="b238">every</span><span id="b243"> </span><span id="b244">moved</span><span id="b249"> </span><span id="b250">blob</span><span id="b254"> </span><span id="b255">regardless</span><span id="b265"> </span><span id="b266">of</span><span id="b268"> </span><span id="b269">which</span>
+<span id="b275">rounds</span><span id="b281"> </span><span id="b282">owe</span><span id="b285">:</span><span id="b286"> </span><span id="b287">forcing</span><span id="b294"> </span><span id="b295">the</span><span id="b298"> </span><span id="b299">TRI</span><span id="b302">-</span><span id="b303">only</span><span id="b307"> </span><span id="b308">round</span><span id="b313"> </span><span id="b314">on</span><span id="b316"> </span><span id="b317">git</span><span id="b320">.</span><span id="b321">git</span><span id="b324"> </span><span id="b325">gives</span><span id="b330"> </span><code id="b331">links:0 syms:0</code><span id="b347"> </span><span id="b348">with</span>
+<code id="b353">parse = 1.85 s</code><span id="b369"> </span><span id="b370">and</span><span id="b373"> </span><span id="b374">4807</span><span id="b378"> </span><span id="b379">lexes</span><span id="b384">,</span><span id="b385"> </span><span id="b386">100</span><span id="b389">%</span><span id="b390"> </span><span id="b391">waste</span><span id="b396">.</span><span id="b397"> </span><span id="b398">That</span><span id="b402"> </span><span id="b403">is</span><span id="b405"> </span><span id="b406">exactly</span><span id="b413"> </span><span id="b414">the</span><span id="b417"> </span><span id="b418">BEE-071</span>
+<span id="b426">upgrade</span><span id="b433"> </span><span id="b434">path</span><span id="b438"> </span><span id="b439">every</span><span id="b444"> </span><span id="b445">existing</span><span id="b453"> </span><span id="b454">repo</span><span id="b458"> </span><span id="b459">takes</span><span id="b464"> </span><span id="b465">(</span><span id="b466">LINK</span><span id="b470">/</span><span id="b471">SYM</span><span id="b474"> </span><span id="b475">marks</span><span id="b480"> </span><span id="b481">at</span><span id="b483"> </span><span id="b484">the</span><span id="b487"> </span><span id="b488">tip</span><span id="b491">,</span><span id="b492"> </span><span id="b493">no</span><span id="b495"> </span><span id="b496">tri</span>
+<span id="b500">mark</span><span id="b504">)</span><span id="b505"> </span><span id="b506">and</span><span id="b509"> </span><span id="b510">the</span><span id="b513"> </span><span id="b514">path</span><span id="b518"> </span><span id="b519">after</span><span id="b524"> </span><span id="b525">any</span><span id="b528"> </span><span id="b529">failed</span><span id="b535"> </span><code id="b536">tix.commit</code><span id="b548"> </span><span id="b549">at</span><span id="b551"> </span><span id="b552">:</span><span id="b553">293.</span><span id="b557"> </span><span id="b558">Also</span><span id="b562"> </span><span id="b563">:</span><span id="b564">319</span><span id="b567"> </span><span id="b568">builds</span><span id="b574"> </span><span id="b575">a</span>
+<code id="b577">progress()</code><span id="b589"> </span><span id="b590">in</span><span id="b592"> </span><code id="b593">blobRound</code><span id="b604"> </span><span id="b605">but</span><span id="b608"> </span><span id="b609">never</span><span id="b614"> </span><span id="b615">ticks</span><span id="b620"> </span><span id="b621">it</span><span id="b623">,</span><span id="b624"> </span><span id="b625">so</span><span id="b627"> </span><span id="b628">the</span><span id="b631"> </span><span id="b632">8</span><span id="b633">-</span><span id="b634">43</span><span id="b636"> </span><span id="b637">s</span><span id="b638"> </span><span id="b639">scan</span><span id="b643"> </span><span id="b644">shows</span>
+<span id="b650">nothing</span><span id="b657">,</span><span id="b658"> </span><span id="b659">and</span><span id="b662"> </span><span id="b663">N</span><span id="b664"> </span><span id="b665">workers</span><span id="b672"> </span><span id="b673">interleave</span><span id="b683"> </span><span id="b684">their</span><span id="b689"> </span><code id="b690">note</code><span id="b696"> </span><span id="b697">lines</span><span id="b702">.</span><span id="b703"> </span><span id="b704">Found</span><span id="b709"> </span><span id="b710">in</span><span id="b712"> </span><span id="b713">the</span><span id="b716"> </span><span id="b717">2026</span><span id="b721">-</span><span id="b722">09</span><span id="b724">-</span><span id="b725">18</span>
+<span id="b728">index</span><span id="b733"> </span><span id="b734">review</span><span id="b740">.</span></p>
+<h3 id="goals"><span id="b743"><span id="b747">Goals</span></span></h3>
+<p id="b753"><code>toks = (gates.linkUp &amp;&amp; gates.symUp) ? null : hk.parse(...)</code><span id="b814">;</span><span id="b815"> </span><span id="b816">tick</span><span id="b820"> </span><span id="b821">the</span>
+<span id="b825">progress</span><span id="b833"> </span><span id="b834">per</span><span id="b837"> </span><span id="b838">blob</span><span id="b842">.</span></p>
+<h2 id="wip"><span id="b845"><span id="b849">WIP</span></span></h2>
+<h3 id="todos"><span id="b854"><span id="b858">TODOs</span></span></h3>
+<ul>
+<li id="b864"><span id="b868">[ ]</span><span id="b871"> </span><span id="b872">repro</span><span id="b877">:</span><span id="b878"> </span><span id="b879">TRI</span><span id="b882">-</span><span id="b883">only</span><span id="b887"> </span><span id="b888">round</span><span id="b893"> </span><span id="b894">lexes</span><span id="b899"> </span><span id="b900">nothing</span></li>
+<li id="b908"><span id="b912">[ ]</span><span id="b915"> </span><span id="b916">progress</span><span id="b924"> </span><span id="b925">ticks</span><span id="b930"> </span><span id="b931">in</span><span id="b933"> </span><span id="b934">the</span><span id="b937"> </span><span id="b938">blob</span><span id="b942"> </span><span id="b943">round</span></li>
+</ul>
+<h3 id="design-decisions"><span id="b950"><span id="b954">Design</span><span id="b960"> </span><span id="b961">decisions</span></span></h3>
+<ul>
+<li id="b971"><span id="b975">The</span><span id="b978"> </span><span id="b979">gate</span><span id="b983"> </span><span id="b984">is</span><span id="b986"> </span><span id="b987">read</span><span id="b991"> </span><span id="b992">where</span><span id="b997"> </span><span id="b998">the</span><span id="b1001"> </span><span id="b1002">lex</span><span id="b1005"> </span><span id="b1006">is</span><span id="b1008">:</span><span id="b1009"> </span><code id="b1010">toks</code><span id="b1016"> </span><span id="b1017">stays</span><span id="b1022"> </span><span id="b1023">null</span><span id="b1027"> </span><span id="b1028">when</span>
+<span id="b1037">both</span><span id="b1041"> </span><span id="b1042">text</span><span id="b1046"> </span><span id="b1047">rounds</span><span id="b1053"> </span><span id="b1054">are</span><span id="b1057"> </span><span id="b1058">up</span><span id="b1060">,</span><span id="b1061"> </span><span id="b1062">and</span><span id="b1065"> </span><code id="b1066">linkRows</code><span id="b1076">/</span><code id="b1077">symRowsOf</code><span id="b1088"> </span><span id="b1089">are</span><span id="b1092"> </span><span id="b1093">the</span>
+<span id="b1101">only</span><span id="b1105"> </span><span id="b1106">readers</span><span id="b1113">,</span><span id="b1114"> </span><span id="b1115">so</span><span id="b1117"> </span><span id="b1118">nothing</span><span id="b1125"> </span><span id="b1126">downstream</span><span id="b1136"> </span><span id="b1137">sees</span><span id="b1141"> </span><span id="b1142">the</span><span id="b1145"> </span><span id="b1146">null</span><span id="b1150">.</span></li>
+<li id="b1152"><span id="b1156">The</span><span id="b1159"> </span><span id="b1160">tick</span><span id="b1164"> </span><span id="b1165">counts</span><span id="b1171"> </span><span id="b1172">EVERY</span><span id="b1177"> </span><span id="b1178">blob</span><span id="b1182"> </span><span id="b1183">of</span><span id="b1185"> </span><span id="b1186">the</span><span id="b1189"> </span><span id="b1190">list</span><span id="b1194">,</span><span id="b1195"> </span><span id="b1196">binary</span><span id="b1202"> </span><span id="b1203">and</span><span id="b1206"> </span><span id="b1207">over</span><span id="b1211">-</span><span id="b1212">cap</span>
+<span id="b1220">ones</span><span id="b1224"> </span><span id="b1225">included</span><span id="b1233">,</span><span id="b1234"> </span><span id="b1235">since</span><span id="b1240"> </span><span id="b1241">the</span><span id="b1244"> </span><span id="b1245">list</span><span id="b1249"> </span><span id="b1250">is</span><span id="b1252"> </span><span id="b1253">what</span><span id="b1257"> </span><span id="b1258">the</span><span id="b1261"> </span><span id="b1262">round</span><span id="b1267"> </span><span id="b1268">walks</span><span id="b1273">.</span></li>
+<li id="b1275"><code id="b1279">prog.done()</code><span id="b1292"> </span><span id="b1293">closes</span><span id="b1299"> </span><span id="b1300">the</span><span id="b1303"> </span><span id="b1304">line</span><span id="b1308"> </span><span id="b1309">the</span><span id="b1312"> </span><span id="b1313">ticks</span><span id="b1318"> </span><span id="b1319">opened</span><span id="b1325">,</span><span id="b1326"> </span><span id="b1327">as</span><span id="b1329"> </span><span id="b1330">the</span>
+<span id="b1338">commit</span><span id="b1344"> </span><span id="b1345">walk</span><span id="b1349"> </span><span id="b1350">does</span><span id="b1354"> </span><span id="b1355">at</span><span id="b1357"> </span><span id="b1358">index/index.js:1162:Wt</span><span id="b1380">.</span></li>
+<li id="b1382"><span id="b1386">The</span><span id="b1389"> </span><span id="b1390">repro</span><span id="b1395"> </span><span id="b1396">is</span><span id="b1398"> </span><span id="b1399">in</span><span id="b1401"> </span><span id="b1402">test/lindex/rows.js</span><span id="b1421">:</span><span id="b1422"> </span><code id="b1423">tri.laneOf</code><span id="b1435"> </span><span id="b1436">stubbed</span><span id="b1443"> </span><span id="b1444">to</span>
+<span id="b1451">null</span><span id="b1455"> </span><span id="b1456">builds</span><span id="b1462"> </span><span id="b1463">the</span><span id="b1466"> </span><span id="b1467">pre</span><span id="b1470">-</span><span id="b1471">BEE-071</span><span id="b1478"> </span><span id="b1479">index</span><span id="b1484"> </span><span id="b1485">(</span><span id="b1486">LINK</span><span id="b1490">/</span><span id="b1491">SYM</span><span id="b1494"> </span><span id="b1495">marked</span><span id="b1501">,</span><span id="b1502"> </span><span id="b1503">no</span><span id="b1505"> </span><span id="b1506">tri</span>
+<span id="b1514">mark</span><span id="b1518">)</span><span id="b1519">,</span><span id="b1520"> </span><span id="b1521">then</span><span id="b1525"> </span><span id="b1526">a</span><span id="b1527"> </span><span id="b1528">counting</span><span id="b1536"> </span><code id="b1537">hk.parse</code><span id="b1547"> </span><span id="b1548">and</span><span id="b1551"> </span><span id="b1552">a</span><span id="b1553"> </span><span id="b1554">counting</span>
+<code id="b1567">idx.progress</code><span id="b1581"> </span><span id="b1582">measure</span><span id="b1589"> </span><span id="b1590">the</span><span id="b1593"> </span><span id="b1594">TRI</span><span id="b1597">-</span><span id="b1598">only</span><span id="b1602"> </span><span id="b1603">round</span><span id="b1608"> </span><span id="b1609">—</span><span id="b1612"> </span><span id="b1613">5</span><span id="b1614"> </span><span id="b1615">lexes</span><span id="b1620"> </span><span id="b1621">and</span><span id="b1624"> </span><span id="b1625">0</span>
+<span id="b1631">ticks</span><span id="b1636"> </span><span id="b1637">before</span><span id="b1643">,</span><span id="b1644"> </span><span id="b1645">0</span><span id="b1646"> </span><span id="b1647">lexes</span><span id="b1652"> </span><span id="b1653">and</span><span id="b1656"> </span><span id="b1657">6</span><span id="b1658"> </span><span id="b1659">ticks</span><span id="b1664"> </span><span id="b1665">after</span><span id="b1670">.</span></li>
+</ul>
+<h2 id="outcome"><span id="b1673"><span id="b1677">Outcome</span></span></h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM</a> 
+❧
+<a href="https://github.com/gritzko/bee">Beagle for git</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime</a>
+❧
+<a href="https://github.com/gritzko/quickjab">QuickJAB runtime</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

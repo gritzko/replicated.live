@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-079: indexSubs drops the caller's opts — a walk-only run scans every submodule</title>
+<meta property="og:title" content="CODE-079: indexSubs drops the caller's opts — a walk-only run scans every submodule">
+<meta property="og:description" content="index/index.js:1041:Wt calls index(sub.root, { home, track, _seen }), dropping opts.links, opts.kv, opts.subs and opts.fork, so a caller asking for the commit half alone still gets the full LINK/SYM/TRI scan plus a kv sweep in every submodule, and a --fork n never reaches them. Found in the 2026-09-18 index review.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-079.html">
+<link rel="stylesheet" href="/blob/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/blob/js/asciicast.js"></script>
+<a class="banner" href="/">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1 id="code-079-indexsubs-drops-the-callers-opts-—-a-walk-only-run-scans-every-submodule"><span id="b0"><span id="b4">CODE-079</span><span id="b12">:</span><span id="b13"> </span><span id="b14">indexSubs</span><span id="b23"> </span><span id="b24">drops</span><span id="b29"> </span><span id="b30">the</span><span id="b33"> </span><span id="b34">caller</span><span id="b40">'</span><span id="b41">s</span><span id="b42"> </span><span id="b43">opts</span><span id="b47"> </span><span id="b48">—</span><span id="b51"> </span><span id="b52">a</span><span id="b53"> </span><span id="b54">walk</span><span id="b58">-</span><span id="b59">only</span><span id="b63"> </span><span id="b64">run</span><span id="b67"> </span><span id="b68">scans</span><span id="b73"> </span><span id="b74">every</span><span id="b79"> </span><span id="b80">submodule</span></span></h1>
+<dl class="meta">
+<dt id="b91"><span>Now</span></dt>
+<dd><span id="b95">OPEN</span></dd>
+<dt id="b101"><span>Sev</span></dt>
+<dd><span id="b105">LOW</span></dd>
+<dt id="b110"><span>Rep</span></dt>
+<dd><span id="b114">///bee</span></dd>
+<dt id="b122"><span>Ask</span></dt>
+<dd><span id="b126">gritzko</span></dd>
+<dt id="b135"><span>Rev</span></dt>
+<dd><span id="b139">///bee#8cb69a0</span></dd>
+<dt id="b155"><span>See</span></dt>
+<dd><span id="b159">BEE-006</span></dd>
+<dt id="b168"><span>See</span></dt>
+<dd><span id="b172">BEE-007</span></dd>
+</dl>
+<h2 id="input"><span id="b182"><span id="b186">Input</span></span></h2>
+<h3 id="context"><span id="b193"><span id="b197">Context</span></span></h3>
+<p id="b205"><span>index/index.js:1041:Wt</span><span id="b227"> </span><span id="b228">calls</span><span id="b233"> </span><code id="b234">index(sub.root, { home, track, _seen })</code><span id="b275">,</span><span id="b276"> </span><span id="b277">dropping</span>
+<code id="b286">opts.links</code><span id="b298">,</span><span id="b299"> </span><code id="b300">opts.kv</code><span id="b309">,</span><span id="b310"> </span><code id="b311">opts.subs</code><span id="b322"> </span><span id="b323">and</span><span id="b326"> </span><code id="b327">opts.fork</code><span id="b338">,</span><span id="b339"> </span><span id="b340">so</span><span id="b342"> </span><span id="b343">a</span><span id="b344"> </span><span id="b345">caller</span><span id="b351"> </span><span id="b352">asking</span><span id="b358"> </span><span id="b359">for</span>
+<span id="b363">the</span><span id="b366"> </span><span id="b367">commit</span><span id="b373"> </span><span id="b374">half</span><span id="b378"> </span><span id="b379">alone</span><span id="b384"> </span><span id="b385">still</span><span id="b390"> </span><span id="b391">gets</span><span id="b395"> </span><span id="b396">the</span><span id="b399"> </span><span id="b400">full</span><span id="b404"> </span><span id="b405">LINK</span><span id="b409">/</span><span id="b410">SYM</span><span id="b413">/</span><span id="b414">TRI</span><span id="b417"> </span><span id="b418">scan</span><span id="b422"> </span><span id="b423">plus</span><span id="b427"> </span><span id="b428">a</span><span id="b429"> </span><span id="b430">kv</span><span id="b432"> </span><span id="b433">sweep</span><span id="b438"> </span><span id="b439">in</span>
+<span id="b442">every</span><span id="b447"> </span><span id="b448">submodule</span><span id="b457">,</span><span id="b458"> </span><span id="b459">and</span><span id="b462"> </span><span id="b463">a</span><span id="b464"> </span><code id="b465">--fork n</code><span id="b475"> </span><span id="b476">never</span><span id="b481"> </span><span id="b482">reaches</span><span id="b489"> </span><span id="b490">them</span><span id="b494">.</span><span id="b495"> </span><span id="b496">Found</span><span id="b501"> </span><span id="b502">in</span><span id="b504"> </span><span id="b505">the</span><span id="b508"> </span><span id="b509">2026</span><span id="b513">-</span><span id="b514">09</span><span id="b516">-</span><span id="b517">18</span>
+<span id="b520">index</span><span id="b525"> </span><span id="b526">review</span><span id="b532">.</span></p>
+<h3 id="goals"><span id="b535"><span id="b539">Goals</span></span></h3>
+<p id="b545"><span>Forward</span><span id="b552"> </span><span id="b553">the</span><span id="b556"> </span><span id="b557">opts</span><span id="b561"> </span><span id="b562">object</span><span id="b568"> </span><span id="b569">with</span><span id="b573"> </span><code id="b574">_seen</code><span id="b581"> </span><span id="b582">overridden</span><span id="b592">.</span></p>
+<h2 id="wip"><span id="b595"><span id="b599">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b604"><span id="b608">Design</span><span id="b614"> </span><span id="b615">decisions</span></span></h3>
+<ol>
+<li id="b626"><span id="b630">The</span><span id="b633"> </span><span id="b634">whole</span><span id="b639"> </span><span id="b640">opts</span><span id="b644"> </span><span id="b645">object</span><span id="b651"> </span><span id="b652">goes</span><span id="b656"> </span><span id="b657">down</span><span id="b661">,</span><span id="b662"> </span><code id="b663">_seen</code><span id="b670"> </span><span id="b671">overridden</span><span id="b681">:</span><span id="b682"> </span><span id="b683">a</span><span id="b684"> </span><span id="b685">two</span><span id="b688">-</span><span id="b689">field</span>
+<span id="b699">copy</span><span id="b703"> </span><span id="b704">is</span><span id="b706"> </span><span id="b707">what</span><span id="b711"> </span><span id="b712">dropped</span><span id="b719"> </span><code id="b720">links</code><span id="b727">,</span><span id="b728"> </span><code id="b729">kv</code><span id="b733">,</span><span id="b734"> </span><code id="b735">subs</code><span id="b741"> </span><span id="b742">and</span><span id="b745"> </span><code id="b746">fork</code><span id="b752">,</span><span id="b753"> </span><span id="b754">and</span><span id="b757"> </span><span id="b758">any</span>
+<span id="b766">knob</span><span id="b770"> </span><span id="b771">added</span><span id="b776"> </span><span id="b777">later</span><span id="b782"> </span><span id="b783">would</span><span id="b788"> </span><span id="b789">be</span><span id="b791"> </span><span id="b792">dropped</span><span id="b799"> </span><span id="b800">the</span><span id="b803"> </span><span id="b804">same</span><span id="b808"> </span><span id="b809">way</span><span id="b812">.</span></li>
+<li id="b814"><code id="b818">tip</code><span id="b823"> </span><span id="b824">is</span><span id="b826"> </span><span id="b827">the</span><span id="b830"> </span><span id="b831">ONE</span><span id="b834"> </span><span id="b835">field</span><span id="b840"> </span><span id="b841">left</span><span id="b845"> </span><span id="b846">behind</span><span id="b852"> </span><span id="b853">—</span><span id="b856"> </span><span id="b857">it</span><span id="b859"> </span><span id="b860">names</span><span id="b865"> </span><span id="b866">a</span><span id="b867"> </span><span id="b868">commit</span><span id="b874"> </span><span id="b875">of</span><span id="b877"> </span><span id="b878">the</span>
+<span id="b886">parent</span><span id="b892">,</span><span id="b893"> </span><span id="b894">and</span><span id="b897"> </span><span id="b898">no</span><span id="b900"> </span><span id="b901">history</span><span id="b908"> </span><span id="b909">of</span><span id="b911"> </span><span id="b912">the</span><span id="b915"> </span><span id="b916">sub</span><span id="b919">'</span><span id="b920">s</span><span id="b921"> </span><span id="b922">holds</span><span id="b927"> </span><span id="b928">it</span><span id="b930">.</span></li>
+</ol>
+<h3 id="todos"><span id="b933"><span id="b937">TODOs</span></span></h3>
+<ul>
+<li id="b943"><span id="b947">[x]</span><span id="b950"> </span><span id="b951">repro</span><span id="b956">:</span><span id="b957"> </span><span id="b958">links</span><span id="b963">:</span><span id="b964">false</span><span id="b969"> </span><span id="b970">run</span><span id="b973"> </span><span id="b974">mints</span><span id="b979"> </span><span id="b980">LINK</span><span id="b984"> </span><span id="b985">rows</span><span id="b989"> </span><span id="b990">in</span><span id="b992"> </span><span id="b993">a</span><span id="b994"> </span><span id="b995">submodule</span></li>
+<li id="b1005"><span id="b1009">[x]</span><span id="b1012"> </span><span id="b1013">opts</span><span id="b1017"> </span><span id="b1018">forwarded</span></li>
+</ul>
+<h2 id="outcome"><span id="b1029"><span id="b1033">Outcome</span></span></h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM</a> 
+❧
+<a href="https://github.com/gritzko/bee">Beagle for git</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime</a>
+❧
+<a href="https://github.com/gritzko/quickjab">QuickJAB runtime</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

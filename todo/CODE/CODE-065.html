@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-065: kv header lexer: unknown keys end the block, | scalars, unfenced YAML</title>
+<meta property="og:title" content="CODE-065: kv header lexer: unknown keys end the block, | scalars, unfenced YAML">
+<meta property="og:description" content="index/kv.js:136:9B-152: one non-pair line inside the meta block ends it, so a 4+-char key (Done:, Note:) or a wrapped value drops every registered pair below it (no live instance in 1124 journal tickets today, a latent hazard). :157-167: the YAML lexer keeps desc: | with the literal | as payload though INDEXES.mkd says a multiline scalar is SKIPPED whole, and with no closing fence it scans the whole file, turning body prose into rows. :171-179 readText slices at 1 MB on a BYTE boundary before utf8.Decode and never releases the mmap handle. Found in the 2026-09-18 index review.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-065.html">
+<link rel="stylesheet" href="/blob/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/blob/js/asciicast.js"></script>
+<a class="banner" href="/">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1 id="code-065-kv-header-lexer-unknown-keys-end-the-block-scalars-unfenced-yaml"><span id="b0"><span id="b4">CODE-065</span><span id="b12">:</span><span id="b13"> </span><span id="b14">kv</span><span id="b16"> </span><span id="b17">header</span><span id="b23"> </span><span id="b24">lexer</span><span id="b29">:</span><span id="b30"> </span><span id="b31">unknown</span><span id="b38"> </span><span id="b39">keys</span><span id="b43"> </span><span id="b44">end</span><span id="b47"> </span><span id="b48">the</span><span id="b51"> </span><span id="b52">block</span><span id="b57">,</span><span id="b58"> </span><code id="b59">|</code><span id="b62"> </span><span id="b63">scalars</span><span id="b70">,</span><span id="b71"> </span><span id="b72">unfenced</span><span id="b80"> </span><span id="b81">YAML</span></span></h1>
+<dl class="meta">
+<dt id="b87"><span>Now</span></dt>
+<dd><span id="b91">OPEN</span></dd>
+<dt id="b97"><span>Sev</span></dt>
+<dd><span id="b101">LOW</span></dd>
+<dt id="b106"><span>Rep</span></dt>
+<dd><span id="b110">///bee</span></dd>
+<dt id="b118"><span>Ask</span></dt>
+<dd><span id="b122">gritzko</span></dd>
+<dt id="b131"><span>Rev</span></dt>
+<dd><span id="b135">///bee#8cb69a0</span></dd>
+<dt id="b151"><span>See</span></dt>
+<dd><span id="b155">BEE-024</span></dd>
+<dt id="b164"><span>See</span></dt>
+<dd><span id="b168">TODO-003</span></dd>
+</dl>
+<h2 id="input"><span id="b179"><span id="b183">Input</span></span></h2>
+<h3 id="context"><span id="b190"><span id="b194">Context</span></span></h3>
+<p id="b202"><span>index/kv.js:136:9B</span><span id="b220">-</span><span id="b221">152</span><span id="b224">:</span><span id="b225"> </span><span id="b226">one</span><span id="b229"> </span><span id="b230">non</span><span id="b233">-</span><span id="b234">pair</span><span id="b238"> </span><span id="b239">line</span><span id="b243"> </span><span id="b244">inside</span><span id="b250"> </span><span id="b251">the</span><span id="b254"> </span><span id="b255">meta</span><span id="b259"> </span><span id="b260">block</span><span id="b265"> </span><span id="b266">ends</span><span id="b270"> </span><span id="b271">it</span><span id="b273">,</span><span id="b274"> </span><span id="b275">so</span><span id="b277"> </span><span id="b278">a</span>
+<span id="b280">4</span><span id="b281">+</span><span id="b282">-</span><span id="b283">char</span><span id="b287"> </span><span id="b288">key</span><span id="b291"> </span><span id="b292">(</span><code id="b293">Done:</code><span id="b300">,</span><span id="b301"> </span><code id="b302">Note:</code><span id="b309">)</span><span id="b310"> </span><span id="b311">or</span><span id="b313"> </span><span id="b314">a</span><span id="b315"> </span><span id="b316">wrapped</span><span id="b323"> </span><span id="b324">value</span><span id="b329"> </span><span id="b330">drops</span><span id="b335"> </span><span id="b336">every</span><span id="b341"> </span><span id="b342">registered</span><span id="b352"> </span><span id="b353">pair</span>
+<span id="b358">below</span><span id="b363"> </span><span id="b364">it</span><span id="b366"> </span><span id="b367">(</span><span id="b368">no</span><span id="b370"> </span><span id="b371">live</span><span id="b375"> </span><span id="b376">instance</span><span id="b384"> </span><span id="b385">in</span><span id="b387"> </span><span id="b388">1124</span><span id="b392"> </span><span id="b393">journal</span><span id="b400"> </span><span id="b401">tickets</span><span id="b408"> </span><span id="b409">today</span><span id="b414">,</span><span id="b415"> </span><span id="b416">a</span><span id="b417"> </span><span id="b418">latent</span><span id="b424"> </span><span id="b425">hazard</span><span id="b431">)</span><span id="b432">.</span>
+<span id="b434">:</span><span id="b435">157</span><span id="b438">-</span><span id="b439">167</span><span id="b442">:</span><span id="b443"> </span><span id="b444">the</span><span id="b447"> </span><span id="b448">YAML</span><span id="b452"> </span><span id="b453">lexer</span><span id="b458"> </span><span id="b459">keeps</span><span id="b464"> </span><code id="b465">desc: |</code><span id="b474"> </span><span id="b475">with</span><span id="b479"> </span><span id="b480">the</span><span id="b483"> </span><span id="b484">literal</span><span id="b491"> </span><code id="b492">|</code><span id="b495"> </span><span id="b496">as</span><span id="b498"> </span><span id="b499">payload</span>
+<span id="b507">though</span><span id="b513"> </span><span id="b514">INDEXES.mkd</span><span id="b525"> </span><span id="b526">says</span><span id="b530"> </span><span id="b531">a</span><span id="b532"> </span><span id="b533">multiline</span><span id="b542"> </span><span id="b543">scalar</span><span id="b549"> </span><span id="b550">is</span><span id="b552"> </span><span id="b553">SKIPPED</span><span id="b560"> </span><span id="b561">whole</span><span id="b566">,</span><span id="b567"> </span><span id="b568">and</span><span id="b571"> </span><span id="b572">with</span><span id="b576"> </span><span id="b577">no</span>
+<span id="b580">closing</span><span id="b587"> </span><span id="b588">fence</span><span id="b593"> </span><span id="b594">it</span><span id="b596"> </span><span id="b597">scans</span><span id="b602"> </span><span id="b603">the</span><span id="b606"> </span><span id="b607">whole</span><span id="b612"> </span><span id="b613">file</span><span id="b617">,</span><span id="b618"> </span><span id="b619">turning</span><span id="b626"> </span><span id="b627">body</span><span id="b631"> </span><span id="b632">prose</span><span id="b637"> </span><span id="b638">into</span><span id="b642"> </span><span id="b643">rows</span><span id="b647">.</span><span id="b648"> </span><span id="b649">:</span><span id="b650">171</span><span id="b653">-</span><span id="b654">179</span>
+<code id="b658">readText</code><span id="b668"> </span><span id="b669">slices</span><span id="b675"> </span><span id="b676">at</span><span id="b678"> </span><span id="b679">1</span><span id="b680"> </span><span id="b681">MB</span><span id="b683"> </span><span id="b684">on</span><span id="b686"> </span><span id="b687">a</span><span id="b688"> </span><span id="b689">BYTE</span><span id="b693"> </span><span id="b694">boundary</span><span id="b702"> </span><span id="b703">before</span><span id="b709"> </span><code id="b710">utf8.Decode</code><span id="b723"> </span><span id="b724">and</span><span id="b727"> </span><span id="b728">never</span>
+<span id="b734">releases</span><span id="b742"> </span><span id="b743">the</span><span id="b746"> </span><span id="b747">mmap</span><span id="b751"> </span><span id="b752">handle</span><span id="b758">.</span><span id="b759"> </span><span id="b760">Found</span><span id="b765"> </span><span id="b766">in</span><span id="b768"> </span><span id="b769">the</span><span id="b772"> </span><span id="b773">2026</span><span id="b777">-</span><span id="b778">09</span><span id="b780">-</span><span id="b781">18</span><span id="b783"> </span><span id="b784">index</span><span id="b789"> </span><span id="b790">review</span><span id="b796">.</span></p>
+<h3 id="goals"><span id="b799"><span id="b803">Goals</span></span></h3>
+<p id="b809"><span>Skip</span><span id="b813"> </span><span id="b814">an</span><span id="b816"> </span><span id="b817">unknown</span><span id="b824"> </span><code id="b825">Word: value</code><span id="b838"> </span><span id="b839">line</span><span id="b843"> </span><span id="b844">instead</span><span id="b851"> </span><span id="b852">of</span><span id="b854"> </span><span id="b855">ending</span><span id="b861"> </span><span id="b862">the</span><span id="b865"> </span><span id="b866">block</span><span id="b871">;</span><span id="b872"> </span><span id="b873">skip</span><span id="b877"> </span><code id="b878">|</code><span id="b881">/</span><code id="b882">&gt;</code>
+<span id="b886">scalars</span><span id="b893">;</span><span id="b894"> </span><span id="b895">bound</span><span id="b900"> </span><span id="b901">the</span><span id="b904"> </span><span id="b905">unfenced</span><span id="b913"> </span><span id="b914">scan</span><span id="b918"> </span><span id="b919">to</span><span id="b921"> </span><code id="b922">bodyLine</code><span id="b932">;</span><span id="b933"> </span><span id="b934">slice</span><span id="b939"> </span><span id="b940">on</span><span id="b942"> </span><span id="b943">a</span><span id="b944"> </span><span id="b945">code</span><span id="b949"> </span><span id="b950">point</span><span id="b955">.</span></p>
+<h2 id="wip"><span id="b958"><span id="b962">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b967"><span id="b971">Design</span><span id="b977"> </span><span id="b978">decisions</span></span></h3>
+<ul>
+<li id="b988"><span id="b992">An</span><span id="b994"> </span><span id="b995">unfenced</span><span id="b1003"> </span><code id="b1004">---</code><span id="b1009"> </span><span id="b1010">head</span><span id="b1014"> </span><span id="b1015">takes</span><span id="b1020"> </span><span id="b1021">NO</span><span id="b1023"> </span><span id="b1024">keys</span><span id="b1028">:</span><span id="b1029"> </span><span id="b1030">MDFM</span><span id="b1034"> </span><span id="b1035">hands</span><span id="b1040"> </span><span id="b1041">the</span><span id="b1044"> </span><span id="b1045">whole</span>
+<span id="b1055">file</span><span id="b1059"> </span><span id="b1060">back</span><span id="b1064"> </span><span id="b1065">as</span><span id="b1067"> </span><span id="b1068">the</span><span id="b1071"> </span><span id="b1072">head</span><span id="b1076">,</span><span id="b1077"> </span><span id="b1078">and</span><span id="b1081"> </span><span id="b1082">a</span><span id="b1083"> </span><span id="b1084">page</span><span id="b1088"> </span><span id="b1089">of</span><span id="b1091"> </span><span id="b1092">prose</span><span id="b1097"> </span><span id="b1098">is</span><span id="b1100"> </span><span id="b1101">no</span><span id="b1103"> </span><span id="b1104">preamble</span><span id="b1112">.</span></li>
+<li id="b1114"><span id="b1118">The</span><span id="b1121"> </span><span id="b1122">cap</span><span id="b1125"> </span><span id="b1126">backs</span><span id="b1131"> </span><span id="b1132">off</span><span id="b1135"> </span><span id="b1136">at</span><span id="b1138"> </span><span id="b1139">most</span><span id="b1143"> </span><span id="b1144">3</span><span id="b1145"> </span><span id="b1146">continuation</span><span id="b1158"> </span><span id="b1159">bytes</span><span id="b1164">;</span><span id="b1165"> </span><span id="b1166">further</span>
+<span id="b1178">back</span><span id="b1182"> </span><span id="b1183">the</span><span id="b1186"> </span><span id="b1187">bytes</span><span id="b1192"> </span><span id="b1193">are</span><span id="b1196"> </span><span id="b1197">malformed</span><span id="b1206"> </span><span id="b1207">and</span><span id="b1210"> </span><span id="b1211">the</span><span id="b1214"> </span><span id="b1215">decoder</span><span id="b1222"> </span><span id="b1223">still</span><span id="b1228"> </span><span id="b1229">says</span><span id="b1233"> </span><span id="b1234">so</span><span id="b1236">.</span></li>
+</ul>
+<h3 id="todos"><span id="b1239"><span id="b1243">TODOs</span></span></h3>
+<ul>
+<li id="b1249"><span id="b1253">[v]</span><span id="b1256"> </span><span id="b1257">repro</span><span id="b1262">:</span><span id="b1263"> </span><span id="b1264">Done</span><span id="b1268">:</span><span id="b1269"> </span><span id="b1270">line</span><span id="b1274"> </span><span id="b1275">hides</span><span id="b1280"> </span><span id="b1281">Ref</span><span id="b1284">:</span><span id="b1285"> </span><span id="b1286">below</span><span id="b1291"> </span><span id="b1292">it</span></li>
+<li id="b1295"><span id="b1299">[v]</span><span id="b1302"> </span><span id="b1303">lexer</span><span id="b1308"> </span><span id="b1309">fixes</span><span id="b1314">,</span><span id="b1315"> </span><span id="b1316">each</span><span id="b1320"> </span><span id="b1321">with</span><span id="b1325"> </span><span id="b1326">a</span><span id="b1327"> </span><span id="b1328">row</span><span id="b1331"> </span><span id="b1332">test</span></li>
+</ul>
+<h3 id="blockers-and-bummers"><span id="b1338"><span id="b1342">Blockers</span><span id="b1350"> </span><span id="b1351">and</span><span id="b1354"> </span><span id="b1355">bummers</span></span></h3>
+<ul>
+<li id="b1363"><span id="b1367">No</span><span id="b1369"> </span><span id="b1370">handle</span><span id="b1376"> </span><span id="b1377">to</span><span id="b1379"> </span><span id="b1380">release</span><span id="b1387">:</span><span id="b1388"> </span><span id="b1389">a</span><span id="b1390"> </span><span id="b1391">read</span><span id="b1395"> </span><span id="b1396">map</span><span id="b1399"> </span><span id="b1400">has</span><span id="b1403"> </span><span id="b1404">no</span><span id="b1406"> </span><span id="b1407">fd</span><span id="b1409"> </span><span id="b1410">and</span><span id="b1413"> </span><span id="b1414">no</span><span id="b1416"> </span><span id="b1417">slot</span>
+<span id="b1426">(</span><span id="b1427">quickjab</span><span id="b1435"> </span><span id="b1436">io.c:681</span><span id="b1444">)</span><span id="b1445">,</span><span id="b1446"> </span><span id="b1447">so</span><span id="b1449"> </span><code id="b1450">io._munmap</code><span id="b1462"> </span><span id="b1463">there</span><span id="b1468"> </span><span id="b1469">is</span><span id="b1471"> </span><span id="b1472">a</span><span id="b1473"> </span><span id="b1474">silent</span><span id="b1480"> </span><span id="b1481">no</span><span id="b1483">-</span><span id="b1484">op</span>
+<span id="b1491">and</span><span id="b1494"> </span><span id="b1495">the</span><span id="b1498"> </span><span id="b1499">wrapper</span><span id="b1506">'</span><span id="b1507">s</span><span id="b1508"> </span><span id="b1509">death</span><span id="b1514"> </span><span id="b1515">munmaps</span><span id="b1522">;</span><span id="b1523"> </span><span id="b1524">20</span><span id="b1526">k</span><span id="b1527"> </span><span id="b1528">reads</span><span id="b1533"> </span><span id="b1534">held</span><span id="b1538"> </span><span id="b1539">flat</span><span id="b1543"> </span><span id="b1544">at</span><span id="b1546"> </span><span id="b1547">32</span>
+<span id="b1554">VMAs</span><span id="b1558">,</span><span id="b1559"> </span><span id="b1560">so</span><span id="b1562"> </span><span id="b1563">that</span><span id="b1567"> </span><span id="b1568">half</span><span id="b1572"> </span><span id="b1573">of</span><span id="b1575"> </span><span id="b1576">the</span><span id="b1579"> </span><span id="b1580">ticket</span><span id="b1586"> </span><span id="b1587">is</span><span id="b1589"> </span><span id="b1590">a</span><span id="b1591"> </span><span id="b1592">non</span><span id="b1595">-</span><span id="b1596">issue</span><span id="b1601">,</span><span id="b1602"> </span><span id="b1603">not</span><span id="b1606"> </span><span id="b1607">a</span><span id="b1608"> </span><span id="b1609">fix</span><span id="b1612">.</span></li>
+<li id="b1614"><span id="b1618">A</span><span id="b1619"> </span><span id="b1620">WRAPPED</span><span id="b1627"> </span><span id="b1628">value</span><span id="b1633"> </span><span id="b1634">line</span><span id="b1638"> </span><span id="b1639">still</span><span id="b1644"> </span><span id="b1645">ends</span><span id="b1649"> </span><span id="b1650">the</span><span id="b1653"> </span><span id="b1654">block</span><span id="b1659">:</span><span id="b1660"> </span><span id="b1661">the</span><span id="b1664"> </span><span id="b1665">Goals</span><span id="b1670"> </span><span id="b1671">name</span>
+<span id="b1680">the</span><span id="b1683"> </span><span id="b1684">unknown</span><span id="b1691"> </span><code id="b1692">Word: value</code><span id="b1705"> </span><span id="b1706">line</span><span id="b1710"> </span><span id="b1711">alone</span><span id="b1716">.</span></li>
+</ul>
+<h2 id="outcome"><span id="b1719"><span id="b1723">Outcome</span></span></h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM</a> 
+❧
+<a href="https://github.com/gritzko/bee">Beagle for git</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime</a>
+❧
+<a href="https://github.com/gritzko/quickjab">QuickJAB runtime</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-064: path_hl collisions: undetected in the rev lane, per-worktree in kv</title>
+<meta property="og:title" content="CODE-064: path_hl collisions: undetected in the rev lane, per-worktree in kv">
+<meta property="og:description" content="index/index.js:128:Wt pathHl is 40 bits and the rev lane never detects a collision: two files on one hashlet share one rev chain and their histories merge (about 0.5% likely per 100k-path repo, and INDEXES.mkd &quot;What is NOT indexed&quot; does not declare it). index/kv.js:314:9B-334 builds its detector from THIS worktree's files only while the lane is shared across linked worktrees (BEE-009), so a cross-worktree collision goes undetected and each sweep reconciles into the other's block, flipping the header wt; INDEXES.mkd's &quot;the sweep holds the COMPLETE path list&quot; is a doc/code discrepancy there. Found in the 2026-09-18 index review.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://replicated.live/todo/CODE/CODE-064.html">
+<link rel="stylesheet" href="/blob/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css"
+      integrity="sha384-05cmIVRzN7mR7nmqajPpGPUPqJ5VyTAGHL1xJuiGWfhpWDp5hEfBk50kr21f3ILM"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="/blob/css/asciicast.css">
+<script defer src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"
+        integrity="sha384-s55nTYAdrPwGWmKKQ1lCnoB8H9LbqmsXsqqqPAHK2+T5h9IfI2dTXTDXJcZnySJD"
+        crossorigin="anonymous"></script>
+<script defer src="/blob/js/asciicast.js"></script>
+<a class="banner" href="/">
+<img class="banner-logo" src="/blob/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1 id="code-064-path_hl-collisions-undetected-in-the-rev-lane-per-worktree-in-kv"><span id="b0"><span id="b4">CODE-064</span><span id="b12">:</span><span id="b13"> </span><span id="b14">path_hl</span><span id="b21"> </span><span id="b22">collisions</span><span id="b32">:</span><span id="b33"> </span><span id="b34">undetected</span><span id="b44"> </span><span id="b45">in</span><span id="b47"> </span><span id="b48">the</span><span id="b51"> </span><span id="b52">rev</span><span id="b55"> </span><span id="b56">lane</span><span id="b60">,</span><span id="b61"> </span><span id="b62">per</span><span id="b65">-</span><span id="b66">worktree</span><span id="b74"> </span><span id="b75">in</span><span id="b77"> </span><span id="b78">kv</span></span></h1>
+<dl class="meta">
+<dt id="b82"><span>Now</span></dt>
+<dd><span id="b86">OPEN</span></dd>
+<dt id="b92"><span>Sev</span></dt>
+<dd><span id="b96">LOW</span></dd>
+<dt id="b101"><span>Rep</span></dt>
+<dd><span id="b105">///bee</span></dd>
+<dt id="b113"><span>Ask</span></dt>
+<dd><span id="b117">gritzko</span></dd>
+<dt id="b126"><span>Rev</span></dt>
+<dd><span id="b130">///bee#8cb69a0</span></dd>
+<dt id="b146"><span>See</span></dt>
+<dd><span id="b150">BEE-024</span></dd>
+<dt id="b159"><span>See</span></dt>
+<dd><span id="b163">LITE-006</span></dd>
+</dl>
+<h2 id="input"><span id="b174"><span id="b178">Input</span></span></h2>
+<h3 id="context"><span id="b185"><span id="b189">Context</span></span></h3>
+<p id="b197"><span>index/index.js:128:Wt</span><span id="b218"> </span><code id="b219">pathHl</code><span id="b227"> </span><span id="b228">is</span><span id="b230"> </span><span id="b231">40</span><span id="b233"> </span><span id="b234">bits</span><span id="b238"> </span><span id="b239">and</span><span id="b242"> </span><span id="b243">the</span><span id="b246"> </span><span id="b247">rev</span><span id="b250"> </span><span id="b251">lane</span><span id="b255"> </span><span id="b256">never</span><span id="b261"> </span><span id="b262">detects</span><span id="b269"> </span><span id="b270">a</span>
+<span id="b272">collision</span><span id="b281">:</span><span id="b282"> </span><span id="b283">two</span><span id="b286"> </span><span id="b287">files</span><span id="b292"> </span><span id="b293">on</span><span id="b295"> </span><span id="b296">one</span><span id="b299"> </span><span id="b300">hashlet</span><span id="b307"> </span><span id="b308">share</span><span id="b313"> </span><span id="b314">one</span><span id="b317"> </span><span id="b318">rev</span><span id="b321"> </span><span id="b322">chain</span><span id="b327"> </span><span id="b328">and</span><span id="b331"> </span><span id="b332">their</span><span id="b337"> </span><span id="b338">histories</span>
+<span id="b348">merge</span><span id="b353"> </span><span id="b354">(</span><span id="b355">about</span><span id="b360"> </span><span id="b361">0.5</span><span id="b364">%</span><span id="b365"> </span><span id="b366">likely</span><span id="b372"> </span><span id="b373">per</span><span id="b376"> </span><span id="b377">100</span><span id="b380">k</span><span id="b381">-</span><span id="b382">path</span><span id="b386"> </span><span id="b387">repo</span><span id="b391">,</span><span id="b392"> </span><span id="b393">and</span><span id="b396"> </span><span id="b397">INDEXES.mkd</span><span id="b408"> </span><span id="b409">&quot;</span><span id="b410">What</span><span id="b414"> </span><span id="b415">is</span><span id="b417"> </span><span id="b418">NOT</span>
+<span id="b422">indexed</span><span id="b429">&quot;</span><span id="b430"> </span><span id="b431">does</span><span id="b435"> </span><span id="b436">not</span><span id="b439"> </span><span id="b440">declare</span><span id="b447"> </span><span id="b448">it</span><span id="b450">)</span><span id="b451">.</span><span id="b452"> </span><span id="b453">index/kv.js:314:9B</span><span id="b471">-</span><span id="b472">334</span><span id="b475"> </span><span id="b476">builds</span><span id="b482"> </span><span id="b483">its</span><span id="b486"> </span><span id="b487">detector</span><span id="b495"> </span><span id="b496">from</span>
+<span id="b501">THIS</span><span id="b505"> </span><span id="b506">worktree</span><span id="b514">'</span><span id="b515">s</span><span id="b516"> </span><span id="b517">files</span><span id="b522"> </span><span id="b523">only</span><span id="b527"> </span><span id="b528">while</span><span id="b533"> </span><span id="b534">the</span><span id="b537"> </span><span id="b538">lane</span><span id="b542"> </span><span id="b543">is</span><span id="b545"> </span><span id="b546">shared</span><span id="b552"> </span><span id="b553">across</span><span id="b559"> </span><span id="b560">linked</span><span id="b566"> </span><span id="b567">worktrees</span>
+<span id="b577">(</span><span id="b578">BEE-009</span><span id="b585">)</span><span id="b586">,</span><span id="b587"> </span><span id="b588">so</span><span id="b590"> </span><span id="b591">a</span><span id="b592"> </span><span id="b593">cross</span><span id="b598">-</span><span id="b599">worktree</span><span id="b607"> </span><span id="b608">collision</span><span id="b617"> </span><span id="b618">goes</span><span id="b622"> </span><span id="b623">undetected</span><span id="b633"> </span><span id="b634">and</span><span id="b637"> </span><span id="b638">each</span><span id="b642"> </span><span id="b643">sweep</span>
+<span id="b649">reconciles</span><span id="b659"> </span><span id="b660">into</span><span id="b664"> </span><span id="b665">the</span><span id="b668"> </span><span id="b669">other</span><span id="b674">'</span><span id="b675">s</span><span id="b676"> </span><span id="b677">block</span><span id="b682">,</span><span id="b683"> </span><span id="b684">flipping</span><span id="b692"> </span><span id="b693">the</span><span id="b696"> </span><span id="b697">header</span><span id="b703"> </span><code id="b704">wt</code><span id="b708">;</span><span id="b709"> </span><span id="b710">INDEXES.mkd</span><span id="b721">'</span><span id="b722">s</span>
+<span id="b724">&quot;</span><span id="b725">the</span><span id="b728"> </span><span id="b729">sweep</span><span id="b734"> </span><span id="b735">holds</span><span id="b740"> </span><span id="b741">the</span><span id="b744"> </span><span id="b745">COMPLETE</span><span id="b753"> </span><span id="b754">path</span><span id="b758"> </span><span id="b759">list</span><span id="b763">&quot;</span><span id="b764"> </span><span id="b765">is</span><span id="b767"> </span><span id="b768">a</span><span id="b769"> </span><span id="b770">doc</span><span id="b773">/</span><span id="b774">code</span><span id="b778"> </span><span id="b779">discrepancy</span><span id="b790"> </span><span id="b791">there</span><span id="b796">.</span>
+<span id="b798">Found</span><span id="b803"> </span><span id="b804">in</span><span id="b806"> </span><span id="b807">the</span><span id="b810"> </span><span id="b811">2026</span><span id="b815">-</span><span id="b816">09</span><span id="b818">-</span><span id="b819">18</span><span id="b821"> </span><span id="b822">index</span><span id="b827"> </span><span id="b828">review</span><span id="b834">.</span></p>
+<h3 id="goals"><span id="b837"><span id="b841">Goals</span></span></h3>
+<p id="b847"><span>State</span><span id="b852"> </span><span id="b853">the</span><span id="b856"> </span><span id="b857">rev</span><span id="b860">-</span><span id="b861">lane</span><span id="b865"> </span><span id="b866">limit</span><span id="b871"> </span><span id="b872">in</span><span id="b874"> </span><span id="b875">INDEXES.mkd</span><span id="b886"> </span><span id="b887">(</span><span id="b888">or</span><span id="b890"> </span><span id="b891">detect</span><span id="b897"> </span><span id="b898">it</span><span id="b900"> </span><span id="b901">off</span><span id="b904"> </span><span id="b905">the</span><span id="b908"> </span><span id="b909">FSEG</span><span id="b913"> </span><span id="b914">row</span><span id="b917">'</span><span id="b918">s</span>
+<span id="b920">segment</span><span id="b927"> </span><span id="b928">hashes</span><span id="b934">)</span><span id="b935">;</span><span id="b936"> </span><span id="b937">fold</span><span id="b941"> </span><span id="b942">other</span><span id="b947"> </span><span id="b948">worktrees</span><span id="b957">'</span><span id="b958"> </span><span id="b959">live</span><span id="b963"> </span><span id="b964">blocks</span><span id="b970"> </span><span id="b971">into</span><span id="b975"> </span><span id="b976">the</span><span id="b979"> </span><span id="b980">kv</span><span id="b982"> </span><span id="b983">detector</span><span id="b991">.</span></p>
+<h2 id="wip"><span id="b994"><span id="b998">WIP</span></span></h2>
+<h3 id="design-decisions"><span id="b1003"><span id="b1007">Design</span><span id="b1013"> </span><span id="b1014">decisions</span></span></h3>
+<ul>
+<li id="b1024"><span id="b1028">The</span><span id="b1031"> </span><span id="b1032">kv</span><span id="b1034"> </span><span id="b1035">detector</span><span id="b1043"> </span><span id="b1044">now</span><span id="b1047"> </span><span id="b1048">weighs</span><span id="b1054"> </span><span id="b1055">the</span><span id="b1058"> </span><span id="b1059">LIVE</span><span id="b1063"> </span><span id="b1064">blocks</span><span id="b1070"> </span><span id="b1071">of</span><span id="b1073"> </span><span id="b1074">the</span><span id="b1077"> </span><span id="b1078">other</span>
+<span id="b1088">checkouts</span><span id="b1097"> </span><span id="b1098">beside</span><span id="b1104"> </span><span id="b1105">its</span><span id="b1108"> </span><span id="b1109">own</span><span id="b1112"> </span><span id="b1113">path</span><span id="b1117"> </span><span id="b1118">list</span><span id="b1122">:</span><span id="b1123"> </span><span id="b1124">a</span><span id="b1125"> </span><span id="b1126">file</span><span id="b1130"> </span><span id="b1131">whose</span><span id="b1136"> </span><span id="b1137">hashlet</span>
+<span id="b1149">another</span><span id="b1156"> </span><span id="b1157">living</span><span id="b1163"> </span><span id="b1164">worktree</span><span id="b1172"> </span><span id="b1173">already</span><span id="b1180"> </span><span id="b1181">owns</span><span id="b1185"> </span><span id="b1186">is</span><span id="b1188"> </span><span id="b1189">read</span><span id="b1193"> </span><span id="b1194">DIRECTLY</span><span id="b1202"> </span><span id="b1203">and</span>
+<span id="b1211">puts</span><span id="b1215"> </span><span id="b1216">nothing</span><span id="b1223">,</span><span id="b1224"> </span><span id="b1225">so</span><span id="b1227"> </span><span id="b1228">the</span><span id="b1231"> </span><span id="b1232">header</span><span id="b1238"> </span><code id="b1239">wt</code><span id="b1243"> </span><span id="b1244">never</span><span id="b1249"> </span><span id="b1250">flips</span><span id="b1255">.</span><span id="b1256">  </span><span id="b1258">The</span><span id="b1261"> </span><span id="b1262">first</span>
+<span id="b1272">worktree</span><span id="b1280"> </span><span id="b1281">to</span><span id="b1283"> </span><span id="b1284">index</span><span id="b1289"> </span><span id="b1290">a</span><span id="b1291"> </span><span id="b1292">hashlet</span><span id="b1299"> </span><span id="b1300">keeps</span><span id="b1305"> </span><span id="b1306">it</span><span id="b1308">;</span><span id="b1309"> </span><span id="b1310">a</span><span id="b1311"> </span><span id="b1312">block</span><span id="b1317"> </span><span id="b1318">whose</span><span id="b1323"> </span><span id="b1324">owner</span>
+<span id="b1334">is</span><span id="b1336"> </span><span id="b1337">gone</span><span id="b1341"> </span><span id="b1342">is</span><span id="b1344"> </span><span id="b1345">collected</span><span id="b1354"> </span><span id="b1355">by</span><span id="b1357"> </span><span id="b1358">CODE-063</span><span id="b1366"> </span><span id="b1367">and</span><span id="b1370"> </span><span id="b1371">the</span><span id="b1374"> </span><span id="b1375">hashlet</span><span id="b1382"> </span><span id="b1383">frees</span><span id="b1388"> </span><span id="b1389">up</span><span id="b1391">.</span></li>
+<li id="b1393"><span id="b1397">The</span><span id="b1400"> </span><span id="b1401">rev</span><span id="b1404"> </span><span id="b1405">lane</span><span id="b1409"> </span><span id="b1410">is</span><span id="b1412"> </span><span id="b1413">DOCUMENTED</span><span id="b1423">,</span><span id="b1424"> </span><span id="b1425">not</span><span id="b1428"> </span><span id="b1429">fixed</span><span id="b1434">.</span><span id="b1435">  </span><span id="b1437">FSEG</span><span id="b1441"> </span><span id="b1442">keys</span><span id="b1446"> </span><span id="b1447">the</span>
+<span id="b1455">filename</span><span id="b1463"> </span><span id="b1464">(</span><code id="b1465">6|fn_hl:40|prnt_hl:20</code><span id="b1488">)</span><span id="b1489">,</span><span id="b1490"> </span><span id="b1491">so</span><span id="b1493"> </span><span id="b1494">its</span><span id="b1497"> </span><span id="b1498">segment</span><span id="b1505"> </span><span id="b1506">hashes</span>
+<span id="b1517">cannot</span><span id="b1523"> </span><span id="b1524">be</span><span id="b1526"> </span><span id="b1527">reached</span><span id="b1534"> </span><span id="b1535">from</span><span id="b1539"> </span><span id="b1540">a</span><span id="b1541"> </span><code id="b1542">path_hl</code><span id="b1551">;</span><span id="b1552"> </span><span id="b1553">a</span><span id="b1554"> </span><span id="b1555">check</span><span id="b1560"> </span><span id="b1561">off</span><span id="b1564"> </span><span id="b1565">them</span><span id="b1569"> </span><span id="b1570">needs</span>
+<span id="b1580">the</span><span id="b1583"> </span><span id="b1584">path_hl</span><span id="b1591"> </span><span id="b1592">stored</span><span id="b1598"> </span><span id="b1599">beside</span><span id="b1605"> </span><span id="b1606">them</span><span id="b1610">,</span><span id="b1611"> </span><span id="b1612">i</span><span id="b1613">.</span><span id="b1614">e</span><span id="b1615">.</span><span id="b1616"> </span><span id="b1617">a</span><span id="b1618"> </span><span id="b1619">format</span><span id="b1625"> </span><span id="b1626">change</span><span id="b1632">.</span>
+<span id="b1638">gritzko</span><span id="b1645"> </span><span id="b1646">decides</span><span id="b1653"> </span><span id="b1654">whether</span><span id="b1661"> </span><span id="b1662">that</span><span id="b1666"> </span><span id="b1667">lane</span><span id="b1671"> </span><span id="b1672">is</span><span id="b1674"> </span><span id="b1675">worth</span><span id="b1680"> </span><span id="b1681">widening</span><span id="b1689">.</span></li>
+</ul>
+<h3 id="todos"><span id="b1692"><span id="b1696">TODOs</span></span></h3>
+<ul>
+<li id="b1702"><span id="b1706">[v]</span><span id="b1709"> </span><span id="b1710">doc</span><span id="b1713">:</span><span id="b1714"> </span><span id="b1715">rev</span><span id="b1718">-</span><span id="b1719">lane</span><span id="b1723"> </span><span id="b1724">collision</span><span id="b1733"> </span><span id="b1734">declared</span></li>
+<li id="b1743"><span id="b1747">[v]</span><span id="b1750"> </span><span id="b1751">kv</span><span id="b1753"> </span><span id="b1754">detector</span><span id="b1762"> </span><span id="b1763">sees</span><span id="b1767"> </span><span id="b1768">every</span><span id="b1773"> </span><span id="b1774">worktree</span><span id="b1782">'</span><span id="b1783">s</span><span id="b1784"> </span><span id="b1785">blocks</span></li>
+</ul>
+<h3 id="blockers-and-bummers"><span id="b1793"><span id="b1797">Blockers</span><span id="b1805"> </span><span id="b1806">and</span><span id="b1809"> </span><span id="b1810">bummers</span></span></h3>
+<ul>
+<li id="b1818"><span id="b1822">Rev</span><span id="b1825">-</span><span id="b1826">lane</span><span id="b1830"> </span><span id="b1831">detection</span><span id="b1840"> </span><span id="b1841">needs</span><span id="b1846"> </span><span id="b1847">a</span><span id="b1848"> </span><span id="b1849">new</span><span id="b1852"> </span><span id="b1853">or</span><span id="b1855"> </span><span id="b1856">widened</span><span id="b1863"> </span><span id="b1864">record</span><span id="b1870">,</span><span id="b1871"> </span><span id="b1872">so</span><span id="b1874"> </span><span id="b1875">it</span><span id="b1877"> </span><span id="b1878">is</span>
+<span id="b1885">left</span><span id="b1889"> </span><span id="b1890">as</span><span id="b1892"> </span><span id="b1893">the</span><span id="b1896"> </span><span id="b1897">INDEXES.mkd</span><span id="b1908"> </span><span id="b1909">&quot;</span><span id="b1910">What</span><span id="b1914"> </span><span id="b1915">is</span><span id="b1917"> </span><span id="b1918">NOT</span><span id="b1921"> </span><span id="b1922">indexed</span><span id="b1929">&quot;</span><span id="b1930"> </span><span id="b1931">entry</span><span id="b1936">.</span></li>
+</ul>
+<h2 id="outcome"><span id="b1939"><span id="b1943">Outcome</span></span></h2>
+<div class="footer">
+❧
+<a href="/feed.rss">RSS feed</a> 
+❧
+<a href="https://github.com/gritzko/beagle">Beagle SCM</a> 
+❧
+<a href="https://github.com/gritzko/bee">Beagle for git</a> 
+❧
+<a href="https://github.com/gritzko/jab">JAB runtime</a>
+❧
+<a href="https://github.com/gritzko/quickjab">QuickJAB runtime</a>
+❧
+<a href="https://bsky.app/profile/gritzko.bsky.social">BlueSky</a>
+❧
+</div>
+</body>
+</html>
